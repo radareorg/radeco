@@ -1,0 +1,7 @@
+[package]
+name = "radeco"
+version = "0.1.0"
+authors = [
+	"David Kreuter <dkreuter@gmail.com>",
+	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
+]
