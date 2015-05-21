@@ -1,0 +1,15 @@
+[package]
+name = "rustc-data-structures"
+version = "0.1.0"
+authors = []
+
+[lib]
+name = "rustc_data_structures"
+path = "lib.radeco.rs"
+
+[dependencies]
+rustc-serialize = "*"
+log = "*"
+
+[dependencies.test]
+path = "../rustc_test"

@@ -5,3 +5,6 @@ authors = [
 	"David Kreuter <dkreuter@gmail.com>",
 	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
 ]
+
+[dependencies.rustc-data-structures]
+path = "src/rustc_data_structures"
