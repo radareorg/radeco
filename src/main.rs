@@ -22,9 +22,10 @@ fn main() {
 		body: s1,
 		alt:  s2
 	});
-	let (rs1, rs2) = match *c { Cond::<D>{ref cond, ref body, ref alt} => (body, alt), _ => panic!() };
-	println!("{:?}", rs1);
-	println!("{:?}", rs2);
+	if let Cond::<D>{ref cond, ref body, ref alt} = *c {
+		println!("{:?}", body);
+		println!("{:?}", alt);
+	}
 	println!("{:?}", c);
 	println!("{}", lang_c::serialize(&c));
 }
