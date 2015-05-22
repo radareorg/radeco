@@ -11,5 +11,7 @@ path = "lib.radeco.rs"
 rustc-serialize = "*"
 log = "*"
 
-[dependencies.test]
-path = "../rustc_test"
+# stable dislikes this crate
+#
+# [dependencies.test]
+# path = "../rustc_test"
