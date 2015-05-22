@@ -2,6 +2,8 @@ use super::D;
 use scf::SCFNode;
 
 pub fn serialize(n: &SCFNode<D>) -> String {
+	//! Serializes SCFNodes for debugging purposes.
+	//! TODO: Newlines and indentation, also cover all constructs
 	match *n {
 		SCFNode::Statement(ref x) =>
 			x.clone(),

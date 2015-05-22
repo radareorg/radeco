@@ -1,9 +1,12 @@
-/* SCF = Structured control flow */
+// SCF = Structured control flow
 
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::fmt::Debug;
 
+/// A trait to pass to SCFNode to control the types for declarations,
+/// expressions, statements, and most importantly to child SCFNodes.
+/// The choice of the name 'Domain' was arbitrary.
 pub trait SCFDomain {
 	type Declaration: Debug;
 	type Expression: Debug;
@@ -11,7 +14,9 @@ pub trait SCFDomain {
 	type Node;
 }
 
+/// Tells SCFNode to refer to children via &SCFNode
 pub struct MutRefDomain<'x> { _marker: PhantomData<&'x ()> }
+/// Tells SCFNode to refer to children via Box<SCFNode>
 pub struct BoxDomain;
 
 impl<'x> SCFDomain for MutRefDomain<'x> {
@@ -28,12 +33,16 @@ impl SCFDomain for BoxDomain {
 	type Node = Box<SCFNode<BoxDomain>>;
 }
 
+/// This enum distinguishes between
+///    for(x=1;;) and
+///    for(int x=1;;)
 #[derive(Debug)]
 pub enum ForInitClause<D: SCFDomain> {
 	InitDeclaration(D::Declaration),
 	InitExpression(D::Expression)
 }
 
+/// Enum to represent *syntactic* flow structures in C
 #[derive(Debug)]
 pub enum SCFNode<D: SCFDomain> {
 	Empty,
