@@ -15,8 +15,9 @@ pub trait SCFDomain {
 }
 
 /// Tells SCFNode to refer to children via &SCFNode
+// (for testing only; crashes the compiler, see https://github.com/rust-lang/rust/issues/25693)
 pub struct MutRefDomain<'x> { _marker: PhantomData<&'x ()> }
-/// Tells SCFNode to refer to children via Box<SCFNode>
+/// Tells SCFNode to refer to children via Box<SCFNode> (for testing only)
 pub struct BoxDomain;
 
 impl<'x> SCFDomain for MutRefDomain<'x> {
@@ -42,7 +43,7 @@ pub enum ForInitClause<D: SCFDomain> {
 	InitExpression(D::Expression)
 }
 
-/// Enum to represent *syntactic* flow structures in C
+/// Enum to represent *syntactic* flow structures in C.
 #[derive(Debug)]
 pub enum SCFNode<D: SCFDomain> {
 	Empty,

@@ -13,5 +13,5 @@ log = "*"
 
 # stable dislikes this crate
 #
-# [dependencies.test]
+# [dev-dependencies.test]
 # path = "../rustc_test"

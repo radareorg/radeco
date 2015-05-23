@@ -1,31 +1,9 @@
-pub mod lang_c;
+// this file is included when compiling src/bin/*.rs or tests
+// maybe we shouldn't define 'main' here
 
-pub mod scf;
-use scf::SCFDomain;
-use scf::SCFNode;
-use scf::SCFNode::{Statement, Cond};
+extern crate radeco;
 
-#[derive(Debug)]
-pub struct D;
-impl<'x> SCFDomain for D {
-	type Declaration = String;
-	type Expression = String;
-	type Statement = String;
-	type Node = Box<SCFNode<D>>;
-}
-
+// attribute to ignore unused 'main' when running tests
+#[cfg_attr(test, allow(dead_code))]
 fn main() {
-	let s1 = Box::new(Statement::<D>("puts(\"Hello, world!\");".to_string()));
-	let s2 = Box::new(Statement::<D>("return 0;".to_string()));
-	let c = Box::new(Cond::<D>{
-		cond: "argc < 2".to_string(),
-		body: s1,
-		alt:  s2
-	});
-	if let Cond::<D>{ref cond, ref body, ref alt} = *c {
-		println!("{:?}", body);
-		println!("{:?}", alt);
-	}
-	println!("{:?}", c);
-	println!("{}", lang_c::serialize(&c));
 }
