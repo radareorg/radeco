@@ -7,4 +7,9 @@ authors = [
 ]
 
 [dependencies.rustc-data-structures]
+doc = false
 path = "src/rustc_data_structures"
+
+[[bin]]
+doc = false
+name = "radeco"
