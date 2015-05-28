@@ -7,5 +7,9 @@ use radeco::frontend::esil;
 // attribute to ignore unused 'main' when running tests
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
-    esil::parse(&mut "eax,eax,^,ebx,+,eax,=".to_string());
+    let mut p = esil::Parser::new();
+    p.parse("eax,ebx,^=,eax,ebx,+=");
+    for inst in &p.emit_insts() {
+        println!("{}", inst.to_string());
+    }
 }
