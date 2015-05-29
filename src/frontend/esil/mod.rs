@@ -1,9 +1,32 @@
 // TODO: Add License information.
 
+//! Module to parse ESIL strings and convert them into the IR.
+//!
 //! ESIL (Evaluable Strings Intermediate Language) is the IL used by radare2.
-//! For a complete documentation of ESIL please checkout:
-//!  https://github.com/radare/radare2/wiki/ESIL
-//! This module is used to parse ESIL strings and convert them into the IR.
+//!
+//! For a complete documentation of ESIL please check 
+//!  [wiki](https://github.com/radare/radare2/wiki/ESIL).
+//!
+//! # Details
+//!
+//! The `Parser` struct provides methods needed to convert a valid ESIL string
+//! into the IR. `Parser::parse()` parses the ESIL string and returns an `Err`
+//! if the ESIL string is Invalid.
+//!
+//! `Parser` also provides `Parser::emit_insts()` to extract the `Instructions` 
+//! it generates. Calling `Parser::parse()` several times will add more instructions.
+//! 
+//! # Example
+//!
+//! ```
+//! let esil = String::from("eax,ebx,^=");
+//! let p = Parser::new();
+//! p.parse(esil)
+//! for inst in &p.emit_insts() {
+//!     println!("{}", inst.to_string());
+//! }
+//! ```
+
 
 use std::collections::HashMap;
 
@@ -70,10 +93,10 @@ pub struct Value {
     typeset: u32,
 }
 
-impl<'a> Value {
-    pub fn new(name: &'a str, size: u8, location: Location, value: i64, typeset: u32) -> Value {
+impl Value {
+    pub fn new(name: String, size: u8, location: Location, value: i64, typeset: u32) -> Value {
         Value {
-            name: name.to_string().clone(),
+            name: name.clone(),
             size: size,
             location: location,
             value: value,
@@ -82,26 +105,13 @@ impl<'a> Value {
     }
 
     pub fn null() -> Value {
-        Value {
-            name: String::from(""),
-            size: 0,
-            location: Location::Null,
-            value: 0,
-            typeset: 0,
-        }
+        Value::new("".to_string(), 0, Location::Null, 0, 0)
     }
 
-    pub fn new_tmp(i: u64) -> Value {
-        Value {
-            name: format!("tmp_{:x}", i),
-            size: 0,
-            location: Location::Temporary,
-            value: 0,
-            typeset: 0,
-        }
+    pub fn tmp(i: u64) -> Value {
+        Value::new(format!("tmp_{:x}", i), 0, Location::Temporary, 0, 0)
     }
 }
-    
 
 #[derive(Debug, Clone)]
 pub struct Instruction<'a> {
@@ -144,7 +154,7 @@ macro_rules! hash {
 fn init_opset() -> HashMap<&'static str, Operator<'static>> {
     // Make a map from esil string to struct Operator.
     // (operator: &str, arity: Arity).
-    // Possible Operatortimization:  Move to compile-time generation ?
+    // Possible Optimization:  Move to compile-time generation ?
     hash![
         ("==" , Operator::new("==", Arity::Binary)),
         ("<"  , Operator::new("<" , Arity::Binary)),
@@ -191,6 +201,7 @@ pub struct Parser<'a> {
     opset: HashMap<&'a str, Operator<'a>>,
     regset: HashMap<&'a str, u8>,
     tmp_index: u64,
+    default_size: u8,
 }
 
 impl<'a> Parser<'a> {
@@ -201,12 +212,13 @@ impl<'a> Parser<'a> {
             opset: init_opset(),
             regset: init_regset(),
             tmp_index: 0,
+            default_size: 64,
         }
     }
 
     fn get_tmp_register(&mut self) -> Value {
         self.tmp_index += 1;
-        Value::new_tmp(self.tmp_index)
+        Value::tmp(self.tmp_index)
     }
 
     fn add_inst(&mut self, op: Operator<'a>) {
@@ -243,25 +255,20 @@ impl<'a> Parser<'a> {
 
             if !token.contains('=') {
                 // Treat it as a operand.
-                let mut val_type: Location;
+                let mut val_type = Location::Unknown;
                 let mut val: i64 = 0;
                 // Change this default based on arch.
-                let mut size: u8 = 64;
-                
+                let mut size: u8 = self.default_size;
                 if let Some(s) = self.regset.get(token) {
                     val_type = Location::Register;
                     // For now, reg is just a u8.
                     size = *s; 
-                } else if token.contains("temp") {
-                    val_type = Location::Temporary;
                 } else if let Ok(v) = token.parse::<i64>() {
                     val_type = Location::Constant;
                     val = v;
-                } else {
-                    val_type = Location::Unknown;
                 }
 
-                let v = Value::new(token, size, val_type, val, 0);
+                let v = Value::new(String::from(token), size, val_type, val, 0);
                 self.stack.push(v);
                 continue;
             }
@@ -284,7 +291,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Should actually return an iter instead.
     pub fn emit_insts(&self) -> Vec<Instruction<'a>> {
         (self).insts.clone()
     }
