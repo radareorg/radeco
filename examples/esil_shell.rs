@@ -1,8 +1,10 @@
 extern crate radeco;
 
-use radeco::frontend::esil;
 use std::io;
 use std::io::Write;
+
+#[warn(unused_imports)]
+use radeco::frontend::esil;
 
 fn main() {
 	let mut reader = io::stdin();
