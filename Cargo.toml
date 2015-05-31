@@ -10,6 +10,9 @@ authors = [
 doc = false
 path = "src/rustc_data_structures"
 
+[dependencies]
+regex = "*"
+
 [[bin]]
 doc = false
 name = "radeco"

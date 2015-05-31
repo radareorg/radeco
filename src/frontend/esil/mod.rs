@@ -19,9 +19,10 @@
 //! # Example
 //!
 //! ```
-//! let esil = String::from("eax,ebx,^=");
-//! let p = Parser::new();
-//! p.parse(esil)
+//! use radeco::frontend::esil;
+//! let esil = "eax,ebx,^=";
+//! let mut p = esil::Parser::new();
+//! p.parse(esil);
 //! for inst in &p.emit_insts() {
 //!     println!("{}", inst.to_string());
 //! }
@@ -29,6 +30,7 @@
 
 
 use std::collections::HashMap;
+use regex::Regex;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Arity {
@@ -63,6 +65,13 @@ impl<'a> Operator<'a> {
     pub fn nop() -> Operator<'a> {
         Operator { op: "nop", arity: Arity::Zero }
     }
+}
+
+
+
+// This enum contains all permitted operators as structs.
+pub enum Ops {
+    
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -108,33 +117,35 @@ impl Value {
         Value::new("".to_string(), 0, Location::Null, 0, 0)
     }
 
-    pub fn tmp(i: u64) -> Value {
-        Value::new(format!("tmp_{:x}", i), 0, Location::Temporary, 0, 0)
+    pub fn tmp(i: u64, size: u8) -> Value {
+        Value::new(format!("tmp_{:x}", i), size, Location::Temporary, 0, 0)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Instruction<'a> {
     opcode: Operator<'a>,
-    dest: Value,
+    dst: Value,
     operand_1: Value,
     operand_2: Value,
 }
 
 impl<'a> Instruction<'a> {
-    pub fn new(opcode: Operator<'a>, dest: Value, op1: Value, op2: Value) -> Instruction<'a> {
+    pub fn new(opcode: Operator<'a>, dst: Value, op1: Value, op2: Value) -> Instruction<'a> {
         Instruction {
             opcode: opcode,
-            dest: dest,
+            dst: dst,
             operand_1: op1,
             operand_2: op2,
         }
     }
     pub fn to_string(&self) -> String {
-        if self.opcode.op == "=" {
-            format!("{} {} {}", self.operand_1.name, self.opcode.op, self.operand_2.name)
+        if self.opcode.arity.n() == 1 {
+            format!("{}({}) = {} {}({})", self.dst.name, self.dst.size, self.opcode.op, self.operand_1.name, self.operand_1.size)
+        } else if self.opcode.op == "=" {
+            format!("{}({}) = {}({})", self.dst.name, self.dst.size, self.operand_1.name, self.operand_1.size)
         } else {
-            format!("{} {} {} {} {}", self.dest.name, "=", self.operand_1.name, self.opcode.op, self.operand_2.name)
+            format!("{} = {} {} {}", self.dst.name, self.operand_1.name, self.opcode.op, self.operand_2.name)
         }
     }
 }
@@ -153,7 +164,7 @@ macro_rules! hash {
 
 fn init_opset() -> HashMap<&'static str, Operator<'static>> {
     // Make a map from esil string to struct Operator.
-    // (operator: &str, arity: Arity).
+    // (operator: &str, op: Operator).
     // Possible Optimization:  Move to compile-time generation ?
     hash![
         ("==" , Operator::new("==", Arity::Binary)),
@@ -212,17 +223,21 @@ impl<'a> Parser<'a> {
             opset: init_opset(),
             regset: init_regset(),
             tmp_index: 0,
+            // Change this default based on arch.
             default_size: 64,
         }
     }
 
-    fn get_tmp_register(&mut self) -> Value {
+    fn get_tmp_register(&mut self, mut size: u8) -> Value {
         self.tmp_index += 1;
-        Value::tmp(self.tmp_index)
+        if size == 0 {
+            size = self.default_size;
+        }
+        Value::tmp(self.tmp_index, size)
     }
 
     fn add_inst(&mut self, op: Operator<'a>) {
-        let op2 = match self.stack.pop() {
+        let mut op2 = match self.stack.pop() {
             Some(ele) => ele,
             None => return,
         };
@@ -234,16 +249,18 @@ impl<'a> Parser<'a> {
             };
         }
         let dst: Value = match op.op {
-            "=" => Value::null(),
-            _ => self.get_tmp_register(),
+            // Make this cleaner later.
+            "=" => { let tmp_ = op2.clone(); op2 = op1.clone(); op1 = Value::null(); tmp_.clone() },
+            _ => self.get_tmp_register(0),
         };
         self.insts.push(Instruction::new(op, dst.clone(), op2, op1));
         self.stack.push(dst);
     }
 
     pub fn parse(&mut self, esil: &'a str) {
-        for token in esil.split(',') {
-            let op = match self.opset.get(token) {
+        let expanded_esil: Vec<String> = esil.split(',').map(|x| x.to_string()).collect();
+        for token in expanded_esil {
+            let op = match self.opset.get(&*token) {
                 Some(op) => op.clone(),
                 None => Operator::nop(),
             };
@@ -253,41 +270,94 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            if !token.contains('=') {
-                // Treat it as a operand.
+            //Do a regular expression match to check for alpha.
+            //If it contains atleast one alpha, it cannot be an operator.
+            let re = Regex::new("[a-zA-Z]").unwrap();
+            if re.is_match(&*token) {
                 let mut val_type = Location::Unknown;
                 let mut val: i64 = 0;
-                // Change this default based on arch.
                 let mut size: u8 = self.default_size;
-                if let Some(s) = self.regset.get(token) {
+                if let Some(r) = self.regset.get(&*token) {
                     val_type = Location::Register;
                     // For now, reg is just a u8.
-                    size = *s; 
+                    size = *r; 
                 } else if let Ok(v) = token.parse::<i64>() {
                     val_type = Location::Constant;
                     val = v;
                 }
-
                 let v = Value::new(String::from(token), size, val_type, val, 0);
                 self.stack.push(v);
                 continue;
             }
 
-            // Expand the 'composite' operators to 'basic' ones.
-            for t in token.split_terminator('=') {
-                let o = match self.opset.get(t) {
-                    Some(op) => op.clone(),
-                    None => Operator::nop(), 
-                };
-                if o.op == "nop" {
-                    // Return error here instead.
+            // Deal with normal 'composite' instructions.
+            if token.char_indices().last().unwrap().1 != ']' {
+                let mut dst: Value;
+                if let Some(x) = self.stack.last() {
+                    dst = x.clone();
+                } else {
+                    // Return Error.
                     return;
                 }
-                let dst = self.stack.last().unwrap().clone();
-                self.add_inst(o);
+                let re = Regex::new(r"^(.|..)=$").unwrap();
+                let t = re.captures(&*token).unwrap().at(1).unwrap_or("");
+                if t.len() == 0 {
+                    // Return Error.
+                    return;
+                }
+                let op = match self.opset.get(t) {
+                    Some(op) => op.clone(),
+                    None => return,
+                };
+
+                self.add_inst(op);
                 self.stack.push(dst);
                 self.add_inst(Operator::new("=", Arity::Binary));
+                continue;
             }
+
+            // Deal with memaccess 'composite' instructions.
+            let re = Regex::new(r"^(.|..)?(=)?\[([1248]?)\]$").unwrap();
+            let tokens = re.captures(&*token).unwrap();
+            let eq = tokens.at(2).unwrap_or("");
+            let has_op = tokens.at(1).unwrap_or("");
+            let access_size = tokens.at(3).unwrap_or("");
+            let access_size = match access_size {
+                "" => self.default_size,
+                _ => access_size.parse::<u8>().unwrap(),
+            };
+
+            self.add_inst(Operator::new("&ref", Arity::Unary));
+            // Set the correct size.
+            let tmp_dst = self.get_tmp_register(access_size);
+            let tmp_dst1 = tmp_dst.clone();
+            self.stack.push(tmp_dst);
+            self.add_inst(Operator::new("=", Arity::Binary));
+            
+            // Simple 'peek' ([n])
+            if eq.is_empty() {
+                continue;
+            }
+
+            // Simple 'poke' (=[n])
+            if has_op.is_empty() {
+                self.add_inst(Operator::new("=", Arity::Binary));
+                continue;
+            }
+
+            // 'poke' with another operation. (<op>=[n])
+            let o = match self.opset.get(has_op) {
+                Some(x) => x.clone(),
+                None => return,
+            };
+            if o.op == "nop" {
+                // Add Error.
+                return;
+            }
+            self.add_inst(o);
+            // Reassignment.
+            self.stack.push(tmp_dst1);
+            self.add_inst(Operator::new("=", Arity::Binary));
         }
     }
 
