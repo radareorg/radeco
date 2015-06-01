@@ -15,7 +15,7 @@ fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
 // attribute to ignore unused 'main' when running tests
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
-    let expression = "0xffff,rax,+";
+    let expression = "rax,[2],rbx,-=";
     let mut p = esil::Parser::new();
     parse_verbose(&mut p, expression);
 }

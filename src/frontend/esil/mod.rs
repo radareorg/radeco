@@ -28,7 +28,6 @@
 //! }
 //! ```
 
-
 use std::collections::HashMap;
 use regex::Regex;
 
@@ -67,12 +66,77 @@ impl<'a> Operator<'a> {
     }
 }
 
-
-
-// This enum contains all permitted operators as structs.
-pub enum Ops {
-    
+pub enum Opcode {
+    OpAdd,
+    OpSub,
+    OpMul,
+    OpDiv,
+    OpMod,
+    OpAnd,
+    OpOr,
+    OpXor,
+    OpNot,
+    OpEq,
+    OpCmp,
+    OpGt,
+    OpLt,
+    OpLsl,
+    OpLsr,
+    OpInc, // Actually composite. Not broken down for now.
+    OpDec, // Actually composite. Not broken down for now.
+    OpIf,
+    OpRef,
+    // Width casts.
+    OpNarrow,
+    OpWiden,
 }
+
+impl<'a> Opcode {
+    fn to_operator(&self) -> Operator<'a> {
+        let (op, arity) = match *self {
+            Opcode::OpAdd => ("+", Arity::Binary),
+            Opcode::OpSub => ("-", Arity::Binary),
+            Opcode::OpMul => ("*", Arity::Binary),
+            Opcode::OpDiv => ("/", Arity::Binary),
+            Opcode::OpMod => ("%", Arity::Binary),
+            Opcode::OpAnd => ("&", Arity::Binary),
+            Opcode::OpOr => ("|", Arity::Binary),
+            Opcode::OpXor => ("^", Arity::Binary),
+            Opcode::OpNot => ("!", Arity::Unary),
+            Opcode::OpEq => ("=", Arity::Binary),
+            Opcode::OpCmp => ("==", Arity::Binary),
+            Opcode::OpGt => (">", Arity::Binary),
+            Opcode::OpLt => ("<", Arity::Binary),
+            Opcode::OpLsl => ("<<", Arity::Binary),
+            Opcode::OpLsr => (">>", Arity::Binary),
+            Opcode::OpInc => ("++", Arity::Unary),
+            Opcode::OpDec => ("--", Arity::Unary),
+            Opcode::OpIf => ("if", Arity::Unary),
+            Opcode::OpRef => ("&ref", Arity::Unary),
+            Opcode::OpNarrow => ("narrow", Arity::Binary),
+            Opcode::OpWiden => ("widen", Arity::Binary),
+        };
+        Operator::new(op, arity).clone()
+    }
+
+    fn format(&self, ins_str: String) -> String {
+        // ins_str is of the form: op,dst,dst_size,op1,op1_size,op2,op2_size
+        let tokens: Vec<String> = ins_str.split_terminator(',').map(|s| s.to_string()).collect();
+        let s = match *self {
+            Opcode::OpNot => format!("%{}[:{}] = {}%{}[:{}]", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4]),
+            Opcode::OpEq => format!("%{}[:{}] = %{}[:{}]", tokens[1], tokens[2], tokens[3], tokens[4]),
+            Opcode::OpInc => format!("%{}[:{}] = %{}[:{}] + 1", tokens[1], tokens[2], tokens[3], tokens[4]),
+            Opcode::OpDec => format!("%{}[:{}] = %{}[:{}] - 1", tokens[1], tokens[2], tokens[3], tokens[4]),
+            Opcode::OpIf => format!("if (%{}) {{", tokens[3]),
+            Opcode::OpRef => format!("%{}[:{}] = {}%{}[:{}]", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4]),
+            Opcode::OpNarrow => format!("%{}[:{}] = {}(%{}[:{}], {})", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4], tokens[5]),
+            Opcode::OpWiden => format!("%{}[:{}] = {}(%{}[:{}], {})", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4], tokens[5]),
+            _ => format!("%{}[:{}] = %{}[:{}] {} %{}[:{}]", tokens[1], tokens[2], tokens[3], tokens[4], tokens[0], tokens[5], tokens[6]),
+        };
+        s
+    }
+}
+
 
 #[derive(Debug, Copy, Clone)]
 pub enum Location {
@@ -120,6 +184,10 @@ impl Value {
     pub fn tmp(i: u64, size: u8) -> Value {
         Value::new(format!("tmp_{:x}", i), size, Location::Temporary, 0, 0)
     }
+
+    pub fn constant(i: i64) -> Value {
+        Value::new(i.to_string(), 64, Location::Constant, i, 0)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -139,15 +207,20 @@ impl<'a> Instruction<'a> {
             operand_2: op2,
         }
     }
+
     pub fn to_string(&self) -> String {
         if self.opcode.arity.n() == 1 {
-            format!("{}({}) = {} {}({})", self.dst.name, self.dst.size, self.opcode.op, self.operand_1.name, self.operand_1.size)
+            format!("{}({}) = {} {}({})", self.dst.name, self.dst.size, 
+                    self.opcode.op, self.operand_1.name, self.operand_1.size)
         } else if self.opcode.op == "=" {
-            format!("{}({}) = {}({})", self.dst.name, self.dst.size, self.operand_1.name, self.operand_1.size)
+            format!("{}({}) = {}({})", self.dst.name, self.dst.size, 
+                    self.operand_1.name, self.operand_1.size)
         } else {
-            format!("{} = {} {} {}", self.dst.name, self.operand_1.name, self.opcode.op, self.operand_2.name)
+            format!("{}({}) = {}({}) {} {}({})", self.dst.name, self.dst.size, self.operand_1.name, 
+                    self.operand_1.size, self.opcode.op, self.operand_2.name, self.operand_2.size)
         }
     }
+
 }
 
 macro_rules! hash {
@@ -236,11 +309,32 @@ impl<'a> Parser<'a> {
         Value::tmp(self.tmp_index, size)
     }
 
+    fn add_widen_inst(&mut self, op: &mut Value, size: u8) {
+        if op.size > size {
+            return;
+        }
+        let dst = self.get_tmp_register(size);
+        let operator = Opcode::OpWiden.to_operator();
+        self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::null()));
+        *op = dst;
+    }
+
+    fn add_narrow_inst(&mut self, op: &mut Value, size: u8) {
+        if op.size < size {
+            return;
+        }
+        let dst = self.get_tmp_register(size);
+        let operator = Opcode::OpNarrow.to_operator();
+        self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64)));
+        *op = dst;
+    }
+
     fn add_inst(&mut self, op: Operator<'a>) {
         let mut op2 = match self.stack.pop() {
             Some(ele) => ele,
             None => return,
         };
+
         let mut op1 = Value::null();
         if op.arity.n() == 2 {
             op1 = match self.stack.pop() {
@@ -248,11 +342,28 @@ impl<'a> Parser<'a> {
                 None => return,
             };
         }
-        let dst: Value = match op.op {
-            // Make this cleaner later.
-            "=" => { let tmp_ = op2.clone(); op2 = op1.clone(); op1 = Value::null(); tmp_.clone() },
-            _ => self.get_tmp_register(0),
-        };
+
+        let mut dst_size = op2.size;
+        //if op1.size > op2.size {
+            //dst_size = op1.size;
+            //self.add_widen_inst(&mut op2, op1.size);
+        //} else if op1.size < op2.size {
+            //dst_size = op2.size;
+            //self.add_widen_inst(&mut op1, op2.size);
+        //}
+
+        let mut dst: Value;
+        if op.op == "=" {
+            dst = op2.clone();
+            op2 = op1.clone();
+            op1 = Value::null();
+        } else {
+            dst = self.get_tmp_register(dst_size);
+        }
+
+        // Add a check to see if dst, op1 and op2 have the same size.
+        // If they do not, cast it.
+
         self.insts.push(Instruction::new(op, dst.clone(), op2, op1));
         self.stack.push(dst);
     }
@@ -270,8 +381,7 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            //Do a regular expression match to check for alpha.
-            //If it contains atleast one alpha, it cannot be an operator.
+            // If it contains atleast one alpha, it cannot be an operator.
             let re = Regex::new("[a-zA-Z]").unwrap();
             if re.is_match(&*token) {
                 let mut val_type = Location::Unknown;
@@ -312,7 +422,7 @@ impl<'a> Parser<'a> {
 
                 self.add_inst(op);
                 self.stack.push(dst);
-                self.add_inst(Operator::new("=", Arity::Binary));
+                self.add_inst(Opcode::OpEq.to_operator());
                 continue;
             }
 
@@ -324,15 +434,18 @@ impl<'a> Parser<'a> {
             let access_size = tokens.at(3).unwrap_or("");
             let access_size = match access_size {
                 "" => self.default_size,
-                _ => access_size.parse::<u8>().unwrap(),
+                _ => access_size.parse::<u8>().unwrap() * 8,
             };
 
-            self.add_inst(Operator::new("&ref", Arity::Unary));
+            self.add_inst(Opcode::OpRef.to_operator());
             // Set the correct size.
             let tmp_dst = self.get_tmp_register(access_size);
             let tmp_dst1 = tmp_dst.clone();
-            self.stack.push(tmp_dst);
-            self.add_inst(Operator::new("=", Arity::Binary));
+            //self.stack.push(tmp_dst);
+            //self.add_inst(Opcode::OpEq.to_operator())
+            let mut x = self.stack.pop().unwrap();
+
+            self.add_narrow_inst(&mut x, access_size);
             
             // Simple 'peek' ([n])
             if eq.is_empty() {
@@ -341,23 +454,20 @@ impl<'a> Parser<'a> {
 
             // Simple 'poke' (=[n])
             if has_op.is_empty() {
-                self.add_inst(Operator::new("=", Arity::Binary));
+                self.add_inst(Opcode::OpEq.to_operator());
                 continue;
             }
 
             // 'poke' with another operation. (<op>=[n])
             let o = match self.opset.get(has_op) {
                 Some(x) => x.clone(),
-                None => return,
+                // Return with error
+                None => return, 
             };
-            if o.op == "nop" {
-                // Add Error.
-                return;
-            }
             self.add_inst(o);
             // Reassignment.
             self.stack.push(tmp_dst1);
-            self.add_inst(Operator::new("=", Arity::Binary));
+            self.add_inst(Opcode::OpEq.to_operator());
         }
     }
 
