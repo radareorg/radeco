@@ -29,6 +29,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::fmt;
 use regex::Regex;
 
 #[derive(Debug, Copy, Clone)]
@@ -66,6 +67,7 @@ impl<'a> Operator<'a> {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Opcode {
     OpAdd,
     OpSub,
@@ -80,6 +82,8 @@ pub enum Opcode {
     OpCmp,
     OpGt,
     OpLt,
+    OpGteq,
+    OpLteq,
     OpLsl,
     OpLsr,
     OpInc, // Actually composite. Not broken down for now.
@@ -89,6 +93,7 @@ pub enum Opcode {
     // Width casts.
     OpNarrow,
     OpWiden,
+    OpNop,
 }
 
 impl<'a> Opcode {
@@ -107,6 +112,8 @@ impl<'a> Opcode {
             Opcode::OpCmp => ("==", Arity::Binary),
             Opcode::OpGt => (">", Arity::Binary),
             Opcode::OpLt => ("<", Arity::Binary),
+            Opcode::OpLteq => ("<=", Arity::Binary),
+            Opcode::OpGteq => (">=", Arity::Binary),
             Opcode::OpLsl => ("<<", Arity::Binary),
             Opcode::OpLsr => (">>", Arity::Binary),
             Opcode::OpInc => ("++", Arity::Unary),
@@ -115,25 +122,9 @@ impl<'a> Opcode {
             Opcode::OpRef => ("&ref", Arity::Unary),
             Opcode::OpNarrow => ("narrow", Arity::Binary),
             Opcode::OpWiden => ("widen", Arity::Binary),
+            Opcode::OpNop => ("", Arity::Zero),
         };
         Operator::new(op, arity).clone()
-    }
-
-    fn format(&self, ins_str: String) -> String {
-        // ins_str is of the form: op,dst,dst_size,op1,op1_size,op2,op2_size
-        let tokens: Vec<String> = ins_str.split_terminator(',').map(|s| s.to_string()).collect();
-        let s = match *self {
-            Opcode::OpNot => format!("%{}[:{}] = {}%{}[:{}]", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4]),
-            Opcode::OpEq => format!("%{}[:{}] = %{}[:{}]", tokens[1], tokens[2], tokens[3], tokens[4]),
-            Opcode::OpInc => format!("%{}[:{}] = %{}[:{}] + 1", tokens[1], tokens[2], tokens[3], tokens[4]),
-            Opcode::OpDec => format!("%{}[:{}] = %{}[:{}] - 1", tokens[1], tokens[2], tokens[3], tokens[4]),
-            Opcode::OpIf => format!("if (%{}) {{", tokens[3]),
-            Opcode::OpRef => format!("%{}[:{}] = {}%{}[:{}]", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4]),
-            Opcode::OpNarrow => format!("%{}[:{}] = {}(%{}[:{}], {})", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4], tokens[5]),
-            Opcode::OpWiden => format!("%{}[:{}] = {}(%{}[:{}], {})", tokens[1], tokens[2], tokens[0], tokens[3], tokens[4], tokens[5]),
-            _ => format!("%{}[:{}] = %{}[:{}] {} %{}[:{}]", tokens[1], tokens[2], tokens[3], tokens[4], tokens[0], tokens[5], tokens[6]),
-        };
-        s
     }
 }
 
@@ -191,15 +182,15 @@ impl Value {
 }
 
 #[derive(Debug, Clone)]
-pub struct Instruction<'a> {
-    opcode: Operator<'a>,
+pub struct Instruction {
+    opcode: Opcode,
     dst: Value,
     operand_1: Value,
     operand_2: Value,
 }
 
-impl<'a> Instruction<'a> {
-    pub fn new(opcode: Operator<'a>, dst: Value, op1: Value, op2: Value) -> Instruction<'a> {
+impl<'a> Instruction {
+    pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value) -> Instruction {
         Instruction {
             opcode: opcode,
             dst: dst,
@@ -207,20 +198,43 @@ impl<'a> Instruction<'a> {
             operand_2: op2,
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        if self.opcode.arity.n() == 1 {
-            format!("{}({}) = {} {}({})", self.dst.name, self.dst.size, 
-                    self.opcode.op, self.operand_1.name, self.operand_1.size)
-        } else if self.opcode.op == "=" {
-            format!("{}({}) = {}({})", self.dst.name, self.dst.size, 
-                    self.operand_1.name, self.operand_1.size)
-        } else {
-            format!("{}({}) = {}({}) {} {}({})", self.dst.name, self.dst.size, self.operand_1.name, 
-                    self.operand_1.size, self.opcode.op, self.operand_2.name, self.operand_2.size)
-        }
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s: String = match self.opcode {
+            Opcode::OpNot => format!("{}[:{}] = {}{}[:{}]", self.dst.name, self.dst.size,
+                                     self.opcode.to_operator().op, self.operand_1.name, self.operand_1.size),
+
+            Opcode::OpEq => format!("{}[:{}] = {}[:{}]", self.dst.name, self.dst.size,
+                                    self.operand_1.name, self.operand_1.size),
+
+            Opcode::OpInc => format!("{}[:{}] = {}[:{}] + 1", self.dst.name, self.dst.size,
+                                     self.operand_1.name, self.operand_1.size),
+
+            Opcode::OpDec => format!("{}[:{}] = {}[:{}] - 1", self.dst.name, self.dst.size,
+                                     self.operand_1.name, self.operand_1.size),
+
+            Opcode::OpIf => format!("if ({}) {{", self.operand_1.name),
+
+            Opcode::OpRef => format!("{}[:{}] = {}({}[:{}])", self.dst.name, self.dst.size,
+                                    self.opcode.to_operator().op, self.operand_1.name, self.operand_1.size),
+
+            Opcode::OpNarrow => format!("{}[:{}] = {}({}[:{}], {})", self.dst.name, self.dst.size,
+                                        self.opcode.to_operator().op, self.operand_1.name,
+                                        self.operand_1.size, self.operand_2.name),
+
+            Opcode::OpWiden => format!("{}[:{}] = {}({}[:{}], {})", self.dst.name, self.dst.size,
+                                       self.opcode.to_operator().op, self.operand_1.name,
+                                       self.operand_1.size, self.operand_2.name),
+
+            _ => format!("{}[:{}] = {}[:{}] {} {}[:{}]", self.dst.name, self.dst.size,
+                         self.operand_1.name, self.operand_1.size, self.opcode.to_operator().op,
+                         self.operand_2.name, self.operand_2.size),
+
+        };
+        f.pad_integral(true, "", &s)
     }
-
 }
 
 macro_rules! hash {
@@ -235,32 +249,32 @@ macro_rules! hash {
     };
 }
 
-fn init_opset() -> HashMap<&'static str, Operator<'static>> {
+fn init_opset() -> HashMap<&'static str, Opcode> {
     // Make a map from esil string to struct Operator.
     // (operator: &str, op: Operator).
     // Possible Optimization:  Move to compile-time generation ?
     hash![
-        ("==" , Operator::new("==", Arity::Binary)),
-        ("<"  , Operator::new("<" , Arity::Binary)),
-        (">"  , Operator::new(">" , Arity::Binary)),
-        ("<=" , Operator::new("<=", Arity::Binary)),
-        (">=" , Operator::new(">=", Arity::Binary)),
-        ("<<" , Operator::new("<<", Arity::Binary)),
-        (">>" , Operator::new(">>", Arity::Binary)),
-        ("&"  , Operator::new("&" , Arity::Binary)),
-        ("|"  , Operator::new("|" , Arity::Binary)),
-        ("="  , Operator::new("=" , Arity::Binary)),
-        ("*"  , Operator::new("*" , Arity::Binary)),
-        ("^"  , Operator::new("^" , Arity::Binary)),
-        ("+"  , Operator::new("+" , Arity::Binary)),
-        ("-"  , Operator::new("-" , Arity::Binary)),
-        ("/"  , Operator::new("/" , Arity::Binary)),
-        ("%"  , Operator::new("%" , Arity::Binary)),
-        ("?{" , Operator::new("?{", Arity::Unary)),
-        ("!"  , Operator::new("!" , Arity::Unary)),
-        ("--" , Operator::new("--", Arity::Unary)),
-        ("++" , Operator::new("++", Arity::Unary)),
-        ("}"  , Operator::new("}" , Arity::Zero))
+        ("==" , Opcode::OpCmp),
+        ("<"  , Opcode::OpLt),
+        (">"  , Opcode::OpGt),
+        ("<=" , Opcode::OpGteq),
+        (">=" , Opcode::OpLteq),
+        ("<<" , Opcode::OpLsl),
+        (">>" , Opcode::OpLsr),
+        ("&"  , Opcode::OpAnd),
+        ("|"  , Opcode::OpOr),
+        ("="  , Opcode::OpEq),
+        ("*"  , Opcode::OpMul),
+        ("^"  , Opcode::OpXor),
+        ("+"  , Opcode::OpAdd),
+        ("-"  , Opcode::OpSub),
+        ("/"  , Opcode::OpDiv),
+        ("%"  , Opcode::OpMod),
+        ("?{" , Opcode::OpIf),
+        ("!"  , Opcode::OpNot),
+        ("--" , Opcode::OpDec),
+        ("++" , Opcode::OpInc),
+        ("}"  , Opcode::OpNop)
     ]
 }
 
@@ -281,8 +295,8 @@ fn init_regset() -> HashMap<&'static str, u8> {
 
 pub struct Parser<'a> {
     stack: Vec<Value>,
-    insts: Vec<Instruction<'a>>,
-    opset: HashMap<&'a str, Operator<'a>>,
+    insts: Vec<Instruction>,
+    opset: HashMap<&'a str, Opcode>,
     regset: HashMap<&'a str, u8>,
     tmp_index: u64,
     default_size: u8,
@@ -314,7 +328,7 @@ impl<'a> Parser<'a> {
             return;
         }
         let dst = self.get_tmp_register(size);
-        let operator = Opcode::OpWiden.to_operator();
+        let operator = Opcode::OpWiden;
         self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::null()));
         *op = dst;
     }
@@ -324,19 +338,19 @@ impl<'a> Parser<'a> {
             return;
         }
         let dst = self.get_tmp_register(size);
-        let operator = Opcode::OpNarrow.to_operator();
+        let operator = Opcode::OpNarrow;
         self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64)));
         *op = dst;
     }
 
-    fn add_inst(&mut self, op: Operator<'a>) {
+    fn add_inst(&mut self, op: Opcode) {
         let mut op2 = match self.stack.pop() {
             Some(ele) => ele,
             None => return,
         };
 
         let mut op1 = Value::null();
-        if op.arity.n() == 2 {
+        if op.to_operator().arity.n() == 2 {
             op1 = match self.stack.pop() {
                 Some(ele) => ele,
                 None => return,
@@ -353,7 +367,7 @@ impl<'a> Parser<'a> {
         //}
 
         let mut dst: Value;
-        if op.op == "=" {
+        if op.to_operator().op == "=" {
             dst = op2.clone();
             op2 = op1.clone();
             op1 = Value::null();
@@ -373,10 +387,10 @@ impl<'a> Parser<'a> {
         for token in expanded_esil {
             let op = match self.opset.get(&*token) {
                 Some(op) => op.clone(),
-                None => Operator::nop(),
+                None => Opcode::OpNop,
             };
 
-            if op.op != "nop" {
+            if op != Opcode::OpNop {
                 self.add_inst(op);
                 continue;
             }
@@ -422,7 +436,7 @@ impl<'a> Parser<'a> {
 
                 self.add_inst(op);
                 self.stack.push(dst);
-                self.add_inst(Opcode::OpEq.to_operator());
+                self.add_inst(Opcode::OpEq);
                 continue;
             }
 
@@ -437,15 +451,12 @@ impl<'a> Parser<'a> {
                 _ => access_size.parse::<u8>().unwrap() * 8,
             };
 
-            self.add_inst(Opcode::OpRef.to_operator());
+            self.add_inst(Opcode::OpRef);
             // Set the correct size.
-            let tmp_dst = self.get_tmp_register(access_size);
-            let tmp_dst1 = tmp_dst.clone();
-            //self.stack.push(tmp_dst);
-            //self.add_inst(Opcode::OpEq.to_operator())
             let mut x = self.stack.pop().unwrap();
-
             self.add_narrow_inst(&mut x, access_size);
+            let tmp_dst1 = x.clone();
+            self.stack.push(x);
             
             // Simple 'peek' ([n])
             if eq.is_empty() {
@@ -454,7 +465,7 @@ impl<'a> Parser<'a> {
 
             // Simple 'poke' (=[n])
             if has_op.is_empty() {
-                self.add_inst(Opcode::OpEq.to_operator());
+                self.add_inst(Opcode::OpEq);
                 continue;
             }
 
@@ -467,11 +478,11 @@ impl<'a> Parser<'a> {
             self.add_inst(o);
             // Reassignment.
             self.stack.push(tmp_dst1);
-            self.add_inst(Opcode::OpEq.to_operator());
+            self.add_inst(Opcode::OpEq);
         }
     }
 
-    pub fn emit_insts(&self) -> Vec<Instruction<'a>> {
+    pub fn emit_insts(&self) -> Vec<Instruction> {
         (self).insts.clone()
     }
 }
