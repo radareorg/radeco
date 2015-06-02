@@ -5,10 +5,8 @@ use std::ops::BitAnd;
 /* Helper tests */
 
 fn confirm_multiplicative_inverse(a: u64, n: u64) {
-	match multiplicative_inverse(a, n) {
-		Some(x) => assert!((a*x) % n == 1),
-		None => panic!()
-	}
+	let x = multiplicative_inverse(a, n).unwrap();
+	assert!((a*x) % n == 1);
 }
 
 #[test]
@@ -95,7 +93,6 @@ fn confirm_valueset_or(u: &ValueSet<u64>, v: &ValueSet<u64>, samples: &[u64]) {
 */
 
 fn confirm_valueset_weaker(u: &ValueSet<u64>, v: &ValueSet<u64>, samples: &[u64]) {
-	//println!("{:?} {:?}", u, v);
 	for &sample in samples {
 		assert!(!u.contains(sample) || v.contains(sample));
 	}
@@ -103,14 +100,14 @@ fn confirm_valueset_weaker(u: &ValueSet<u64>, v: &ValueSet<u64>, samples: &[u64]
 
 #[test]
 fn test_uintmultiple_membership() {
-	let m5_2 = UIntMultiple{factor: 5, offset: 2};
+	let m5_2 = UIntMultiple{modulus: 5, residue: 2};
 	confirm_valueset_contains    (&m5_2, &[2, 7, 12]);
 	confirm_valueset_contains_not(&m5_2, &[0, 1, 3, 10, 11, 13]);
 
-	let m0_2 = UIntMultiple{factor: 0, offset: 2};
+	let m0_2 = UIntMultiple{modulus: 0, residue: 2};
 	confirm_valueset_contains_not(&m0_2, &[0, 1, 2, 3]);
 
-	let m5_0 = UIntMultiple{factor: 5, offset: 0};
+	let m5_0 = UIntMultiple{modulus: 5, residue: 0};
 	confirm_valueset_contains    (&m5_0, &[0, 5, 10]);
 	confirm_valueset_contains_not(&m5_0, &[1, 4, 6, 9, 11]);
 }
@@ -161,12 +158,12 @@ fn test_uintmultiple_conversions() {
 	];
 
 
-	let empty = UIntMultiple{factor: 0, offset: 3};
+	let empty = UIntMultiple{modulus: 0, residue: 3};
 	confirm_valueset_weaker(&empty, &empty.as_knownbits(), &seq);
 	confirm_valueset_weaker(&empty, &empty.as_urange(), &seq);
 	confirm_valueset_weaker(&empty, &empty.as_srange(), &seq);
 
-	let m12_6 = UIntMultiple{factor: 12, offset: 6};
+	let m12_6 = UIntMultiple{modulus: 12, residue: 6};
 	confirm_valueset_weaker(&m12_6, &m12_6.as_knownbits(), &seq);
 	confirm_valueset_weaker(&m12_6, &m12_6.as_urange(), &seq);
 	confirm_valueset_weaker(&m12_6, &m12_6.as_srange(), &seq);
@@ -197,21 +194,13 @@ fn test_knownbits_conversions() {
 
 #[test]
 fn test_uintmultiple_intersection() {
-	let (a, b) = (11, 19);
-	let (x, y) = (5, 17);
-	let scale = 3*7;
-	confirm_valueset_and(
-		&UIntMultiple{factor: a*scale, offset: x*scale+1},
-		&UIntMultiple{factor: b*scale, offset: y*scale+1},
-		&(0..a*b*scale).collect::<Vec<_>>()
-	);/*
 	for a in 2..6 {
 		for i in 0..a {
-			let x = UIntMultiple { factor: a, offset: i };
+			let x = UIntMultiple { modulus: a, residue: i };
 
 			for b in 3..15 {
 				for j in 0..b {
-					let y = UIntMultiple { factor: b, offset: j };
+					let y = UIntMultiple { modulus: b, residue: j };
 
 					confirm_valueset_and(&x, &y, &(0..a*b).collect::<Vec<_>>());
 
@@ -219,5 +208,5 @@ fn test_uintmultiple_intersection() {
 			}
 
 		}
-	}*/
+	}
 }

@@ -18,13 +18,13 @@ pub trait ValueSet<T>: Debug /*+ BitAnd<Self> + BitOr<Self>*/ {
 #[derive(Clone, Copy, Debug)]
 pub struct KnownBits { pub zerobits: u64, pub onebits: u64 }
 #[derive(Clone, Copy, Debug)]
-pub struct UIntMultiple { pub factor: u64, pub offset: u64 }
+pub struct UIntMultiple { pub modulus: u64, pub residue: u64 }
 #[derive(Clone, Copy, Debug)]
 pub struct UIntRange { pub min: u64, pub max: u64 }
 #[derive(Clone, Copy, Debug)]
 pub struct SIntRange { pub min: i64, pub max: i64 }
 
-const EMPTY_UINTMULTIPLE: UIntMultiple = UIntMultiple { factor: 0, offset: 0 };
+const EMPTY_UINTMULTIPLE: UIntMultiple = UIntMultiple { modulus: 0, residue: 0 };
 const EMPTY_UINTRANGE:    UIntRange    = UIntRange { min: U64MAX, max: U64MIN };
 const EMPTY_SINTRANGE:    SIntRange    = SIntRange { min: S64MAX, max: S64MIN };
 
@@ -39,8 +39,8 @@ impl ValueSet<u64> for KnownBits {
 
 impl ValueSet<u64> for UIntMultiple {
 	fn contains(&self, value: u64) -> bool {
-		if self.factor == 0 { return false }
-		value % self.factor == self.offset
+		if self.modulus == 0 { return false }
+		value % self.modulus == self.residue
 	}
 }
 
@@ -57,8 +57,8 @@ impl KnownBits {
 		let fixedbits = self.zerobits | self.onebits;
 		let f_blcic = blcic(fixedbits);
 		UIntMultiple {
-			factor: f_blcic,
-			offset: (f_blcic - 1) & self.onebits
+			modulus: f_blcic,
+			residue: (f_blcic - 1) & self.onebits
 		}
 	}
 	pub fn as_urange(&self) -> UIntRange {
@@ -79,22 +79,22 @@ impl KnownBits {
 
 impl UIntMultiple {
 	pub fn as_knownbits(&self) -> KnownBits {
-		let z = tzmsk(self.factor);
+		let z = tzmsk(self.modulus);
 		KnownBits {
-			zerobits: z & !self.offset,
-			onebits:  z &  self.offset
+			zerobits: z & !self.residue,
+			onebits:  z &  self.residue
 		}
 	}
 	// dkreuter: it seems pointless to convert a multiple constraint to a range
 	pub fn as_urange(&self) -> UIntRange {
-		if self.factor == 0 { return EMPTY_UINTRANGE }
+		if self.modulus == 0 { return EMPTY_UINTRANGE }
 		UIntRange {
 			min: self.scan_up(U64MIN).unwrap_or(U64MAX),
 			max: self.scan_dn(U64MAX).unwrap_or(U64MIN)
 		}
 	}
 	pub fn as_srange(&self) -> SIntRange {
-		if self.factor == 0 { return EMPTY_SINTRANGE }
+		if self.modulus == 0 { return EMPTY_SINTRANGE }
 		SIntRange {
 			min: self.scan_up(S64MIN as u64).or_else(|| self.scan_up(U64MIN)).unwrap_or(S64MIN as u64) as i64,
 			max: self.scan_dn(S64MAX as u64).or_else(|| self.scan_dn(U64MAX)).unwrap_or(S64MAX as u64) as i64,
@@ -103,14 +103,14 @@ impl UIntMultiple {
 
 	// helpers
 	fn scan_up(&self, n: u64) -> Option<u64> {
-		let io = self.factor - self.offset;
+		let io = self.modulus - self.residue;
 		if n > U64MAX - io { return Option::None }
-		let t = (n + io) % self.factor;
-		Option::Some(if t == 0 { n } else { n + (self.factor - t) })
+		let t = (n + io) % self.modulus;
+		Option::Some(if t == 0 { n } else { n + (self.modulus - t) })
 	}
 	fn scan_dn(&self, n: u64) -> Option<u64> {
-		if n < self.offset { return Option::None }
-		Option::Some(n - (n-self.offset)%self.factor)
+		if n < self.residue { return Option::None }
+		Option::Some(n - (n-self.residue)%self.modulus)
 	}
 }
 
@@ -156,42 +156,41 @@ impl<'a, 'b> BitAnd<&'a UIntMultiple> for &'b UIntMultiple {
 	fn bitand(self, rhs: &UIntMultiple) -> UIntMultiple {
 		// calls the euclidean algorithm three times
 		// TODO: get a mathematician to reduce this
-		let (gcd, lcm) = gcd_lcm(self.factor, rhs.factor);
-		println!("gcd={:?} lcm={:?}", gcd, lcm);
-		let ioff = self.offset % gcd;
-		if ioff != rhs.offset % gcd {
+		let (gcd, lcm) = gcd_lcm(self.modulus, rhs.modulus);
+		let ioff = self.residue % gcd;
+		if ioff != rhs.residue % gcd {
 			return EMPTY_UINTMULTIPLE
 		}
-		/* TODO
-		let a = self.offset / gcd;
-		let b = rhs.offset / gcd;
-		let c = self.factor / gcd;
-		let d = rhs.factor / gcd;
 
-		// special cases when a==0 or b==0 or c==1 or d==1 (for speedups)
+		// See http://artofproblemsolving.com/wiki/index.php/Chinese_Remainder_Theorem
+		let y1 = self.residue / gcd;
+		let y2 = rhs.residue / gcd;
+		let d1 = self.modulus / gcd;
+		let d2 = rhs.modulus / gcd;
 
-		// reconstruct i from j
-		let i = b+d*j % c;
-		let j = a+c*i % d;
+		let x = if d1 == 1 {
+			y2
+		} else if d2 == 1 {
+			y1
+		} else {
+			let m = d1 * d2;
+			let b1 = d2; // = m / d1;
+			let b2 = d1; // = m / d2;
+			let a1 = match multiplicative_inverse(b1, d1) { None => return EMPTY_UINTMULTIPLE, Some(a1) => a1 };
+			let a2 = match multiplicative_inverse(b2, d2) { None => return EMPTY_UINTMULTIPLE, Some(a2) => a2 };
+			let x1 = a1 * b1 * y1;
+			let x2 = a2 * b2 * y2;
+			(x1 + x2) % m
+		};
 
-		let i = match multiplicative_inverse(d, c) { None => return EMPTY_UINTMULTIPLE, Some(i) => i };
-		let j = match multiplicative_inverse(c, d) { None => return EMPTY_UINTMULTIPLE, Some(j) => j };
+		let offset = ioff + gcd * x;
 
-		let offset1 = (ioff + (i*b+j*a)*gcd) % lcm;
-		let offset2 = (ioff + (i*a+j*b)*gcd) % lcm;
-		println!("{:?} {:?}", *self, *rhs);
-		println!("ioff={:?} + lcm={:?} - ((i={:?}*b={:?} + j={:?}*a={:?}) * {:?}) % lcm = {:?}", ioff, lcm, i, b, j, a, gcd, offset1);
-		println!("ioff={:?} + lcm={:?} - ((i={:?}*a={:?} + j={:?}*b={:?}) * {:?}) % lcm = {:?}", ioff, lcm, i, a, j, b, gcd, offset2);
-
-		*/
-		let offset = 0;
-
-		assert_eq!(offset % self.factor, self.offset);
-		assert_eq!(offset % rhs.factor, rhs.offset);
+		assert_eq!(offset % self.modulus, self.residue);
+		assert_eq!(offset % rhs.modulus, rhs.residue);
 
 		UIntMultiple {
-			factor: lcm,
-			offset: offset
+			modulus: lcm,
+			residue: offset
 		}
 	}
 }
