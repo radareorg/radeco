@@ -6,7 +6,9 @@ use radeco::frontend::esil;
 
 fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
     println!("< {}", expression.to_string());
-    p.parse(expression);
+    if let Err(e) = p.parse(expression) {
+        panic!("Error: {:?}", e)
+    }
     for inst in &p.emit_insts() {
         println!("> {}", inst);
     }
@@ -15,7 +17,7 @@ fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
 // attribute to ignore unused 'main' when running tests
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
-    let expression = "rax,rbx,-=[4]";
+    let expression = "rax,rbx,+";
     let mut p = esil::Parser::new();
     parse_verbose(&mut p, expression);
 }
