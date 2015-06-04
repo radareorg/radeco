@@ -1,64 +1,5 @@
-use super::value_int::{ValueSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
-use super::helper::{blcic, tzmsk, multiplicative_inverse};
-use std::ops::BitAnd;
-
-/* Helper tests */
-
-fn confirm_multiplicative_inverse(a: u64, n: u64) {
-	let x = multiplicative_inverse(a, n).unwrap();
-	assert!((a*x) % n == 1);
-}
-
-#[test]
-fn test_blcic() {
-	assert_eq!(blcic(0x0000000000000000), 0x0000000000000001);
-	assert_eq!(blcic(0x0000ffff0000ffff), 0x0000000000010000);
-	assert_eq!(blcic(0x00000000ffff0000), 0x0000000000000001);
-	assert_eq!(blcic(0xffffffffffffffff), 0x0000000000000000);
-}
-
-#[test]
-fn test_tzmsk() {
-	assert_eq!(tzmsk(0x0000000000000000), 0xffffffffffffffff);
-	assert_eq!(tzmsk(0x0000ffff0000ffff), 0x0000000000000000);
-	assert_eq!(tzmsk(0x00000000ffff0000), 0x000000000000ffff);
-	assert_eq!(tzmsk(0xffffffffffffffff), 0x0000000000000000);
-}
-
-fn test_multiplicative_inverse_recursively(depth: usize, m: u64, n: u64) {
-	if n != 1 {
-		confirm_multiplicative_inverse(m, n);
-		confirm_multiplicative_inverse(n, m);
-	}
-	if depth > 0 {
-		// See http://en.wikipedia.org/wiki/Coprime_integers#Generating_all_coprime_pairs
-		test_multiplicative_inverse_recursively(depth-1, 2*m-n, m);
-		test_multiplicative_inverse_recursively(depth-1, 2*m+n, m);
-		test_multiplicative_inverse_recursively(depth-1, m+2*n, n);
-	}
-}
-
-#[test]
-fn test_multiplicative_inverse() {
-	test_multiplicative_inverse_recursively(0, 2, 1);
-	test_multiplicative_inverse_recursively(0, 3, 1);
-}
-
-#[test]
-fn test_blcic_tzmsk_equiv() {
-	for &i in &[
-		0x0000000000000000,
-		0x0000ffff0000ffff,
-		0x00000000ffff0000,
-		0xffffffff0000ffff,
-		0xffff0000ffff0000,
-		0xffffffffffffffff
-	] {
-		assert_eq!(blcic(!i), tzmsk(i).wrapping_add(1));
-	}
-}
-
-/* ValueSet tests */
+use super::{ValueSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
+use std::ops::{BitAnd, BitOr};
 
 fn confirm_valueset_contains(u: &ValueSet<u64>, samples: &[u64]) {
 	for &sample in samples {
@@ -83,14 +24,16 @@ fn confirm_valueset_and<'a, 'b, T>(u: &'a T, v: &'b T, samples: &[u64])
 	}
 }
 
-/*
-fn confirm_valueset_or(u: &ValueSet<u64>, v: &ValueSet<u64>, samples: &[u64]) {
+fn confirm_valueset_or<'a, 'b, T>(u: &'a T, v: &'b T, samples: &[u64])
+	where
+		T: ValueSet<u64>,
+		&'a T: BitOr<&'b T, Output=T>
+{
 	let uv = u | v;
 	for &sample in samples {
 		assert_eq!((u.contains(sample) || v.contains(sample)), uv.contains(sample));
 	}
 }
-*/
 
 fn confirm_valueset_weaker(u: &ValueSet<u64>, v: &ValueSet<u64>, samples: &[u64]) {
 	for &sample in samples {
@@ -178,18 +121,24 @@ fn test_knownbits_conversions() {
 	let upperknown = KnownBits{zerobits: 0xffff000000000000, onebits: 0x0000ffff00000000};
 	let upper_urange = upperknown.as_urange();
 	let upper_srange = upperknown.as_srange();
+	let upper_mult   = upperknown.as_umultiple();
 	assert_eq!(upper_urange.min, 0x0000ffff00000000);
 	assert_eq!(upper_urange.max, 0x0000ffffffffffff);
 	assert_eq!(upper_srange.min, 0x0000ffff00000000);
 	assert_eq!(upper_srange.max, 0x0000ffffffffffff);
+	assert_eq!(upper_mult.modulus, 1);
+	assert_eq!(upper_mult.residue, 0);
 
 	let lowerknown = KnownBits{zerobits: 0x00000000ffff0000, onebits: 0x000000000000ffff};
 	let lower_urange = lowerknown.as_urange();
 	let lower_srange = lowerknown.as_srange();
+	let lower_mult   = lowerknown.as_umultiple();
 	assert_eq!(lower_urange.min,  0x000000000000ffff);
 	assert_eq!(lower_urange.max,  0xffffffff0000ffff);
 	assert_eq!(lower_srange.min, -0x7fffffffffff0001);
 	assert_eq!(lower_srange.max,  0x7fffffff0000ffff);
+	assert_eq!(lower_mult.modulus, 0x100000000);
+	assert_eq!(lower_mult.residue, 0xffff);
 }
 
 #[test]

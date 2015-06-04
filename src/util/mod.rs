@@ -1,7 +1,8 @@
-// helper functions
+#[cfg(test)]
+mod test;
+
 // warning: rust uses '!' as bitwise not operator
 // blcic(!x) = tzmsk(x)+1 = product of the '2's of x's prime decomposition
-
 pub fn blcic(x: u64) -> u64 { x.wrapping_add(1) & !x } // 101111-> 10000
 pub fn tzmsk(x: u64) -> u64 { x.wrapping_sub(1) & !x } // 010000->  1111
 
