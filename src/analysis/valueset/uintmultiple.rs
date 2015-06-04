@@ -1,13 +1,13 @@
 use super::{ValueSet, ScannableSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
 use super::{EMPTY_UINTMULTIPLE, EMPTY_UINTRANGE, EMPTY_SINTRANGE};
+use std;
 use std::ops::{BitAnd, BitOr};
 use util::{tzmsk, gcd_lcm, multiplicative_inverse};
 
-// TODO: Find appropriate consts from stdlib
-const U64MIN: u64 =  0x0000000000000000;
-const U64MAX: u64 =  0xffffffffffffffff;
-const S64MIN: i64 = -0x8000000000000000;
-const S64MAX: i64 =  0x7fffffffffffffff;
+const U64MIN: u64 =  std::u64::MIN;  // 0x0000000000000000;
+const U64MAX: u64 =  std::u64::MAX;  // 0xffffffffffffffff;
+const S64MIN: i64 =  std::i64::MIN;  // -0x8000000000000000;
+const S64MAX: i64 =  std::i64::MAX;  // 0x7fffffffffffffff;
 
 impl ValueSet<u64> for UIntMultiple {
 	fn contains(&self, value: u64) -> bool {
