@@ -1,4 +1,4 @@
-use super::{ValueSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
+use super::{ValueSet, ScannableSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
 use std::ops::{BitAnd, BitOr};
 
 fn confirm_valueset_contains(u: &ValueSet<u64>, samples: &[u64]) {
@@ -158,4 +158,23 @@ fn test_uintmultiple_intersection() {
 
 		}
 	}
+}
+
+#[test]
+fn test_knownbits_scan() {
+	let kb = KnownBits { onebits: 0b0100100, zerobits: 0b0010010 };
+	assert_eq!(kb.scan_up(0b0000000).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000001).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000010).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000011).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000100).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0100101).unwrap(), 0b0100101);
+	assert_eq!(kb.scan_up(0b0100110).unwrap(), 0b0101100);
+	assert_eq!(kb.scan_up(0b0100111).unwrap(), 0b0101100);
+	assert_eq!(kb.scan_up(0b0101100).unwrap(), 0b0101100);
+	assert_eq!(kb.scan_up(0b0101101).unwrap(), 0b0101101);
+	assert_eq!(kb.scan_up(0b0101110).unwrap(), 0b1100100);
+	assert_eq!(kb.scan_up(0b0101111).unwrap(), 0b1100100);
+	assert_eq!(kb.scan_up(0b0110000).unwrap(), 0b1100100);
+	assert_eq!(kb.scan_up(0b1101101).unwrap(), 0b1101101);
 }

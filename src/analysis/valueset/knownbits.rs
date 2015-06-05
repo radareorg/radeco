@@ -1,6 +1,6 @@
-use super::{ValueSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
+use super::{ValueSet, ScannableSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
 use std::ops::{BitAnd, BitOr};
-use util::blcic;
+use util::{blcic,bitsmear};
 
 impl ValueSet<u64> for KnownBits {
 	fn contains(&self, value: u64) -> bool {
@@ -8,6 +8,28 @@ impl ValueSet<u64> for KnownBits {
 			return false // pattern unfulfillable
 		}
 		value & (self.zerobits | self.onebits) == self.onebits
+	}
+}
+
+fn scan_up(value: u64, zeroes: u64, ones: u64) -> Option<u64> {
+	let fixedbits = zeroes | ones;
+	if value & fixedbits == ones { return Option::Some(value) }
+
+	let over = bitsmear(fixedbits & (ones ^ value));
+	let bsm  = value & over; // value & !down;
+	let increase = bitsmear(bsm) + 1;
+	let rounded = ((value & !over) | fixedbits) + (increase & !over);
+	let overwritten = (!fixedbits & rounded) | ones;
+
+	Option::Some(overwritten)
+}
+
+impl ScannableSet<u64> for KnownBits {
+	fn scan_up(&self, value: u64) -> Option<u64> {
+		scan_up(value, self.zerobits, self.onebits)
+	}
+	fn scan_dn(&self, value: u64) -> Option<u64> {
+		scan_up(!value, self.onebits, self.zerobits).and_then(|x| Option::Some(!x))
 	}
 }
 

@@ -99,11 +99,12 @@ impl<'a, 'b> BitAnd<&'a UIntMultiple> for &'b UIntMultiple {
 	}
 }
 
+/* TODO
 impl<'a, 'b> BitOr<&'a UIntMultiple> for &'b UIntMultiple {
 	type Output = UIntMultiple;
 
 	fn bitor(self, rhs: &UIntMultiple) -> UIntMultiple {
-		// TODO
 		UIntMultiple { modulus: 0, residue: 0 }
 	}
 }
+*/
