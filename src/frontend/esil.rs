@@ -109,6 +109,7 @@ pub enum Opcode {
 	OpInc,
 	OpDec,
 	OpIf,
+    OpBr,
 	OpRef,
 	OpNarrow,
 	OpWiden,
@@ -142,6 +143,7 @@ impl<'a> Opcode {
 			Opcode::OpNarrow => ("narrow", Arity::Binary),
 			Opcode::OpWiden => ("widen", Arity::Binary),
 			Opcode::OpNop => ("nop", Arity::Zero),
+			Opcode::OpBr => ("br", Arity::Zero),
 		};
 		Operator::new(op, arity).clone()
 	}
@@ -202,10 +204,10 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone)]
 pub struct Instruction {
-	opcode: Opcode,
-	dst: Value,
-	operand_1: Value,
-	operand_2: Value,
+	pub opcode: Opcode,
+	pub dst: Value,
+	pub operand_1: Value,
+	pub operand_2: Value,
 }
 
 impl<'a> Instruction {

@@ -2,7 +2,7 @@
 // maybe we shouldn't define 'main' here
 
 extern crate radeco;
-use radeco::frontend::esil;
+use radeco::frontend::{esil, cfg};
 
 fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
     println!("< {}", expression.to_string());
@@ -20,4 +20,6 @@ fn main() {
     let expression = "rax,rbx,+";
     let mut p = esil::Parser::new();
     parse_verbose(&mut p, expression);
+    let mut c = cfg::CFG::new(p.emit_insts());
+    c.build();
 }
