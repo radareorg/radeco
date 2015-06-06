@@ -1,6 +1,7 @@
 use super::{ValueSet, ScannableSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
 use super::{EMPTY_UINTMULTIPLE, EMPTY_UINTRANGE, EMPTY_SINTRANGE};
 use std;
+use std::cmp::{min, max};
 use std::ops::{BitAnd, BitOr};
 use util::{tzmsk, gcd_lcm, multiplicative_inverse};
 
@@ -103,7 +104,26 @@ impl<'a, 'b> BitOr<&'a UIntMultiple> for &'b UIntMultiple {
 	type Output = UIntMultiple;
 
 	fn bitor(self, rhs: &UIntMultiple) -> UIntMultiple {
-		// TODO
-		UIntMultiple { modulus: 0, residue: 0 }
+
+		// because this operator only merges two at a time the guess will be conservative
+
+		let m = min(self.modulus, rhs.modulus);
+		let n = max(self.modulus, rhs.modulus);
+		let ra = self.residue % m;
+		let rb = rhs.residue % m;
+		let r = min(ra, rb);
+
+		if n % m != 0 {
+			return UIntMultiple { modulus: 1, residue: 0 }
+		}
+
+		let diff = (m + ra - rb) % m;
+		if diff == 0 {
+			UIntMultiple { modulus: m, residue: r }
+		} else if diff * 2 == m {
+			UIntMultiple { modulus: m / 2, residue: r }
+		} else {
+			UIntMultiple { modulus: 1, residue: 0 }
+		}
 	}
 }

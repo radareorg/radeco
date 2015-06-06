@@ -1,4 +1,4 @@
-use super::{ValueSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
+use super::{ValueSet, ScannableSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
 use std::ops::{BitAnd, BitOr};
 
 fn confirm_valueset_contains(u: &ValueSet<u64>, samples: &[u64]) {
@@ -32,6 +32,17 @@ fn confirm_valueset_or<'a, 'b, T>(u: &'a T, v: &'b T, samples: &[u64])
 	let uv = u | v;
 	for &sample in samples {
 		assert_eq!((u.contains(sample) || v.contains(sample)), uv.contains(sample));
+	}
+}
+
+fn confirm_valueset_or_weaker<'a, 'b, T>(u: &'a T, v: &'b T, samples: &[u64])
+	where
+		T: ValueSet<u64>,
+		&'a T: BitOr<&'b T, Output=T>
+{
+	let uv = u | v;
+	for &sample in samples {
+		assert!(!(u.contains(sample) || v.contains(sample)) || uv.contains(sample));
 	}
 }
 
@@ -151,11 +162,31 @@ fn test_uintmultiple_intersection() {
 				for j in 0..b {
 					let y = UIntMultiple { modulus: b, residue: j };
 
-					confirm_valueset_and(&x, &y, &(0..a*b).collect::<Vec<_>>());
+					confirm_valueset_and(&x, &y, &(0..a*b+2).collect::<Vec<_>>());
+					confirm_valueset_or_weaker(&x, &y, &(0..a*b+2).collect::<Vec<_>>());
 
 				}
 			}
 
 		}
 	}
+}
+
+#[test]
+fn test_knownbits_scan() {
+	let kb = KnownBits { onebits: 0b0100100, zerobits: 0b0010010 };
+	assert_eq!(kb.scan_up(0b0000000).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000001).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000010).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000011).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0000100).unwrap(), 0b0100100);
+	assert_eq!(kb.scan_up(0b0100101).unwrap(), 0b0100101);
+	assert_eq!(kb.scan_up(0b0100110).unwrap(), 0b0101100);
+	assert_eq!(kb.scan_up(0b0100111).unwrap(), 0b0101100);
+	assert_eq!(kb.scan_up(0b0101100).unwrap(), 0b0101100);
+	assert_eq!(kb.scan_up(0b0101101).unwrap(), 0b0101101);
+	assert_eq!(kb.scan_up(0b0101110).unwrap(), 0b1100100);
+	assert_eq!(kb.scan_up(0b0101111).unwrap(), 0b1100100);
+	assert_eq!(kb.scan_up(0b0110000).unwrap(), 0b1100100);
+	assert_eq!(kb.scan_up(0b1101101).unwrap(), 0b1101101);
 }

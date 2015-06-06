@@ -35,9 +35,8 @@ const EMPTY_UINTMULTIPLE: UIntMultiple = UIntMultiple { modulus: 0, residue: 0 }
 const EMPTY_UINTRANGE:    UIntRange    = UIntRange    { min: 0xffffffffffffffff, max:  0x0000000000000000 };
 const EMPTY_SINTRANGE:    SIntRange    = SIntRange    { min: 0x7fffffffffffffff, max: -0x8000000000000000 };
 
-/// A value set
+/// A value set. Some implementations introduce false positives when intersected or unified with each other.
 pub trait ValueSet<T>: Debug /*+ BitAnd<Self> + BitOr<Self>*/ {
-    /// Returns whether the value belngs
 	fn contains(&self, value: T) -> bool;
 }
 
