@@ -35,6 +35,17 @@ fn confirm_valueset_or<'a, 'b, T>(u: &'a T, v: &'b T, samples: &[u64])
 	}
 }
 
+fn confirm_valueset_or_weaker<'a, 'b, T>(u: &'a T, v: &'b T, samples: &[u64])
+	where
+		T: ValueSet<u64>,
+		&'a T: BitOr<&'b T, Output=T>
+{
+	let uv = u | v;
+	for &sample in samples {
+		assert!(!(u.contains(sample) || v.contains(sample)) || uv.contains(sample));
+	}
+}
+
 fn confirm_valueset_weaker(u: &ValueSet<u64>, v: &ValueSet<u64>, samples: &[u64]) {
 	for &sample in samples {
 		assert!(!u.contains(sample) || v.contains(sample));
@@ -151,7 +162,8 @@ fn test_uintmultiple_intersection() {
 				for j in 0..b {
 					let y = UIntMultiple { modulus: b, residue: j };
 
-					confirm_valueset_and(&x, &y, &(0..a*b).collect::<Vec<_>>());
+					confirm_valueset_and(&x, &y, &(0..a*b+2).collect::<Vec<_>>());
+					confirm_valueset_or_weaker(&x, &y, &(0..a*b+2).collect::<Vec<_>>());
 
 				}
 			}
