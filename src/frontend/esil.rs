@@ -22,7 +22,7 @@
 //! use radeco::frontend::esil;
 //! let esil = "eax,ebx,^=";
 //! let mut p = esil::Parser::new();
-//! p.parse(esil);
+//! p.parse(esil, None);
 //! for inst in &p.emit_insts() {
 //!     println!("{}", inst);
 //! }
@@ -518,5 +518,5 @@ impl<'a> Parser<'a> {
 #[test]
 fn testing() {
 	let mut p = Parser::new();
-	p.parse("0,0x204db1,rip,+,[1],==,%z,zf,=,%b8,cf,=,%p,pf,=,%s,sf,=");
+	p.parse("0,0x204db1,rip,+,[1],==,%z,zf,=,%b8,cf,=,%p,pf,=,%s,sf,=", None);
 }
