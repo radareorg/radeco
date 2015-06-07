@@ -6,6 +6,7 @@
 pub use super::cfg::*;
 pub use super::esil::*;
 
+// Remove after make_cfg() is removed.
 use std::io::prelude::*;
 use std::fs::File;
 
@@ -15,7 +16,7 @@ macro_rules! add_strings {
             let mut s = String::new();
             $(
                 s = format!("{}{}", s, $x);
-                )*
+             )*
                 s
         }
     };
@@ -34,7 +35,6 @@ impl Dot for CFG {
         for node in self.g.raw_nodes().iter() {
             result = add_strings!(result, node.weight.to_dot());
         }
-
         // Connect BasicBlocks by edges.
         for edge in self.g.raw_edges() {
             let src_node = self.g.node_weight(edge.source()).unwrap();
@@ -42,7 +42,6 @@ impl Dot for CFG {
             result = add_strings!(result, src_node.label, " -> ", dst_node.label,
                                   "[color=blue];\n");
         }
-
         add_strings!(result, "}")
     }
 }
@@ -61,14 +60,15 @@ impl Dot for BasicBlock {
 
 impl Dot for Instruction {
     fn to_dot(&self) -> String {
-        format!("<tr><td>{}</td></tr>", self)
+        format!("<tr><td align=\"left\"><font color=\"grey50\">{}</font></td><td>{}</td></tr>", self.addr, self)
     }
 }
 
+// Dummy Function for test purposes. Will be removed later.
 pub fn make_dot(g: CFG) {
     let mut dot_file = File::create("cfg.dot").ok().expect("Error. Cannot
                                                            create file!\n");
     dot_file.write_all(g.to_dot().as_bytes()).ok().expect("Error. Cannot write
                                                           file!\n");
-    println!("* File written!");
+    println!("[*] Dot file written!");
 }

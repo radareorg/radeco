@@ -7,7 +7,7 @@
 #![allow(dead_code, unused_variables)]
 
 extern crate petgraph;
-//use self::petgraph::*;
+
 use self::petgraph::graph::{Graph, NodeIndex};
 use super::esil::*;
 use std::ops;
@@ -63,7 +63,8 @@ impl CFG {
         // Add a dummy start node.
         // For now, the start block will have no instructions.
         let mut start_block = BasicBlock::new();
-        start_block.label = "start".to_string();
+        start_block.label = "n0".to_string();
+        // TODO: Replace by a new 'start' Instruction ?
         let i = Instruction::new(Opcode::OpNop, Value::null(), Value::null(), Value::null(), None);
         start_block.instructions.insert("0x0".to_string(), i);
         let start = g.add_node(start_block);
@@ -88,10 +89,11 @@ impl CFG {
 
     pub fn add_new_block(&mut self) -> &mut BasicBlock {
         let mut bb = BasicBlock::new();
+        // Be default a block is always labeled as nX.
+        bb.label = format!("n{}", self.g.node_count());
         let n = self.g.add_node(bb);
         self.g.node_weight_mut(n).unwrap()
     }
-
 
     pub fn add_block(&mut self, bb: BasicBlock) {
         self.g.add_node(bb);
@@ -107,7 +109,6 @@ pub fn make_graph(insts: Vec<Instruction>) {
     {
         let mut bb: &mut BasicBlock;
         bb = cfg.add_new_block();
-        bb.label = "n1".to_string();
         for inst in insts {
             // Just add all the instruction into one basic block.
             bb.add_instruction(inst.clone());
@@ -117,9 +118,4 @@ pub fn make_graph(insts: Vec<Instruction>) {
     cfg.g.add_edge(n(0), n(1), 0);
     dot::make_dot(cfg);
 }
-
-
-
-
-
 
