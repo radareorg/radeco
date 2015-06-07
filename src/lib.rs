@@ -4,4 +4,5 @@ extern crate regex;
 pub mod analysis;
 pub mod frontend;
 pub mod backend;
+pub mod ir;
 pub mod util;

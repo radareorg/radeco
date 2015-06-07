@@ -2,27 +2,32 @@
 
 use std::ops::Index;
 
-struct Grid<ColT, RowT, CellT> {
-	pub recompute: Box<Fn(&ColT, &RowT) -> CellT>,
+pub struct Grid<ColT, RowT, CellT> {
+	recompute: Box<Fn(&mut ColT, &mut RowT) -> CellT>,
 	rowdata: Vec<RowT>,
 	columns: Vec<(ColT, Vec<CellT>)>
 }
 
 impl<ColT, RowT, CellT> Grid<ColT, RowT, CellT> {
-	pub fn push_row(&mut self, rowdata: RowT) {
+	pub fn new(recompute: Box<Fn(&mut ColT, &mut RowT) -> CellT>) -> Self {
+		Grid { recompute: recompute, rowdata: Vec::new(), columns: Vec::new() }
+	}
+
+	pub fn push_row(&mut self, mut rowdata: RowT) {
 		// maybe if rowdata was pushed before the loop, we could
 		// pass a reference with longer lifetime to recompute()
-		for &mut (ref columndata, ref mut celldata) in &mut self.columns {
-			celldata.push((*self.recompute)(columndata, &rowdata));
+		for &mut (ref mut columndata, ref mut celldata) in &mut self.columns {
+			celldata.push((self.recompute)(columndata, &mut rowdata));
 		}
 		self.rowdata.push(rowdata);
 	}
 
-	pub fn push_column(&mut self, columndata: ColT) {
+	pub fn push_column(&mut self, mut columndata: ColT) {
 		// maybe if columndata was pushed before the loop, we could
 		// pass a reference with longer lifetime to recompute()
-		let celldata: Vec<_> = self.rowdata.iter().map(
-			|ref rowdata| (*self.recompute)(&columndata, rowdata)
+		let rc = &*self.recompute;
+		let celldata: Vec<_> = self.rowdata.iter_mut().map(
+			|rowdata| rc(&mut columndata, rowdata)
 		).collect();
 		self.columns.push((columndata, celldata));
 	}
