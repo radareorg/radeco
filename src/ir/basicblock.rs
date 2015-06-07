@@ -1,20 +1,29 @@
 use util::grid::Grid;
 
 struct NodeRef; // stub
-struct Use; // stub
-struct Instr; // stub
 
 #[allow(dead_code)]
-struct Usable<T> {
-	t: T,
-	uses: Vec<Use>
+pub struct Ref<I> {
+	/// target of this reference
+	target: I,
+	/// the next item with a reference to the same target
+	next: I,
+}
+
+pub enum Instr<I> {
+	Const(I, u64),
+	Un(I, [Ref<I>; 1]),
+	Bin(I, [Ref<I>; 2]),
+	Tern(I, [Ref<I>; 3]),
+	/// not sure if this one will remain an `Instr`
+	Phi(I, I)
 }
 
 #[allow(dead_code)]
 pub struct BasicBlock<'a> {
 	// TODO: Replace <'a> refs by something that integrates with our graph libs
 	phigrid: Grid<&'a BasicBlock<'a>, Phi, NodeRef>,
-	instr: Vec<Usable<Instr>>
+	instr: Vec<Instr<u16>>
 }
 
 pub type PhiInputProvider = Box<FnMut(&BasicBlock) -> NodeRef>;
