@@ -204,6 +204,7 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone)]
 pub struct Instruction {
+    pub addr: String,
 	pub opcode: Opcode,
 	pub dst: Value,
 	pub operand_1: Value,
@@ -211,8 +212,14 @@ pub struct Instruction {
 }
 
 impl<'a> Instruction {
-	pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value) -> Instruction {
+	pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value, _addr: Option<String>) -> Instruction {
+        let addr = match _addr {
+            Some(s) => s,
+            None => String::new(),
+        };
+
 		Instruction {
+            addr: addr,
 			opcode: opcode,
 			dst: dst,
 			operand_1: op1,
@@ -289,6 +296,10 @@ pub struct Parser<'a> {
 	regset: HashMap<&'a str, u8>,
 	tmp_index: u64,
 	default_size: u8,
+    // The address the parser is currently parsing at.
+    // TODO: Change addr later to use it's own struct rather than just
+    // a String or u64.
+    addr: u64,
 }
 
 impl<'a> Parser<'a> {
@@ -301,6 +312,7 @@ impl<'a> Parser<'a> {
 			tmp_index: 0,
 			// Change this default based on arch.
 			default_size: 64,
+            addr: 0,
 		}
 	}
 
@@ -318,7 +330,7 @@ impl<'a> Parser<'a> {
 		}
 		let dst = self.get_tmp_register(size);
 		let operator = Opcode::OpWiden;
-		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64)));
+		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr.to_string())));
 		*op = dst;
 	}
 
@@ -328,7 +340,7 @@ impl<'a> Parser<'a> {
 		}
 		let dst = self.get_tmp_register(size);
 		let operator = Opcode::OpNarrow;
-		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64)));
+		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr.to_string())));
 		*op = dst;
 	}
 
@@ -382,14 +394,25 @@ impl<'a> Parser<'a> {
 			dst.size = dst_size;
 		}
 
-		self.insts.push(Instruction::new(op, dst.clone(), op2, op1));
+		self.insts.push(Instruction::new(op, dst.clone(), op2, op1, Some(self.addr.to_string())));
 		self.stack.push(dst);
 
 		Ok(())
 	}
 
-	pub fn parse(&mut self, esil: &'a str) -> Result<(), ParseError> {
-		let expanded_esil: Vec<String> = esil.split(',').map(|x| x.to_string()).collect();
+	pub fn parse(&mut self, esil: &'a str, _addr: Option<String>) -> Result<(), ParseError> {
+
+        self.addr = match _addr {
+            // TODO: Actually handle the error here.
+            Some(s) => s.parse::<u64>().ok().expect("Invalid Number\n"),
+            None => {
+                self.addr += 1;
+                self.addr
+            },
+        };
+
+        let expanded_esil: Vec<String> = esil.split(',')
+                                             .map(|x| x.to_string()).collect();
 		for token in expanded_esil {
 			let op = match self.opset.get(&*token) {
 				Some(op) => op.clone(),
