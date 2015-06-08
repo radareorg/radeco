@@ -13,6 +13,7 @@ path = "src/rustc_data_structures"
 [dependencies]
 regex = "*"
 petgraph = "*"
+num = "*"
 
 [[bin]]
 doc = false

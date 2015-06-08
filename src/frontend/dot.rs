@@ -50,7 +50,7 @@ impl Dot for BasicBlock {
     fn to_dot(&self) -> String {
         let mut result = String::new();
         result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
-        for (_, inst) in &self.instructions {
+        for inst in &self.instructions {
             result = add_strings!(result, inst.to_dot());
         }
         result = add_strings!(result, "</table>>");
@@ -60,7 +60,9 @@ impl Dot for BasicBlock {
 
 impl Dot for Instruction {
     fn to_dot(&self) -> String {
-        format!("<tr><td align=\"left\"><font color=\"grey50\">{}</font></td><td>{}</td></tr>", self.addr, self)
+        format!("<tr><td align=\"left\" cellspacing=\"1\"><font color=\"grey50\"
+                point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>", self.addr,
+                self)
     }
 }
 

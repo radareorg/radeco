@@ -2,7 +2,7 @@
 // maybe we shouldn't define 'main' here
 
 extern crate radeco;
-use radeco::frontend::{esil, cfg};
+use radeco::frontend::{esil, cfg, dot};
 
 fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
     println!("< {}", expression.to_string());
@@ -17,14 +17,22 @@ fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
 // attribute to ignore unused 'main' when running tests
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
-    let mut expression = "rax,rbx,+";
     let mut p = esil::Parser::new();
     
+    let mut expression = "rax,rbx,+";
     parse_verbose(&mut p, expression);
     expression = "rax,=";
     parse_verbose(&mut p, expression);
     expression = "rax,rax,^";
     parse_verbose(&mut p, expression);
+    expression = "zf,?{,3,rip,=,}";
+    parse_verbose(&mut p, expression);
+    expression = "rax,rax,^";
+    parse_verbose(&mut p, expression);
 
-    cfg::make_graph(p.emit_insts());
+    let mut cfg = cfg::CFG::new();
+    cfg.build(&(p.emit_insts()));
+    dot::make_dot(cfg);
+
+    //cfg::make_graph(p.emit_insts());
 }

@@ -28,6 +28,9 @@
 //! }
 //! ```
 
+extern crate num;
+use self::num::traits::Num;
+
 use std::collections::HashMap;
 use std::fmt;
 use std::cmp;
@@ -46,6 +49,8 @@ macro_rules! hash {
 		}
 	};
 }
+
+pub type Address = u64;
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -88,6 +93,16 @@ impl<'a> Operator<'a> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+/// enum of valid opcodes for radeco IR.
+/// To simplify the construction of Operator struct, this enum implements a
+/// to_operator().
+/// Since transformation from ESIL is complicated, the IR has two types of
+/// Opcodes: Basic and Composite.
+/// Composite Opcodes must *never* be used or seen outside the parser. The
+/// emit_insts() method of the parser iterates over the instructions generated
+/// and converts the composite opcodes to basic ones. The idea is to keep the
+/// basic set as small as possible for simpler analysis.
+
 pub enum Opcode {
 	OpAdd,
 	OpSub,
@@ -102,18 +117,22 @@ pub enum Opcode {
 	OpCmp,
 	OpGt,
 	OpLt,
-	OpGteq,
 	OpLteq,
+	OpGteq,
 	OpLsl,
 	OpLsr,
-	OpInc,
-	OpDec,
 	OpIf,
-    OpBr,
+    OpJmp,  // Unconditional Jmp.
+    OpCJmp, // Conditional Jmp.
 	OpRef,
 	OpNarrow,
 	OpWiden,
 	OpNop,
+    OpInvalid,
+    // Composite Opcodes:
+	OpInc,
+	OpDec,
+    OpCl, // '}'
 }
 
 impl<'a> Opcode {
@@ -143,7 +162,10 @@ impl<'a> Opcode {
 			Opcode::OpNarrow => ("narrow", Arity::Binary),
 			Opcode::OpWiden => ("widen", Arity::Binary),
 			Opcode::OpNop => ("nop", Arity::Zero),
-			Opcode::OpBr => ("br", Arity::Zero),
+			Opcode::OpInvalid => ("invalid", Arity::Zero),
+			Opcode::OpJmp => ("jmp", Arity::Unary),
+            Opcode::OpCJmp => ("jmp if", Arity::Binary),
+            Opcode::OpCl => ("}", Arity::Zero),
 		};
 		Operator::new(op, arity).clone()
 	}
@@ -157,10 +179,10 @@ impl fmt::Display for Opcode {
 
 #[derive(Debug, Clone)]
 pub struct Value {
-	name: String,
-	size: u8,
-	location: Location,
-	value: i64,
+	pub name: String,
+	pub size: u8,
+	pub location: Location,
+	pub value: i64,
 	// TODO: Convert from u32 to TypeSet.
 	// Every value can be considered in terms of typesets rather than fixed
 	// types which can then be narrowed down based on the analysis.
@@ -204,7 +226,7 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone)]
 pub struct Instruction {
-    pub addr: String,
+    pub addr: Address,
 	pub opcode: Opcode,
 	pub dst: Value,
 	pub operand_1: Value,
@@ -212,10 +234,10 @@ pub struct Instruction {
 }
 
 impl<'a> Instruction {
-	pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value, _addr: Option<String>) -> Instruction {
+	pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value, _addr: Option<Address>) -> Instruction {
         let addr = match _addr {
             Some(s) => s,
-            None => String::new(),
+            None => 0,
         };
 
 		Instruction {
@@ -239,6 +261,10 @@ impl fmt::Display for Instruction {
 			Opcode::OpRef => format!("{} = {}({})", self.dst, self.opcode, self.operand_1),
 			Opcode::OpNarrow => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, self.operand_2),
 			Opcode::OpWiden => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, self.operand_2),
+            Opcode::OpNop => format!("{}", self.opcode),
+            Opcode::OpJmp => format!("{} {}", self.opcode, self.operand_1),
+            Opcode::OpCJmp => format!("{} {} {}", self.opcode, self.operand_1, self.operand_2),
+            Opcode::OpCl => format!("{}", self.opcode),
 			_ => format!("{} = {} {} {}", self.dst, self.operand_1, self.opcode, self.operand_2),
 		};
 		f.pad_integral(true, "", &s)
@@ -270,7 +296,7 @@ fn map_esil_to_opset() -> HashMap<&'static str, Opcode> {
 		("!"  , Opcode::OpNot),
 		("--" , Opcode::OpDec),
 		("++" , Opcode::OpInc),
-		("}"  , Opcode::OpNop)
+		("}"  , Opcode::OpCl)
     ]
 }
 
@@ -285,7 +311,8 @@ fn init_regset() -> HashMap<&'static str, u8> {
 		("rbp", 64),
 		("rsi", 64),
 		("rdi", 64),
-		("rip", 64)
+		("rip", 64),
+        ("zf",   1)
 	]
 }
 
@@ -297,9 +324,9 @@ pub struct Parser<'a> {
 	tmp_index: u64,
 	default_size: u8,
     // The address the parser is currently parsing at.
-    // TODO: Change addr later to use it's own struct rather than just
-    // a String or u64.
-    addr: u64,
+    addr: Address,
+    // Name of the Instruction pointer for the architecture.
+    ip: String,
 }
 
 impl<'a> Parser<'a> {
@@ -310,9 +337,11 @@ impl<'a> Parser<'a> {
 			opset: map_esil_to_opset(),
 			regset: init_regset(),
 			tmp_index: 0,
-			// Change this default based on arch.
+			// TODO: change this default based on arch.
 			default_size: 64,
             addr: 0,
+            // TODO: Set dynamically based on the arch.
+            ip: "rip".to_string(),
 		}
 	}
 
@@ -330,7 +359,7 @@ impl<'a> Parser<'a> {
 		}
 		let dst = self.get_tmp_register(size);
 		let operator = Opcode::OpWiden;
-		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr.to_string())));
+		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr)));
 		*op = dst;
 	}
 
@@ -340,11 +369,58 @@ impl<'a> Parser<'a> {
 		}
 		let dst = self.get_tmp_register(size);
 		let operator = Opcode::OpNarrow;
-		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr.to_string())));
+		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr)));
 		*op = dst;
 	}
 
+    fn add_assign_inst(&mut self, op: Opcode) -> Result<(), ParseError> {
+        let dst = match self.stack.pop() {
+			Some(ele) => ele,
+			None => return Err(ParseError::InsufficientOperands),
+		};
+
+        let mut op1 = match self.stack.pop() {
+            Some(ele) => ele,
+            None => return Err(ParseError::InsufficientOperands),
+        };
+
+        // If it is an assignment to the Instruction Pointer, then the Instruction should be a OpJmp
+        // rather than an OpEq.
+        if dst.name == self.ip {
+            self.insts.push(Instruction::new(Opcode::OpJmp, Value::null(), op1, Value::null(), Some(self.addr)));
+            return Ok(());
+        }
+
+        if dst.size == op1.size {
+            self.insts.push(Instruction::new(op, dst.clone(), op1, Value::null(), Some(self.addr)));
+            return Ok(());
+        }
+
+        if dst.size > op1.size {
+            self.add_widen_inst(&mut op1, dst.size);
+        } else {
+            self.add_narrow_inst(&mut op1, dst.size);
+        }
+		
+        // We don't need to use another instruction for assignment. Just replace the dst of the
+        // narrow/widen instruction generated.
+        self.insts.last_mut().unwrap().dst = dst.clone();
+        Ok(())
+    }
+
 	fn add_inst(&mut self, op: Opcode) -> Result<(), ParseError> {
+        // Handle "}".
+        if op == Opcode::OpCl {
+            let null = Value::null();
+            self.insts.push(Instruction::new(op, null.clone(), null.clone(), null.clone(), Some(self.addr)));
+            return Ok(());
+        }
+
+        // Assignment operation has to be handled quite differently.
+        if op == Opcode::OpEq {
+            return self.add_assign_inst(op);
+        }
+
 		let mut op2 = match self.stack.pop() {
 			Some(ele) => ele,
 			None => return Err(ParseError::InsufficientOperands),
@@ -358,23 +434,21 @@ impl<'a> Parser<'a> {
 			};
 		}
 
+        if op == Opcode::OpIf {
+            self.insts.push(Instruction::new(op, Value::null(), op2, op1, Some(self.addr)));
+            return Ok(());
+        }
+
 		let mut dst_size: u8;
 		let mut dst: Value;
-
-		if op == Opcode::OpEq {
-			dst_size = op2.size;
-			dst = op2.clone();
-			op2 = op1.clone();
-			op1 = Value::null();
-		} else {
-			dst_size = cmp::max(op1.size, op2.size);
-			dst = self.get_tmp_register(dst_size);
-		}
+        dst_size = cmp::max(op1.size, op2.size);
+        dst = self.get_tmp_register(dst_size);
 
 		// Add a check to see if dst, op1 and op2 have the same size.
 		// If they do not, cast it. op2 is never 'Null'.
 		assert!(op2.location != Location::Null);
-		if op1.location != Location::Null {
+		
+        if op.to_operator().arity == Arity::Binary {
 			if op1.size > op2.size {
 				dst_size = op1.size;
 				self.add_widen_inst(&mut op2, op1.size);
@@ -384,24 +458,15 @@ impl<'a> Parser<'a> {
 			}
 		}
 
-		if op == Opcode::OpEq {
-			if dst.size > op2.size {
-				self.add_widen_inst(&mut op2, dst.size);
-			} else if dst.size < op2.size {
-				self.add_narrow_inst(&mut op2, dst.size);
-			}
-		} else {
-			dst.size = dst_size;
-		}
+        dst.size = dst_size;
 
-		self.insts.push(Instruction::new(op, dst.clone(), op2, op1, Some(self.addr.to_string())));
+		self.insts.push(Instruction::new(op, dst.clone(), op2, op1, Some(self.addr)));
 		self.stack.push(dst);
 
 		Ok(())
 	}
 
 	pub fn parse(&mut self, esil: &'a str, _addr: Option<String>) -> Result<(), ParseError> {
-
         self.addr = match _addr {
             // TODO: Actually handle the error here.
             Some(s) => s.parse::<u64>().ok().expect("Invalid Number\n"),
@@ -416,10 +481,10 @@ impl<'a> Parser<'a> {
 		for token in expanded_esil {
 			let op = match self.opset.get(&*token) {
 				Some(op) => op.clone(),
-				None => Opcode::OpNop,
+				None => Opcode::OpInvalid,
 			};
 
-			if op != Opcode::OpNop {
+			if op != Opcode::OpInvalid {
 				try!(self.add_inst(op));
 				continue;
 			}
@@ -437,11 +502,25 @@ impl<'a> Parser<'a> {
 				} else if let Ok(v) = token.parse::<i64>() {
 					val_type = Location::Constant;
 					val = v;
-				}
+				} else if let Ok(v) = Num::from_str_radix(token.trim_left_matches("0x"), 16) {
+                    val_type = Location::Constant;
+                    val = v;
+                }
 				let v = Value::new(String::from(token), size, val_type, val, 0);
 				self.stack.push(v);
 				continue;
 			}
+
+            // Handle constants.
+            if let Ok(num) = token.parse::<i64>() {
+                let val_type = Location::Constant;
+                let val = num;
+                let size  = self.default_size;
+                let name = format!("0x{:x}", num);
+                let v = Value::new(name, size, val_type, val, 0);
+                self.stack.push(v);
+                continue;
+            }
 
 			// Deal with normal 'composite' instructions.
 			if token.char_indices().last().unwrap().1 != ']' {
@@ -510,8 +589,34 @@ impl<'a> Parser<'a> {
 		Ok(())
 	}
 
-    pub fn emit_insts(&self) -> Vec<Instruction> {
-        (self).insts.clone()
+    pub fn emit_insts(&mut self) -> Vec<Instruction> {
+        // Need to convert if cond { jmp } to CJmp.
+        let len = self.insts.len();
+        let mut res: Vec<Instruction> = Vec::new();
+        let mut i = 0;
+        while i < len {
+            let inst = self.insts[i].clone();
+            if inst.opcode != Opcode::OpIf {
+                res.push(inst);
+                i += 1;
+                continue;
+            }
+            while inst.opcode != Opcode::OpCl && i < len - 1 {
+                i += 1;
+                let inst_ = self.insts[i].clone();
+                if inst_.opcode == Opcode::OpJmp {
+                    let res_inst = Instruction::new(Opcode::OpCJmp,
+                                                    Value::null(),
+                                                    inst.operand_1.clone(),
+                                                    inst_.operand_1,
+                                                    Some(inst.addr));
+                    res.push(res_inst);
+                }
+            }
+            i += 1;
+        }
+        self.insts = res;
+        return (self).insts.clone();
     }
 }
 
