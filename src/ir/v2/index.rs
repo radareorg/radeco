@@ -1,6 +1,6 @@
 use std::ops::Add;
 
-trait InnerIndexType : Clone + Copy + Add<Output=Self> {
+pub trait InnerIndexType : Clone + Copy + Add<Output=Self> {
 	// replace with zero trait once stable
 	fn zero() -> Self;
 }

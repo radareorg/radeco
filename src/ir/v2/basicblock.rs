@@ -1,5 +1,5 @@
 use super::graph::NodeRef;
-use super::index::{InnerIndexType, KnowsIndexType};
+use super::index::InnerIndexType;
 
 enum IndexKind {
 	External,
@@ -10,26 +10,26 @@ enum IndexKind {
 pub struct PhiIndex<I>(I);
 
 #[allow(dead_code)]
-pub struct BasicBlock<Instr: KnowsIndexType> {
-	num_ext: Instr::I,
-	num_phi: Instr::I,
+pub struct BasicBlock<I: InnerIndexType, Instr> {
+	num_ext: I,
+	num_phi: I,
 	instr: Vec<Instr>
 }
 
-trait PhiInputProvider {
-	fn provide_for<Instr: KnowsIndexType>(src: &BasicBlock<Instr>) -> NodeRef<Instr::I>;
+trait PhiInputProvider<I> {
+	fn provide_for<Instr>(src: &BasicBlock<I, Instr>) -> NodeRef<I>;
 }
 
-impl<Instr: KnowsIndexType> BasicBlock<Instr>
+impl<I: InnerIndexType, Instr> BasicBlock<I, Instr>
 {
 	pub fn new() -> Self {
-		BasicBlock::<Instr> {
-			num_phi: Instr::I::zero(),
-			num_ext: Instr::I::zero(),
+		BasicBlock::<I, Instr> {
+			num_phi: I::zero(),
+			num_ext: I::zero(),
 			instr: Vec::new()
 		}
 	}
-	pub fn phiindex(&self, i: Instr::I) -> PhiIndex<Instr::I> {
+	pub fn phiindex(&self, i: I) -> PhiIndex<I> {
 		PhiIndex(i+self.num_phi)
 	}
 	// pub fn phi(&mut self, input_provider: Box<PhiInputProvider>) {

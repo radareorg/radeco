@@ -13,7 +13,7 @@ enum IRNode<Instruction> {
 	// Represents an operation of a basic block that is used by non-phi nodes outside of that basic block
 	Repr,
 	// Represents a basic block
-	BasicBlock(BasicBlock<Instruction>)
+	BasicBlock(BasicBlock<DefaultInnerIndex, Instruction>)
 }
 
 enum IREdge {
@@ -46,7 +46,7 @@ impl<I: InnerIndexType> KnowsIndexType for InternalEdge<I> {
 	type I = Opnd::I;
 }*/
 
-struct NodeRef<I>(NodeIndex, I);
+pub struct NodeRef<I>(NodeIndex, I);
 
 // replace NodeRef below with &[InternalEdge]?
 // probably, yes along with a distinction betwen &Graph and &mut Graph throughout this code
@@ -72,13 +72,13 @@ impl<I: InnerIndexType> Iterator for ArgSubIterator<I> {
 }
 
 // Iterator over users of an operation (the cases of this enum are implementation details)
-enum UseIterator<A, B, G: Deref<Target=Graph<A, B>>, I> {
+enum UseIterator<'a, Instruction: 'a, I> {
 	// Iterator is currently on a user in the same basic block
-	UseInner(G, UseSubIterator<I>),
+	UseInner(&'a IRGraph<Instruction>, UseSubIterator<I>),
 	// Iterator is currently on a non-phi user in another basic block
-	UseExternal(G, UseSubIterator<I>, EdgeIndex, EdgeIndex),
+	UseExternal(&'a IRGraph<Instruction>, UseSubIterator<I>, EdgeIndex, EdgeIndex),
 	// Iterator is currently on a user that's a phi node
-	UsePhi(G, EdgeIndex)
+	UsePhi(&'a IRGraph<Instruction>, EdgeIndex)
 }
 
 // Iterator over users of an operation
@@ -87,7 +87,7 @@ enum ArgIterator<I> {
 	ArgOp(I, u8)
 }
 
-impl<A, B, G, I: InnerIndexType> Iterator for UseIterator<A, B, G, I> {
+impl<'a, Instruction, I: InnerIndexType> Iterator for UseIterator<'a, Instruction, I> {
 	type Item = NodeRef<I>;
 	fn next(&mut self) -> Option<NodeRef<I>> {
 		let mut o: Option<NodeRef<I>> = Option::None;
