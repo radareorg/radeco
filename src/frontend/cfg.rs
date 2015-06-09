@@ -12,11 +12,10 @@ use self::petgraph::graph::{Graph, NodeIndex};
 use std::ops;
 use std::collections::BTreeMap;
 
-use super::dot;
 use super::esil::*;
 
-/// A `BasicBlock` is the basic unit in a CFG. Every `Instruction` must be a
-/// part of one and only one `BasicBlock`.
+/// A `BasicBlock` is the basic unit in a CFG.
+/// Every `Instruction` must be a part of one and only one `BasicBlock`.
 pub struct BasicBlock {
     pub range: ops::Range<u64>,
     pub reachable: bool,
@@ -42,35 +41,101 @@ impl BasicBlock {
     }
 }
 
+pub enum NodeData {
+    Block(BasicBlock),
+    Entry,
+    Exit,
+}
+
+impl NodeData {
+    pub fn label(&self) -> String {
+        match *self {
+            NodeData::Block(ref block) => (*(block.label)).to_string(),
+            NodeData::Entry => "n0".to_string(),
+            NodeData::Exit => "n1".to_string(),
+        }
+    }
+}
+
 // Consts used for edge-weights.
 // TODO: Make a separate struct for edge-weight to store addtional details.
-pub const FORWARD: u8 = 0;
-pub const BACKWARD: u8 = 1;
+//pub const FORWARD: u8 = 0;
+//pub const BACKWARD: u8 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EdgeType {
+    True,
+    False,
+    Unconditional,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Direction { d: u8, }
+pub const FORWARD: Direction  = Direction { d: 0 };
+pub const BACKWARD: Direction = Direction { d: 1 };
+
+pub struct EdgeData {
+    pub direction: Direction,
+    pub edge_type: EdgeType,
+    src_addr: Address,
+    dst_addr: Address,
+}
+
+impl EdgeData {
+    pub fn new(direction: Direction, edge_type: EdgeType, src_addr: Address, dst_addr: Address) -> EdgeData {
+        EdgeData {
+            direction: direction,
+            edge_type: edge_type,
+            src_addr: src_addr,
+            dst_addr: dst_addr,
+        }
+    }
+
+    pub fn new_forward_true(src_addr: Address, dst_addr: Address) -> EdgeData {
+        EdgeData::new(FORWARD, EdgeType::True, src_addr, dst_addr)
+    }
+
+    pub fn new_forward_false(src_addr: Address, dst_addr: Address) -> EdgeData {
+        EdgeData::new(FORWARD, EdgeType::False, src_addr, dst_addr)
+    }
+
+    pub fn new_backward_true(src_addr: Address, dst_addr: Address) -> EdgeData {
+        EdgeData::new(BACKWARD, EdgeType::True, src_addr, dst_addr)
+    }
+
+    pub fn new_backward_false(src_addr: Address, dst_addr: Address) -> EdgeData {
+        EdgeData::new(BACKWARD, EdgeType::False, src_addr, dst_addr)
+    }
+
+    pub fn new_forward_uncond(src_addr: Address, dst_addr: Address) -> EdgeData {
+        EdgeData::new(FORWARD, EdgeType::Unconditional, src_addr, dst_addr)
+    }
+
+    pub fn new_backward_uncond(src_addr: Address, dst_addr: Address) -> EdgeData {
+        EdgeData::new(BACKWARD, EdgeType::Unconditional, src_addr, dst_addr)
+    }
+}
 
 pub struct CFG {
-    pub g: Graph<BasicBlock, u8>,
+    pub g: Graph<NodeData, EdgeData>,
     pub insts: Vec<Instruction>,
-    pub start: NodeIndex,
+    pub entry: NodeIndex,
+    pub exit: NodeIndex,
 }
 
 impl CFG {
     pub fn new() -> CFG {
         // Initializing the cfg must init with 2 default nodes. One 'entry'
         // and another 'exit' node.
-        let mut g = Graph::new();
-        // Add a dummy start node.
-        // For now, the start block will have no instructions.
-        let mut start_block = BasicBlock::new();
-        start_block.label = "n0".to_string();
-        // TODO: Replace by a new 'start' Instruction ?
-        let i = Instruction::new(Opcode::OpNop, Value::null(), Value::null(),
-                                 Value::null(), None);
-        start_block.instructions.push(i);
-        let start = g.add_node(start_block);
+        let mut g: Graph<NodeData, EdgeData> = Graph::new();
+        let entry = g.add_node(NodeData::Entry);
+        let exit = g.add_node(NodeData::Exit);
+
         CFG {
             g: g,
             insts: Vec::new(),
-            start: start,
+            entry: entry,
+            exit: exit,
         }
     }
 
@@ -79,10 +144,13 @@ impl CFG {
         let mut leaders: Vec<Address> = Vec::new();
         let mut i = 0;
         let len = insts.len();
-        let cur = self.add_new_block();
-        
-        self.g.add_edge(self.start, cur, 0);
-        bbs.insert(insts[0].clone().addr, cur);
+        { 
+            let cur = self.add_new_block();
+            let first_addr = insts[0].clone().addr;
+            let entry_index = self.entry;
+            self.add_edge(entry_index, cur, EdgeData::new_forward_uncond(0, first_addr));
+            bbs.insert(first_addr, cur);
+        }
 
         // First we iterate through all the instructions and identify the
         // 'leaders'. 'leaders' are first instruction of some basic block.
@@ -130,11 +198,17 @@ impl CFG {
             // If there are no more leaders or the current instruction is not
             // a leader, simply add it to the BB.
             if inst.addr != leaders[i] {
-                self.get_block(n).add_instruction((*inst).clone());
+                if let &mut NodeData::Block(ref mut block) = self.get_block(n) {
+                    block.add_instruction((*inst).clone());
+                }
                 continue;
             }
+
             n = *(bbs.get(&(inst.addr)).unwrap());
-            self.get_block(n).add_instruction((*inst).clone());
+            if let &mut NodeData::Block(ref mut block) = self.get_block(n) {
+                block.add_instruction((*inst).clone());
+            }
+
             if i > 0 { i -= 1; }
         }
 
@@ -150,36 +224,45 @@ impl CFG {
         for (key, n) in bbs.iter() {
             let mut target: NodeIndex;
             let inst: Instruction;
-            {
-                let bb = self.get_block(*n);
-                inst = bb.instructions.last().unwrap().clone();
+            if let &mut NodeData::Block(ref mut block) = self.get_block(*n) {
+                inst = block.instructions.last().unwrap().clone();
+            } else {
+                continue;
             }
 
             if inst.opcode == Opcode::OpJmp {
-                target = *(bbs.get(&(inst.operand_1.value as u64)).unwrap());
-                let mut wt = FORWARD;
-                if inst.addr > (inst.operand_1.value as u64) { wt = BACKWARD; };
-                self.g.add_edge(*n, target, wt);
+                let target_addr = inst.operand_1.value as u64;
+                let mut edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
+                target = *(bbs.get(&target_addr).unwrap());
+                if inst.addr > target_addr { edge_data.direction = BACKWARD; };
+                self.add_edge(*n, target, edge_data);
                 continue;
+            }
+            
+            let mut is_false_branch = false;
+            if inst.opcode == Opcode::OpCJmp {
+                let target_addr = inst.operand_2.value as u64;
+                let mut edge_data = EdgeData::new_forward_true(inst.addr, target_addr);
+                target = *(bbs.get(&target_addr).unwrap());
+                if inst.addr > target_addr { edge_data.direction = BACKWARD; };
+                self.add_edge(*n, target, edge_data);
+                is_false_branch = true;
             }
 
             // Find the BasicBlock the next instruction belongs to.
             // Remember, the next instruction has to be a leader.
-            if let Some(addr) = leaders.pop() {
+            let mut target = self.exit;
+            let mut edge_data = EdgeData::new_forward_uncond(inst.addr, 0);
+            if let Some(target_addr) = leaders.pop() {
                 // This should never create a back-edge as this represents the natural flow path.
                 // i.e. the path taken if jumps are ignored.
-                if addr > inst.addr {
-                    let next = *(bbs.get(&addr).unwrap());
-                    self.g.add_edge(*n, next, 0);
+                if target_addr > inst.addr {
+                    target = *(bbs.get(&target_addr).unwrap());
+                    edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
+                    if is_false_branch { edge_data.edge_type = EdgeType::False; };
                 }
             }
-
-            if inst.opcode == Opcode::OpCJmp {
-                target = *(bbs.get(&(inst.operand_2.value as u64)).unwrap());
-                let mut wt = 0;
-                if inst.addr > (inst.operand_2.value as u64) { wt = 1; };
-                self.g.add_edge(*n, target, wt);
-            }
+            self.add_edge(*n, target, edge_data);
         }
     }
 
@@ -187,34 +270,20 @@ impl CFG {
         let mut bb = BasicBlock::new();
         // By default a block is always labeled as nX.
         bb.label = format!("n{}", self.g.node_count());
-        self.g.add_node(bb)
+        self.g.add_node(NodeData::Block(bb))
     }
 
     pub fn add_block(&mut self, bb: BasicBlock) {
-        self.g.add_node(bb);
+        self.g.add_node(NodeData::Block(bb));
     }
 
-    pub fn get_block(&mut self, n: NodeIndex) -> &mut BasicBlock {
+    pub fn get_block(&mut self, n: NodeIndex) -> &mut NodeData {
         self.g.node_weight_mut(n).unwrap()
     }
 
-}
-
-// Dummy test function to call from main for testing purposes.
-pub fn make_graph(insts: Vec<Instruction>) {
-    let mut cfg = CFG::new();
-    let n = NodeIndex::new;
-    
-    {
-        //let mut bb: &mut BasicBlock;
-        let n = cfg.add_new_block();
-        for inst in insts {
-            // Just add all the instruction into one basic block.
-            cfg.get_block(n).add_instruction(inst.clone());
-        }
+    pub fn add_edge(&mut self, src: NodeIndex, target: NodeIndex, edge_data: EdgeData) {
+        self.g.add_edge(src, target, edge_data);
     }
 
-    cfg.g.add_edge(n(0), n(1), 0);
-    dot::make_dot(cfg);
 }
 

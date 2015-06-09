@@ -40,14 +40,19 @@ impl Dot for CFG {
             let src_node = self.g.node_weight(edge.source()).unwrap();
             let dst_node = self.g.node_weight(edge.target()).unwrap();
             let mut direction = "forward";
-            let mut color = "black";
-            // TODO: Must be changed once edges get their own attributes.
-            if edge.weight == BACKWARD {
+
+            let (color, label) = match edge.weight.edge_type {
+                EdgeType::True => ("green", "label=T"),
+                EdgeType::False => ("red", "label=F"),
+                EdgeType::Unconditional => ("black", ""),
+            };
+            
+            if edge.weight.direction == BACKWARD {
                 direction = "back";
-                color = "blue";
             }
-            result = add_strings!(result, src_node.label, " -> ", dst_node.label,
-                                  "[color=", color, " dir=", direction, "];\n");
+
+            result = add_strings!(result, src_node.label(), " -> ", dst_node.label(),
+                                  "[", label, " color=", color, " dir=", direction, "];\n");
         }
         add_strings!(result, "}")
     }
@@ -56,12 +61,27 @@ impl Dot for CFG {
 impl Dot for BasicBlock {
     fn to_dot(&self) -> String {
         let mut result = String::new();
-        result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
+        //result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
         for inst in &self.instructions {
             result = add_strings!(result, inst.to_dot());
         }
-        result = add_strings!(result, "</table>>");
-        add_strings!(self.label, "[label=", result, " shape=box];\n")
+        //result = add_strings!(result, "</table>>");
+        //add_strings!(self.label, "[label=", result, " shape=box];\n")
+        result
+    }
+}
+
+impl Dot for NodeData {
+    fn to_dot(&self) -> String {
+        let mut result = String::new();
+        result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
+        let res = match *self {
+            NodeData::Block(ref block) => block.to_dot(),
+            NodeData::Entry => "<tr><td>Entry</td></tr>".to_string(),
+            NodeData::Exit => "<tr><td>Exit</td></tr>".to_string(),
+        };
+        result = add_strings!(result, res, "</table>>");
+        add_strings!(self.label(), "[label=", result, " shape=box];\n")
     }
 }
 

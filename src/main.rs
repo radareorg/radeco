@@ -25,7 +25,7 @@ fn main() {
     parse_verbose(&mut p, expression);
     expression = "rax,rax,^";
     parse_verbose(&mut p, expression);
-    expression = "zf,?{,2,rip,=,}";
+    expression = "zf,?{,6,rip,=,}";
     parse_verbose(&mut p, expression);
     expression = "rax,rax,^";
     parse_verbose(&mut p, expression);
