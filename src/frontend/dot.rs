@@ -39,8 +39,15 @@ impl Dot for CFG {
         for edge in self.g.raw_edges() {
             let src_node = self.g.node_weight(edge.source()).unwrap();
             let dst_node = self.g.node_weight(edge.target()).unwrap();
+            let mut direction = "forward";
+            let mut color = "black";
+            // TODO: Must be changed once edges get their own attributes.
+            if edge.weight == 1 {
+                direction = "back";
+                color = "blue";
+            }
             result = add_strings!(result, src_node.label, " -> ", dst_node.label,
-                                  "[color=blue];\n");
+                                  "[color=", color, " dir=", direction, "];\n");
         }
         add_strings!(result, "}")
     }
@@ -73,4 +80,5 @@ pub fn make_dot(g: CFG) {
     dot_file.write_all(g.to_dot().as_bytes()).ok().expect("Error. Cannot write
                                                           file!\n");
     println!("[*] Dot file written!");
+    println!("[*] Run `./scripts/genpng.sh cfg.dot` to generate the graph.");
 }

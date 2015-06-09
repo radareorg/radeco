@@ -11,6 +11,7 @@ extern crate num;
 
 use self::petgraph::graph::{Graph, NodeIndex};
 use std::ops;
+use std::collections::BTreeMap;
 
 
 use super::dot;
@@ -78,7 +79,11 @@ impl CFG {
     pub fn build(&mut self, insts: &Vec<Instruction>) {
         // First we iterate through all the instructions and identify the
         // 'leaders'. 'leaders' are first instruction of some basic block.
+        let mut bbs: BTreeMap<Address, NodeIndex> = BTreeMap::new();
         let mut leaders: Vec<Address> = Vec::new();
+        let cur = self.add_new_block();
+        self.g.add_edge(self.start, cur, 0);
+        bbs.insert(insts[0].clone().addr, cur);
         let mut i = 0;
         let len = insts.len();
         while i < len {
@@ -88,26 +93,40 @@ impl CFG {
                 i += 1;
                 continue;
             }
+
             let addr: i64;
-            if inst.operand_2.location == Location::Constant {
-                addr = inst.operand_2.value;
+            let operand;
+            if inst.opcode == Opcode::OpCJmp {
+                operand = inst.operand_2;
+            } else {
+                operand = inst.operand_1;
+            }
+
+            if operand.location == Location::Constant {
+                addr = operand.value;
             } else {
                 // TODO: Need to decide what we should do if ever this
                 // case arises. Right now, we just panic!.
                 unreachable!("Unresolved jump!");
             }
 
+            bbs.entry((addr as u64)).or_insert(self.add_new_block());
             leaders.push(addr as u64);
             // Next instruction will also be a leader of a new block.
-            if i + 1 < len {
-                leaders.push(insts[i+1].addr);
+            if i + 1 >= len {
+                break;
             }
+
+            bbs.entry(insts[i+1].addr).or_insert(self.add_new_block());
+            leaders.push(insts[i+1].addr);
             i += 1;
         }
 
+        
         // Reverse sort the leaders.
         leaders.sort_by(|a, b| b.cmp(a));
-        let mut n = self.add_new_block();
+        let mut leaders_ = leaders.clone();
+        let mut n = *(bbs.get(&(insts[0].addr)).unwrap());
         for inst in insts {
             // If there are no more leaders or the current instruction is not
             // a leader, simply add it to the BB.
@@ -115,11 +134,43 @@ impl CFG {
                 self.get_block(n).add_instruction((*inst).clone());
                 continue;
             }
-            n = self.add_new_block();
+            n = *(bbs.get(&(inst.addr)).unwrap());
             self.get_block(n).add_instruction((*inst).clone());
             let _bb = leaders.pop();
         }
-        println!("{:?}", leaders);
+
+        for (key, n) in bbs.iter() {
+            let mut target: NodeIndex;
+            let inst: Instruction;
+            {
+                let bb = self.get_block(*n);
+                inst = bb.instructions.last().unwrap().clone();
+            }
+            
+            if inst.opcode == Opcode::OpJmp {
+                target = *(bbs.get(&(inst.operand_1.value as u64)).unwrap());
+                let mut wt = 0;
+                if inst.addr > (inst.operand_1.value as u64) { wt = 1; };
+                self.g.add_edge(*n, target, wt);
+                continue;
+            }
+
+            // Find the BasicBlock the next instruction belongs to. Remember, the next
+            // Instruction has to be a leader.
+            if let Some(addr) = leaders_.pop() {
+                if addr > inst.addr {
+                    let next = *(bbs.get(&addr).unwrap());
+                    self.g.add_edge(*n, next, 0);
+                }
+            }
+
+            if inst.opcode == Opcode::OpCJmp {
+                target = *(bbs.get(&(inst.operand_2.value as u64)).unwrap());
+                let mut wt = 0;
+                if inst.addr > (inst.operand_2.value as u64) { wt = 1; };
+                self.g.add_edge(*n, target, wt);
+            }
+        }
     }
 
     pub fn add_new_block(&mut self) -> NodeIndex {
