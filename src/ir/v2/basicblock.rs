@@ -1,5 +1,5 @@
-use super::{InnerIndexType, KnowsIndexType};
 use super::graph::NodeRef;
+use super::index::{InnerIndexType, KnowsIndexType};
 
 enum IndexKind {
 	External,

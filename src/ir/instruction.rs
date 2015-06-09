@@ -1,4 +1,3 @@
-use super::KnowsIndexType;
 use std::mem;
 
 pub enum FieldSpec {
@@ -33,36 +32,36 @@ pub enum ValueType {
 	Bits(BitCount)
 }
 
-pub enum Instruction<Ref> {
+pub enum InstructionType {
 	Nop,
-	Phi(ValueType), //Box<FnMut(&BasicBlock) -> Ref>),
-	Select(ValueType, Ref),
+	Phi(ValueType), //Box<FnMut(&BasicBlock) -> Opnd>),
+	Select(ValueType),
 	ConstBits(Const),
 
-	Unary(BitCount, UnaryArith, [Ref; 1]),
-	Binary(BitCount, BinaryArith, [Ref; 2]),
-//	Extension(BitCount, [Ref; 2]),
+	Unary(BitCount, UnaryArith),
+	Binary(BitCount, BinaryArith),
+//	Extension(BitCount, [Opnd; 2]),
 
-	Extract(FieldSpec, [Ref; 1]),
-	Inject(FieldSpec, [Ref; 2])
+	Extract(FieldSpec),
+	Inject(FieldSpec)
 }
 
-impl<Ref: KnowsIndexType> KnowsIndexType for Instruction<Ref> {
-	type I = Ref::I;
-}
+// impl RefHolder<Opnd> for Instruction<Opnd> {
+// 
+// }
 
-pub fn exprtype<Ref>(nd: &Instruction<Ref>) -> ValueType {
+pub fn exprtype(nd: &InstructionType) -> ValueType {
 	match *nd {
-		Instruction::Nop                      => ValueType::Void,
-		Instruction::Phi(valueType)           => valueType,
-		Instruction::Select(valueType, _)     => valueType,
-		Instruction::ConstBits(width)         => ValueType::Bits(mem::size_of::<Const>() as BitCount),
+		InstructionType::Nop                   => ValueType::Void,
+		InstructionType::Phi(valueType)        => valueType,
+		InstructionType::Select(valueType)     => valueType,
+		InstructionType::ConstBits(width)      => ValueType::Bits(mem::size_of::<Const>() as BitCount),
 
-		Instruction::Unary(width, ref op, _)  => ValueType::Bits(width),
-		Instruction::Binary(width, ref op, _) => ValueType::Bits(width),
-		//Instruction::Nary(width, op)   => ValueType::Bits(width),
+		InstructionType::Unary(width, ref op)  => ValueType::Bits(width),
+		InstructionType::Binary(width, ref op) => ValueType::Bits(width),
+		//InstructionType::Nary(width, op)   => ValueType::Bits(width),
 
-		Instruction::Extract(_, _)            => ValueType::Bits(32),
-		Instruction::Inject(_, _)             => ValueType::MachineState
+		InstructionType::Extract(_)            => ValueType::Bits(32),
+		InstructionType::Inject(_)             => ValueType::MachineState
 	}
 }
