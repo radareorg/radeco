@@ -271,27 +271,6 @@ impl fmt::Display for Instruction {
 	}
 }
 
-//pub type Instructions = Vec<Instruction>;
-//pub trait Helper {
-    //fn at_address(&self, addr: u64) -> Option<usize>;
-//}
-//impl Helper for Instructions {
-    //fn find_address(&self, addr: u64) -> Option<usize> {
-        //if self.len() == 0 {
-            //return None;
-        //}
-        //let len = self.len();
-        //let mut i: usize = 0;
-        //while i < len {
-            //if self[i].addr == addr {
-                //return Some(i);
-            //}
-            //i += 1;
-        //}
-        //return None;
-    //}
-//}
-
 fn map_esil_to_opset() -> HashMap<&'static str, Opcode> {
 	// Make a map from esil string to struct Operator.
 	// (operator: &str, op: Operator).

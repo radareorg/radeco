@@ -7,23 +7,16 @@
 #![allow(dead_code, unused_variables)]
 
 extern crate petgraph;
-extern crate num;
 
 use self::petgraph::graph::{Graph, NodeIndex};
 use std::ops;
 use std::collections::BTreeMap;
 
-
 use super::dot;
 use super::esil::*;
 
 /// A `BasicBlock` is the basic unit in a CFG. Every `Instruction` must be a
-/// part of one and only one `BasicBlock`. Every instruction in the
-/// `BasicBlock` executes sequentially. This `BasicBlock` implementation
-/// does not store the instructions themselves but rather just stores the
-/// indices of the instructions that belong to a block as a `Range`.
-/// Note that rust ranges are half-open. This means that the last value is not
-/// included as a part of this `Range`, i.e. (a..b) => [a, b).
+/// part of one and only one `BasicBlock`.
 pub struct BasicBlock {
     pub range: ops::Range<u64>,
     pub reachable: bool,
@@ -48,6 +41,11 @@ impl BasicBlock {
         self.instructions.push(inst);
     }
 }
+
+// Consts used for edge-weights.
+// TODO: Make a separate struct for edge-weight to store addtional details.
+pub const FORWARD: u8 = 0;
+pub const BACKWARD: u8 = 1;
 
 pub struct CFG {
     pub g: Graph<BasicBlock, u8>,
@@ -77,15 +75,17 @@ impl CFG {
     }
 
     pub fn build(&mut self, insts: &Vec<Instruction>) {
-        // First we iterate through all the instructions and identify the
-        // 'leaders'. 'leaders' are first instruction of some basic block.
         let mut bbs: BTreeMap<Address, NodeIndex> = BTreeMap::new();
         let mut leaders: Vec<Address> = Vec::new();
-        let cur = self.add_new_block();
-        self.g.add_edge(self.start, cur, 0);
-        bbs.insert(insts[0].clone().addr, cur);
         let mut i = 0;
         let len = insts.len();
+        let cur = self.add_new_block();
+        
+        self.g.add_edge(self.start, cur, 0);
+        bbs.insert(insts[0].clone().addr, cur);
+
+        // First we iterate through all the instructions and identify the
+        // 'leaders'. 'leaders' are first instruction of some basic block.
         while i < len {
             let inst = insts[i].clone();
             // If the inst does not change the control flow, simply continue.
@@ -122,22 +122,30 @@ impl CFG {
             i += 1;
         }
 
-        
         // Reverse sort the leaders.
         leaders.sort_by(|a, b| b.cmp(a));
-        let mut leaders_ = leaders.clone();
+        let mut i = leaders.len() - 1;
         let mut n = *(bbs.get(&(insts[0].addr)).unwrap());
         for inst in insts {
             // If there are no more leaders or the current instruction is not
             // a leader, simply add it to the BB.
-            if leaders.len() == 0 || inst.addr != *(leaders.last().unwrap()) {
+            if inst.addr != leaders[i] {
                 self.get_block(n).add_instruction((*inst).clone());
                 continue;
             }
             n = *(bbs.get(&(inst.addr)).unwrap());
             self.get_block(n).add_instruction((*inst).clone());
-            let _bb = leaders.pop();
+            if i > 0 { i -= 1; }
         }
+
+        // Logic to add edges.
+        // In case of an unconditional jump, there will only be one target BasicBlock for the jump.
+        // In case of a conditional jump, there will be two possible paths, one if the condition is
+        // true and the other 'natural' path when the condition evaluates to false.
+        // The false path can never lead to a back-edge as it follows the natural flow of the
+        // execution.
+        // Iterate through every node, check the jump target of the last instruction. Add an edge
+        // to the corresponding BB by referring to BTreeMap.
 
         for (key, n) in bbs.iter() {
             let mut target: NodeIndex;
@@ -146,18 +154,20 @@ impl CFG {
                 let bb = self.get_block(*n);
                 inst = bb.instructions.last().unwrap().clone();
             }
-            
+
             if inst.opcode == Opcode::OpJmp {
                 target = *(bbs.get(&(inst.operand_1.value as u64)).unwrap());
-                let mut wt = 0;
-                if inst.addr > (inst.operand_1.value as u64) { wt = 1; };
+                let mut wt = FORWARD;
+                if inst.addr > (inst.operand_1.value as u64) { wt = BACKWARD; };
                 self.g.add_edge(*n, target, wt);
                 continue;
             }
 
-            // Find the BasicBlock the next instruction belongs to. Remember, the next
-            // Instruction has to be a leader.
-            if let Some(addr) = leaders_.pop() {
+            // Find the BasicBlock the next instruction belongs to.
+            // Remember, the next instruction has to be a leader.
+            if let Some(addr) = leaders.pop() {
+                // This should never create a back-edge as this represents the natural flow path.
+                // i.e. the path taken if jumps are ignored.
                 if addr > inst.addr {
                     let next = *(bbs.get(&addr).unwrap());
                     self.g.add_edge(*n, next, 0);
@@ -175,7 +185,7 @@ impl CFG {
 
     pub fn add_new_block(&mut self) -> NodeIndex {
         let mut bb = BasicBlock::new();
-        // Be default a block is always labeled as nX.
+        // By default a block is always labeled as nX.
         bb.label = format!("n{}", self.g.node_count());
         self.g.add_node(bb)
     }

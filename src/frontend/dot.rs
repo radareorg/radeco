@@ -42,7 +42,7 @@ impl Dot for CFG {
             let mut direction = "forward";
             let mut color = "black";
             // TODO: Must be changed once edges get their own attributes.
-            if edge.weight == 1 {
+            if edge.weight == BACKWARD {
                 direction = "back";
                 color = "blue";
             }
