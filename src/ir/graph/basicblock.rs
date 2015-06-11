@@ -1,24 +1,15 @@
-use super::graph::NodeRef;
-use super::index::InnerIndexType;
-
-enum IndexKind {
-	External,
-	Phi,
-	Inner
-}
+use super::NodeRef;
+use super::inner::{InnerGraph, InnerEdgeLight};
+use super::traits::InnerIndexType;
 
 pub struct PhiIndex<I>(I);
 
-#[allow(dead_code)]
 pub struct BasicBlock<I: InnerIndexType, Instr> {
 	num_ext: I,
 	num_phi: I,
-	instr: Vec<Instr>
+	graph: InnerGraph<I, InnerEdgeLight<I>>
 }
 
-trait PhiInputProvider<I> {
-	fn provide_for<Instr>(src: &BasicBlock<I, Instr>) -> NodeRef<I>;
-}
 
 impl<I: InnerIndexType, Instr> BasicBlock<I, Instr>
 {
