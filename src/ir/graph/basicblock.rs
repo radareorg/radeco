@@ -1,13 +1,12 @@
 use super::NodeRef;
-use super::inner::{InnerGraph, InnerEdgeLight};
-use super::traits::InnerIndexType;
+use super::inner::{InnerGraph, InnerEdgeLight, InnerIndexType};
 
 pub struct PhiIndex<I>(I);
 
 pub struct BasicBlock<I: InnerIndexType, Instr> {
 	num_ext: I,
 	num_phi: I,
-	graph: InnerGraph<I, InnerEdgeLight<I>>
+	graph: InnerGraph<Instr, InnerEdgeLight<I>>
 }
 
 
@@ -17,7 +16,7 @@ impl<I: InnerIndexType, Instr> BasicBlock<I, Instr>
 		BasicBlock::<I, Instr> {
 			num_phi: I::zero(),
 			num_ext: I::zero(),
-			instr: Vec::new()
+			graph: InnerGraph::<Instr, InnerEdgeLight<I>>::new()
 		}
 	}
 	pub fn phiindex(&self, i: I) -> PhiIndex<I> {

@@ -1,5 +1,6 @@
 pub mod instruction;
 pub mod graph;
+mod traits;
 
 use self::instruction::InstructionType;
 

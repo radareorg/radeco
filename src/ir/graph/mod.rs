@@ -2,14 +2,12 @@ extern crate petgraph;
 
 pub mod basicblock;
 pub mod inner;
-pub mod traits;
 
 use std::ops::Deref;
 
 use self::basicblock::BasicBlock;
-use self::inner::InnerEdgeTrait;
 use self::petgraph::graph::{Edge, EdgeIndex, Graph, NodeIndex};
-use self::traits::NavigationInternal;
+use super::traits::NavigationInternal;
 
 type DefaultInnerIndex = i16;
 
@@ -38,19 +36,15 @@ type IRGraph<Instruction> = Graph<IRNode<Instruction>, IREdge>;
 
 pub struct NodeRef<I>(NodeIndex, I);
 
-impl NavigationInternal<NodeRef> for IRGraph {
-	fn add_uses_to(node: NodeRef) -> Vec<NodeRef> {
-		let v: Vec<NodeRef>;
-		if (node.is_phi()) {
+impl<NodeRef, Instruction> NavigationInternal<NodeRef> for IRGraph<Instruction> {
+	fn add_uses_to(&self, node: NodeRef, r: &mut Vec<NodeRef>) {
+		/*if (node.is_phi()) {
 			//v.re
 		} else {
 
-		}
-		return v;
+		}*/
 	}
 
-	fn add_args_to(node: NodeRef) -> Vec<NodeRef> {
-		let v: Vec<NodeRef>;
-		return v;
+	fn add_args_to(&self, node: NodeRef, r: &mut Vec<NodeRef>) {
 	}
 }
