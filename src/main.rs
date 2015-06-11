@@ -2,7 +2,8 @@
 // maybe we shouldn't define 'main' here
 
 extern crate radeco;
-use radeco::frontend::{esil, cfg, dot};
+use radeco::frontend::esil;
+use radeco::middle::{cfg, dot};
 
 fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
     println!("< {}", expression.to_string());

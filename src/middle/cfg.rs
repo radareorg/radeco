@@ -10,7 +10,7 @@ use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use petgraph::{Dfs, DfsIter, EdgeDirection};
 use std::collections::BTreeMap;
 
-use super::esil::*;
+use super::ir::*;
 
 /// A `BasicBlock` is the basic unit in a CFG.
 /// Every `Instruction` must be a part of one and only one `BasicBlock`.
@@ -288,14 +288,4 @@ impl CFG {
     pub fn add_edge(&mut self, src: NodeIndex, target: NodeIndex, edge_data: EdgeData) {
         self.g.add_edge(src, target, edge_data);
     }
-
-    //pub fn true_edge(&self, index: NodeIndex) -> Option<EdgeIndex> {
-        //let res: Option<EdgeIndex> = None;
-        //for edge in self.g.walk_edges_directed(index, EdgeDirection::Outgoing).iter() {
-            //if edge.edge_type == EdgeType::True {
-                //res = Some(edge.clone());
-            //}
-        //}
-        //return res;
-    //}
 }

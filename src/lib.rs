@@ -3,6 +3,7 @@
 extern crate regex;
 extern crate petgraph;
 
+pub mod middle;
 pub mod analysis;
 pub mod frontend;
 pub mod backend;

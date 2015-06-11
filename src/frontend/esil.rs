@@ -32,9 +32,10 @@ extern crate num;
 use self::num::traits::Num;
 
 use std::collections::HashMap;
-use std::fmt;
 use std::cmp;
 use regex::Regex;
+
+use super::{Instruction, Value, Opcode, Operator, Location, Address, Arity};
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
@@ -50,225 +51,16 @@ macro_rules! hash {
     };
 }
 
-pub type Address = u64;
+macro_rules! hex_to_i {
+    ( $x:expr ) => {
+        Num::from_str_radix($x.trim_left_matches("0x"), 16)
+    };
+}
 
 #[derive(Debug)]
 pub enum ParseError {
     InvalidOperator,
     InsufficientOperands,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Arity {
-    Zero,
-    Unary,
-    Binary,
-    Ternary,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Location {
-    Memory,
-    Register,
-    Constant,
-    Temporary,
-    Unknown,
-    Null,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Operator<'a> {
-    op: &'a str,
-    arity: Arity,
-}
-
-impl<'a> Operator<'a> {
-    pub fn new(op: &str, n: Arity) -> Operator {
-        Operator { op: op, arity: n }
-    }
-
-    pub fn nop() -> Operator<'a> {
-        Operator { op: "nop", arity: Arity::Zero }
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-/// enum of valid opcodes for radeco IR.
-/// To simplify the construction of Operator struct, this enum implements a
-/// to_operator().
-/// Since transformation from ESIL is complicated, the IR has two types of
-/// Opcodes: Basic and Composite.
-/// Composite Opcodes must *never* be used or seen outside the parser. The
-/// emit_insts() method of the parser iterates over the instructions generated
-/// and converts the composite opcodes to basic ones. The idea is to keep the
-/// basic set as small as possible for simpler analysis.
-
-pub enum Opcode {
-    OpAdd,
-    OpSub,
-    OpMul,
-    OpDiv,
-    OpMod,
-    OpAnd,
-    OpOr,
-    OpXor,
-    OpNot,
-    OpEq,
-    OpCmp,
-    OpGt,
-    OpLt,
-    OpLteq,
-    OpGteq,
-    OpLsl,
-    OpLsr,
-    OpIf,
-    OpJmp,  // Unconditional Jmp.
-    OpCJmp, // Conditional Jmp.
-    OpRef,
-    OpNarrow,
-    OpWiden,
-    OpNop,
-    OpInvalid,
-    // Composite Opcodes:
-    OpInc,
-    OpDec,
-    OpCl, // '}'
-}
-
-impl<'a> Opcode {
-    fn to_operator(&self) -> Operator<'a> {
-        let (op, arity) = match *self {
-            Opcode::OpAdd => ("+", Arity::Binary),
-            Opcode::OpSub => ("-", Arity::Binary),
-            Opcode::OpMul => ("*", Arity::Binary),
-            Opcode::OpDiv => ("/", Arity::Binary),
-            Opcode::OpMod => ("%", Arity::Binary),
-            Opcode::OpAnd => ("&", Arity::Binary),
-            Opcode::OpOr => ("|", Arity::Binary),
-            Opcode::OpXor => ("^", Arity::Binary),
-            Opcode::OpNot => ("!", Arity::Unary),
-            Opcode::OpEq => ("=", Arity::Binary),
-            Opcode::OpCmp => ("==", Arity::Binary),
-            Opcode::OpGt => (">", Arity::Binary),
-            Opcode::OpLt => ("<", Arity::Binary),
-            Opcode::OpLteq => ("<=", Arity::Binary),
-            Opcode::OpGteq => (">=", Arity::Binary),
-            Opcode::OpLsl => ("<<", Arity::Binary),
-            Opcode::OpLsr => (">>", Arity::Binary),
-            Opcode::OpInc => ("++", Arity::Unary),
-            Opcode::OpDec => ("--", Arity::Unary),
-            Opcode::OpIf => ("if", Arity::Unary),
-            Opcode::OpRef => ("ref", Arity::Unary),
-            Opcode::OpNarrow => ("narrow", Arity::Binary),
-            Opcode::OpWiden => ("widen", Arity::Binary),
-            Opcode::OpNop => ("nop", Arity::Zero),
-            Opcode::OpInvalid => ("invalid", Arity::Zero),
-            Opcode::OpJmp => ("jmp", Arity::Unary),
-            Opcode::OpCJmp => ("jmp if", Arity::Binary),
-            Opcode::OpCl => ("}", Arity::Zero),
-        };
-        Operator::new(op, arity).clone()
-    }
-}
-
-impl fmt::Display for Opcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_operator().op)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Value {
-    pub name: String,
-    pub size: u8,
-    pub location: Location,
-    pub value: i64,
-    // TODO: Convert from u32 to TypeSet.
-    // Every value can be considered in terms of typesets rather than fixed
-    // types which can then be narrowed down based on the analysis.
-    // TypeSet can be implemented simply as a bit-vector.
-    typeset: u32,
-}
-
-impl Value {
-    pub fn new(name: String, size: u8, location: Location, value: i64, typeset: u32) -> Value {
-        Value {
-            name: name.clone(),
-            size: size,
-            location: location,
-            value: value,
-            typeset: typeset,
-        }
-    }
-
-    pub fn null() -> Value {
-        Value::new("".to_string(), 0, Location::Null, 0, 0)
-    }
-
-    pub fn tmp(i: u64, size: u8) -> Value {
-        Value::new(format!("tmp_{:x}", i), size, Location::Temporary, 0, 0)
-    }
-
-    pub fn constant(i: i64) -> Value {
-        Value::new(i.to_string(), 64, Location::Constant, i, 0)
-    }
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s: String = match self.location {
-            Location::Constant => format!("{}", self.name),
-            _ => format!("{}[:{}]", self.name, self.size),
-        };
-        f.pad_integral(true, "", &s)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Instruction {
-    pub addr: Address,
-    pub opcode: Opcode,
-    pub dst: Value,
-    pub operand_1: Value,
-    pub operand_2: Value,
-}
-
-impl<'a> Instruction {
-    pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value, _addr: Option<Address>) -> Instruction {
-        let addr = match _addr {
-            Some(s) => s,
-            None => 0,
-        };
-
-        Instruction {
-            addr: addr,
-            opcode: opcode,
-            dst: dst,
-            operand_1: op1,
-            operand_2: op2,
-        }
-    }
-}
-
-impl fmt::Display for Instruction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s: String = match self.opcode {
-            Opcode::OpNot => format!("{} = {}{}", self.dst, self.opcode, self.operand_1),
-            Opcode::OpEq => format!("{} = {}", self.dst, self.operand_1),
-            Opcode::OpInc => format!("{} = {} + 1", self.dst, self.operand_1),
-            Opcode::OpDec => format!("{} = {} - 1", self.dst, self.operand_1),
-            Opcode::OpIf => format!("if ({}) {{", self.operand_1),
-            Opcode::OpRef => format!("{} = {}({})", self.dst, self.opcode, self.operand_1),
-            Opcode::OpNarrow => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, self.operand_2),
-            Opcode::OpWiden => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, self.operand_2),
-            Opcode::OpNop => format!("{}", self.opcode),
-            Opcode::OpJmp => format!("{} {}", self.opcode, self.operand_1),
-            Opcode::OpCJmp => format!("{} {}, {}", self.opcode, self.operand_1, self.operand_2),
-            Opcode::OpCl => format!("{}", self.opcode),
-            _ => format!("{} = {} {} {}", self.dst, self.operand_1, self.opcode, self.operand_2),
-        };
-        f.pad_integral(true, "", &s)
-    }
 }
 
 fn map_esil_to_opset() -> HashMap<&'static str, Opcode> {
@@ -297,7 +89,7 @@ fn map_esil_to_opset() -> HashMap<&'static str, Opcode> {
         ("--" , Opcode::OpDec),
         ("++" , Opcode::OpInc),
         ("}"  , Opcode::OpCl)
-            ]
+    ]
 }
 
 fn init_regset() -> HashMap<&'static str, u8> {
@@ -467,18 +259,21 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self, esil: &'a str, _addr: Option<String>) -> Result<(), ParseError> {
+        // Set parser address.
         self.addr = match _addr {
-            // TODO: Actually handle the error here.
-            Some(s) => s.parse::<u64>().ok().expect("Invalid Number\n"),
-            None => {
-                self.addr += 1;
-                self.addr
+            Some(s) => {
+                if let Ok(val) = hex_to_i!(s) {
+                    val
+                } else {
+                    self.addr + 1
+                }
             },
+            None => self.addr + 1,
         };
 
-        let expanded_esil: Vec<String> = esil.split(',')
-            .map(|x| x.to_string()).collect();
-        for token in expanded_esil {
+        let esil: Vec<String> = esil.split(',')
+                                    .map(|x| x.to_string()).collect();
+        for token in esil {
             let op = match self.opset.get(&*token) {
                 Some(op) => op.clone(),
                 None => Opcode::OpInvalid,
@@ -502,7 +297,7 @@ impl<'a> Parser<'a> {
                 } else if let Ok(v) = token.parse::<i64>() {
                     val_type = Location::Constant;
                     val = v;
-                } else if let Ok(v) = Num::from_str_radix(token.trim_left_matches("0x"), 16) {
+                } else if let Ok(v) = hex_to_i!(token) {
                     val_type = Location::Constant;
                     val = v;
                 }
@@ -589,8 +384,18 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    /// Emit-instructions converts certain compound instructions to simpler instructions.
+    /// For example, the sequence of instructions,
+    /// ```none
+    /// if zf            (OpIf)
+    ///   jump addr      (OpJmp)
+    /// ```
+    /// is converted to a single conditional jump as,
+    /// ```none
+    /// if zf jump addr  (OpCJmp)
+    /// ```
+
     pub fn emit_insts(&mut self) -> Vec<Instruction> {
-        // Need to convert if cond { jmp } to CJmp.
         let len = self.insts.len();
         let mut res: Vec<Instruction> = Vec::new();
         let mut i = 0;
@@ -601,15 +406,20 @@ impl<'a> Parser<'a> {
                 i += 1;
                 continue;
             }
+
+            // Note(sushant94): We need to improve this process if we want to retain the side-effects.
+            // For example, a x86 call instruction will result the corresponding esil statement to
+            // have instructions to set esp and then jump to the required location.
+            // We can use these side-effects to determine if it's a 'call' or just a jump.
+            // This however requires study into other architectures and their esil too.
             while inst.opcode != Opcode::OpCl && i < len - 1 {
                 i += 1;
                 let inst_ = self.insts[i].clone();
                 if inst_.opcode == Opcode::OpJmp {
-                    let res_inst = Instruction::new(Opcode::OpCJmp,
-                                    Value::null(),
-                                    inst.operand_1.clone(),
-                                    inst_.operand_1,
-                                    Some(inst.addr));
+                    let res_inst = 
+                        Instruction::new(Opcode::OpCJmp, Value::null(),
+                                         inst.operand_1.clone(),
+                                         inst_.operand_1, Some(inst.addr));
                     res.push(res_inst);
                 }
             }

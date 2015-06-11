@@ -4,7 +4,7 @@
 //   * Add colors to different elements of the graph.
 
 pub use super::cfg::*;
-pub use super::esil::*;
+pub use super::ir::*;
 
 // Remove after make_cfg() is removed.
 use std::io::prelude::*;
@@ -43,20 +43,6 @@ impl Dot for CFG {
             let dst_node = self.g.node_weight(edge.target()).unwrap();
             result = add_strings!(result, src_node.label(), " -> ",
             dst_node.label(), edge.weight.to_dot());
-            let mut direction = "forward";
-
-            let (color, label) = match edge.weight.edge_type {
-                EdgeType::True => ("green", "label=T"),
-                EdgeType::False => ("red", "label=F"),
-                EdgeType::Unconditional => ("black", ""),
-            };
-
-            if edge.weight.direction == BACKWARD {
-                direction = "back";
-            }
-
-            result = add_strings!(result, src_node.label(), " -> ", dst_node.label(),
-                "[", label, " color=", color, " dir=", direction, "];\n");
         }
         add_strings!(result, "}")
     }
