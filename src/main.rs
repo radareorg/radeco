@@ -18,23 +18,11 @@ fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
     let mut p = esil::Parser::new();
-    
-    let mut expression = "rax,rbx,+";
-    parse_verbose(&mut p, expression);
-    expression = "rax,=";
-    parse_verbose(&mut p, expression);
-    expression = "rax,rax,^";
-    parse_verbose(&mut p, expression);
-    expression = "zf,?{,6,rip,=,}";
-    parse_verbose(&mut p, expression);
-    expression = "rax,rax,^";
-    parse_verbose(&mut p, expression);
-    expression = "rax,rax,+=";
-    parse_verbose(&mut p, expression);
-
+    let exprs = ["rax,rbx,+", "rax,=", "rax,rax,^", "zf,?{,6,rip,=,}", "rax,rax,^", "rax,rax,+="];
+    for exp in &exprs {
+        parse_verbose(&mut p, exp);
+    }
     let mut cfg = cfg::CFG::new();
     cfg.build(&(p.emit_insts()));
     dot::make_dot(cfg);
-
-    //cfg::make_graph(p.emit_insts());
 }

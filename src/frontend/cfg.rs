@@ -6,10 +6,8 @@
 
 #![allow(dead_code, unused_variables)]
 
-extern crate petgraph;
-
-use self::petgraph::graph::{Graph, NodeIndex};
-use std::ops;
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::{Dfs, DfsIter, EdgeDirection};
 use std::collections::BTreeMap;
 
 use super::esil::*;
@@ -17,18 +15,14 @@ use super::esil::*;
 /// A `BasicBlock` is the basic unit in a CFG.
 /// Every `Instruction` must be a part of one and only one `BasicBlock`.
 pub struct BasicBlock {
-    pub range: ops::Range<u64>,
     pub reachable: bool,
     pub instructions: Vec<Instruction>,
     pub label: String,
-    // Do we need a jump from and a jump to field considering that we already
-    // have a graph that we can traverse?
 }
 
 impl BasicBlock {
     fn new() -> BasicBlock {
         BasicBlock { 
-            range: (0..0),
             reachable: false,
             instructions: Vec::new(),
             label: String::new(),
@@ -36,7 +30,6 @@ impl BasicBlock {
     }
 
     fn add_instruction(&mut self, inst: Instruction) {
-        let addr = inst.clone().addr;
         self.instructions.push(inst);
     }
 }
@@ -56,11 +49,6 @@ impl NodeData {
         }
     }
 }
-
-// Consts used for edge-weights.
-// TODO: Make a separate struct for edge-weight to store addtional details.
-//pub const FORWARD: u8 = 0;
-//pub const BACKWARD: u8 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EdgeType {
@@ -118,7 +106,6 @@ impl EdgeData {
 
 pub struct CFG {
     pub g: Graph<NodeData, EdgeData>,
-    pub insts: Vec<Instruction>,
     pub entry: NodeIndex,
     pub exit: NodeIndex,
 }
@@ -133,7 +120,6 @@ impl CFG {
 
         CFG {
             g: g,
-            insts: Vec::new(),
             entry: entry,
             exit: exit,
         }
@@ -144,6 +130,7 @@ impl CFG {
         let mut leaders: Vec<Address> = Vec::new();
         let mut i = 0;
         let len = insts.len();
+
         { 
             let cur = self.add_new_block();
             let first_addr = insts[0].clone().addr;
@@ -156,14 +143,15 @@ impl CFG {
         // 'leaders'. 'leaders' are first instruction of some basic block.
         while i < len {
             let inst = insts[i].clone();
+            let addr: i64;
+            let operand;
+
             // If the inst does not change the control flow, simply continue.
             if inst.opcode != Opcode::OpCJmp && inst.opcode != Opcode::OpJmp {
                 i += 1;
                 continue;
             }
 
-            let addr: i64;
-            let operand;
             if inst.opcode == Opcode::OpCJmp {
                 operand = inst.operand_2;
             } else {
@@ -173,9 +161,7 @@ impl CFG {
             if operand.location == Location::Constant {
                 addr = operand.value;
             } else {
-                // TODO: Need to decide what we should do if ever this
-                // case arises. Right now, we just panic!.
-                unreachable!("Unresolved jump!");
+                unreachable!("Unresolved Jump!");
             }
 
             bbs.entry((addr as u64)).or_insert(self.add_new_block());
@@ -221,38 +207,45 @@ impl CFG {
         // Iterate through every node, check the jump target of the last instruction. Add an edge
         // to the corresponding BB by referring to BTreeMap.
 
-        for (key, n) in bbs.iter() {
+        for (_, n) in bbs.iter() {
             let mut target: NodeIndex;
+            let mut target_addr: Address;
+            let mut edge_data: EdgeData;
+            let mut is_false_branch = false;
             let inst: Instruction;
+
             if let &mut NodeData::Block(ref mut block) = self.get_block(*n) {
                 inst = block.instructions.last().unwrap().clone();
             } else {
-                continue;
+                unreachable!("Found something other than a BasicBlock!");
             }
 
             if inst.opcode == Opcode::OpJmp {
-                let target_addr = inst.operand_1.value as u64;
-                let mut edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
+                target_addr = inst.operand_1.value as u64;
+                edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
                 target = *(bbs.get(&target_addr).unwrap());
-                if inst.addr > target_addr { edge_data.direction = BACKWARD; };
+                if inst.addr > target_addr {
+                    edge_data.direction = BACKWARD;
+                }
                 self.add_edge(*n, target, edge_data);
                 continue;
             }
-            
-            let mut is_false_branch = false;
+
             if inst.opcode == Opcode::OpCJmp {
-                let target_addr = inst.operand_2.value as u64;
-                let mut edge_data = EdgeData::new_forward_true(inst.addr, target_addr);
+                target_addr = inst.operand_2.value as u64;
+                edge_data = EdgeData::new_forward_true(inst.addr, target_addr);
                 target = *(bbs.get(&target_addr).unwrap());
-                if inst.addr > target_addr { edge_data.direction = BACKWARD; };
+                if inst.addr > target_addr {
+                    edge_data.direction = BACKWARD;
+                }
                 self.add_edge(*n, target, edge_data);
                 is_false_branch = true;
             }
 
             // Find the BasicBlock the next instruction belongs to.
             // Remember, the next instruction has to be a leader.
-            let mut target = self.exit;
-            let mut edge_data = EdgeData::new_forward_uncond(inst.addr, 0);
+            target = self.exit;
+            edge_data = EdgeData::new_forward_uncond(inst.addr, 0);
             if let Some(target_addr) = leaders.pop() {
                 // This should never create a back-edge as this represents the natural flow path.
                 // i.e. the path taken if jumps are ignored.
@@ -263,6 +256,17 @@ impl CFG {
                 }
             }
             self.add_edge(*n, target, edge_data);
+        }
+
+        self.mark_reachable();
+    }
+
+    pub fn mark_reachable(&mut self) {
+        let mut dfs = Dfs::new(&(self.g), self.entry);
+        while let Some(n) = dfs.next(&self.g) {
+            if let &mut NodeData::Block(ref mut block) = &mut(self.g[n]) {
+                block.reachable = true;
+            }
         }
     }
 
@@ -285,5 +289,13 @@ impl CFG {
         self.g.add_edge(src, target, edge_data);
     }
 
+    //pub fn true_edge(&self, index: NodeIndex) -> Option<EdgeIndex> {
+        //let res: Option<EdgeIndex> = None;
+        //for edge in self.g.walk_edges_directed(index, EdgeDirection::Outgoing).iter() {
+            //if edge.edge_type == EdgeType::True {
+                //res = Some(edge.clone());
+            //}
+        //}
+        //return res;
+    //}
 }
-

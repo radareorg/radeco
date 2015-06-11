@@ -31,57 +31,65 @@ impl Dot for CFG {
         let mut result = String::new();
         result = add_strings!(result, "digraph cfg {\n");
         // Graph configurations
+        result = add_strings!(result, "splines=\"true\";\n");
         // Node configurations
         for node in self.g.raw_nodes().iter() {
             result = add_strings!(result, node.weight.to_dot());
         }
-        // Connect BasicBlocks by edges.
-        for edge in self.g.raw_edges() {
+
+        // Connect nodes by edges.
+        for edge in self.g.raw_edges().iter() {
             let src_node = self.g.node_weight(edge.source()).unwrap();
             let dst_node = self.g.node_weight(edge.target()).unwrap();
-            let mut direction = "forward";
-
-            let (color, label) = match edge.weight.edge_type {
-                EdgeType::True => ("green", "label=T"),
-                EdgeType::False => ("red", "label=F"),
-                EdgeType::Unconditional => ("black", ""),
-            };
-            
-            if edge.weight.direction == BACKWARD {
-                direction = "back";
-            }
-
-            result = add_strings!(result, src_node.label(), " -> ", dst_node.label(),
-                                  "[", label, " color=", color, " dir=", direction, "];\n");
+            result = add_strings!(result, src_node.label(), " -> ",
+            dst_node.label(), edge.weight.to_dot());
         }
         add_strings!(result, "}")
     }
 }
 
-impl Dot for BasicBlock {
+impl Dot for EdgeData {
     fn to_dot(&self) -> String {
-        let mut result = String::new();
-        //result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
-        for inst in &self.instructions {
-            result = add_strings!(result, inst.to_dot());
+        let mut direction = "forward";
+        let (color, label) = match self.edge_type {
+            EdgeType::True => ("green", "label=T"),
+            EdgeType::False => ("red", "label=F"),
+            EdgeType::Unconditional => ("black", ""),
+        };
+        if self.direction == BACKWARD {
+            direction = "back";
         }
-        //result = add_strings!(result, "</table>>");
-        //add_strings!(self.label, "[label=", result, " shape=box];\n")
-        result
+        add_strings!("[", label, " color=", color, " dir=", direction, "];\n")
     }
 }
 
 impl Dot for NodeData {
     fn to_dot(&self) -> String {
         let mut result = String::new();
+        let mut color = "black";
         result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
         let res = match *self {
-            NodeData::Block(ref block) => block.to_dot(),
+            NodeData::Block(ref block) => {
+                if !block.reachable {
+                    color = "red";
+                }
+                block.to_dot()
+            },
             NodeData::Entry => "<tr><td>Entry</td></tr>".to_string(),
             NodeData::Exit => "<tr><td>Exit</td></tr>".to_string(),
         };
         result = add_strings!(result, res, "</table>>");
-        add_strings!(self.label(), "[label=", result, " shape=box];\n")
+        add_strings!(self.label(), "[style=rounded label=", result, " shape=box color=", color,"];\n")
+    }
+}
+
+impl Dot for BasicBlock {
+    fn to_dot(&self) -> String {
+        let mut result = String::new();
+        for inst in &self.instructions {
+            result = add_strings!(result, inst.to_dot());
+        }
+        result
     }
 }
 
