@@ -16,7 +16,7 @@ macro_rules! add_strings {
             let mut s = String::new();
             $(
                 s = format!("{}{}", s, $x);
-             )*
+            )*
                 s
         }
     };
@@ -43,6 +43,20 @@ impl Dot for CFG {
             let dst_node = self.g.node_weight(edge.target()).unwrap();
             result = add_strings!(result, src_node.label(), " -> ",
             dst_node.label(), edge.weight.to_dot());
+            let mut direction = "forward";
+
+            let (color, label) = match edge.weight.edge_type {
+                EdgeType::True => ("green", "label=T"),
+                EdgeType::False => ("red", "label=F"),
+                EdgeType::Unconditional => ("black", ""),
+            };
+
+            if edge.weight.direction == BACKWARD {
+                direction = "back";
+            }
+
+            result = add_strings!(result, src_node.label(), " -> ", dst_node.label(),
+                "[", label, " color=", color, " dir=", direction, "];\n");
         }
         add_strings!(result, "}")
     }
@@ -96,17 +110,15 @@ impl Dot for BasicBlock {
 impl Dot for Instruction {
     fn to_dot(&self) -> String {
         format!("<tr><td align=\"left\" cellspacing=\"1\"><font color=\"grey50\"
-                point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>", self.addr,
-                self)
+            point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>",
+            self.addr, self)
     }
 }
 
 // Dummy Function for test purposes. Will be removed later.
 pub fn make_dot(g: CFG) {
-    let mut dot_file = File::create("cfg.dot").ok().expect("Error. Cannot
-                                                           create file!\n");
-    dot_file.write_all(g.to_dot().as_bytes()).ok().expect("Error. Cannot write
-                                                          file!\n");
+    let mut dot_file = File::create("cfg.dot").ok().expect("Error. Cannot create file!\n");
+    dot_file.write_all(g.to_dot().as_bytes()).ok().expect("Error. Cannot write file!\n");
     println!("[*] Dot file written!");
     println!("[*] Run `./scripts/genpng.sh cfg.dot` to generate the graph.");
 }

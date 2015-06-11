@@ -606,10 +606,10 @@ impl<'a> Parser<'a> {
                 let inst_ = self.insts[i].clone();
                 if inst_.opcode == Opcode::OpJmp {
                     let res_inst = Instruction::new(Opcode::OpCJmp,
-                                                    Value::null(),
-                                                    inst.operand_1.clone(),
-                                                    inst_.operand_1,
-                                                    Some(inst.addr));
+                                    Value::null(),
+                                    inst.operand_1.clone(),
+                                    inst_.operand_1,
+                                    Some(inst.addr));
                     res.push(res_inst);
                 }
             }
