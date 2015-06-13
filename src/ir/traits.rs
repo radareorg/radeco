@@ -1,3 +1,7 @@
+pub trait Manipulation<T, U> {
+	fn arg_mod(&mut self, T, U, T) -> T;
+}
+
 pub trait Navigation<T> {
 	fn uses_of(&self, T) -> Vec<T>;
 	fn args_of(&self, T) -> Vec<T>;
@@ -12,12 +16,12 @@ impl<T> Navigation<T> for NavigationInternal<T> {
 	fn uses_of(&self, t: T) -> Vec<T> {
 		let mut r = Vec::<T>::new();
 		self.add_uses_to(t, &mut r);
-		r
+		return r
 	}
 	fn args_of(&self, t: T) -> Vec<T> {
 		let mut r = Vec::<T>::new();
 		self.add_args_to(t, &mut r);
-		r
+		return r
 	}
 }
 

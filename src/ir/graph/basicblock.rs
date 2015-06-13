@@ -22,10 +22,4 @@ impl<I: InnerIndexType, Instr> BasicBlock<I, Instr>
 	pub fn phiindex(&self, i: I) -> PhiIndex<I> {
 		PhiIndex(i+self.num_phi)
 	}
-	// pub fn phi(&mut self, input_provider: Box<PhiInputProvider>) {
-	// }
-	// pub fn add(&mut self, opc: Opcode, args: &[OpRef]) {
-	// }
-	// pub fn flow_into(&mut self, target: &BasicBlock or Node<>) {
-	// }
 }

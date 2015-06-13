@@ -7,7 +7,7 @@ use std::ops::Deref;
 
 use self::basicblock::BasicBlock;
 use self::petgraph::graph::{Edge, EdgeIndex, Graph, NodeIndex};
-use super::traits::NavigationInternal;
+use super::traits::{NavigationInternal, InstructionType};
 
 type DefaultInnerIndex = i16;
 
@@ -36,15 +36,20 @@ type IRGraph<Instruction> = Graph<IRNode<Instruction>, IREdge>;
 
 pub struct NodeRef<I>(NodeIndex, I);
 
-impl<NodeRef, Instruction> NavigationInternal<NodeRef> for IRGraph<Instruction> {
+impl<NodeRef: InstructionType, Instruction> NavigationInternal<NodeRef> for IRGraph<Instruction> {
 	fn add_uses_to(&self, node: NodeRef, r: &mut Vec<NodeRef>) {
-		/*if (node.is_phi()) {
+		if (node.is_phi()) {
 			//v.re
 		} else {
 
-		}*/
+		}
 	}
 
 	fn add_args_to(&self, node: NodeRef, r: &mut Vec<NodeRef>) {
+		if (node.is_phi()) {
+
+		} else {
+
+		}
 	}
 }

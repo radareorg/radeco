@@ -1,4 +1,5 @@
 use std::mem;
+use super::traits;
 
 pub enum FieldSpec {
 	Register
@@ -46,9 +47,11 @@ pub enum InstructionType {
 	Inject(FieldSpec)
 }
 
-// impl RefHolder<Opnd> for Instruction<Opnd> {
-// 
-// }
+impl traits::InstructionType for InstructionType {
+	fn is_phi(&self) -> bool {
+		if let &InstructionType::Phi(_) = self { true } else { false }
+	}
+}
 
 pub fn exprtype(nd: &InstructionType) -> ValueType {
 	match *nd {
