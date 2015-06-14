@@ -1,5 +1,5 @@
 pub trait Manipulation<T, U> {
-	fn arg_ins(&mut self, T, U, T) -> T;
+	fn arg_ins(&mut self, T, U, T);
 	fn arg_mod(&mut self, T, U, T) -> T;
 }
 

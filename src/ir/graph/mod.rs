@@ -69,14 +69,14 @@ enum IRNode<Instruction: InstructionType> {
 
 enum IREdge {
 	// Points from a `IRNode::Repr` to the `IR::BasicBlock` that it belongs to
-    ReprToBlock(DefaultInnerIndex),
-    // Points from a `IR::BasicBlock`s to `IRNode::Repr` whose target is used by operations in the basic block
-    // Contains a id of the first user in the basic block, and the id the `IRNode::Repr` is known by in the basic block
-    BlockToRepr(DefaultInnerIndex, DefaultInnerIndex),
-    // Points from one `IR::BasicBlock` to another. Represents control flow.
-    // It contains a vector of 'n' references to operations in the origin basic block
-    // that are used by 'n' phi operations in the target basic block.
-    Flow(Vec<DefaultInnerIndex>, u64)
+	ReprToBlock(DefaultInnerIndex),
+	// Points from a `IR::BasicBlock`s to `IRNode::Repr` whose target is used by operations in the basic block
+	// Contains a id of the first user in the basic block, and the id the `IRNode::Repr` is known by in the basic block
+	BlockToRepr(DefaultInnerIndex, DefaultInnerIndex),
+	// Points from one `IR::BasicBlock` to another. Represents control flow.
+	// It contains a vector of 'n' references to operations in the origin basic block
+	// that are used by 'n' phi operations in the target basic block.
+	Flow(Vec<DefaultInnerIndex>, u64)
 }
 
 type IRGraph<Instruction> = Graph<IRNode<Instruction>, IREdge>;
@@ -91,6 +91,7 @@ fn lookup<NodeRef: InstructionType, Instruction: InstructionType>(graph: IRGraph
 impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<Index>> for IRGraph<Instruction> {
 	fn add_uses_to(&self, noderef: NodeRef<Index>, r: &mut Vec<NodeRef<Index>>) {
 		if let Option::Some(node) = self.node_weight(noderef.0) {
+			// TODO
 			panic!();
 		} else {
 			panic!();
@@ -102,6 +103,7 @@ impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<
 			let bb = match *node {
 				IRNode::Repr => panic!(),
 				IRNode::BasicBlock(ref bb) => {
+					// TODO
 					bb //bb.lookup()
 				}
 			};
