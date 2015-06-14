@@ -1,64 +1,24 @@
-use std::cmp::Eq;
-use std::ops::{Add, Not};
 use std::mem;
 
 use super::super::traits::{Manipulation, NavigationInternal};
-
-pub trait InnerIndexType : Clone + Copy + Add<Output=Self> + Not<Output=Self> + Eq + {
-	// replace with zero trait once stable
-	fn zero() -> Self;
-	fn as_usize(self) -> usize;
-	fn from_usize(usize) -> Self;
-	fn invalid() -> Self { !(Self::zero()) }
-}
-
-impl InnerIndexType for i8 {
-	fn zero() -> i8 { 0 }
-	fn as_usize(self) -> usize { self as usize }
-	fn from_usize(v: usize) -> i8 { v as i8 }
-}
-
-impl InnerIndexType for i16 {
-	fn zero() -> i16 { 0 }
-	fn as_usize(self) -> usize { self as usize }
-	fn from_usize(v: usize) -> i16 { v as i16 }
-}
-
-impl InnerIndexType for i32 {
-	fn zero() -> i32 { 0 }
-	fn as_usize(self) -> usize { self as usize }
-	fn from_usize(v: usize) -> i32 { v as i32 }
-}
-
-impl InnerIndexType for i64 {
-	fn zero() -> i64 { 0 }
-	fn as_usize(self) -> usize { self as usize }
-	fn from_usize(v: usize) -> i64 { v as i64 }
-}
-
-impl InnerIndexType for isize {
-	fn zero() -> isize { 0 }
-	fn as_usize(self) -> usize { self as usize }
-	fn from_usize(v: usize) -> isize { v as isize }
-}
-
+use super::indextype::IndexType;
 
 #[derive(Clone, Copy)]
-pub struct InnerEdgeLight<I: InnerIndexType> { target: I }
+pub struct InnerEdgeLight<I: IndexType> { target: I }
 #[derive(Clone, Copy)]
-pub struct InnerEdgeLinked<I: InnerIndexType> { target: I, next: I, prev: I }
+pub struct InnerEdgeLinked<I: IndexType> { target: I, next: I, prev: I }
 
 pub trait InnerEdgeTrait: Copy {
 	type NodeAux;
 	type Index;
 }
 
-impl<I: InnerIndexType> InnerEdgeTrait for InnerEdgeLight<I> {
+impl<I: IndexType> InnerEdgeTrait for InnerEdgeLight<I> {
 	type NodeAux = ();
 	type Index = I;
 }
 
-impl<I: InnerIndexType> InnerEdgeTrait for InnerEdgeLinked<I> {
+impl<I: IndexType> InnerEdgeTrait for InnerEdgeLinked<I> {
 	type NodeAux = I;
 	type Index = I;
 }
@@ -85,9 +45,10 @@ impl<Node, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 trait NPSet<Index> {
 	fn next_set(&mut self, Index, Index);
 	fn prev_set(&mut self, Index, Index);
+	fn similar_edge(&self, Index) -> Option<&InnerEdgeLinked<Index>>;
 }
 
-impl<N, Index: InnerIndexType> NPSet<Index> for InnerNode<N, InnerEdgeLinked<Index>> {
+impl<N, Index: IndexType> NPSet<Index> for InnerNode<N, InnerEdgeLinked<Index>> {
 	fn next_set(&mut self, target: Index, value: Index) {
 		for x in 0..self.num_edges {
 			let edge = &mut self.edges[x as usize];
@@ -104,17 +65,45 @@ impl<N, Index: InnerIndexType> NPSet<Index> for InnerNode<N, InnerEdgeLinked<Ind
 			}
 		}
 	}
-}
-
-impl<Index: InnerIndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLight<Index>> {
-	fn arg_mod(&mut self, i: Index, x: u8, mut target: Index) -> Index {
-		mem::swap(&mut target, &mut self.nodes[i.as_usize()].edges[x as usize].target);
-		return target
+	fn similar_edge(&self, target: Index) -> Option<&InnerEdgeLinked<Index>> {
+		for x in 0..self.num_edges {
+			let edge = &self.edges[x as usize];
+			if edge.target == target {
+				return Option::Some(edge)
+			}
+		}
+		return Option::None
 	}
 }
 
-impl<Index: InnerIndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLinked<Index>> {
-	fn arg_mod(&mut self, i: Index, x: u8, mut target: Index) -> Index {
+impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLight<Index>> {
+	fn arg_ins(&mut self, i: Index, x: u8, mut target: Index) -> Index {
+		mem::swap(&mut target, &mut self.nodes[i.as_usize()].edges[x as usize].target);
+		return target
+	}
+	fn arg_mod(&mut self, i: Index, x: u8, target: Index) -> Index {
+		self.arg_ins(i, x, target)
+	}
+}
+
+impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLinked<Index>> {
+
+	fn arg_ins(&mut self, mut i: Index, x: u8, target: Index) -> Index {
+		match self.nodes[i.as_usize()].similar_edge (target) {
+			Option::Some(linkededge) => {
+				return i // TODO
+			},
+			Option::None => {}
+		}
+
+ 		let node = &mut self.nodes[i.as_usize()];
+		mem::swap(&mut i, &mut node.aux);
+		let edge = &mut node.edges[x as usize];
+		// TODO
+		i
+	}
+
+	fn arg_mod(&mut self, i: Index, x: u8, target: Index) -> Index {
 		let edgecopy = self.nodes[i.as_usize()].edges[x as usize];
 
 		if edgecopy.target != target {
@@ -131,14 +120,13 @@ impl<Index: InnerIndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEd
 				self.nodes[edgecopy.target.as_usize()].aux = ni;
 			}
 
-			let node = &mut self.nodes[i.as_usize()];
-			let edge = &mut node.edges[x as usize];
-			edge.target = target;
-
-			//arg_ins(i, )
-			for ox in 0..node.num_edges {
-				// check if this node already has an edge pointing to target
+			{
+				let node = &mut self.nodes[i.as_usize()];
+				let edge = &mut node.edges[x as usize];
+				edge.target = target;
 			}
+
+			self.arg_ins(i, x, target);
 		}
 
 		return target
@@ -146,7 +134,7 @@ impl<Index: InnerIndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEd
 }
 
 
-impl<Index: InnerIndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLight<Index>> {
+impl<Index: IndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLight<Index>> {
 	fn add_uses_to(&self, i: Index, r: &mut Vec<Index>) {
 		for (n, ref node) in self.nodes.iter().enumerate() {
 			for x in 0..node.num_edges {
@@ -167,7 +155,7 @@ impl<Index: InnerIndexType, N> NavigationInternal<Index> for InnerGraph<N, Inner
 	}
 }
 
-impl<Index: InnerIndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLinked<Index>> {
+impl<Index: IndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLinked<Index>> {
 	fn add_uses_to(&self, t: Index, r: &mut Vec<Index>) {
 		let mut user: Index = self.nodes[t.as_usize()].aux;
 		while user != Index::invalid() {

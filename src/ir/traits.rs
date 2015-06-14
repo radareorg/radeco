@@ -1,4 +1,5 @@
 pub trait Manipulation<T, U> {
+	fn arg_ins(&mut self, T, U, T) -> T;
 	fn arg_mod(&mut self, T, U, T) -> T;
 }
 
@@ -25,4 +26,18 @@ impl<T> Navigation<T> for NavigationInternal<T> {
 	}
 }
 
-pub trait InstructionType { fn is_phi(&self) -> bool; } 
+pub trait InstructionType {
+	type PhiType: Copy + Clone;
+	fn make_phi(Self::PhiType) -> Self;
+	fn is_phi(&self) -> bool;
+}
+
+pub trait Accessible<T, U, V> {
+	fn lookup(&self, T) -> LookupResult<U, V>;
+}
+
+pub enum LookupResult<ResultType, RedirectType> {
+	Found(ResultType),
+	Redirect(RedirectType),
+	NotFound
+}

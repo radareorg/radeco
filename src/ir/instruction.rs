@@ -35,7 +35,7 @@ pub enum ValueType {
 
 pub enum InstructionType {
 	Nop,
-	Phi(ValueType), //Box<FnMut(&BasicBlock) -> Opnd>),
+	Phi(ValueType),
 	Select(ValueType),
 	ConstBits(Const),
 
@@ -48,6 +48,10 @@ pub enum InstructionType {
 }
 
 impl traits::InstructionType for InstructionType {
+	type PhiType = ValueType;
+	fn make_phi(vt: ValueType) -> InstructionType {
+		InstructionType::Phi(vt)
+	}
 	fn is_phi(&self) -> bool {
 		if let &InstructionType::Phi(_) = self { true } else { false }
 	}
