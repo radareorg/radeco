@@ -1,9 +1,10 @@
 // rust, y u no provide integer trait
 
 use std::cmp::{Eq, Ord};
+use std::fmt::Debug;
 use std::ops::{Add, Not};
 
-pub trait IndexType : Clone + Copy + Add<Output=Self> + Not<Output=Self> + Eq + Ord {
+pub trait IndexType : Clone + Copy + Add<Output=Self> + Not<Output=Self> + Eq + Ord + Debug {
 	// replace with zero trait once stable
 	fn zero() -> Self;
 	fn as_usize(self) -> usize;

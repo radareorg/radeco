@@ -1,16 +1,16 @@
 use std::mem;
-use std::cmp::min;
+use std::fmt::Debug;
 
 use super::super::traits::{Manipulation, NavigationInternal};
 use super::indextype::IndexType;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct InnerEdgeLight<I: IndexType> { target: I }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct InnerEdgeLinked<I: IndexType> { target: I, next: I, prev: I }
 
-pub trait InnerEdgeTrait: Copy + Default {
-	type NodeAux;
+pub trait InnerEdgeTrait: Copy + Default + Debug {
+	type NodeAux: Debug;
 	type Index: IndexType;
 	fn default_aux() -> Self::NodeAux;
 }
@@ -35,6 +35,7 @@ impl<I: IndexType> Default for InnerEdgeLinked<I> {
 	fn default() -> Self { InnerEdgeLinked::<I> { target: I::invalid(), next: I::invalid(), prev: I::invalid() } }
 }
 
+#[derive(Debug)]
 struct InnerNode<Node, Edge: InnerEdgeTrait> {
 	data:      Node,
 	aux:       Edge::NodeAux,
@@ -42,15 +43,18 @@ struct InnerNode<Node, Edge: InnerEdgeTrait> {
 	num_edges: u8
 }
 
-pub struct InnerGraph<Node, Edge: InnerEdgeTrait> {
+pub struct InnerGraph<Node: Debug, Edge: InnerEdgeTrait> {
 	nodes: Vec<InnerNode<Node, Edge>>
 }
 
-impl<Node, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
+impl<Node: Debug, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 	pub fn new() -> InnerGraph<Node, Edge> {
 		InnerGraph::<Node, Edge> {
 			nodes: Vec::new()
 		}
+	}
+	pub fn dump_node(&self, i: Edge::Index) {
+		println!("{:?}", self.nodes[i.as_usize()]);
 	}
 }
 
@@ -58,7 +62,7 @@ pub trait TempTrait<Node, Edge: InnerEdgeTrait> {
 	fn add(&mut self, Node, &[Edge::Index]) -> Edge::Index;
 }
 
-impl<Node, Edge: InnerEdgeTrait> TempTrait<Node, Edge> for InnerGraph<Node, Edge>
+impl<Node: Debug, Edge: InnerEdgeTrait> TempTrait<Node, Edge> for InnerGraph<Node, Edge>
 	where InnerGraph<Node, Edge>: Manipulation<Edge::Index, u8>
 {
 	fn add(&mut self, data: Node, args: &[Edge::Index]) -> Edge::Index {
@@ -74,11 +78,12 @@ impl<Node, Edge: InnerEdgeTrait> TempTrait<Node, Edge> for InnerGraph<Node, Edge
 
 		for (i, &target) in args.iter().enumerate() {
 			if i == 2 { break }
-			self.nodes[index].num_edges = i as u8;
 
 			self.arg_ins(
 				Edge::Index::from_usize(index),
 				i as u8, target);
+
+			self.nodes[index].num_edges = i as u8+1;
 		}
 		return Edge::Index::from_usize(index)
 	}
@@ -118,7 +123,7 @@ impl<N, Index: IndexType> NPSet<Index> for InnerNode<N, InnerEdgeLinked<Index>> 
 	}
 }
 
-impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLight<Index>> {
+impl<Index: IndexType, N: Debug> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLight<Index>> {
 	fn arg_ins(&mut self, i: Index, x: u8, target: Index) {
 		self.arg_mod(i, x, target);
 	}
@@ -128,7 +133,7 @@ impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLig
 	}
 }
 
-impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLinked<Index>> {
+impl<Index: IndexType, N: Debug> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLinked<Index>> {
 
 	fn arg_ins(&mut self, i: Index, x: u8, target: Index) {
 		let next: Index;
@@ -139,8 +144,16 @@ impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLin
 				node.edges[x as usize] = linkededge;
 				return;
 			}
+		}
+
+		{
+			let node = &mut self.nodes[target.as_usize()];
 			next = node.aux;
 			node.aux = i;
+		}
+
+		{
+			let node = &mut self.nodes[i.as_usize()];
 			node.edges[x as usize] = InnerEdgeLinked {
 				target: target,
 				next:   next,
@@ -148,7 +161,10 @@ impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLin
 			};
 		}
 
-		self.nodes[next.as_usize()].prev_set(target, i);
+
+		if next != Index::invalid() {
+			self.nodes[next.as_usize()].prev_set(target, i);
+		}
 	}
 
 	fn arg_mod(&mut self, i: Index, x: u8, target: Index) -> Index {
@@ -184,7 +200,7 @@ impl<Index: IndexType, N> Manipulation<Index, u8> for InnerGraph<N, InnerEdgeLin
 }
 
 
-impl<Index: IndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLight<Index>> {
+impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLight<Index>> {
 	fn add_uses_to(&self, i: Index, r: &mut Vec<Index>) {
 		for (n, ref node) in self.nodes.iter().enumerate() {
 			for x in 0..node.num_edges {
@@ -197,15 +213,14 @@ impl<Index: IndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeL
 	}
 
 	fn add_args_to(&self, i: Index, r: &mut Vec<Index>) {
-		for node in &self.nodes {
-			for x in 0..node.num_edges {
-				r.push(node.edges[x as usize].target)
-			}
+		let node = &self.nodes[i.as_usize()];
+		for x in 0..node.num_edges {
+			r.push(node.edges[x as usize].target)
 		}
 	}
 }
 
-impl<Index: IndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLinked<Index>> {
+impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLinked<Index>> {
 	fn add_uses_to(&self, t: Index, r: &mut Vec<Index>) {
 		let mut user: Index = self.nodes[t.as_usize()].aux;
 		while user != Index::invalid() {
@@ -223,15 +238,16 @@ impl<Index: IndexType, N> NavigationInternal<Index> for InnerGraph<N, InnerEdgeL
 	}
 
 	fn add_args_to(&self, t: Index, r: &mut Vec<Index>) {
-		for node in &self.nodes {
-			for x in 0..node.num_edges {
-				r.push(node.edges[x as usize].target)
-			}
+		let node = &self.nodes[t.as_usize()];
+		for x in 0..node.num_edges {
+			r.push(node.edges[x as usize].target)
 		}
 	}
 }
 
 mod test {
+	use ir::traits::{Navigation, NavigationInternal};
+	use super::super::indextype::IndexType;
 	use super::*;
 
 	#[test]
@@ -241,17 +257,30 @@ mod test {
 
 	#[test]
 	fn construct_linked() {
-		construct::<InnerEdgeLight<i16>>();
+		construct::<InnerEdgeLinked<i16>>();
 	}
 
+	#[derive(Debug)]
 	enum TestInstr { Phi, NotPhi }
 
 	fn construct<EdgeType: InnerEdgeTrait>() where
-		InnerGraph<TestInstr, EdgeType>: TempTrait<TestInstr, EdgeType>
+		InnerGraph<TestInstr, EdgeType>: TempTrait<TestInstr, EdgeType> + Navigation<EdgeType::Index>
 	{
 		let mut graph = InnerGraph::<TestInstr, EdgeType>::new();
 		let i1 = graph.add(TestInstr::NotPhi, &[]);
 		let i2 = graph.add(TestInstr::NotPhi, &[]);
 		let i3 = graph.add(TestInstr::NotPhi, &[i1, i2]);
+
+		graph.dump_node(i1);
+		graph.dump_node(i2);
+		graph.dump_node(i3);
+
+		assert_eq!(graph.args_of(i1), &[]);
+		assert_eq!(graph.args_of(i2), &[]);
+		assert_eq!(graph.args_of(i3), &[i1, i2]);
+
+		assert_eq!(graph.uses_of(i1), &[i3]);
+		assert_eq!(graph.uses_of(i2), &[i3]);
+		assert_eq!(graph.uses_of(i3), &[]);
 	}
 }

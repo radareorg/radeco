@@ -3,8 +3,6 @@ extern crate petgraph;
 pub mod indextype;
 pub mod inner;
 
-use std::ops::Deref;
-
 use super::traits::{Accessible, InstructionType, LookupResult, NavigationInternal};
 
 use self::indextype::IndexType;
@@ -21,8 +19,7 @@ pub struct BasicBlock<Index: IndexType, Instruction: InstructionType> {
 	inner_graph: InnerGraph<Instruction, InnerEdgeLight<Index>>
 }
 
-impl<Index: IndexType, Instruction: InstructionType> BasicBlock<Index, Instruction>
-{
+impl<Index: IndexType, Instruction: InstructionType> BasicBlock<Index, Instruction> {
 	pub fn new() -> Self {
 		BasicBlock::<Index, Instruction> {
 			num_phi: Index::zero(),
@@ -133,4 +130,26 @@ impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<
 			panic!();
 		}
 	}
+}
+
+mod test {
+	use super::super::traits::InstructionType;
+	use super::petgraph::graph::Graph;
+	use super::{IRNode, IREdge};
+
+	#[derive(Debug)]
+	enum TestInstr { Phi, NotPhi }
+
+	impl InstructionType for TestInstr {
+		type PhiType = ();
+		fn make_phi(x: ()) -> TestInstr { TestInstr::Phi }
+		fn is_phi(&self) -> bool { if let TestInstr::Phi = *self { true } else { false } }
+	}
+
+	#[test]
+	fn construct() {
+		let graph: Graph<IRNode<TestInstr>, IREdge>;
+	}
+
+	// more tests will follow
 }

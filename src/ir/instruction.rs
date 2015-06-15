@@ -1,10 +1,12 @@
 use std::mem;
 use super::traits;
 
+#[derive(Debug)]
 pub enum FieldSpec {
 	Register
 }
 
+#[derive(Debug)]
 pub enum UnaryArith {
 	Neg,
 	Not,
@@ -13,11 +15,13 @@ pub enum UnaryArith {
 	Truncate
 }
 
+#[derive(Debug)]
 pub enum BinaryArith {
 	Sub,
 	Div
 }
 
+#[derive(Debug)]
 pub enum NaryArith {
 	Add,
 	Mul
@@ -33,6 +37,7 @@ pub enum ValueType {
 	Bits(BitCount)
 }
 
+#[derive(Debug)]
 pub enum InstructionType {
 	Nop,
 	Phi(ValueType),
