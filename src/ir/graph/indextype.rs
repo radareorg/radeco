@@ -2,9 +2,10 @@
 
 use std::cmp::{Eq, Ord};
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::ops::{Add, Not};
 
-pub trait IndexType : Clone + Copy + Add<Output=Self> + Not<Output=Self> + Eq + Ord + Debug {
+pub trait IndexType : Clone + Copy + Add<Output=Self> + Not<Output=Self> + Eq + Ord + Debug + Hash {
 	// replace with zero trait once stable
 	fn zero() -> Self;
 	fn as_usize(self) -> usize;

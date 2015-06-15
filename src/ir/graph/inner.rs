@@ -53,7 +53,7 @@ impl<Node: Debug, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 			nodes: Vec::new()
 		}
 	}
-	pub fn dump_node(&self, i: Edge::Index) {
+	// pub fn dump_node(&self, i: Edge::Index) {
 		println!("{:?}", self.nodes[i.as_usize()]);
 	}
 }
@@ -246,7 +246,8 @@ impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, Inn
 }
 
 mod test {
-	use ir::traits::{Navigation, NavigationInternal};
+	use std::collections::HashSet;
+	use ir::traits::{Manipulation, Navigation};
 	use super::super::indextype::IndexType;
 	use super::*;
 
@@ -264,16 +265,23 @@ mod test {
 	enum TestInstr { Phi, NotPhi }
 
 	fn construct<EdgeType: InnerEdgeTrait>() where
-		InnerGraph<TestInstr, EdgeType>: TempTrait<TestInstr, EdgeType> + Navigation<EdgeType::Index>
+		InnerGraph<TestInstr, EdgeType>:
+			TempTrait<TestInstr, EdgeType> +
+			Navigation<EdgeType::Index> +
+			Manipulation<EdgeType::Index, u8>
 	{
 		let mut graph = InnerGraph::<TestInstr, EdgeType>::new();
+
+		let i0 = graph.add(TestInstr::NotPhi, &[]);
+
 		let i1 = graph.add(TestInstr::NotPhi, &[]);
 		let i2 = graph.add(TestInstr::NotPhi, &[]);
 		let i3 = graph.add(TestInstr::NotPhi, &[i1, i2]);
 
-		graph.dump_node(i1);
-		graph.dump_node(i2);
-		graph.dump_node(i3);
+		// println!("");
+		// graph.dump_node(i1);
+		// graph.dump_node(i2);
+		// graph.dump_node(i3);
 
 		assert_eq!(graph.args_of(i1), &[]);
 		assert_eq!(graph.args_of(i2), &[]);
@@ -282,5 +290,35 @@ mod test {
 		assert_eq!(graph.uses_of(i1), &[i3]);
 		assert_eq!(graph.uses_of(i2), &[i3]);
 		assert_eq!(graph.uses_of(i3), &[]);
+
+		let i4 = graph.add(TestInstr::NotPhi, &[i2, i3]);
+		let i5 = graph.add(TestInstr::NotPhi, &[i2, i4]);
+
+		// graph.dump_node(i4);
+		// graph.dump_node(i5);
+
+		assert_eq!(graph.args_of(i1), &[]);
+		assert_eq!(graph.args_of(i2), &[]);
+		assert_eq!(graph.args_of(i3), &[i1, i2]);
+		assert_eq!(graph.args_of(i4), &[i2, i3]);
+		assert_eq!(graph.args_of(i5), &[i2, i4]);
+
+		assert_eq!(graph.uses_of(i1), &[i3]);
+		assert_eq!(
+			graph.uses_of(i2). iter().collect::<HashSet<_>>(),
+			[i3, i4, i5].      iter().collect::<HashSet<_>>()
+		);
+		assert_eq!(graph.uses_of(i3), &[i4]);
+		assert_eq!(graph.uses_of(i4), &[i5]);
+		assert_eq!(graph.uses_of(i5), &[]);
+
+		graph.arg_mod(i4, 1, i2);
+
+		assert_eq!(
+			graph.uses_of(i2). iter().collect::<HashSet<_>>(),
+			[i3, i4, i5].      iter().collect::<HashSet<_>>()
+		);
+		assert_eq!(graph.uses_of(i3), &[]);
+		assert_eq!(graph.args_of(i4), &[i2, i2]);
 	}
 }
