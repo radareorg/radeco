@@ -2,6 +2,9 @@
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
 extern crate regex;
 extern crate petgraph;
+extern crate rustc_serialize;
+#[macro_use]
+extern crate r2pipe;
 
 pub mod middle;
 pub mod analysis;

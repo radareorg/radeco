@@ -6,8 +6,8 @@
 
 #![allow(dead_code, unused_variables)]
 
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
-use petgraph::{Dfs, DfsIter, EdgeDirection};
+use petgraph::graph::{Graph, NodeIndex};
+use petgraph::{Dfs};
 use std::collections::BTreeMap;
 
 use super::ir::*;

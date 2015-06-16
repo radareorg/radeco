@@ -3,3 +3,4 @@
 pub use super::middle::ir::{Instruction, Value, Opcode, Operator, Location, Address, Arity};
 
 pub mod esil;
+pub mod r2;

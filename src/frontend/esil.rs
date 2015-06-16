@@ -35,7 +35,7 @@ use std::collections::HashMap;
 use std::cmp;
 use regex::Regex;
 
-use super::{Instruction, Value, Opcode, Operator, Location, Address, Arity};
+use super::{Instruction, Value, Opcode, Location, Address, Arity};
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
