@@ -429,5 +429,5 @@ impl<'a> Parser<'a> {
 #[test]
 fn testing() {
     let mut p = Parser::new();
-    p.parse("0,0x204db1,rip,+,[1],==,%z,zf,=,%b8,cf,=,%p,pf,=,%s,sf,=", None);
+    p.parse(String::from("0,0x204db1,rip,+,[1],==,%z,zf,=,%b8,cf,=,%p,pf,=,%s,sf,="), None);
 }
