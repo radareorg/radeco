@@ -2,9 +2,14 @@
 //! Uses r2pipe.
 #![allow(dead_code)]
 use r2pipe::R2Pipe;
+
 use rustc_serialize::json::{Json, ToJson};
+use rustc_serialize::json;
 use std::collections::BTreeMap;
-struct R2 {
+
+use super::structs::{FunctionInfo};
+
+pub struct R2 {
     pipe: R2Pipe,
     readin: String,
 }
@@ -70,6 +75,14 @@ impl R2 {
         R2 { pipe: pipe, readin: String::new() }
     }
 
+    // Does some basic configurations (sane defaults).
+    pub fn init(&mut self) {
+        self.send("e asm.esil = true");
+        self.send("e scr.color = false");
+        self.send("aa");
+        self.flush();
+    }
+
     pub fn close(&mut self) {
         self.send("q!");
     }
@@ -98,7 +111,12 @@ impl R2 {
         self.flush();
     }
 
-    fn build_type(&mut self) {
+    pub fn get_function(&mut self, func: &str) -> FunctionInfo {
+        let cmd = format!("pdfj @ {}", func);
+        self.send(&*cmd);
+        let raw_json = self.recv();
+        // Handle Error here.
+        json::decode(&*raw_json).unwrap()
     }
 
     pub fn get_fn_list(&mut self) -> Json {
@@ -107,17 +125,26 @@ impl R2 {
     }
 }
 
+
 mod test {
-    use frontend::r2::R2;
-    use frontend::r2::Search;
+#![allow(unused_imports)]
+    use frontend::r2::{R2, Search};
 
     #[test]
-    fn test1() {
+    fn test_fn_listing() {
         let mut r2 = R2::new("./key");
         r2.analyze();
         let fn_data = r2.get_fn_list();
         assert_eq!(fn_data.get_values(&["addr"], false), None);
         assert!(fn_data.get_values(&["addr"], true).is_some());
         println!("{}", fn_data.get_values(&["name", "offset"], false).unwrap().pretty());
+    }
+
+    #[test]
+    fn test_fn_disas() {
+        let mut r2 = R2::new("./key");
+        r2.init();
+        let data = r2.get_function("sym.main");
+        println!("{:?}", data);
     }
 }

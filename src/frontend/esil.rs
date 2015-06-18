@@ -258,15 +258,11 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    pub fn parse(&mut self, esil: &'a str, _addr: Option<String>) -> Result<(), ParseError> {
+    pub fn parse(&mut self, esil: String, _addr: Option<u64>) -> Result<(), ParseError> {
         // Set parser address.
         self.addr = match _addr {
             Some(s) => {
-                if let Ok(val) = hex_to_i!(s) {
-                    val
-                } else {
-                    self.addr + 1
-                }
+                s
             },
             None => self.addr + 1,
         };
@@ -412,7 +408,7 @@ impl<'a> Parser<'a> {
             // have instructions to set esp and then jump to the required location.
             // We can use these side-effects to determine if it's a 'call' or just a jump.
             // This however requires study into other architectures and their esil too.
-            while inst.opcode != Opcode::OpCl && i < len - 1 {
+            while self.insts[i].opcode != Opcode::OpCl && i < len - 1 {
                 i += 1;
                 let inst_ = self.insts[i].clone();
                 if inst_.opcode == Opcode::OpJmp {

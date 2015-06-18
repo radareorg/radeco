@@ -102,12 +102,37 @@ impl EdgeData {
     pub fn new_backward_uncond(src_addr: Address, dst_addr: Address) -> EdgeData {
         EdgeData::new(BACKWARD, EdgeType::Unconditional, src_addr, dst_addr)
     }
+
+    pub fn new_true(src_addr: Address, dst_addr: Address) -> EdgeData {
+        if src_addr > dst_addr {
+            EdgeData::new_backward_true(src_addr, dst_addr)
+        } else {
+            EdgeData::new_forward_true(src_addr, dst_addr)
+        }
+    }
+
+    pub fn new_false(src_addr: Address, dst_addr: Address) -> EdgeData {
+        if src_addr > dst_addr {
+            EdgeData::new_backward_false(src_addr, dst_addr)
+        } else {
+            EdgeData::new_forward_false(src_addr, dst_addr)
+        }
+    }
+
+    pub fn new_uncond(src_addr: Address, dst_addr: Address) -> EdgeData {
+        if src_addr > dst_addr {
+            EdgeData::new_backward_uncond(src_addr, dst_addr)
+        } else {
+            EdgeData::new_forward_uncond(src_addr, dst_addr)
+        }
+    }
 }
 
 pub struct CFG {
     pub g: Graph<NodeData, EdgeData>,
     pub entry: NodeIndex,
     pub exit: NodeIndex,
+    pub bbs: BTreeMap<Address, NodeIndex>,
 }
 
 impl CFG {
@@ -122,142 +147,120 @@ impl CFG {
             g: g,
             entry: entry,
             exit: exit,
+            bbs: BTreeMap::new(),
         }
     }
 
-    pub fn build(&mut self, insts: &Vec<Instruction>) {
-        let mut bbs: BTreeMap<Address, NodeIndex> = BTreeMap::new();
-        let mut leaders: Vec<Address> = Vec::new();
-        let mut i = 0;
-        let len = insts.len();
+    // Iterate through the instructions and create new BasicBlocks.
+    pub fn assign_bbs(&mut self, insts: &Vec<Instruction>) {
+        let mut insts_iter = insts.iter().peekable();
+        let first_addr = insts[0].addr;
+        let last_addr = insts.last().unwrap().addr;
 
-        { 
-            let cur = self.add_new_block();
-            let first_addr = insts[0].clone().addr;
-            let entry_index = self.entry;
-            self.add_edge(entry_index, cur, EdgeData::new_forward_uncond(0, first_addr));
-            bbs.insert(first_addr, cur);
+        // First Instruction will be the start of the first BasicBlock.
+        {
+            let bb = self.add_new_block();
+            let entry = self.entry;
+            self.add_edge(entry, bb, EdgeData::new_forward_uncond(0, first_addr));
+            self.bbs.insert(first_addr, bb);
         }
 
-        // First we iterate through all the instructions and identify the
-        // 'leaders'. 'leaders' are first instruction of some basic block.
-        while i < len {
-            let inst = insts[i].clone();
-            let addr: i64;
-            let operand;
+        loop {
+            match insts_iter.next() {
+                None        => break,
+                Some(ref i) => {
+                    let inst = i.clone();
+                    let operand = match inst.opcode {
+                        Opcode::OpCJmp => &inst.operand_2,
+                        Opcode::OpJmp  => &inst.operand_1,
+                        _              => continue,
+                    };
+                    // TODO: Resolve the address if it's not a constant.
+                    let addr = match operand.location {
+                        Location::Constant => operand.value as u64,
+                        _                  => continue,
+                    };
 
-            // If the inst does not change the control flow, simply continue.
-            if inst.opcode != Opcode::OpCJmp && inst.opcode != Opcode::OpJmp {
-                i += 1;
-                continue;
+                    if !self.bbs.contains_key(&addr) {
+                        if addr > last_addr || addr < first_addr {
+                            self.bbs.insert(addr, self.exit);
+                        } else {
+                            let bb = self.add_new_block();
+                            self.bbs.insert(addr, bb);
+                        }
+                    }
+
+                    if let Some(j) = insts_iter.peek() {
+                        if !self.bbs.contains_key(&(j.addr)) {
+                            let bb = self.add_new_block();
+                            self.bbs.insert(j.addr, bb);
+                        }
+                    }
+                },
             }
-
-            if inst.opcode == Opcode::OpCJmp {
-                operand = inst.operand_2;
-            } else {
-                operand = inst.operand_1;
-            }
-
-            if operand.location == Location::Constant {
-                addr = operand.value;
-            } else {
-                unreachable!("Unresolved Jump!");
-            }
-
-            bbs.entry((addr as u64)).or_insert(self.add_new_block());
-            leaders.push(addr as u64);
-            // Next instruction will also be a leader of a new block.
-            if i + 1 >= len {
-                break;
-            }
-
-            bbs.entry(insts[i+1].addr).or_insert(self.add_new_block());
-            leaders.push(insts[i+1].addr);
-            i += 1;
         }
+    }
 
-        // Reverse sort the leaders.
-        leaders.sort_by(|a, b| b.cmp(a));
-        let mut i = leaders.len() - 1;
-        let mut n = *(bbs.get(&(insts[0].addr)).unwrap());
-        for inst in insts {
-            // If there are no more leaders or the current instruction is not
-            // a leader, simply add it to the BB.
-            if inst.addr != leaders[i] {
-                if let &mut NodeData::Block(ref mut block) = self.get_block(n) {
-                    block.add_instruction((*inst).clone());
-                }
-                continue;
-            }
+    fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: Instruction, next_inst: Instruction) {
+        let exit = self.exit.clone();
+        match inst.opcode {
+            Opcode::OpJmp => {
+                let target_addr = inst.operand_1.value as u64;
+                let edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
+                let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
+                self.add_edge(current, target, edge_data);
+            },
+            Opcode::OpCJmp => {
+                let target_addr = inst.operand_2.value as u64;
+                let edge_data = EdgeData::new_true(inst.addr, target_addr);
+                let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
+                self.add_edge(current, target, edge_data);
 
-            n = *(bbs.get(&(inst.addr)).unwrap());
-            if let &mut NodeData::Block(ref mut block) = self.get_block(n) {
-                block.add_instruction((*inst).clone());
-            }
-
-            if i > 0 { i -= 1; }
+                let edge_data = EdgeData::new_false(inst.addr, next_inst.addr);
+                self.add_edge(current, next, edge_data);
+            },
+            _ => {
+                let edge_data = EdgeData::new_uncond(inst.addr, next_inst.addr);
+                self.add_edge(current, next, edge_data);
+            },
         }
+    }
 
-        // Logic to add edges.
-        // In case of an unconditional jump, there will only be one target BasicBlock for the jump.
-        // In case of a conditional jump, there will be two possible paths, one if the condition is
-        // true and the other 'natural' path when the condition evaluates to false.
-        // The false path can never lead to a back-edge as it follows the natural flow of the
-        // execution.
-        // Iterate through every node, check the jump target of the last instruction. Add an edge
-        // to the corresponding BB by referring to BTreeMap.
+    pub fn build(&mut self, insts: &mut Vec<Instruction>) {
+        insts.sort_by(|a, b| a.addr.cmp(&b.addr));
+        // Identify the first statement of every BasicBlock and assign them.
+        self.assign_bbs(insts);
+        let mut current = self.bbs.get(&insts[0].addr).unwrap().clone();
+        let exit = self.exit.clone();
+        let mut insts_iter = insts.iter_mut().peekable();
+        let mut next = current.clone();
 
-        for (_, n) in bbs.iter() {
-            let mut target: NodeIndex;
-            let mut target_addr: Address;
-            let mut edge_data: EdgeData;
-            let mut is_false_branch = false;
-            let inst: Instruction;
+        loop {
+            match insts_iter.next() {
+                None => break,
+                Some(inst) => {
+                    match insts_iter.peek() {
+                        Some(next_inst) => { 
+                            if let Some(x) = self.bbs.get(&next_inst.addr) {
+                                next = x.clone();
+                            }
+                            if next != current {
+                                self.build_edges(current, next, inst.clone(), (*next_inst).clone());
+                            }
+                        },
+                        None => {
+                            self.add_edge(current, exit, EdgeData::new_forward_uncond(inst.addr, 0));
+                        },
+                    }
 
-            if let &mut NodeData::Block(ref mut block) = self.get_block(*n) {
-                inst = block.instructions.last().unwrap().clone();
-            } else {
-                unreachable!("Found something other than a BasicBlock!");
-            }
-
-            if inst.opcode == Opcode::OpJmp {
-                target_addr = inst.operand_1.value as u64;
-                edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
-                target = *(bbs.get(&target_addr).unwrap());
-                if inst.addr > target_addr {
-                    edge_data.direction = BACKWARD;
-                }
-                self.add_edge(*n, target, edge_data);
-                continue;
-            }
-
-            if inst.opcode == Opcode::OpCJmp {
-                target_addr = inst.operand_2.value as u64;
-                edge_data = EdgeData::new_forward_true(inst.addr, target_addr);
-                target = *(bbs.get(&target_addr).unwrap());
-                if inst.addr > target_addr {
-                    edge_data.direction = BACKWARD;
-                }
-                self.add_edge(*n, target, edge_data);
-                is_false_branch = true;
-            }
-
-            // Find the BasicBlock the next instruction belongs to.
-            // Remember, the next instruction has to be a leader.
-            target = self.exit;
-            edge_data = EdgeData::new_forward_uncond(inst.addr, 0);
-            if let Some(target_addr) = leaders.pop() {
-                // This should never create a back-edge as this represents the natural flow path.
-                // i.e. the path taken if jumps are ignored.
-                if target_addr > inst.addr {
-                    target = *(bbs.get(&target_addr).unwrap());
-                    edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
-                    if is_false_branch { edge_data.edge_type = EdgeType::False; };
+                    if let &mut NodeData::Block(ref mut block) = self.get_block(current) {
+                        block.add_instruction((*inst).clone());
+                    }
+                    current = next.clone();
                 }
             }
-            self.add_edge(*n, target, edge_data);
         }
-
+        
         self.mark_reachable();
     }
 
