@@ -165,38 +165,33 @@ impl CFG {
             self.bbs.insert(first_addr, bb);
         }
 
-        loop {
-            match insts_iter.next() {
-                None        => break,
-                Some(ref i) => {
-                    let inst = i.clone();
-                    let operand = match inst.opcode {
-                        Opcode::OpCJmp => &inst.operand_2,
-                        Opcode::OpJmp  => &inst.operand_1,
-                        _              => continue,
-                    };
-                    // TODO: Resolve the address if it's not a constant.
-                    let addr = match operand.location {
-                        Location::Constant => operand.value as u64,
-                        _                  => continue,
-                    };
+        while let Some(ref i) = insts_iter.next() {
+            let inst = i.clone();
+            let operand = match inst.opcode {
+                Opcode::OpCJmp => &inst.operand_2,
+                Opcode::OpJmp  => &inst.operand_1,
+                _              => continue,
+            };
+            // TODO: Resolve the address if it's not a constant.
+            let addr = match operand.location {
+                Location::Constant => operand.value as u64,
+                _                  => continue,
+            };
 
-                    if !self.bbs.contains_key(&addr) {
-                        if addr > last_addr || addr < first_addr {
-                            self.bbs.insert(addr, self.exit);
-                        } else {
-                            let bb = self.add_new_block();
-                            self.bbs.insert(addr, bb);
-                        }
-                    }
+            if !self.bbs.contains_key(&addr) {
+                if addr > last_addr || addr < first_addr {
+                    self.bbs.insert(addr, self.exit);
+                } else {
+                    let bb = self.add_new_block();
+                    self.bbs.insert(addr, bb);
+                }
+            }
 
-                    if let Some(j) = insts_iter.peek() {
-                        if !self.bbs.contains_key(&(j.addr)) {
-                            let bb = self.add_new_block();
-                            self.bbs.insert(j.addr, bb);
-                        }
-                    }
-                },
+            if let Some(j) = insts_iter.peek() {
+                if !self.bbs.contains_key(&(j.addr)) {
+                    let bb = self.add_new_block();
+                    self.bbs.insert(j.addr, bb);
+                }
             }
         }
     }
@@ -235,32 +230,27 @@ impl CFG {
         let mut insts_iter = insts.iter_mut().peekable();
         let mut next = current.clone();
 
-        loop {
-            match insts_iter.next() {
-                None => break,
-                Some(inst) => {
-                    match insts_iter.peek() {
-                        Some(next_inst) => { 
-                            if let Some(x) = self.bbs.get(&next_inst.addr) {
-                                next = x.clone();
-                            }
-                            if next != current {
-                                self.build_edges(current, next, inst.clone(), (*next_inst).clone());
-                            }
-                        },
-                        None => {
-                            self.add_edge(current, exit, EdgeData::new_forward_uncond(inst.addr, 0));
-                        },
+        while let Some(inst) = insts_iter.next() {
+            match insts_iter.peek() {
+                Some(next_inst) => { 
+                    if let Some(x) = self.bbs.get(&next_inst.addr) {
+                        next = x.clone();
                     }
-
-                    if let &mut NodeData::Block(ref mut block) = self.get_block(current) {
-                        block.add_instruction((*inst).clone());
+                    if next != current {
+                        self.build_edges(current, next, inst.clone(), (*next_inst).clone());
                     }
-                    current = next.clone();
-                }
+                },
+                None => {
+                    self.add_edge(current, exit, EdgeData::new_forward_uncond(inst.addr, 0));
+                },
             }
+
+            if let &mut NodeData::Block(ref mut block) = self.get_block(current) {
+                block.add_instruction((*inst).clone());
+            }
+            current = next.clone();
         }
-        
+
         self.mark_reachable();
     }
 

@@ -36,6 +36,7 @@ use std::cmp;
 use regex::Regex;
 
 use super::{Instruction, Value, Opcode, Location, Address, Arity};
+use super::structs::{OpInfo};
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
@@ -59,6 +60,7 @@ macro_rules! hex_to_i {
 
 #[derive(Debug)]
 pub enum ParseError {
+    InvalidEsil,
     InvalidOperator,
     InsufficientOperands,
 }
@@ -109,31 +111,74 @@ fn init_regset() -> HashMap<&'static str, u8> {
 }
 
 pub struct Parser<'a> {
-    stack: Vec<Value>,
-    insts: Vec<Instruction>,
-    opset: HashMap<&'a str, Opcode>,
-    regset: HashMap<&'a str, u8>,
-    tmp_index: u64,
+    stack:        Vec<Value>,
+    insts:        Vec<Instruction>,
+    opset:        HashMap<&'a str, Opcode>,
+    regset:       HashMap<&'a str, u8>,
+    tmp_index:    u64,
     default_size: u8,
-    // The address the parser is currently parsing at.
-    addr: Address,
-    // Name of the Instruction pointer for the architecture.
-    ip: String,
+    ip:           String,
+    tmp_prefix:   String,
+    arch:         String,
+    addr:         Address,
+    opinfo:       Option<OpInfo>,
 }
 
+// Struct used to configure the Parser. If `None` is passed to any of the fields, then the default
+// values are set.
+pub struct ParserConfig<'a> {
+    arch:         Option<String>,
+    default_size: Option<u8>,
+    ip:           Option<String>,
+    tmp_prefix:   Option<String>,
+    init_opset:   Option<fn() -> HashMap<&'a str, Opcode>>,
+    init_regset:  Option<fn() -> HashMap<&'a str, u8>>,
+}
+
+// Represents the state of the parser.
+#[allow(dead_code)]
+pub struct ParserState {
+    offset:    u64,
+    tmp_index: u64,
+    opinfo:    Option<OpInfo>,
+}
+
+impl<'a> Default for ParserConfig<'a> {
+    fn default() -> Self {
+        ParserConfig {
+            arch: Some("x86_64".to_string()),
+            default_size: Some(64),
+            ip: Some("rip".to_string()),
+            tmp_prefix: Some("tmp".to_string()),
+            init_opset: Some(map_esil_to_opset),
+            init_regset: Some(init_regset),
+        }
+    }
+}
+
+
 impl<'a> Parser<'a> {
-    pub fn new() -> Parser<'a> {
+    pub fn new(config: Option<ParserConfig<'a>>) -> Parser<'a> {
+        let config = config.unwrap_or_default();
+        let arch = config.arch.unwrap_or("x86_64".to_string());
+        let default_size = config.default_size.unwrap_or(64);
+        let ip = config.ip.unwrap_or("rip".to_string());
+        let tmp_prefix = config.tmp_prefix.unwrap_or("tmp".to_string());
+        let init_opset = config.init_opset.unwrap_or(map_esil_to_opset);
+        let init_regset = config.init_regset.unwrap_or(init_regset);
+
         Parser { 
-            stack: Vec::new(),
-            insts: Vec::new(),
-            opset: map_esil_to_opset(),
-            regset: init_regset(),
-            tmp_index: 0,
-            // TODO: change this default based on arch.
-            default_size: 64,
-            addr: 0,
-            // TODO: Set dynamically based on the arch.
-            ip: "rip".to_string(),
+            stack:        Vec::new(),
+            insts:        Vec::new(),
+            opset:        init_opset(),
+            regset:       init_regset(),
+            default_size: default_size,
+            ip:           ip,
+            arch:         arch,
+            tmp_prefix:   tmp_prefix,
+            tmp_index:    0,
+            addr:         0,
+            opinfo:       None,
         }
     }
 
@@ -146,7 +191,7 @@ impl<'a> Parser<'a> {
     }
 
     fn add_widen_inst(&mut self, op: &mut Value, size: u8) {
-        if op.size > size {
+        if op.size >= size {
             return;
         }
         let dst = self.get_tmp_register(size);
@@ -156,7 +201,7 @@ impl<'a> Parser<'a> {
     }
 
     fn add_narrow_inst(&mut self, op: &mut Value, size: u8) {
-        if op.size < size {
+        if op.size <= size {
             return;
         }
         let dst = self.get_tmp_register(size);
@@ -179,7 +224,15 @@ impl<'a> Parser<'a> {
         // If it is an assignment to the Instruction Pointer, then the Instruction should be a OpJmp
         // rather than an OpEq.
         if dst.name == self.ip {
-            self.insts.push(Instruction::new(Opcode::OpJmp, Value::null(), op1, Value::null(), Some(self.addr)));
+            let mut op = Opcode::OpJmp;
+            if let Some(ref info) = self.opinfo {
+                let optype = info.clone().optype.unwrap_or("".to_string());
+                if optype == "call" {
+                    op = Opcode::OpCall;
+                }
+            }
+
+            self.insts.push(Instruction::new(op, Value::null(), op1, Value::null(), Some(self.addr)));
             return Ok(());
         }
 
@@ -258,14 +311,23 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    pub fn parse(&mut self, esil: String, _addr: Option<u64>) -> Result<(), ParseError> {
-        // Set parser address.
-        self.addr = match _addr {
-            Some(s) => {
-                s
-            },
-            None => self.addr + 1,
+    pub fn parse_opinfo(&mut self, opinfo: &OpInfo) -> Result<(), ParseError> {
+        let opinfo = opinfo.clone();
+        let esil = opinfo.esil.clone().unwrap_or("".to_string());
+
+        self.addr = match opinfo.offset {
+            Some(s) => s,
+            None    => self.addr + 1,
         };
+
+        self.opinfo = Some(opinfo);
+        self.parse_str(&*esil)
+    }
+
+    pub fn parse_str(&mut self, esil: &str) -> Result<(), ParseError> {
+        if esil.len() == 0 {
+            return Err(ParseError::InvalidEsil);
+        }
 
         let esil: Vec<String> = esil.split(',')
                                     .map(|x| x.to_string()).collect();

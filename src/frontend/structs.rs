@@ -1,15 +1,31 @@
 //! Module provides basic structs which are used for json encoding and decoding.
-
-#[derive(RustcDecodable, RustcEncodable, Debug)]
+use rustc_serialize::{Decodable, Decoder};
+#[derive(RustcEncodable, Debug, Clone)]
 pub struct OpInfo {
-    pub esil: String,
-    pub offset: u64,
-    pub opcode: String,
+    pub esil:   Option<String>,
+    pub offset: Option<u64>,
+    pub opcode: Option<String>,
+    pub optype: Option<String>,
 }
 
-#[derive(RustcDecodable, RustcEncodable, Debug)]
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
 pub struct FunctionInfo {
-    pub addr: u64,
-    pub name: String,
-    pub ops: Vec<OpInfo>,
+    pub addr: Option<u64>,
+    pub name: Option<String>,
+    pub ops:  Option<Vec<OpInfo>>,
+}
+
+impl Decodable for OpInfo {
+    fn decode<D: Decoder>(d: &mut D) -> Result<OpInfo, D::Error> {
+        d.read_struct("root", 0, |d_| {
+            let op = OpInfo {
+                esil:   d_.read_struct_field("esil", 0, |d| Decodable::decode(d)).ok(),
+                offset: d_.read_struct_field("offset", 0, |d| Decodable::decode(d)).ok(),
+                opcode: d_.read_struct_field("opcode", 0, |d| Decodable::decode(d)).ok(),
+                optype: d_.read_struct_field("type", 0, |d| Decodable::decode(d)).ok(),
+            };
+
+            Ok(op)
+        })
+    }
 }

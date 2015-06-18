@@ -58,6 +58,7 @@ pub enum Opcode {
     OpIf,
     OpJmp,  // Unconditional Jmp.
     OpCJmp, // Conditional Jmp.
+    OpCall,
     OpRef,
     OpNarrow,
     OpWiden,
@@ -99,6 +100,7 @@ impl<'a> Opcode {
             Opcode::OpInvalid => ("invalid", Arity::Zero),
             Opcode::OpJmp => ("jmp", Arity::Unary),
             Opcode::OpCJmp => ("jmp if", Arity::Binary),
+            Opcode::OpCall => ("call", Arity::Unary),
             Opcode::OpCl => ("}", Arity::Zero),
         };
         Operator::new(op, arity).clone()

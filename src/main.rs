@@ -29,27 +29,14 @@ fn main() {
 
     let mut r2 = r2::R2::new("./key");
     r2.init();
-    let ops = r2.get_function("sym.main").ops;
+    let mut ops = r2.get_function("sym.main").ops.unwrap();
     println!("[*] Got ops.");
-    let mut p = esil::Parser::new();
+    let mut p = esil::Parser::new(None);
     println!("[*] Begin Parse.");
-    for op in ops {
-        if op.esil.len() == 0 {
-            continue;
-        }
-        println!("   0x{:x}> {}", op.offset, op.esil);
-        p.parse(op.esil, Some(op.offset)).ok().expect("Error");
+    for op in ops.iter_mut() {
+        p.parse_opinfo(op);
     }
 
-    let insts = p.emit_insts();
-    println!("");
-    println!("");
-
-    for i in &insts {
-        println!("{}", i);
-    }
-
-    println!("");
     println!("[*] Begin CFG Generation.");
     let mut cfg = cfg::CFG::new();
     cfg.build(&mut (p.emit_insts()));

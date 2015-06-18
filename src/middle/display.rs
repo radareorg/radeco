@@ -33,6 +33,7 @@ impl fmt::Display for Instruction {
             Opcode::OpNop => format!("{}", self.opcode),
             Opcode::OpJmp => format!("{} {}", self.opcode, self.operand_1),
             Opcode::OpCJmp => format!("{} {}, {}", self.opcode, self.operand_1, self.operand_2),
+            Opcode::OpCall => format!("{} {}", self.opcode, self.operand_1),
             Opcode::OpCl => format!("{}", self.opcode),
             _ => format!("{} = {} {} {}", self.dst, self.operand_1, self.opcode, self.operand_2),
         };
