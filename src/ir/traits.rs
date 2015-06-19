@@ -11,6 +11,7 @@ pub trait Navigation<T> {
 }
 
 pub trait NavigationInternal<T> {
+	// add param for manual aux
 	fn add_uses_to(&self, T, &mut Vec<T>);
 	fn add_args_to(&self, T, &mut Vec<T>);
 }

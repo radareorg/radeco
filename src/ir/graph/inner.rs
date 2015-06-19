@@ -7,12 +7,13 @@ use super::indextype::IndexType;
 #[derive(Clone, Copy, Debug)]
 pub struct InnerEdgeLight<I: IndexType> { target: I }
 #[derive(Clone, Copy, Debug)]
-pub struct InnerEdgeLinked<I: IndexType> { target: I, next: I, prev: I }
+pub struct InnerEdgeLinked<I: IndexType> { target: I, prev: I, next: I }
 
 pub trait InnerEdgeTrait: Copy + Default + Debug {
 	type NodeAux: Debug;
 	type Index: IndexType;
 	fn default_aux(i: Self::Index) -> Self::NodeAux;
+	fn default_aux_usize(i: usize) -> Self::NodeAux { Self::default_aux(Self::Index::from_usize(i)) }
 }
 
 impl<I: IndexType> InnerEdgeTrait for InnerEdgeLight<I> {
@@ -199,15 +200,16 @@ impl<Index: IndexType, N: Debug>
 		let oldtarget = edgecopy.target;
 
 		if oldtarget != target {
+			// TODO: Make Option<Index> accessors for prev/next
 			let ni = edgecopy.next;
 			let pi = edgecopy.prev;
 
 			if ni != i {
-				self.nodes[ni.as_usize()].prev_set(oldtarget, pi);
+				self.nodes[ni.as_usize()].prev_set(oldtarget, if pi == i {ni} else {pi});
 			}
 
 			if pi != i {
-				self.nodes[pi.as_usize()].next_set(oldtarget, ni);
+				self.nodes[pi.as_usize()].next_set(oldtarget, if ni == i {pi} else {ni});
 			} else {
 				*self.access_aux(oldtarget, external) = if ni == i { oldtarget } else { ni }
 			}
@@ -249,8 +251,12 @@ impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, Inn
 
 impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, InnerEdgeLinked<Index>> {
 	fn add_uses_to(&self, t: Index, r: &mut Vec<Index>) {
+		// TODO: let user pass 'aux' so negative indices can be handled as well
 		let mut user: Index = self.nodes[t.as_usize()].aux;
 		let mut prev_user: Index = t;
+
+		//let mut expect_prev: Index = user;
+
 		while user != prev_user {
 			prev_user = user;
 
@@ -260,10 +266,13 @@ impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, Inn
 
 			for x in 0..node.num_edges {
 				if node.edges[x as usize].target == t {
+					// assert_eq!(node.edges[x as usize].prev, expect_prev);
 					user = node.edges[x as usize].next;
 					break
 				}
 			}
+
+			//expect_prev = prev_user;
 		}
 	}
 
@@ -282,16 +291,6 @@ mod test {
 	use super::super::indextype::IndexType;
 	use super::*;
 
-	#[test]
-	fn construct_light() {
-		construct::<InnerEdgeLight<i16>>();
-	}
-
-	#[test]
-	fn construct_linked() {
-		construct::<InnerEdgeLinked<i16>>();
-	}
-
 	#[derive(Debug)]
 	enum TestInstr { Phi, NotPhi }
 
@@ -299,7 +298,7 @@ mod test {
 
 	impl<Edge: InnerEdgeTrait> AuxQuery<Edge> for TestAuxQuery<Edge> {
 		fn access_aux<'a>(&'a mut self, i: Edge::Index) -> &'a mut Edge::NodeAux {
-			&mut self.0[i.as_usize()]
+			&mut self.0[!i.as_usize()]
 		}
 	}
 
@@ -313,52 +312,117 @@ mod test {
 		let mut graph = InnerGraph::<TestInstr, EdgeType>::new();
 
 		let i0 = graph.add(&mut external, TestInstr::NotPhi, &[]);
-
 		let i1 = graph.add(&mut external, TestInstr::NotPhi, &[]);
-		let i2 = graph.add(&mut external, TestInstr::NotPhi, &[]);
-		let i3 = graph.add(&mut external, TestInstr::NotPhi, &[i1, i2]);
+		let i2 = graph.add(&mut external, TestInstr::NotPhi, &[i0, i1]);
 
 		println!("");
+		graph.dump_node(i0);
+		graph.dump_node(i1);
+		graph.dump_node(i2);
+
+		assert_eq!(graph.args_of(i0), &[]);
+		assert_eq!(graph.args_of(i1), &[]);
+		assert_eq!(graph.args_of(i2), &[i0, i1]);
+
+		assert_eq!(graph.uses_of(i0), &[i2]);
+		assert_eq!(graph.uses_of(i1), &[i2]);
+		assert_eq!(graph.uses_of(i2), &[]);
+
+		let i3 = graph.add(&mut external, TestInstr::NotPhi, &[i1, i2]);
+		let i4 = graph.add(&mut external, TestInstr::NotPhi, &[i1, i3]);
+
+		println!("");
+		graph.dump_node(i0);
 		graph.dump_node(i1);
 		graph.dump_node(i2);
 		graph.dump_node(i3);
-
-		assert_eq!(graph.args_of(i1), &[]);
-		assert_eq!(graph.args_of(i2), &[]);
-		assert_eq!(graph.args_of(i3), &[i1, i2]);
-
-		assert_eq!(graph.uses_of(i1), &[i3]);
-		assert_eq!(graph.uses_of(i2), &[i3]);
-		assert_eq!(graph.uses_of(i3), &[]);
-
-		let i4 = graph.add(&mut external, TestInstr::NotPhi, &[i2, i3]);
-		let i5 = graph.add(&mut external, TestInstr::NotPhi, &[i2, i4]);
-
 		graph.dump_node(i4);
-		graph.dump_node(i5);
 
+		assert_eq!(graph.args_of(i0), &[]);
 		assert_eq!(graph.args_of(i1), &[]);
-		assert_eq!(graph.args_of(i2), &[]);
+		assert_eq!(graph.args_of(i2), &[i0, i1]);
 		assert_eq!(graph.args_of(i3), &[i1, i2]);
-		assert_eq!(graph.args_of(i4), &[i2, i3]);
-		assert_eq!(graph.args_of(i5), &[i2, i4]);
+		assert_eq!(graph.args_of(i4), &[i1, i3]);
 
-		assert_eq!(graph.uses_of(i1), &[i3]);
+		assert_eq!(graph.uses_of(i0), &[i2]);
 		assert_eq!(
-			graph.uses_of(i2). iter().collect::<HashSet<_>>(),
-			[i3, i4, i5].      iter().collect::<HashSet<_>>()
+			graph.uses_of(i1). iter().collect::<HashSet<_>>(),
+			[i2, i3, i4].      iter().collect::<HashSet<_>>()
 		);
+		assert_eq!(graph.uses_of(i2), &[i3]);
 		assert_eq!(graph.uses_of(i3), &[i4]);
-		assert_eq!(graph.uses_of(i4), &[i5]);
-		assert_eq!(graph.uses_of(i5), &[]);
+		assert_eq!(graph.uses_of(i4), &[]);
 
-		graph.arg_mod(i4, 1, i2, &mut external);
+		graph.arg_mod(i3, 1, i1, &mut external);
 
 		assert_eq!(
-			graph.uses_of(i2). iter().collect::<HashSet<_>>(),
-			[i3, i4, i5].      iter().collect::<HashSet<_>>()
+			graph.uses_of(i1). iter().collect::<HashSet<_>>(),
+			[i2, i3, i4].      iter().collect::<HashSet<_>>()
 		);
-		assert_eq!(graph.uses_of(i3), &[]);
-		assert_eq!(graph.args_of(i4), &[i2, i2]);
+		assert_eq!(graph.uses_of(i2), &[]);
+		assert_eq!(graph.args_of(i3), &[i1, i1]);
 	}
+
+
+	fn external<EdgeType: InnerEdgeTrait>() where
+		InnerGraph<TestInstr, EdgeType>:
+			HasAdd<TestInstr, EdgeType> +
+			Navigation<EdgeType::Index> +
+			ManipulationWithExternal<EdgeType, u8>
+	{
+		let mut external = TestAuxQuery::<EdgeType>(Vec::new());
+		let mut graph = InnerGraph::<TestInstr, EdgeType>::new();
+
+		external.0.push(EdgeType::default_aux_usize(!0));
+		external.0.push(EdgeType::default_aux_usize(!1));
+
+		let m1 = EdgeType::Index::from_usize(!1);
+		let m0 = EdgeType::Index::from_usize(!0);
+
+		let i0 = graph.add(&mut external, TestInstr::NotPhi, &[m0]);
+		let i1 = graph.add(&mut external, TestInstr::NotPhi, &[m1, m0]);
+		let i2 = graph.add(&mut external, TestInstr::NotPhi, &[i0, m1]);
+		let i3 = graph.add(&mut external, TestInstr::NotPhi, &[m0, m0]);
+
+		assert_eq!(graph.args_of(i0), &[m0]);
+		assert_eq!(graph.args_of(i1), &[m1, m0]);
+		assert_eq!(graph.args_of(i2), &[i0, m1]);
+		assert_eq!(graph.args_of(i3), &[m0, m0]);
+
+		// TODO
+		//assert_eq!(graph.uses_of(!1), &[i1, i2]);
+		//assert_eq!(graph.uses_of(!0), &[i0, i2, i3]);
+		assert_eq!(graph.uses_of(i0), &[i2]);
+		assert_eq!(graph.uses_of(i1), &[]);
+		assert_eq!(graph.uses_of(i2), &[]);
+		assert_eq!(graph.uses_of(i3), &[]);
+
+		println!("");
+		println!("{:?} {:?}", external.0[0], external.0[1]);
+		graph.dump_node(i0);
+		graph.dump_node(i1);
+		graph.dump_node(i2);
+		graph.dump_node(i3);
+	}
+
+	#[test]
+	fn construct_light() {
+		construct::<InnerEdgeLight<i16>>();
+	}
+
+	#[test]
+	fn construct_linked() {
+		construct::<InnerEdgeLinked<i16>>();
+	}
+
+	#[test]
+	fn external_light() {
+		external::<InnerEdgeLight<i16>>();
+	}
+
+	#[test]
+	fn external_linked() {
+		external::<InnerEdgeLinked<i16>>();
+	}
+
 }

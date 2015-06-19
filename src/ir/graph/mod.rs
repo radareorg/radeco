@@ -193,7 +193,7 @@ mod test {
 
 	impl InstructionType for TestInstr {
 		type PhiType = ();
-		fn make_phi(x: ()) -> TestInstr { TestInstr::Phi }
+		fn make_phi(_: ()) -> TestInstr { TestInstr::Phi }
 		fn is_phi(&self) -> bool { if let TestInstr::Phi = *self { true } else { false } }
 	}
 
