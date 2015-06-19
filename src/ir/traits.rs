@@ -29,17 +29,7 @@ impl<T, U> Navigation<T> for U where U: NavigationInternal<T> {
 }
 
 pub trait InstructionType: Debug {
-	type PhiType: Copy + Clone;
+	type PhiType: Copy + Clone + 'static;
 	fn make_phi(Self::PhiType) -> Self;
 	fn is_phi(&self) -> bool;
-}
-
-pub trait Accessible<T, U, V> {
-	fn lookup(&self, T) -> LookupResult<U, V>;
-}
-
-pub enum LookupResult<ResultType, RedirectType> {
-	Found(ResultType),
-	Redirect(RedirectType),
-	NotFound
 }
