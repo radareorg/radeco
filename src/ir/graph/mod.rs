@@ -99,6 +99,27 @@ impl<'a, Instruction: InstructionType> UsedInnerEdgeType for AuxQueryImpl<'a, In
 	type InnerEdgeType = <IRGraph<Instruction> as UsedInnerEdgeType>::InnerEdgeType;
 }
 
+macro_rules! find_edge {
+	( $graph:expr, $node:expr, $direction:expr, $( $pat:pat => $cond:expr ),* ) => {
+		{
+			let mut fedge: Option<EdgeIndex> = Option::None;
+			let mut temp_edgewalk = $graph.walk_edges_directed($node, $direction);
+			while let Some(edge) = temp_edgewalk.next($graph) {
+				if match $graph.edge_weight(edge).expect("petgraph.walk_edges_directed gave us a non-existant edge") {
+					$(
+						$pat => $cond
+					),*
+					_ => { false }
+				} {
+					fedge = Option::Some(edge);
+					break
+				}
+			}
+			fedge
+		}
+	};
+}
+
 impl<'b, Instruction: InstructionType/*, InnerEdge: InnerEdgeTrait<Index=DefaultInnerIndex>*/>
 	inner::AuxQuery<<AuxQueryImpl<'b, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
 	for AuxQueryImpl<'b, Instruction>
@@ -108,23 +129,9 @@ impl<'b, Instruction: InstructionType/*, InnerEdge: InnerEdgeTrait<Index=Default
 	fn access_aux<'a>(&'a mut self, i: <<Self as UsedInnerEdgeType>::InnerEdgeType as InnerEdgeTrait>::Index)
 		-> &'a mut <<Self as UsedInnerEdgeType>::InnerEdgeType as InnerEdgeTrait>::NodeAux
 	{
-
-		let mut fedge: Option<EdgeIndex> = Option::None;
-		{
-			let graph = &*self.0;
-			let mut edges = graph.walk_edges_directed(self.1, Outgoing);
-			while let Some(edge) = edges.next(graph) {
-				match graph.edge_weight(edge) {
-					Some(&IREdge::BlockToRepr(key, _)) => {
-						if key == i {
-							fedge = Option::Some(edge);
-							break
-						}
-					},
-					_ => {}
-				}
-			}
-		}
+		let fedge: Option<EdgeIndex> = find_edge!(self.0, self.1, Outgoing,
+			&IREdge::BlockToRepr(key, _) => { key == i }
+		);
 		if let Some(edge) = fedge {
 			if let Some(&mut IREdge::BlockToRepr(_, ref mut aux)) = self.0.edge_weight_mut(edge){
 				return aux
@@ -134,9 +141,15 @@ impl<'b, Instruction: InstructionType/*, InnerEdge: InnerEdgeTrait<Index=Default
 	}
 }
 
-//fn deref<InstructionType>(graph: &IRGraph<Instruction>) {
-//	//
-//}
+fn deref<Instruction: InstructionType>(graph: &IRGraph<Instruction>, noderef: NodeRef<DefaultInnerIndex>) {
+
+	let fedge: Option<EdgeIndex> = find_edge!(graph, noderef.0, Outgoing,
+		&IREdge::BlockToRepr(key, _) => { key == noderef.1 }
+	);
+	if let Some(edge) = fedge {
+		// TODO
+	}
+}
 
 impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<Index>> for IRGraph<Instruction> {
 	fn add_uses_to(&self, noderef: NodeRef<Index>, r: &mut Vec<NodeRef<Index>>) {
