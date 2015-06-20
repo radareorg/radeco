@@ -28,495 +28,406 @@
 //! }
 //! ```
 
+extern crate num;
+use self::num::traits::Num;
+
 use std::collections::HashMap;
-use std::fmt;
 use std::cmp;
 use regex::Regex;
+
+use super::{Instruction, Value, Opcode, Location, Address, Arity};
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
 macro_rules! hash {
-	( $( ($x:expr, $y:expr) ),* ) => {
-		{
-			let mut temp_hash = HashMap::new();
-			$(
-				temp_hash.insert($x, $y);
-			 )*
-				temp_hash
-		}
-	};
+    ( $( ($x:expr, $y:expr) ),* ) => {
+        {
+            let mut temp_hash = HashMap::new();
+            $(
+                temp_hash.insert($x, $y);
+             )*
+                temp_hash
+        }
+    };
+}
+
+macro_rules! hex_to_i {
+    ( $x:expr ) => {
+        Num::from_str_radix($x.trim_left_matches("0x"), 16)
+    };
 }
 
 #[derive(Debug)]
 pub enum ParseError {
-	InvalidOperator,
-	InsufficientOperands,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Arity {
-	Zero,
-	Unary,
-	Binary,
-	Ternary,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Location {
-	Memory,
-	Register,
-	Constant,
-	Temporary,
-	Unknown,
-	Null,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Operator<'a> {
-	op: &'a str,
-	arity: Arity,
-}
-
-impl<'a> Operator<'a> {
-	pub fn new(op: &str, n: Arity) -> Operator {
-		Operator { op: op, arity: n }
-	}
-
-	pub fn nop() -> Operator<'a> {
-		Operator { op: "nop", arity: Arity::Zero }
-	}
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Opcode {
-	OpAdd,
-	OpSub,
-	OpMul,
-	OpDiv,
-	OpMod,
-	OpAnd,
-	OpOr,
-	OpXor,
-	OpNot,
-	OpEq,
-	OpCmp,
-	OpGt,
-	OpLt,
-	OpGteq,
-	OpLteq,
-	OpLsl,
-	OpLsr,
-	OpInc,
-	OpDec,
-	OpIf,
-    OpBr,
-	OpRef,
-	OpNarrow,
-	OpWiden,
-	OpNop,
-}
-
-impl<'a> Opcode {
-	fn to_operator(&self) -> Operator<'a> {
-		let (op, arity) = match *self {
-			Opcode::OpAdd => ("+", Arity::Binary),
-			Opcode::OpSub => ("-", Arity::Binary),
-			Opcode::OpMul => ("*", Arity::Binary),
-			Opcode::OpDiv => ("/", Arity::Binary),
-			Opcode::OpMod => ("%", Arity::Binary),
-			Opcode::OpAnd => ("&", Arity::Binary),
-			Opcode::OpOr => ("|", Arity::Binary),
-			Opcode::OpXor => ("^", Arity::Binary),
-			Opcode::OpNot => ("!", Arity::Unary),
-			Opcode::OpEq => ("=", Arity::Binary),
-			Opcode::OpCmp => ("==", Arity::Binary),
-			Opcode::OpGt => (">", Arity::Binary),
-			Opcode::OpLt => ("<", Arity::Binary),
-			Opcode::OpLteq => ("<=", Arity::Binary),
-			Opcode::OpGteq => (">=", Arity::Binary),
-			Opcode::OpLsl => ("<<", Arity::Binary),
-			Opcode::OpLsr => (">>", Arity::Binary),
-			Opcode::OpInc => ("++", Arity::Unary),
-			Opcode::OpDec => ("--", Arity::Unary),
-			Opcode::OpIf => ("if", Arity::Unary),
-			Opcode::OpRef => ("ref", Arity::Unary),
-			Opcode::OpNarrow => ("narrow", Arity::Binary),
-			Opcode::OpWiden => ("widen", Arity::Binary),
-			Opcode::OpNop => ("nop", Arity::Zero),
-			Opcode::OpBr => ("br", Arity::Zero),
-		};
-		Operator::new(op, arity).clone()
-	}
-}
-
-impl fmt::Display for Opcode {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", self.to_operator().op)
-	}
-}
-
-#[derive(Debug, Clone)]
-pub struct Value {
-	name: String,
-	size: u8,
-	location: Location,
-	value: i64,
-	// TODO: Convert from u32 to TypeSet.
-	// Every value can be considered in terms of typesets rather than fixed
-	// types which can then be narrowed down based on the analysis.
-	// TypeSet can be implemented simply as a bit-vector.
-	typeset: u32,
-}
-
-impl Value {
-    pub fn new(name: String, size: u8, location: Location, value: i64, typeset: u32) -> Value {
-        Value {
-            name: name.clone(),
-            size: size,
-            location: location,
-            value: value,
-            typeset: typeset,
-        }
-    }
-
-    pub fn null() -> Value {
-        Value::new("".to_string(), 0, Location::Null, 0, 0)
-    }
-
-    pub fn tmp(i: u64, size: u8) -> Value {
-        Value::new(format!("tmp_{:x}", i), size, Location::Temporary, 0, 0)
-    }
-
-    pub fn constant(i: i64) -> Value {
-        Value::new(i.to_string(), 64, Location::Constant, i, 0)
-    }
-}
-
-impl fmt::Display for Value {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let s: String = match self.location {
-			Location::Constant => format!("{}", self.name),
-			_ => format!("{}[:{}]", self.name, self.size),
-		};
-		f.pad_integral(true, "", &s)
-	}
-}
-
-#[derive(Debug, Clone)]
-pub struct Instruction {
-    pub addr: String,
-	pub opcode: Opcode,
-	pub dst: Value,
-	pub operand_1: Value,
-	pub operand_2: Value,
-}
-
-impl<'a> Instruction {
-	pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value, _addr: Option<String>) -> Instruction {
-        let addr = match _addr {
-            Some(s) => s,
-            None => String::new(),
-        };
-
-		Instruction {
-            addr: addr,
-			opcode: opcode,
-			dst: dst,
-			operand_1: op1,
-			operand_2: op2,
-		}
-	}
-}
-
-impl fmt::Display for Instruction {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let s: String = match self.opcode {
-			Opcode::OpNot => format!("{} = {}{}", self.dst, self.opcode, self.operand_1),
-			Opcode::OpEq => format!("{} = {}", self.dst, self.operand_1),
-			Opcode::OpInc => format!("{} = {} + 1", self.dst, self.operand_1),
-			Opcode::OpDec => format!("{} = {} - 1", self.dst, self.operand_1),
-			Opcode::OpIf => format!("if ({}) {{", self.operand_1),
-			Opcode::OpRef => format!("{} = {}({})", self.dst, self.opcode, self.operand_1),
-			Opcode::OpNarrow => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, self.operand_2),
-			Opcode::OpWiden => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, self.operand_2),
-			_ => format!("{} = {} {} {}", self.dst, self.operand_1, self.opcode, self.operand_2),
-		};
-		f.pad_integral(true, "", &s)
-	}
+    InvalidOperator,
+    InsufficientOperands,
 }
 
 fn map_esil_to_opset() -> HashMap<&'static str, Opcode> {
-	// Make a map from esil string to struct Operator.
-	// (operator: &str, op: Operator).
-	// Possible Optimization:  Move to compile-time generation ?
-	hash![
-		("==" , Opcode::OpCmp),
-		("<"  , Opcode::OpLt),
-		(">"  , Opcode::OpGt),
-		("<=" , Opcode::OpGteq),
-		(">=" , Opcode::OpLteq),
-		("<<" , Opcode::OpLsl),
-		(">>" , Opcode::OpLsr),
-		("&"  , Opcode::OpAnd),
-		("|"  , Opcode::OpOr),
-		("="  , Opcode::OpEq),
-		("*"  , Opcode::OpMul),
-		("^"  , Opcode::OpXor),
-		("+"  , Opcode::OpAdd),
-		("-"  , Opcode::OpSub),
-		("/"  , Opcode::OpDiv),
-		("%"  , Opcode::OpMod),
-		("?{" , Opcode::OpIf),
-		("!"  , Opcode::OpNot),
-		("--" , Opcode::OpDec),
-		("++" , Opcode::OpInc),
-		("}"  , Opcode::OpNop)
+    // Make a map from esil string to struct Operator.
+    // (operator: &str, op: Operator).
+    // Possible Optimization:  Move to compile-time generation ?
+    hash![
+        ("==" , Opcode::OpCmp),
+        ("<"  , Opcode::OpLt),
+        (">"  , Opcode::OpGt),
+        ("<=" , Opcode::OpGteq),
+        (">=" , Opcode::OpLteq),
+        ("<<" , Opcode::OpLsl),
+        (">>" , Opcode::OpLsr),
+        ("&"  , Opcode::OpAnd),
+        ("|"  , Opcode::OpOr),
+        ("="  , Opcode::OpEq),
+        ("*"  , Opcode::OpMul),
+        ("^"  , Opcode::OpXor),
+        ("+"  , Opcode::OpAdd),
+        ("-"  , Opcode::OpSub),
+        ("/"  , Opcode::OpDiv),
+        ("%"  , Opcode::OpMod),
+        ("?{" , Opcode::OpIf),
+        ("!"  , Opcode::OpNot),
+        ("--" , Opcode::OpDec),
+        ("++" , Opcode::OpInc),
+        ("}"  , Opcode::OpCl)
     ]
 }
 
 fn init_regset() -> HashMap<&'static str, u8> {
-	// Use from sdb later, probably a better option.
-	hash![
-		("rax", 64),
-		("rbx", 64),
-		("rcx", 64),
-		("rdx", 64),
-		("rsp", 64),
-		("rbp", 64),
-		("rsi", 64),
-		("rdi", 64),
-		("rip", 64)
-	]
+    // Use from sdb later, probably a better option.
+    hash![
+        ("rax", 64),
+        ("rbx", 64),
+        ("rcx", 64),
+        ("rdx", 64),
+        ("rsp", 64),
+        ("rbp", 64),
+        ("rsi", 64),
+        ("rdi", 64),
+        ("rip", 64),
+        ("zf",   1)
+    ]
 }
 
 pub struct Parser<'a> {
-	stack: Vec<Value>,
-	insts: Vec<Instruction>,
-	opset: HashMap<&'a str, Opcode>,
-	regset: HashMap<&'a str, u8>,
-	tmp_index: u64,
-	default_size: u8,
+    stack: Vec<Value>,
+    insts: Vec<Instruction>,
+    opset: HashMap<&'a str, Opcode>,
+    regset: HashMap<&'a str, u8>,
+    tmp_index: u64,
+    default_size: u8,
     // The address the parser is currently parsing at.
-    // TODO: Change addr later to use it's own struct rather than just
-    // a String or u64.
-    addr: u64,
+    addr: Address,
+    // Name of the Instruction pointer for the architecture.
+    ip: String,
 }
 
 impl<'a> Parser<'a> {
-	pub fn new() -> Parser<'a> {
-		Parser { 
-			stack: Vec::new(),
-			insts: Vec::new(),
-			opset: map_esil_to_opset(),
-			regset: init_regset(),
-			tmp_index: 0,
-			// Change this default based on arch.
-			default_size: 64,
+    pub fn new() -> Parser<'a> {
+        Parser { 
+            stack: Vec::new(),
+            insts: Vec::new(),
+            opset: map_esil_to_opset(),
+            regset: init_regset(),
+            tmp_index: 0,
+            // TODO: change this default based on arch.
+            default_size: 64,
             addr: 0,
-		}
-	}
+            // TODO: Set dynamically based on the arch.
+            ip: "rip".to_string(),
+        }
+    }
 
-	fn get_tmp_register(&mut self, mut size: u8) -> Value {
-		self.tmp_index += 1;
-		if size == 0 {
-			size = self.default_size;
-		}
-		Value::tmp(self.tmp_index, size)
-	}
+    fn get_tmp_register(&mut self, mut size: u8) -> Value {
+        self.tmp_index += 1;
+        if size == 0 {
+            size = self.default_size;
+        }
+        Value::tmp(self.tmp_index, size)
+    }
 
-	fn add_widen_inst(&mut self, op: &mut Value, size: u8) {
-		if op.size > size {
-			return;
-		}
-		let dst = self.get_tmp_register(size);
-		let operator = Opcode::OpWiden;
-		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr.to_string())));
-		*op = dst;
-	}
+    fn add_widen_inst(&mut self, op: &mut Value, size: u8) {
+        if op.size > size {
+            return;
+        }
+        let dst = self.get_tmp_register(size);
+        let operator = Opcode::OpWiden;
+        self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr)));
+        *op = dst;
+    }
 
-	fn add_narrow_inst(&mut self, op: &mut Value, size: u8) {
-		if op.size < size {
-			return;
-		}
-		let dst = self.get_tmp_register(size);
-		let operator = Opcode::OpNarrow;
-		self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr.to_string())));
-		*op = dst;
-	}
+    fn add_narrow_inst(&mut self, op: &mut Value, size: u8) {
+        if op.size < size {
+            return;
+        }
+        let dst = self.get_tmp_register(size);
+        let operator = Opcode::OpNarrow;
+        self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr)));
+        *op = dst;
+    }
 
-	fn add_inst(&mut self, op: Opcode) -> Result<(), ParseError> {
-		let mut op2 = match self.stack.pop() {
-			Some(ele) => ele,
-			None => return Err(ParseError::InsufficientOperands),
-		};
-
-		let mut op1 = Value::null();
-		if op.to_operator().arity == Arity::Binary {
-			op1 = match self.stack.pop() {
-				Some(ele) => ele,
-				None => return Err(ParseError::InsufficientOperands),
-			};
-		}
-
-		let mut dst_size: u8;
-		let mut dst: Value;
-
-		if op == Opcode::OpEq {
-			dst_size = op2.size;
-			dst = op2.clone();
-			op2 = op1.clone();
-			op1 = Value::null();
-		} else {
-			dst_size = cmp::max(op1.size, op2.size);
-			dst = self.get_tmp_register(dst_size);
-		}
-
-		// Add a check to see if dst, op1 and op2 have the same size.
-		// If they do not, cast it. op2 is never 'Null'.
-		assert!(op2.location != Location::Null);
-		if op1.location != Location::Null {
-			if op1.size > op2.size {
-				dst_size = op1.size;
-				self.add_widen_inst(&mut op2, op1.size);
-			} else if op2.size > op1.size {
-				dst_size = op2.size;
-				self.add_widen_inst(&mut op1, op2.size);
-			}
-		}
-
-		if op == Opcode::OpEq {
-			if dst.size > op2.size {
-				self.add_widen_inst(&mut op2, dst.size);
-			} else if dst.size < op2.size {
-				self.add_narrow_inst(&mut op2, dst.size);
-			}
-		} else {
-			dst.size = dst_size;
-		}
-
-		self.insts.push(Instruction::new(op, dst.clone(), op2, op1, Some(self.addr.to_string())));
-		self.stack.push(dst);
-
-		Ok(())
-	}
-
-	pub fn parse(&mut self, esil: &'a str, _addr: Option<String>) -> Result<(), ParseError> {
-
-        self.addr = match _addr {
-            // TODO: Actually handle the error here.
-            Some(s) => s.parse::<u64>().ok().expect("Invalid Number\n"),
-            None => {
-                self.addr += 1;
-                self.addr
-            },
+    fn add_assign_inst(&mut self, op: Opcode) -> Result<(), ParseError> {
+        let dst = match self.stack.pop() {
+            Some(ele) => ele,
+            None => return Err(ParseError::InsufficientOperands),
         };
 
-        let expanded_esil: Vec<String> = esil.split(',')
-                                             .map(|x| x.to_string()).collect();
-		for token in expanded_esil {
-			let op = match self.opset.get(&*token) {
-				Some(op) => op.clone(),
-				None => Opcode::OpNop,
-			};
+        let mut op1 = match self.stack.pop() {
+            Some(ele) => ele,
+            None => return Err(ParseError::InsufficientOperands),
+        };
 
-			if op != Opcode::OpNop {
-				try!(self.add_inst(op));
-				continue;
-			}
+        // If it is an assignment to the Instruction Pointer, then the Instruction should be a OpJmp
+        // rather than an OpEq.
+        if dst.name == self.ip {
+            self.insts.push(Instruction::new(Opcode::OpJmp, Value::null(), op1, Value::null(), Some(self.addr)));
+            return Ok(());
+        }
 
-			// If it contains atleast one alpha, it cannot be an operator.
-			let re = Regex::new("[a-zA-Z]").unwrap();
-			if re.is_match(&*token) {
-				let mut val_type = Location::Unknown;
-				let mut val: i64 = 0;
-				let mut size: u8 = self.default_size;
-				if let Some(r) = self.regset.get(&*token) {
-					val_type = Location::Register;
-					// For now, reg is just a u8.
-					size = *r; 
-				} else if let Ok(v) = token.parse::<i64>() {
-					val_type = Location::Constant;
-					val = v;
-				}
-				let v = Value::new(String::from(token), size, val_type, val, 0);
-				self.stack.push(v);
-				continue;
-			}
+        if dst.size == op1.size {
+            self.insts.push(Instruction::new(op, dst.clone(), op1, Value::null(), Some(self.addr)));
+            return Ok(());
+        }
 
-			// Deal with normal 'composite' instructions.
-			if token.char_indices().last().unwrap().1 != ']' {
-				let mut dst: Value;
-				if let Some(x) = self.stack.last() {
-					dst = x.clone();
-				} else {
-					return Err(ParseError::InsufficientOperands);
-				}
-				let re = Regex::new(r"^(.|..)=$").unwrap();
-				let t = re.captures(&*token).unwrap().at(1).unwrap_or("");
-				if t.len() == 0 {
-					return Err(ParseError::InvalidOperator);
-				}
-				let op = match self.opset.get(t) {
-					Some(op) => op.clone(),
-					None => return Err(ParseError::InvalidOperator),
-				};
+        if dst.size > op1.size {
+            self.add_widen_inst(&mut op1, dst.size);
+        } else {
+            self.add_narrow_inst(&mut op1, dst.size);
+        }
 
-				try!(self.add_inst(op));
-				self.stack.push(dst);
-				try!(self.add_inst(Opcode::OpEq));
-				continue;
-			}
+        // We don't need to use another instruction for assignment. Just replace the dst of the
+        // narrow/widen instruction generated.
+        self.insts.last_mut().unwrap().dst = dst.clone();
+        Ok(())
+    }
 
-			// Deal with memaccess 'composite' instructions.
-			let re = Regex::new(r"^(.|..)?(=)?\[([1248]?)\]$").unwrap();
-			let tokens = re.captures(&*token).unwrap();
-			let eq = tokens.at(2).unwrap_or("");
-			let has_op = tokens.at(1).unwrap_or("");
-			let access_size = tokens.at(3).unwrap_or("");
-			let access_size = match access_size {
-				"" => self.default_size,
-				_ => access_size.parse::<u8>().unwrap() * 8,
-			};
+    fn add_inst(&mut self, op: Opcode) -> Result<(), ParseError> {
+        // Handle "}".
+        if op == Opcode::OpCl {
+            let null = Value::null();
+            self.insts.push(Instruction::new(op, null.clone(), null.clone(), null.clone(), Some(self.addr)));
+            return Ok(());
+        }
 
-			try!(self.add_inst(Opcode::OpRef));
-			// Set the correct size.
-			let mut x = self.stack.pop().unwrap();
-			self.add_narrow_inst(&mut x, access_size);
-			let tmp_dst1 = x.clone();
-			self.stack.push(x);
+        // Assignment operation has to be handled quite differently.
+        if op == Opcode::OpEq {
+            return self.add_assign_inst(op);
+        }
 
-			// Simple 'peek' ([n])
-			if eq.is_empty() {
-				continue;
-			}
+        let mut op2 = match self.stack.pop() {
+            Some(ele) => ele,
+            None => return Err(ParseError::InsufficientOperands),
+        };
 
-			// Simple 'poke' (=[n])
-			if has_op.is_empty() {
-				try!(self.add_inst(Opcode::OpEq));
-				continue;
-			}
+        let mut op1 = Value::null();
+        if op.to_operator().arity == Arity::Binary {
+            op1 = match self.stack.pop() {
+                Some(ele) => ele,
+                None => return Err(ParseError::InsufficientOperands),
+            };
+        }
 
-			// 'poke' with another operation. (<op>=[n])
-			let o = match self.opset.get(has_op) {
-				Some(x) => x.clone(),
-				// Return with error
-				None => return Err(ParseError::InvalidOperator),
-			};
-			try!(self.add_inst(o));
-			// Reassignment.
-			self.stack.push(tmp_dst1);
-			try!(self.add_inst(Opcode::OpEq));
-		}
-		Ok(())
-	}
+        if op == Opcode::OpIf {
+            self.insts.push(Instruction::new(op, Value::null(), op2, op1, Some(self.addr)));
+            return Ok(());
+        }
 
-    pub fn emit_insts(&self) -> Vec<Instruction> {
-        (self).insts.clone()
+        let mut dst_size: u8;
+        let mut dst: Value;
+        dst_size = cmp::max(op1.size, op2.size);
+        dst = self.get_tmp_register(dst_size);
+
+        // Add a check to see if dst, op1 and op2 have the same size.
+        // If they do not, cast it. op2 is never 'Null'.
+        assert!(op2.location != Location::Null);
+
+        if op.to_operator().arity == Arity::Binary {
+            if op1.size > op2.size {
+                dst_size = op1.size;
+                self.add_widen_inst(&mut op2, op1.size);
+            } else if op2.size > op1.size {
+                dst_size = op2.size;
+                self.add_widen_inst(&mut op1, op2.size);
+            }
+        }
+
+        dst.size = dst_size;
+
+        self.insts.push(Instruction::new(op, dst.clone(), op2, op1, Some(self.addr)));
+        self.stack.push(dst);
+
+        Ok(())
+    }
+
+    pub fn parse(&mut self, esil: String, _addr: Option<u64>) -> Result<(), ParseError> {
+        // Set parser address.
+        self.addr = match _addr {
+            Some(s) => {
+                s
+            },
+            None => self.addr + 1,
+        };
+
+        let esil: Vec<String> = esil.split(',')
+                                    .map(|x| x.to_string()).collect();
+        for token in esil {
+            let op = match self.opset.get(&*token) {
+                Some(op) => op.clone(),
+                None => Opcode::OpInvalid,
+            };
+
+            if op != Opcode::OpInvalid {
+                try!(self.add_inst(op));
+                continue;
+            }
+
+            // If it contains atleast one alpha, it cannot be an operator.
+            let re = Regex::new("[a-zA-Z]").unwrap();
+            if re.is_match(&*token) {
+                let mut val_type = Location::Unknown;
+                let mut val: i64 = 0;
+                let mut size: u8 = self.default_size;
+                if let Some(r) = self.regset.get(&*token) {
+                    val_type = Location::Register;
+                    // For now, reg is just a u8.
+                    size = *r; 
+                } else if let Ok(v) = token.parse::<i64>() {
+                    val_type = Location::Constant;
+                    val = v;
+                } else if let Ok(v) = hex_to_i!(token) {
+                    val_type = Location::Constant;
+                    val = v;
+                }
+                let v = Value::new(String::from(token), size, val_type, val, 0);
+                self.stack.push(v);
+                continue;
+            }
+
+            // Handle constants.
+            if let Ok(num) = token.parse::<i64>() {
+                let val_type = Location::Constant;
+                let val = num;
+                let size  = self.default_size;
+                let name = format!("0x{:x}", num);
+                let v = Value::new(name, size, val_type, val, 0);
+                self.stack.push(v);
+                continue;
+            }
+
+            // Deal with normal 'composite' instructions.
+            if token.char_indices().last().unwrap().1 != ']' {
+                let mut dst: Value;
+                if let Some(x) = self.stack.last() {
+                    dst = x.clone();
+                } else {
+                    return Err(ParseError::InsufficientOperands);
+                }
+                let re = Regex::new(r"^(.|..)=$").unwrap();
+                let t = re.captures(&*token).unwrap().at(1).unwrap_or("");
+                if t.len() == 0 {
+                    return Err(ParseError::InvalidOperator);
+                }
+                let op = match self.opset.get(t) {
+                    Some(op) => op.clone(),
+                    None => return Err(ParseError::InvalidOperator),
+                };
+
+                try!(self.add_inst(op));
+                self.stack.push(dst);
+                try!(self.add_inst(Opcode::OpEq));
+                continue;
+            }
+
+            // Deal with memaccess 'composite' instructions.
+            let re = Regex::new(r"^(.|..)?(=)?\[([1248]?)\]$").unwrap();
+            let tokens = re.captures(&*token).unwrap();
+            let eq = tokens.at(2).unwrap_or("");
+            let has_op = tokens.at(1).unwrap_or("");
+            let access_size = tokens.at(3).unwrap_or("");
+            let access_size = match access_size {
+                "" => self.default_size,
+                _ => access_size.parse::<u8>().unwrap() * 8,
+            };
+
+            try!(self.add_inst(Opcode::OpRef));
+            // Set the correct size.
+            let mut x = self.stack.pop().unwrap();
+            self.add_narrow_inst(&mut x, access_size);
+            let tmp_dst1 = x.clone();
+            self.stack.push(x);
+
+            // Simple 'peek' ([n])
+            if eq.is_empty() {
+                continue;
+            }
+
+            // Simple 'poke' (=[n])
+            if has_op.is_empty() {
+                try!(self.add_inst(Opcode::OpEq));
+                continue;
+            }
+
+            // 'poke' with another operation. (<op>=[n])
+            let o = match self.opset.get(has_op) {
+                Some(x) => x.clone(),
+                // Return with error
+                None => return Err(ParseError::InvalidOperator),
+            };
+            try!(self.add_inst(o));
+            // Reassignment.
+            self.stack.push(tmp_dst1);
+            try!(self.add_inst(Opcode::OpEq));
+        }
+        Ok(())
+    }
+
+    /// Emit-instructions converts certain compound instructions to simpler instructions.
+    /// For example, the sequence of instructions,
+    /// ```none
+    /// if zf            (OpIf)
+    ///   jump addr      (OpJmp)
+    /// ```
+    /// is converted to a single conditional jump as,
+    /// ```none
+    /// if zf jump addr  (OpCJmp)
+    /// ```
+
+    pub fn emit_insts(&mut self) -> Vec<Instruction> {
+        let len = self.insts.len();
+        let mut res: Vec<Instruction> = Vec::new();
+        let mut i = 0;
+        while i < len {
+            let inst = self.insts[i].clone();
+            if inst.opcode != Opcode::OpIf {
+                res.push(inst);
+                i += 1;
+                continue;
+            }
+
+            // Note(sushant94): We need to improve this process if we want to retain the side-effects.
+            // For example, a x86 call instruction will result the corresponding esil statement to
+            // have instructions to set esp and then jump to the required location.
+            // We can use these side-effects to determine if it's a 'call' or just a jump.
+            // This however requires study into other architectures and their esil too.
+            while self.insts[i].opcode != Opcode::OpCl && i < len - 1 {
+                i += 1;
+                let inst_ = self.insts[i].clone();
+                if inst_.opcode == Opcode::OpJmp {
+                    let res_inst = 
+                        Instruction::new(Opcode::OpCJmp, Value::null(),
+                                         inst.operand_1.clone(),
+                                         inst_.operand_1, Some(inst.addr));
+                    res.push(res_inst);
+                }
+            }
+            i += 1;
+        }
+        self.insts = res;
+        return (self).insts.clone();
     }
 }
 
 #[test]
 fn testing() {
-	let mut p = Parser::new();
-	p.parse("0,0x204db1,rip,+,[1],==,%z,zf,=,%b8,cf,=,%p,pf,=,%s,sf,=", None);
+    let mut p = Parser::new();
+    p.parse(String::from("0,0x204db1,rip,+,[1],==,%z,zf,=,%b8,cf,=,%p,pf,=,%s,sf,="), None);
 }

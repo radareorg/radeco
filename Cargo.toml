@@ -9,6 +9,9 @@ authors = [
 [dependencies]
 regex = "*"
 petgraph = "*"
+num = "*"
+r2pipe = "*"
+rustc-serialize = "*"
 
 [[bin]]
 doc = false
