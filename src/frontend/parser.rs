@@ -13,7 +13,7 @@
 //! into the IR. `Parser::parse()` parses the ESIL string and returns an `Err`
 //! if the ESIL string is Invalid.
 //!
-//! `Parser` also provides `Parser::emit_insts()` to extract the `Instructions` 
+//! `Parser` also provides `Parser::emit_insts()` to extract the `MInsts` 
 //! it generates. Calling `Parser::parse()` several times will add more instructions.
 //! 
 //! # Example
@@ -35,8 +35,8 @@ use std::collections::HashMap;
 use std::cmp;
 use regex::Regex;
 
-use super::{Instruction, Value, Opcode, Location, Address, Arity, MRegInfo};
-use super::structs::{OpInfo, AliasInfo, LRegInfo, RegProfile};
+use super::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo};
+use super::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile};
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
@@ -61,68 +61,51 @@ macro_rules! hex_to_i {
 #[derive(Debug)]
 pub enum ParseError {
     InvalidEsil,
-    InvalidOperator,
+    InvalidMOperator,
     InsufficientOperands,
 }
 
-fn map_esil_to_opset() -> HashMap<&'static str, Opcode> {
-    // Make a map from esil string to struct Operator.
-    // (operator: &str, op: Operator).
+fn map_esil_to_opset() -> HashMap<&'static str, MOpcode> {
+    // Make a map from esil string to struct MOperator.
+    // (operator: &str, op: MOperator).
     // Possible Optimization:  Move to compile-time generation ?
     hash![
-        ("==" , Opcode::OpCmp),
-        ("<"  , Opcode::OpLt),
-        (">"  , Opcode::OpGt),
-        ("<=" , Opcode::OpGteq),
-        (">=" , Opcode::OpLteq),
-        ("<<" , Opcode::OpLsl),
-        (">>" , Opcode::OpLsr),
-        ("&"  , Opcode::OpAnd),
-        ("|"  , Opcode::OpOr),
-        ("="  , Opcode::OpEq),
-        ("*"  , Opcode::OpMul),
-        ("^"  , Opcode::OpXor),
-        ("+"  , Opcode::OpAdd),
-        ("-"  , Opcode::OpSub),
-        ("/"  , Opcode::OpDiv),
-        ("%"  , Opcode::OpMod),
-        ("?{" , Opcode::OpIf),
-        ("!"  , Opcode::OpNot),
-        ("--" , Opcode::OpDec),
-        ("++" , Opcode::OpInc),
-        ("}"  , Opcode::OpCl)
-    ]
-}
-
-fn init_regset() -> HashMap<&'static str, u8> {
-    // Use from sdb later, probably a better option.
-    hash![
-        ("rax", 64),
-        ("rbx", 64),
-        ("rcx", 64),
-        ("rdx", 64),
-        ("rsp", 64),
-        ("rbp", 64),
-        ("rsi", 64),
-        ("rdi", 64),
-        ("rip", 64),
-        ("zf",   1)
+        ("==" , MOpcode::OpCmp),
+        ("<"  , MOpcode::OpLt),
+        (">"  , MOpcode::OpGt),
+        ("<=" , MOpcode::OpGteq),
+        (">=" , MOpcode::OpLteq),
+        ("<<" , MOpcode::OpLsl),
+        (">>" , MOpcode::OpLsr),
+        ("&"  , MOpcode::OpAnd),
+        ("|"  , MOpcode::OpOr),
+        ("="  , MOpcode::OpEq),
+        ("*"  , MOpcode::OpMul),
+        ("^"  , MOpcode::OpXor),
+        ("+"  , MOpcode::OpAdd),
+        ("-"  , MOpcode::OpSub),
+        ("/"  , MOpcode::OpDiv),
+        ("%"  , MOpcode::OpMod),
+        ("?{" , MOpcode::OpIf),
+        ("!"  , MOpcode::OpNot),
+        ("--" , MOpcode::OpDec),
+        ("++" , MOpcode::OpInc),
+        ("}"  , MOpcode::OpCl)
     ]
 }
 
 pub struct Parser<'a> {
-    stack:        Vec<Value>,
-    insts:        Vec<Instruction>,
-    opset:        HashMap<&'a str, Opcode>,
-    regset:       HashMap<String, RegProfile>,
-    alias_info:   HashMap<String, AliasInfo>,
+    stack:        Vec<MVal>,
+    insts:        Vec<MInst>,
+    opset:        HashMap<&'a str, MOpcode>,
+    regset:       HashMap<String, LRegProfile>,
+    alias_info:   HashMap<String, LAliasInfo>,
     tmp_index:    u64,
     default_size: u8,
-    ip:           String,
     tmp_prefix:   String,
     arch:         String,
     addr:         Address,
-    opinfo:       Option<OpInfo>,
+    opinfo:       Option<LOpInfo>,
 }
 
 // Struct used to configure the Parser. If `None` is passed to any of the fields, then the default
@@ -130,10 +113,9 @@ pub struct Parser<'a> {
 pub struct ParserConfig<'a> {
     arch:         Option<String>,
     default_size: Option<u8>,
-    ip:           Option<String>,
     tmp_prefix:   Option<String>,
-    init_opset:   Option<fn() -> HashMap<&'a str, Opcode>>,
-    regset:  Option<HashMap<String, RegProfile>>,
+    init_opset:   Option<fn() -> HashMap<&'a str, MOpcode>>,
+    regset:  Option<HashMap<String, LRegProfile>>,
 }
 
 // Represents the state of the parser.
@@ -141,7 +123,7 @@ pub struct ParserConfig<'a> {
 pub struct ParserState {
     offset:    u64,
     tmp_index: u64,
-    opinfo:    Option<OpInfo>,
+    opinfo:    Option<LOpInfo>,
 }
 
 impl<'a> Default for ParserConfig<'a> {
@@ -149,7 +131,6 @@ impl<'a> Default for ParserConfig<'a> {
         ParserConfig {
             arch: Some("x86_64".to_string()),
             default_size: Some(64),
-            ip: Some("rip".to_string()),
             tmp_prefix: Some("tmp".to_string()),
             init_opset: Some(map_esil_to_opset),
             regset: Some(HashMap::new()),
@@ -163,7 +144,6 @@ impl<'a> Parser<'a> {
         let config = config.unwrap_or_default();
         let arch = config.arch.unwrap_or("x86_64".to_string());
         let default_size = config.default_size.unwrap_or(64);
-        let ip = config.ip.unwrap_or("rip".to_string());
         let tmp_prefix = config.tmp_prefix.unwrap_or("tmp".to_string());
         let init_opset = config.init_opset.unwrap_or(map_esil_to_opset);
         let regset = config.regset.unwrap_or(HashMap::new());
@@ -174,7 +154,6 @@ impl<'a> Parser<'a> {
             opset:        init_opset(),
             regset:       regset,
             default_size: default_size,
-            ip:           ip,
             arch:         arch,
             tmp_prefix:   tmp_prefix,
             tmp_index:    0,
@@ -186,10 +165,10 @@ impl<'a> Parser<'a> {
 
     pub fn set_register_profile(&mut self, reg_info: &LRegInfo) {
         self.regset = HashMap::new();
-        let mut tmp: HashMap<String, AliasInfo> = HashMap::new();
+        let mut tmp: HashMap<String, LAliasInfo> = HashMap::new();
         for alias in reg_info.alias_info.iter() {
             let a = alias.clone();
-            tmp.insert(a.role_str.clone(), a.clone());
+            tmp.insert(a.reg.clone(), a.clone());
         }
 
         for reg in reg_info.reg_info.iter() {
@@ -200,35 +179,35 @@ impl<'a> Parser<'a> {
         self.alias_info = tmp.clone();
     }
 
-    fn get_tmp_register(&mut self, mut size: u8) -> Value {
+    fn get_tmp_register(&mut self, mut size: u8) -> MVal {
         self.tmp_index += 1;
         if size == 0 {
             size = self.default_size;
         }
-        Value::tmp(self.tmp_index, size)
+        MVal::tmp(self.tmp_index, size)
     }
 
-    fn add_widen_inst(&mut self, op: &mut Value, size: u8) {
+    fn add_widen_inst(&mut self, op: &mut MVal, size: u8) {
         if op.size >= size {
             return;
         }
         let dst = self.get_tmp_register(size);
-        let operator = Opcode::OpWiden;
-        self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr)));
+        let operator = MOpcode::OpWiden;
+        self.insts.push(MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(self.addr)));
         *op = dst;
     }
 
-    fn add_narrow_inst(&mut self, op: &mut Value, size: u8) {
+    fn add_narrow_inst(&mut self, op: &mut MVal, size: u8) {
         if op.size <= size {
             return;
         }
         let dst = self.get_tmp_register(size);
-        let operator = Opcode::OpNarrow;
-        self.insts.push(Instruction::new(operator, dst.clone(), op.clone(), Value::constant(size as i64), Some(self.addr)));
+        let operator = MOpcode::OpNarrow;
+        self.insts.push(MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(self.addr)));
         *op = dst;
     }
 
-    fn add_assign_inst(&mut self, op: Opcode) -> Result<(), ParseError> {
+    fn add_assign_inst(&mut self, op: MOpcode) -> Result<(), ParseError> {
         let dst = match self.stack.pop() {
             Some(ele) => ele,
             None => return Err(ParseError::InsufficientOperands),
@@ -239,23 +218,24 @@ impl<'a> Parser<'a> {
             None => return Err(ParseError::InsufficientOperands),
         };
 
-        // If it is an assignment to the Instruction Pointer, then the Instruction should be a OpJmp
-        // rather than an OpEq.
-        if dst.name == self.ip {
-            let mut op = Opcode::OpJmp;
+        // Check the alias of dst. If it is the instruction pointer, the assignment should be a
+        // OpJmp rather than a OpEq.
+        println!("{:?}", dst);
+        if dst.reg_info.clone().unwrap_or_default().alias == "pc" {
+            let mut op = MOpcode::OpJmp;
             if let Some(ref info) = self.opinfo {
                 let optype = info.clone().optype.unwrap_or("".to_string());
                 if optype == "call" {
-                    op = Opcode::OpCall;
+                    op = MOpcode::OpCall;
                 }
             }
 
-            self.insts.push(Instruction::new(op, Value::null(), op1, Value::null(), Some(self.addr)));
+            self.insts.push(MInst::new(op, MVal::null(), op1, MVal::null(), Some(self.addr)));
             return Ok(());
         }
 
         if dst.size == op1.size {
-            self.insts.push(Instruction::new(op, dst.clone(), op1, Value::null(), Some(self.addr)));
+            self.insts.push(MInst::new(op, dst.clone(), op1, MVal::null(), Some(self.addr)));
             return Ok(());
         }
 
@@ -271,16 +251,16 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn add_inst(&mut self, op: Opcode) -> Result<(), ParseError> {
+    fn add_inst(&mut self, op: MOpcode) -> Result<(), ParseError> {
         // Handle "}".
-        if op == Opcode::OpCl {
-            let null = Value::null();
-            self.insts.push(Instruction::new(op, null.clone(), null.clone(), null.clone(), Some(self.addr)));
+        if op == MOpcode::OpCl {
+            let null = MVal::null();
+            self.insts.push(MInst::new(op, null.clone(), null.clone(), null.clone(), Some(self.addr)));
             return Ok(());
         }
 
         // Assignment operation has to be handled quite differently.
-        if op == Opcode::OpEq {
+        if op == MOpcode::OpEq {
             return self.add_assign_inst(op);
         }
 
@@ -289,29 +269,29 @@ impl<'a> Parser<'a> {
             None => return Err(ParseError::InsufficientOperands),
         };
 
-        let mut op1 = Value::null();
-        if op.to_operator().arity == Arity::Binary {
+        let mut op1 = MVal::null();
+        if op.to_operator().arity == MArity::Binary {
             op1 = match self.stack.pop() {
                 Some(ele) => ele,
                 None => return Err(ParseError::InsufficientOperands),
             };
         }
 
-        if op == Opcode::OpIf {
-            self.insts.push(Instruction::new(op, Value::null(), op2, op1, Some(self.addr)));
+        if op == MOpcode::OpIf {
+            self.insts.push(MInst::new(op, MVal::null(), op2, op1, Some(self.addr)));
             return Ok(());
         }
 
         let mut dst_size: u8;
-        let mut dst: Value;
+        let mut dst: MVal;
         dst_size = cmp::max(op1.size, op2.size);
         dst = self.get_tmp_register(dst_size);
 
         // Add a check to see if dst, op1 and op2 have the same size.
         // If they do not, cast it. op2 is never 'Null'.
-        assert!(op2.location != Location::Null);
+        assert!(op2.location != MValType::Null);
 
-        if op.to_operator().arity == Arity::Binary {
+        if op.to_operator().arity == MArity::Binary {
             if op1.size > op2.size {
                 dst_size = op1.size;
                 self.add_widen_inst(&mut op2, op1.size);
@@ -323,13 +303,13 @@ impl<'a> Parser<'a> {
 
         dst.size = dst_size;
 
-        self.insts.push(Instruction::new(op, dst.clone(), op2, op1, Some(self.addr)));
+        self.insts.push(MInst::new(op, dst.clone(), op2, op1, Some(self.addr)));
         self.stack.push(dst);
 
         Ok(())
     }
 
-    pub fn new_mreg_info(&self, info: RegProfile) -> MRegInfo {
+    pub fn new_mreg_info(&self, info: LRegProfile) -> MRegInfo {
         MRegInfo {
             reg_type: info.type_str,
             offset: info.offset,
@@ -339,7 +319,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_opinfo(&mut self, opinfo: &OpInfo) -> Result<(), ParseError> {
+    pub fn parse_opinfo(&mut self, opinfo: &LOpInfo) -> Result<(), ParseError> {
         let opinfo = opinfo.clone();
         let esil = opinfo.esil.clone().unwrap_or("".to_string());
 
@@ -362,10 +342,10 @@ impl<'a> Parser<'a> {
         for token in esil {
             let op = match self.opset.get(&*token) {
                 Some(op) => op.clone(),
-                None => Opcode::OpInvalid,
+                None => MOpcode::OpInvalid,
             };
 
-            if op != Opcode::OpInvalid {
+            if op != MOpcode::OpInvalid {
                 try!(self.add_inst(op));
                 continue;
             }
@@ -373,38 +353,43 @@ impl<'a> Parser<'a> {
             // If it contains atleast one alpha, it cannot be an operator.
             let re = Regex::new("[a-zA-Z]").unwrap();
             if re.is_match(&*token) {
-                let mut val_type = Location::Unknown;
+                let mut val_type = MValType::Unknown;
                 let mut val: i64 = 0;
                 let mut size: u8 = self.default_size;
                 let mut reg_info: Option<MRegInfo> = None;
                 if let Some(r) = self.regset.get(&*token) {
-                    val_type = Location::Register;
-                    reg_info = Some(self.new_mreg_info(r.clone()));
+                    val_type = MValType::Register;
+                    let mut reg_info_ = self.new_mreg_info(r.clone());
+                    let alias = self.alias_info.get(&reg_info_.reg)
+                                               .map(|x| x.role_str.clone())
+                                               .unwrap_or_default();
+                    reg_info_.alias = alias;
+                    reg_info = Some(reg_info_.clone());
                     size = r.size; 
                 } else if let Ok(v) = hex_to_i!(token) {
-                    val_type = Location::Constant;
+                    val_type = MValType::Constant;
                     val = v;
                 }
                 // TODO: Add support for internals.
-                let v = Value::new(String::from(token), size, val_type, val, 0, reg_info);
+                let v = MVal::new(String::from(token), size, val_type, val, 0, reg_info);
                 self.stack.push(v);
                 continue;
             }
 
             // Handle constants.
             if let Ok(num) = token.parse::<i64>() {
-                let val_type = Location::Constant;
+                let val_type = MValType::Constant;
                 let val = num;
                 let size  = self.default_size;
                 let name = format!("0x{:x}", num);
-                let v = Value::new(name, size, val_type, val, 0, None);
+                let v = MVal::new(name, size, val_type, val, 0, None);
                 self.stack.push(v);
                 continue;
             }
 
             // Deal with normal 'composite' instructions.
             if token.char_indices().last().unwrap().1 != ']' {
-                let mut dst: Value;
+                let mut dst: MVal;
                 if let Some(x) = self.stack.last() {
                     dst = x.clone();
                 } else {
@@ -413,16 +398,16 @@ impl<'a> Parser<'a> {
                 let re = Regex::new(r"^(.|..)=$").unwrap();
                 let t = re.captures(&*token).unwrap().at(1).unwrap_or("");
                 if t.len() == 0 {
-                    return Err(ParseError::InvalidOperator);
+                    return Err(ParseError::InvalidMOperator);
                 }
                 let op = match self.opset.get(t) {
                     Some(op) => op.clone(),
-                    None => return Err(ParseError::InvalidOperator),
+                    None => return Err(ParseError::InvalidMOperator),
                 };
 
                 try!(self.add_inst(op));
                 self.stack.push(dst);
-                try!(self.add_inst(Opcode::OpEq));
+                try!(self.add_inst(MOpcode::OpEq));
                 continue;
             }
 
@@ -437,7 +422,7 @@ impl<'a> Parser<'a> {
                 _ => access_size.parse::<u8>().unwrap() * 8,
             };
 
-            try!(self.add_inst(Opcode::OpRef));
+            try!(self.add_inst(MOpcode::OpRef));
             // Set the correct size.
             let mut x = self.stack.pop().unwrap();
             self.add_narrow_inst(&mut x, access_size);
@@ -451,7 +436,7 @@ impl<'a> Parser<'a> {
 
             // Simple 'poke' (=[n])
             if has_op.is_empty() {
-                try!(self.add_inst(Opcode::OpEq));
+                try!(self.add_inst(MOpcode::OpEq));
                 continue;
             }
 
@@ -459,12 +444,12 @@ impl<'a> Parser<'a> {
             let o = match self.opset.get(has_op) {
                 Some(x) => x.clone(),
                 // Return with error
-                None => return Err(ParseError::InvalidOperator),
+                None => return Err(ParseError::InvalidMOperator),
             };
             try!(self.add_inst(o));
             // Reassignment.
             self.stack.push(tmp_dst1);
-            try!(self.add_inst(Opcode::OpEq));
+            try!(self.add_inst(MOpcode::OpEq));
         }
         Ok(())
     }
@@ -480,13 +465,13 @@ impl<'a> Parser<'a> {
     /// if zf jump addr  (OpCJmp)
     /// ```
 
-    pub fn emit_insts(&mut self) -> Vec<Instruction> {
+    pub fn emit_insts(&mut self) -> Vec<MInst> {
         let len = self.insts.len();
-        let mut res: Vec<Instruction> = Vec::new();
+        let mut res: Vec<MInst> = Vec::new();
         let mut i = 0;
         while i < len {
             let inst = self.insts[i].clone();
-            if inst.opcode != Opcode::OpIf {
+            if inst.opcode != MOpcode::OpIf {
                 res.push(inst);
                 i += 1;
                 continue;
@@ -497,12 +482,12 @@ impl<'a> Parser<'a> {
             // have instructions to set esp and then jump to the required location.
             // We can use these side-effects to determine if it's a 'call' or just a jump.
             // This however requires study into other architectures and their esil too.
-            while self.insts[i].opcode != Opcode::OpCl && i < len - 1 {
+            while self.insts[i].opcode != MOpcode::OpCl && i < len - 1 {
                 i += 1;
                 let inst_ = self.insts[i].clone();
-                if inst_.opcode == Opcode::OpJmp {
+                if inst_.opcode == MOpcode::OpJmp {
                     let res_inst = 
-                        Instruction::new(Opcode::OpCJmp, Value::null(),
+                        MInst::new(MOpcode::OpCJmp, MVal::null(),
                                          inst.operand_1.clone(),
                                          inst_.operand_1, Some(inst.addr));
                     res.push(res_inst);

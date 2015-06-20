@@ -89,7 +89,7 @@ impl Dot for BasicBlock {
     }
 }
 
-impl Dot for Instruction {
+impl Dot for MInst {
     fn to_dot(&self) -> String {
         format!("<tr><td align=\"left\" cellspacing=\"1\"><font color=\"grey50\"
             point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>",

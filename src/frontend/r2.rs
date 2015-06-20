@@ -111,7 +111,7 @@ impl R2 {
         self.flush();
     }
 
-    pub fn get_function(&mut self, func: &str) -> FunctionInfo {
+    pub fn get_function(&mut self, func: &str) -> LFunctionInfo {
         let cmd = format!("pdfj @ {}", func);
         self.send(&*cmd);
         let raw_json = self.recv();
@@ -120,7 +120,7 @@ impl R2 {
     }
 
     // get 'n' (or 16) instructions at 'offset' (or current position if offset in `None`)
-    pub fn get_insts(&mut self, n: Option<u64>, offset: Option<&str>) -> Vec<OpInfo> {
+    pub fn get_insts(&mut self, n: Option<u64>, offset: Option<&str>) -> Vec<LOpInfo> {
         let n = n.unwrap_or(16);
         let offset: &str = offset.unwrap_or_default();
         let mut cmd = format!("pdj{}", n);

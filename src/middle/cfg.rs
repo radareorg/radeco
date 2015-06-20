@@ -13,10 +13,10 @@ use std::collections::BTreeMap;
 use super::ir::*;
 
 /// A `BasicBlock` is the basic unit in a CFG.
-/// Every `Instruction` must be a part of one and only one `BasicBlock`.
+/// Every `MInst` must be a part of one and only one `BasicBlock`.
 pub struct BasicBlock {
     pub reachable: bool,
-    pub instructions: Vec<Instruction>,
+    pub instructions: Vec<MInst>,
     pub label: String,
 }
 
@@ -29,7 +29,7 @@ impl BasicBlock {
         }
     }
 
-    fn add_instruction(&mut self, inst: Instruction) {
+    fn add_instruction(&mut self, inst: MInst) {
         self.instructions.push(inst);
     }
 }
@@ -152,12 +152,12 @@ impl CFG {
     }
 
     // Iterate through the instructions and create new BasicBlocks.
-    pub fn assign_bbs(&mut self, insts: &Vec<Instruction>) {
+    pub fn assign_bbs(&mut self, insts: &Vec<MInst>) {
         let mut insts_iter = insts.iter().peekable();
         let first_addr = insts[0].addr;
         let last_addr = insts.last().unwrap().addr;
 
-        // First Instruction will be the start of the first BasicBlock.
+        // First MInst will be the start of the first BasicBlock.
         {
             let bb = self.add_new_block();
             let entry = self.entry;
@@ -168,13 +168,13 @@ impl CFG {
         while let Some(ref i) = insts_iter.next() {
             let inst = i.clone();
             let operand = match inst.opcode {
-                Opcode::OpCJmp => &inst.operand_2,
-                Opcode::OpJmp  => &inst.operand_1,
+                MOpcode::OpCJmp => &inst.operand_2,
+                MOpcode::OpJmp  => &inst.operand_1,
                 _              => continue,
             };
             // TODO: Resolve the address if it's not a constant.
             let addr = match operand.location {
-                Location::Constant => operand.value as u64,
+                MValType::Constant => operand.value as u64,
                 _                  => continue,
             };
 
@@ -196,16 +196,16 @@ impl CFG {
         }
     }
 
-    fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: Instruction, next_inst: Instruction) {
+    fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: MInst, next_inst: MInst) {
         let exit = self.exit.clone();
         match inst.opcode {
-            Opcode::OpJmp => {
+            MOpcode::OpJmp => {
                 let target_addr = inst.operand_1.value as u64;
                 let edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
                 self.add_edge(current, target, edge_data);
             },
-            Opcode::OpCJmp => {
+            MOpcode::OpCJmp => {
                 let target_addr = inst.operand_2.value as u64;
                 let edge_data = EdgeData::new_true(inst.addr, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
@@ -221,7 +221,7 @@ impl CFG {
         }
     }
 
-    pub fn build(&mut self, insts: &mut Vec<Instruction>) {
+    pub fn build(&mut self, insts: &mut Vec<MInst>) {
         insts.sort_by(|a, b| a.addr.cmp(&b.addr));
         // Identify the first statement of every BasicBlock and assign them.
         self.assign_bbs(insts);

@@ -3,7 +3,7 @@
 pub type Address = u64;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Arity {
+pub enum MArity {
     Zero,
     Unary,
     Binary,
@@ -11,7 +11,7 @@ pub enum Arity {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Location {
+pub enum MValType {
     Memory,
     Register,
     Constant,
@@ -21,23 +21,23 @@ pub enum Location {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Operator<'a> {
+pub struct MOperator<'a> {
     pub op: &'a str,
-    pub arity: Arity,
+    pub arity: MArity,
 }
 
-impl<'a> Operator<'a> {
-    pub fn new(op: &'a str, n: Arity) -> Operator<'a> {
-        Operator { op: op, arity: n }
+impl<'a> MOperator<'a> {
+    pub fn new(op: &'a str, n: MArity) -> MOperator<'a> {
+        MOperator { op: op, arity: n }
     }
 
-    pub fn nop() -> Operator<'a> {
-        Operator { op: "nop", arity: Arity::Zero }
+    pub fn nop() -> MOperator<'a> {
+        MOperator { op: "nop", arity: MArity::Zero }
     }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Opcode {
+pub enum MOpcode {
     OpAdd,
     OpSub,
     OpMul,
@@ -64,46 +64,46 @@ pub enum Opcode {
     OpWiden,
     OpNop,
     OpInvalid,
-    // Composite Opcodes:
+    // Composite MOpcodes:
     OpInc,
     OpDec,
     OpCl, // '}'
 }
 
-impl<'a> Opcode {
-    pub fn to_operator(&self) -> Operator<'a> {
+impl<'a> MOpcode {
+    pub fn to_operator(&self) -> MOperator<'a> {
         let (op, arity) = match *self {
-            Opcode::OpAdd => ("+", Arity::Binary),
-            Opcode::OpSub => ("-", Arity::Binary),
-            Opcode::OpMul => ("*", Arity::Binary),
-            Opcode::OpDiv => ("/", Arity::Binary),
-            Opcode::OpMod => ("%", Arity::Binary),
-            Opcode::OpAnd => ("&", Arity::Binary),
-            Opcode::OpOr => ("|", Arity::Binary),
-            Opcode::OpXor => ("^", Arity::Binary),
-            Opcode::OpNot => ("!", Arity::Unary),
-            Opcode::OpEq => ("=", Arity::Binary),
-            Opcode::OpCmp => ("==", Arity::Binary),
-            Opcode::OpGt => (">", Arity::Binary),
-            Opcode::OpLt => ("<", Arity::Binary),
-            Opcode::OpLteq => ("<=", Arity::Binary),
-            Opcode::OpGteq => (">=", Arity::Binary),
-            Opcode::OpLsl => ("<<", Arity::Binary),
-            Opcode::OpLsr => (">>", Arity::Binary),
-            Opcode::OpInc => ("++", Arity::Unary),
-            Opcode::OpDec => ("--", Arity::Unary),
-            Opcode::OpIf => ("if", Arity::Unary),
-            Opcode::OpRef => ("ref", Arity::Unary),
-            Opcode::OpNarrow => ("narrow", Arity::Binary),
-            Opcode::OpWiden => ("widen", Arity::Binary),
-            Opcode::OpNop => ("nop", Arity::Zero),
-            Opcode::OpInvalid => ("invalid", Arity::Zero),
-            Opcode::OpJmp => ("jmp", Arity::Unary),
-            Opcode::OpCJmp => ("jmp if", Arity::Binary),
-            Opcode::OpCall => ("call", Arity::Unary),
-            Opcode::OpCl => ("}", Arity::Zero),
+            MOpcode::OpAdd => ("+", MArity::Binary),
+            MOpcode::OpSub => ("-", MArity::Binary),
+            MOpcode::OpMul => ("*", MArity::Binary),
+            MOpcode::OpDiv => ("/", MArity::Binary),
+            MOpcode::OpMod => ("%", MArity::Binary),
+            MOpcode::OpAnd => ("&", MArity::Binary),
+            MOpcode::OpOr => ("|", MArity::Binary),
+            MOpcode::OpXor => ("^", MArity::Binary),
+            MOpcode::OpNot => ("!", MArity::Unary),
+            MOpcode::OpEq => ("=", MArity::Binary),
+            MOpcode::OpCmp => ("==", MArity::Binary),
+            MOpcode::OpGt => (">", MArity::Binary),
+            MOpcode::OpLt => ("<", MArity::Binary),
+            MOpcode::OpLteq => ("<=", MArity::Binary),
+            MOpcode::OpGteq => (">=", MArity::Binary),
+            MOpcode::OpLsl => ("<<", MArity::Binary),
+            MOpcode::OpLsr => (">>", MArity::Binary),
+            MOpcode::OpInc => ("++", MArity::Unary),
+            MOpcode::OpDec => ("--", MArity::Unary),
+            MOpcode::OpIf => ("if", MArity::Unary),
+            MOpcode::OpRef => ("ref", MArity::Unary),
+            MOpcode::OpNarrow => ("narrow", MArity::Binary),
+            MOpcode::OpWiden => ("widen", MArity::Binary),
+            MOpcode::OpNop => ("nop", MArity::Zero),
+            MOpcode::OpInvalid => ("invalid", MArity::Zero),
+            MOpcode::OpJmp => ("jmp", MArity::Unary),
+            MOpcode::OpCJmp => ("jmp if", MArity::Binary),
+            MOpcode::OpCall => ("call", MArity::Unary),
+            MOpcode::OpCl => ("}", MArity::Zero),
         };
-        Operator::new(op, arity).clone()
+        MOperator::new(op, arity).clone()
     }
 }
 
@@ -117,10 +117,10 @@ pub struct MRegInfo {
 }
 
 #[derive(Debug, Clone)]
-pub struct Value {
+pub struct MVal {
     pub name: String,
     pub size: u8,
-    pub location: Location,
+    pub location: MValType,
     pub value: i64,
     pub reg_info: Option<MRegInfo>,
     pub typeset: u32,
@@ -133,9 +133,9 @@ impl MRegInfo {
     }
 }
 
-impl Value {
-    pub fn new(name: String, size: u8, location: Location, value: i64, typeset: u32, reg_info: Option<MRegInfo>) -> Value {
-        Value {
+impl MVal {
+    pub fn new(name: String, size: u8, location: MValType, value: i64, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
+        MVal {
             name: name.clone(),
             size: size,
             location: location,
@@ -145,38 +145,38 @@ impl Value {
         }
     }
 
-    pub fn null() -> Value {
-        Value::new("".to_string(), 0, Location::Null, 0, 0, None)
+    pub fn null() -> MVal {
+        MVal::new("".to_string(), 0, MValType::Null, 0, 0, None)
     }
 
-    pub fn tmp(i: u64, size: u8) -> Value {
-        Value::new(format!("tmp_{:x}", i), size, Location::Temporary, 0, 0, None)
+    pub fn tmp(i: u64, size: u8) -> MVal {
+        MVal::new(format!("tmp_{:x}", i), size, MValType::Temporary, 0, 0, None)
     }
 
-    pub fn constant(i: i64) -> Value {
-        Value::new(i.to_string(), 64, Location::Constant, i, 0, None)
+    pub fn constant(i: i64) -> MVal {
+        MVal::new(i.to_string(), 64, MValType::Constant, i, 0, None)
     }
 }
 
 
 
 #[derive(Debug, Clone)]
-pub struct Instruction {
+pub struct MInst {
     pub addr: Address,
-    pub opcode: Opcode,
-    pub dst: Value,
-    pub operand_1: Value,
-    pub operand_2: Value,
+    pub opcode: MOpcode,
+    pub dst: MVal,
+    pub operand_1: MVal,
+    pub operand_2: MVal,
 }
 
-impl<'a> Instruction {
-    pub fn new(opcode: Opcode, dst: Value, op1: Value, op2: Value, _addr: Option<Address>) -> Instruction {
+impl<'a> MInst {
+    pub fn new(opcode: MOpcode, dst: MVal, op1: MVal, op2: MVal, _addr: Option<Address>) -> MInst {
         let addr = match _addr {
             Some(s) => s,
             None => 0,
         };
 
-        Instruction {
+        MInst {
             addr: addr,
             opcode: opcode,
             dst: dst,
