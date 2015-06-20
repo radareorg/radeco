@@ -3,7 +3,7 @@ extern crate petgraph;
 pub mod indextype;
 pub mod inner;
 
-use super::traits::{InstructionType, NavigationInternal};
+use super::traits::{InstructionType, Navigation, NavigationInternal};
 
 use self::indextype::IndexType;
 use self::inner::{InnerGraph, InnerEdgeLight, InnerEdgeTrait, AuxQuery};
@@ -64,39 +64,42 @@ impl<Index: IndexType, Instruction: InstructionType> BasicBlock<Index, Instructi
 type DefaultInnerIndex = i16;
 type DefaultBasicBlock<Instruction> = BasicBlock<DefaultInnerIndex, Instruction>;
 
-enum IRNode<Instruction: InstructionType> {
+enum IRNode<Index: IndexType, Instruction: InstructionType> {
 	// Represents an operation of a basic block that is used by non-phi nodes outside of that basic block
 	Repr,
 	// Represents a basic block
-	BasicBlock(DefaultBasicBlock<Instruction>)
+	BasicBlock(BasicBlock<Index, Instruction>)
 }
 
-enum IREdge<Instruction: InstructionType> {
+enum IREdge<Index: IndexType, Instruction: InstructionType> {
 	// Points from a `IRNode::Repr` to the `IR::BasicBlock` that it belongs to
-	ReprToBlock(DefaultInnerIndex),
-	// Points from a `IR::BasicBlock`s to `IRNode::Repr` whose target BlockToReprPayloadis used by operations in the basic block
+	ReprToBlock(Index),
+	// Points from a `IR::BasicBlock`s to `IRNode::Repr` whose target is used by operations in the basic block
 	// Contains a id of the first user in the basic block, and the id the `IRNode::Repr` is known by in the basic block
-	BlockToRepr(DefaultInnerIndex, <DefaultBasicBlock<Instruction> as BlockToReprPayload>::Type),
+	BlockToRepr(Index, <BasicBlock<Index, Instruction> as BlockToReprPayload>::Type),
 	// Points from one `IR::BasicBlock` to another. Represents control flow.
 	// It contains a vector of 'n' references to operations in the origin basic block
 	// that are used by 'n' phi operations in the target basic block.
-	Flow(Vec<DefaultInnerIndex>, u64)
+	Flow(Vec<Index>, u64)
 }
 
-type IRGraph<Instruction> = Graph<IRNode<Instruction>, IREdge<Instruction>>;
+type IRGraph<Index, Instruction> = Graph<
+	IRNode<Index, Instruction>,
+	IREdge<Index, Instruction>
+>;
 
 pub struct NodeRef<I>(NodeIndex, I);
-struct AuxQueryImpl<'a, Instruction: InstructionType + 'a>(&'a mut IRGraph<Instruction>, NodeIndex);
+struct AuxQueryImpl<'a, Index: IndexType + 'a, Instruction: InstructionType + 'a>(
+	&'a mut IRGraph<Index, Instruction>,
+	NodeIndex
+);
 
 // forward that type
-impl<Index: IndexType, Instruction: InstructionType> UsedInnerEdgeType for BasicBlock<Index, Instruction> {
+impl<Index: IndexType, Instruction: InstructionType> UsedInnerEdgeType for IRGraph<Index, Instruction> {
 	type InnerEdgeType = DefaultInnerEdge<Index>;
 }
-impl<Instruction: InstructionType> UsedInnerEdgeType for IRGraph<Instruction> {
-	type InnerEdgeType = <DefaultBasicBlock<Instruction> as UsedInnerEdgeType>::InnerEdgeType;
-}
-impl<'a, Instruction: InstructionType> UsedInnerEdgeType for AuxQueryImpl<'a, Instruction> {
-	type InnerEdgeType = <IRGraph<Instruction> as UsedInnerEdgeType>::InnerEdgeType;
+impl<'a, Index: IndexType, Instruction: InstructionType> UsedInnerEdgeType for AuxQueryImpl<'a, Index, Instruction> {
+	type InnerEdgeType = <IRGraph<Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType;
 }
 
 macro_rules! find_edge {
@@ -105,7 +108,7 @@ macro_rules! find_edge {
 			let mut fedge: Option<EdgeIndex> = Option::None;
 			let mut temp_edgewalk = $graph.walk_edges_directed($node, $direction);
 			while let Some(edge) = temp_edgewalk.next($graph) {
-				if match $graph.edge_weight(edge).expect("petgraph.walk_edges_directed gave us a non-existant edge") {
+				if match &$graph[edge] {
 					$(
 						$pat => $cond
 					),*
@@ -120,9 +123,9 @@ macro_rules! find_edge {
 	};
 }
 
-impl<'b, Instruction: InstructionType/*, InnerEdge: InnerEdgeTrait<Index=DefaultInnerIndex>*/>
-	inner::AuxQuery<<AuxQueryImpl<'b, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
-	for AuxQueryImpl<'b, Instruction>
+impl<'b, Index: IndexType, Instruction: InstructionType/*, InnerEdge: InnerEdgeTrait<Index=DefaultInnerIndex>*/>
+	inner::AuxQuery<<AuxQueryImpl<'b, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
+	for AuxQueryImpl<'b, Index, Instruction>
 {
 	//use AuxQueryImpl<'b, Instruction>::InnerEdgeType as InnerEdge;
 
@@ -141,65 +144,53 @@ impl<'b, Instruction: InstructionType/*, InnerEdge: InnerEdgeTrait<Index=Default
 	}
 }
 
-fn deref<Instruction: InstructionType>(graph: &IRGraph<Instruction>, noderef: NodeRef<DefaultInnerIndex>) {
-
+fn deref<Index: IndexType, Instruction: InstructionType>(
+	graph: &IRGraph<Index, Instruction>,
+	noderef: NodeRef<Index>
+) -> NodeRef<Index> {
 	let fedge: Option<EdgeIndex> = find_edge!(graph, noderef.0, Outgoing,
 		&IREdge::BlockToRepr(key, _) => { key == noderef.1 }
 	);
 	if let Some(edge) = fedge {
 		// TODO
 	}
+	panic!();
 }
 
-impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<Index>> for IRGraph<Instruction> {
+impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<Index>> for IRGraph<Index, Instruction> {
 	fn add_uses_to(&self, noderef: NodeRef<Index>, r: &mut Vec<NodeRef<Index>>) {
-		if let Option::Some(node) = self.node_weight(noderef.0) {
-			// TODO
-			panic!();
-		} else {
-			panic!();
-		}
+		let node = &self[noderef.0];
+		let bb = if let &IRNode::BasicBlock(ref bb) = node { bb } else { panic!() };
 	}
 
 	fn add_args_to(&self, noderef: NodeRef<Index>, r: &mut Vec<NodeRef<Index>>) {
-		if let Option::Some(node) = self.node_weight(noderef.0) {
-			let bb = match *node {
-				IRNode::Repr => panic!(),
-				IRNode::BasicBlock(ref bb) => {
-					bb
-				}
-			};
-			/* // TODO
-			if (noderef.is_phi()) {
-				let phiindex = !noderef.1;
-				let mut edges = self.walk_edges_directed(noderef.0, Incoming);
-				while let Some(edge) = edges.next(&self) {
-					match self.edge_weight(edge) {
-						None => {},
-						Some(&IREdge::ReprToBlock(_)) => {},
-						Some(&IREdge::BlockToRepr(_, _)) => {},
-						Some(&IREdge::Flow(phisource, id)) => {
-							// r.push(deref_noderef(self, noderef.0, i));
-						}
+		let node = &self[noderef.0];
+		let bb = if let &IRNode::BasicBlock(ref bb) = node { bb } else { panic!() };
+		let instruction = bb.inner_graph.lookup(noderef.1);
+
+		if (instruction.is_phi()) {
+			let mut edges = self.walk_edges_directed(noderef.0, Incoming);
+			while let Some(edgeindex) = edges.next(&self) {
+				let edge = &self.raw_edges()[edgeindex.index()];
+				match &edge.weight {
+					&IREdge::Flow(ref phisource, ref id) => {
+						//r.push(deref(self, NodeRef::<Index>(edge.source(), phisource[])));
 					}
+					_ => {}
 				}
-			} else {
-				let inner_r = Vec::<Index>::new();
-				bb.inner_graph.add_args_to(noderef.1, &mut r);
-				for i in inner_r {
-					// TODO
-					// r.push(deref_noderef(self, noderef.0, i));
-				}
-			}*/
+			}
 		} else {
-			panic!();
+			let inner_arg = bb.inner_graph.args_of(noderef.1);
+			for i in inner_arg {
+				r.push(deref(self, NodeRef::<Index>(noderef.0, i)));
+			}
 		}
 	}
 }
 
 mod test {
 	use super::super::traits::InstructionType;
-	use super::IRGraph;
+	use super::{DefaultInnerIndex, IRGraph};
 
 	#[derive(Debug)]
 	enum TestInstr { Phi, NotPhi }
@@ -212,7 +203,7 @@ mod test {
 
 	#[test]
 	fn construct() {
-		let graph: IRGraph<TestInstr>;
+		let graph: IRGraph<DefaultInnerIndex, TestInstr>;
 	}
 
 	// more tests will follow
