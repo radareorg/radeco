@@ -2,18 +2,19 @@
 // maybe we shouldn't define 'main' here
 
 extern crate radeco;
-use radeco::frontend::{esil, r2};
-use radeco::middle::{cfg, dot};
+use radeco::frontend::{parser, r2};
+use radeco::middle::{cfg};
+use radeco::middle::dot::Dot;
 
-//fn parse_verbose (p: &mut esil::Parser, expression: &'static str) {
-    //println!("< {}", expression.to_string());
-    //if let Err(e) = p.parse(expression, None) {
-        //panic!("Error: {:?}", e)
-    //}
-    //for inst in &p.emit_insts() {
-        //println!("> {}", inst);
-    //}
-//}
+use std::io::prelude::*;
+use std::fs::File;
+
+fn make_dot(g: cfg::CFG, outfile: &str) {
+    let mut dot_file = File::create(outfile).ok().expect("Error. Cannot create file!\n");
+    dot_file.write_all(g.to_dot().as_bytes()).ok().expect("Error. Cannot write file!\n");
+    println!("[*] Dot file written!");
+    println!("[*] Run `./scripts/genpng.sh {}` to generate the graph.", outfile);
+}
 
 // attribute to ignore unused 'main' when running tests
 #[cfg_attr(test, allow(dead_code))]
@@ -29,18 +30,23 @@ fn main() {
 
     let mut r2 = r2::R2::new("./key");
     r2.init();
-    let mut ops = r2.get_function("sym.main").ops.unwrap();
-    println!("[*] Got ops.");
-    let mut p = esil::Parser::new(None);
-    println!("[*] Begin Parse.");
-    for op in ops.iter_mut() {
-        p.parse_opinfo(op);
-    }
+    let r = r2.get_reg_info();
+    println!("{:?}", r);
+    let mut p = parser::Parser::new(None);
+    p.set_register_profile(&r);
 
-    println!("[*] Begin CFG Generation.");
-    let mut cfg = cfg::CFG::new();
-    cfg.build(&mut (p.emit_insts()));
+    //let mut ops = r2.get_insts(Some(2), Some("sym.main"));
+    //println!("[*] Got ops.");
+    //let mut p = esil::Parser::new(None);
+    //println!("[*] Begin Parse.");
+    //for op in ops.iter_mut() {
+        //p.parse_opinfo(op).ok();
+    //}
 
-    println!("[*] Dot generation.");
-    dot::make_dot(cfg);
+    //println!("[*] Begin CFG Generation.");
+    //let mut cfg = cfg::CFG::new();
+    //cfg.build(&mut (p.emit_insts()));
+
+    //println!("[*] Dot generation.");
+    //make_dot(cfg, "cfg.dot");
 }

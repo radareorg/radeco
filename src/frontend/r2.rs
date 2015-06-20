@@ -7,7 +7,7 @@ use rustc_serialize::json::{Json, ToJson};
 use rustc_serialize::json;
 use std::collections::BTreeMap;
 
-use super::structs::{FunctionInfo};
+use super::structs::*;
 
 pub struct R2 {
     pipe: R2Pipe,
@@ -116,6 +116,25 @@ impl R2 {
         self.send(&*cmd);
         let raw_json = self.recv();
         // Handle Error here.
+        json::decode(&*raw_json).unwrap()
+    }
+
+    // get 'n' (or 16) instructions at 'offset' (or current position if offset in `None`)
+    pub fn get_insts(&mut self, n: Option<u64>, offset: Option<&str>) -> Vec<OpInfo> {
+        let n = n.unwrap_or(16);
+        let offset: &str = offset.unwrap_or_default();
+        let mut cmd = format!("pdj{}", n);
+        if offset.len() > 0 {
+            cmd = format!("{} @ {}", cmd, offset);
+        }
+        self.send(&*cmd);
+        let raw_json = self.recv();
+        json::decode(&*raw_json).unwrap()
+    }
+
+    pub fn get_reg_info(&mut self) -> LRegInfo {
+        self.send("drpj");
+        let raw_json = self.recv();
         json::decode(&*raw_json).unwrap()
     }
 

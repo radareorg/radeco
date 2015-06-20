@@ -6,10 +6,6 @@
 pub use super::cfg::*;
 pub use super::ir::*;
 
-// Remove after make_cfg() is removed.
-use std::io::prelude::*;
-use std::fs::File;
-
 macro_rules! add_strings {
     ( $( $x: expr ),* ) => {
         {
@@ -99,12 +95,4 @@ impl Dot for Instruction {
             point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>",
             self.addr, self)
     }
-}
-
-// Dummy Function for test purposes. Will be removed later.
-pub fn make_dot(g: CFG) {
-    let mut dot_file = File::create("cfg.dot").ok().expect("Error. Cannot create file!\n");
-    dot_file.write_all(g.to_dot().as_bytes()).ok().expect("Error. Cannot write file!\n");
-    println!("[*] Dot file written!");
-    println!("[*] Run `./scripts/genpng.sh cfg.dot` to generate the graph.");
 }

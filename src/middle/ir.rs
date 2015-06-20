@@ -107,40 +107,54 @@ impl<'a> Opcode {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct MRegInfo {
+    pub reg_type: String,
+    pub reg: String,
+    pub size: u8,
+    pub alias: String,
+    pub offset: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct Value {
     pub name: String,
     pub size: u8,
     pub location: Location,
     pub value: i64,
-    // TODO: Convert from u32 to TypeSet.
-    // Every value can be considered in terms of typesets rather than fixed
-    // types which can then be narrowed down based on the analysis.
-    // TypeSet can be implemented simply as a bit-vector.
-    typeset: u32,
+    pub reg_info: Option<MRegInfo>,
+    pub typeset: u32,
+}
+
+impl MRegInfo {
+    pub fn new() -> MRegInfo {
+        let def: MRegInfo = Default::default();
+        def
+    }
 }
 
 impl Value {
-    pub fn new(name: String, size: u8, location: Location, value: i64, typeset: u32) -> Value {
+    pub fn new(name: String, size: u8, location: Location, value: i64, typeset: u32, reg_info: Option<MRegInfo>) -> Value {
         Value {
             name: name.clone(),
             size: size,
             location: location,
             value: value,
             typeset: typeset,
+            reg_info: reg_info,
         }
     }
 
     pub fn null() -> Value {
-        Value::new("".to_string(), 0, Location::Null, 0, 0)
+        Value::new("".to_string(), 0, Location::Null, 0, 0, None)
     }
 
     pub fn tmp(i: u64, size: u8) -> Value {
-        Value::new(format!("tmp_{:x}", i), size, Location::Temporary, 0, 0)
+        Value::new(format!("tmp_{:x}", i), size, Location::Temporary, 0, 0, None)
     }
 
     pub fn constant(i: i64) -> Value {
-        Value::new(i.to_string(), 64, Location::Constant, i, 0)
+        Value::new(i.to_string(), 64, Location::Constant, i, 0, None)
     }
 }
 

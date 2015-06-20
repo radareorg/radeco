@@ -15,6 +15,27 @@ pub struct FunctionInfo {
     pub ops:  Option<Vec<OpInfo>>,
 }
 
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
+pub struct LRegInfo {
+    pub alias_info: Vec<AliasInfo>,
+    pub reg_info: Vec<RegProfile>,
+}
+
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
+pub struct AliasInfo {
+    pub reg: String,
+    pub role: u64,
+    pub role_str: String,
+}
+
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
+pub struct RegProfile {
+    pub name: String,
+    pub offset: u64,
+    pub size: u8,
+    pub type_str: String,
+}
+
 impl Decodable for OpInfo {
     fn decode<D: Decoder>(d: &mut D) -> Result<OpInfo, D::Error> {
         d.read_struct("root", 0, |d_| {

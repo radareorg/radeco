@@ -35,8 +35,8 @@ use std::collections::HashMap;
 use std::cmp;
 use regex::Regex;
 
-use super::{Instruction, Value, Opcode, Location, Address, Arity};
-use super::structs::{OpInfo};
+use super::{Instruction, Value, Opcode, Location, Address, Arity, MRegInfo};
+use super::structs::{OpInfo, AliasInfo, LRegInfo, RegProfile};
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
@@ -114,7 +114,8 @@ pub struct Parser<'a> {
     stack:        Vec<Value>,
     insts:        Vec<Instruction>,
     opset:        HashMap<&'a str, Opcode>,
-    regset:       HashMap<&'a str, u8>,
+    regset:       HashMap<String, RegProfile>,
+    alias_info:   HashMap<String, AliasInfo>,
     tmp_index:    u64,
     default_size: u8,
     ip:           String,
@@ -132,7 +133,7 @@ pub struct ParserConfig<'a> {
     ip:           Option<String>,
     tmp_prefix:   Option<String>,
     init_opset:   Option<fn() -> HashMap<&'a str, Opcode>>,
-    init_regset:  Option<fn() -> HashMap<&'a str, u8>>,
+    regset:  Option<HashMap<String, RegProfile>>,
 }
 
 // Represents the state of the parser.
@@ -151,7 +152,7 @@ impl<'a> Default for ParserConfig<'a> {
             ip: Some("rip".to_string()),
             tmp_prefix: Some("tmp".to_string()),
             init_opset: Some(map_esil_to_opset),
-            init_regset: Some(init_regset),
+            regset: Some(HashMap::new()),
         }
     }
 }
@@ -165,13 +166,13 @@ impl<'a> Parser<'a> {
         let ip = config.ip.unwrap_or("rip".to_string());
         let tmp_prefix = config.tmp_prefix.unwrap_or("tmp".to_string());
         let init_opset = config.init_opset.unwrap_or(map_esil_to_opset);
-        let init_regset = config.init_regset.unwrap_or(init_regset);
+        let regset = config.regset.unwrap_or(HashMap::new());
 
         Parser { 
             stack:        Vec::new(),
             insts:        Vec::new(),
             opset:        init_opset(),
-            regset:       init_regset(),
+            regset:       regset,
             default_size: default_size,
             ip:           ip,
             arch:         arch,
@@ -179,7 +180,24 @@ impl<'a> Parser<'a> {
             tmp_index:    0,
             addr:         0,
             opinfo:       None,
+            alias_info:   HashMap::new(),
         }
+    }
+
+    pub fn set_register_profile(&mut self, reg_info: &LRegInfo) {
+        self.regset = HashMap::new();
+        let mut tmp: HashMap<String, AliasInfo> = HashMap::new();
+        for alias in reg_info.alias_info.iter() {
+            let a = alias.clone();
+            tmp.insert(a.role_str.clone(), a.clone());
+        }
+
+        for reg in reg_info.reg_info.iter() {
+            let r = reg.clone();
+            self.regset.insert(r.name.clone(), r.clone());
+        }
+
+        self.alias_info = tmp.clone();
     }
 
     fn get_tmp_register(&mut self, mut size: u8) -> Value {
@@ -311,6 +329,16 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    pub fn new_mreg_info(&self, info: RegProfile) -> MRegInfo {
+        MRegInfo {
+            reg_type: info.type_str,
+            offset: info.offset,
+            reg: info.name,
+            size: info.size,
+            alias: String::new(),
+        }
+    }
+
     pub fn parse_opinfo(&mut self, opinfo: &OpInfo) -> Result<(), ParseError> {
         let opinfo = opinfo.clone();
         let esil = opinfo.esil.clone().unwrap_or("".to_string());
@@ -348,18 +376,17 @@ impl<'a> Parser<'a> {
                 let mut val_type = Location::Unknown;
                 let mut val: i64 = 0;
                 let mut size: u8 = self.default_size;
+                let mut reg_info: Option<MRegInfo> = None;
                 if let Some(r) = self.regset.get(&*token) {
                     val_type = Location::Register;
-                    // For now, reg is just a u8.
-                    size = *r; 
-                } else if let Ok(v) = token.parse::<i64>() {
-                    val_type = Location::Constant;
-                    val = v;
+                    reg_info = Some(self.new_mreg_info(r.clone()));
+                    size = r.size; 
                 } else if let Ok(v) = hex_to_i!(token) {
                     val_type = Location::Constant;
                     val = v;
                 }
-                let v = Value::new(String::from(token), size, val_type, val, 0);
+                // TODO: Add support for internals.
+                let v = Value::new(String::from(token), size, val_type, val, 0, reg_info);
                 self.stack.push(v);
                 continue;
             }
@@ -370,7 +397,7 @@ impl<'a> Parser<'a> {
                 let val = num;
                 let size  = self.default_size;
                 let name = format!("0x{:x}", num);
-                let v = Value::new(name, size, val_type, val, 0);
+                let v = Value::new(name, size, val_type, val, 0, None);
                 self.stack.push(v);
                 continue;
             }
