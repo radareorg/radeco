@@ -386,7 +386,7 @@ impl<'a> Parser<'a> {
 		Ok(())
 	}
 
-	pub fn parse(&mut self, esil: &'a str) -> Result<(), ParseError> {
+	pub fn parse(&mut self, esil: &str) -> Result<(), ParseError> {
 		let expanded_esil: Vec<String> = esil.split(',').map(|x| x.to_string()).collect();
 		for token in expanded_esil {
 			let op = match self.opset.get(&*token) {
