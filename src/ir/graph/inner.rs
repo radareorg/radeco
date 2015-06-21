@@ -1,5 +1,8 @@
-use std::mem;
 use std::fmt::Debug;
+use std::iter::Map;
+use std::mem;
+use std::ops::Index;
+use std::slice;
 
 use super::super::traits::{Manipulation, NavigationInternal};
 use super::indextype::IndexType;
@@ -10,7 +13,7 @@ pub struct InnerEdgeLight<I: IndexType> { target: I }
 pub struct InnerEdgeLinked<I: IndexType> { target: I, prev: I, next: I }
 
 pub trait InnerEdgeTrait: Copy + Default + Debug {
-	type NodeAux: Debug;
+	type NodeAux: Debug + 'static;
 	type Index: IndexType;
 	fn default_aux(i: Self::Index) -> Self::NodeAux;
 	fn default_aux_usize(i: usize) -> Self::NodeAux { Self::default_aux(Self::Index::from_usize(i)) }
@@ -58,6 +61,10 @@ pub struct InnerGraph<Node: Debug, Edge: InnerEdgeTrait> {
 	nodes: Vec<InnerNode<Node, Edge>>,
 }
 
+pub struct InnerGraphIter<'a, Node: Debug + 'a, Edge: InnerEdgeTrait + 'a> {
+	iter: slice::Iter<'a, InnerNode<Node, Edge>>
+}
+
 impl<Node: Debug, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 	pub fn new() -> InnerGraph<Node, Edge> {
 		InnerGraph::<Node, Edge> {
@@ -77,6 +84,23 @@ impl<Node: Debug, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 		} else {
 			return external.access_aux(i)
 		}
+	}
+	pub fn iter<'a>(&'a self) -> InnerGraphIter<'a, Node, Edge> {
+		InnerGraphIter{iter: self.nodes.iter()}
+	}
+}
+
+impl<'a, Node: Debug, Edge: InnerEdgeTrait> Iterator for InnerGraphIter<'a, Node, Edge> {
+	type Item = &'a Node;
+	fn next(&mut self) -> Option<&'a Node> {
+		self.iter.next().map(|node|&node.data)
+	}
+}
+
+impl<Node: Debug, Edge: InnerEdgeTrait> Index<usize> for InnerGraph<Node, Edge> {
+	type Output = Node;
+	fn index<'a>(&'a self, index: usize) -> &'a Node {
+		&self.nodes[index].data
 	}
 }
 

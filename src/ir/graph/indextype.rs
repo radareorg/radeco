@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::{Add, Not};
 
-pub trait IndexType : Clone + Copy + Add<Output=Self> + Not<Output=Self> + Eq + Ord + Debug + Hash {
+pub trait IndexType : Clone + Copy + Add<Output=Self> + Not<Output=Self> + Eq + Ord + Debug + Hash + 'static {
 	// replace with zero trait once stable
 	fn zero() -> Self;
 	fn as_usize(self) -> usize;

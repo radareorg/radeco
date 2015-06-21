@@ -1,5 +1,6 @@
 extern crate petgraph;
 
+pub mod dot;
 pub mod indextype;
 pub mod inner;
 
@@ -19,7 +20,7 @@ pub struct PhiIndex<Index>(Index);
 
 pub struct BasicBlock<Index: IndexType, Instruction: InstructionType> {
 	num_ext: Index,
-	phis: Vec<(Instruction::PhiType, <DefaultInnerEdge<Index> as self::inner::InnerEdgeTrait>::NodeAux)>,
+	//phis: Vec<(Instruction::PhiType, <DefaultInnerEdge<Index> as self::inner::InnerEdgeTrait>::NodeAux)>,
 	inner_graph: InnerGraph<Instruction, DefaultInnerEdge<Index>>
 }
 
@@ -38,7 +39,7 @@ impl<Index: IndexType, Instruction: InstructionType> BasicBlock<Index, Instructi
 	pub fn new() -> Self {
 		BasicBlock::<Index, Instruction> {
 			num_ext: Index::zero(),
-			phis: Vec::new(),
+			//phis: Vec::new(),
 			inner_graph: InnerGraph::<Instruction, InnerEdgeLight<Index>>::new()
 		}
 	}
@@ -83,7 +84,7 @@ enum IREdge<Index: IndexType, Instruction: InstructionType> {
 	Flow(Vec<Index>, u64)
 }
 
-type IRGraph<Index, Instruction> = Graph<
+pub type IRGraph<Index, Instruction> = Graph<
 	IRNode<Index, Instruction>,
 	IREdge<Index, Instruction>
 >;
@@ -188,9 +189,23 @@ impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<
 	}
 }
 
+trait AddIR {
+	fn add_bb(&mut self) -> NodeIndex;
+}
+
+impl<Index: IndexType, Instruction: InstructionType> AddIR for IRGraph<Index, Instruction> {
+	fn add_bb(&mut self) -> NodeIndex{
+		self.add_node(IRNode::BasicBlock(BasicBlock::<Index, Instruction>::new()))
+	}
+}
+
 mod test {
+	use std::fs::File;
+
 	use super::super::traits::InstructionType;
-	use super::{DefaultInnerIndex, IRGraph};
+	use super::inner::HasAdd;
+	use super::{AddIR, DefaultInnerIndex, IRGraph, IRNode, AuxQueryImpl};
+	use super::dot;
 
 	#[derive(Debug)]
 	enum TestInstr { Phi, NotPhi }
@@ -203,8 +218,20 @@ mod test {
 
 	#[test]
 	fn construct() {
-		let graph: IRGraph<DefaultInnerIndex, TestInstr>;
-	}
+		let mut graph = IRGraph::<DefaultInnerIndex, TestInstr>::new();
+		let ni1 = graph.add_bb();
+		let ni2 = graph.add_bb();
 
-	// more tests will follow
+		/*{
+			let node = &mut graph[ni1];
+			let bb = if let &mut IRNode::BasicBlock(ref mut bb) = node { bb } else { panic!() };
+			let ig = &mut bb.inner_graph;
+			let mut external = AuxQueryImpl::<DefaultInnerIndex, TestInstr>(&mut graph, ni1);
+			let i0 = ig.add(&mut external, TestInstr::NotPhi, &[]);
+			let i1 = ig.add(&mut external, TestInstr::NotPhi, &[i0]);
+		}*/
+
+		let mut dot_file = File::create("ssa.dot").ok().expect("Error. Cannot create file!\n");
+		dot::dot(&mut dot_file, &graph);
+	}
 }
