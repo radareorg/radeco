@@ -11,7 +11,7 @@ impl fmt::Display for MOpcode {
 
 impl fmt::Display for MVal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s: String = match self.location {
+        let s: String = match self.val_type {
             MValType::Constant => format!("{}", self.name),
             _ => format!("{}[:{}]", self.name, self.size),
         };

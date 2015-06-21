@@ -2,6 +2,13 @@
 
 pub type Address = u64;
 
+#[derive(Debug, Clone, Default)]
+pub struct MAddr {
+    pub val: u64,
+    pub comments: Vec<String>,
+    pub flags: Vec<String>,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MArity {
     Zero,
@@ -120,7 +127,7 @@ pub struct MRegInfo {
 pub struct MVal {
     pub name: String,
     pub size: u8,
-    pub location: MValType,
+    pub val_type: MValType,
     pub value: i64,
     pub reg_info: Option<MRegInfo>,
     pub typeset: u32,
@@ -134,11 +141,11 @@ impl MRegInfo {
 }
 
 impl MVal {
-    pub fn new(name: String, size: u8, location: MValType, value: i64, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
+    pub fn new(name: String, size: u8, val_type: MValType, value: i64, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
         MVal {
             name: name.clone(),
             size: size,
-            location: location,
+            val_type: val_type,
             value: value,
             typeset: typeset,
             reg_info: reg_info,
@@ -162,7 +169,7 @@ impl MVal {
 
 #[derive(Debug, Clone)]
 pub struct MInst {
-    pub addr: Address,
+    pub addr: MAddr,
     pub opcode: MOpcode,
     pub dst: MVal,
     pub operand_1: MVal,
@@ -170,18 +177,24 @@ pub struct MInst {
 }
 
 impl<'a> MInst {
-    pub fn new(opcode: MOpcode, dst: MVal, op1: MVal, op2: MVal, _addr: Option<Address>) -> MInst {
-        let addr = match _addr {
-            Some(s) => s,
-            None => 0,
-        };
-
+    pub fn new(opcode: MOpcode, dst: MVal, op1: MVal, op2: MVal, _addr: Option<MAddr>) -> MInst {
+        let addr = _addr.unwrap_or_default();
         MInst {
             addr: addr,
             opcode: opcode,
             dst: dst,
             operand_1: op1,
             operand_2: op2,
+        }
+    }
+}
+
+impl MAddr {
+    pub fn new(addr: u64) -> MAddr {
+        MAddr {
+            val: addr,
+            comments: Vec::new(),
+            flags: Vec::new(),
         }
     }
 }

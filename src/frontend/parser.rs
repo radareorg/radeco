@@ -35,8 +35,8 @@ use std::collections::HashMap;
 use std::cmp;
 use regex::Regex;
 
-use super::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo};
-use super::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile};
+use super::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
+use super::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile, LFlagInfo};
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
@@ -100,6 +100,7 @@ pub struct Parser<'a> {
     opset:        HashMap<&'a str, MOpcode>,
     regset:       HashMap<String, LRegProfile>,
     alias_info:   HashMap<String, LAliasInfo>,
+    flags:        HashMap<u64, LFlagInfo>,
     tmp_index:    u64,
     default_size: u8,
     tmp_prefix:   String,
@@ -160,6 +161,7 @@ impl<'a> Parser<'a> {
             addr:         0,
             opinfo:       None,
             alias_info:   HashMap::new(),
+            flags:        HashMap::new(),
         }
     }
 
@@ -179,6 +181,12 @@ impl<'a> Parser<'a> {
         self.alias_info = tmp.clone();
     }
 
+    pub fn set_flags(&mut self, flags: &Vec<LFlagInfo>) {
+        for f in flags.iter() {
+            self.flags.insert(f.offset.clone(), f.clone());
+        }
+    }
+
     fn get_tmp_register(&mut self, mut size: u8) -> MVal {
         self.tmp_index += 1;
         if size == 0 {
@@ -193,7 +201,10 @@ impl<'a> Parser<'a> {
         }
         let dst = self.get_tmp_register(size);
         let operator = MOpcode::OpWiden;
-        self.insts.push(MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(self.addr)));
+        // TODO: Add comments and flags.
+        let addr = MAddr::new(self.addr);
+        let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(addr));
+        self.insts.push(inst.clone());
         *op = dst;
     }
 
@@ -203,7 +214,10 @@ impl<'a> Parser<'a> {
         }
         let dst = self.get_tmp_register(size);
         let operator = MOpcode::OpNarrow;
-        self.insts.push(MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(self.addr)));
+        // TODO: Add comments and flags.
+        let addr = MAddr::new(self.addr);
+        let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(addr));
+        self.insts.push(inst.clone());
         *op = dst;
     }
 
@@ -220,7 +234,6 @@ impl<'a> Parser<'a> {
 
         // Check the alias of dst. If it is the instruction pointer, the assignment should be a
         // OpJmp rather than a OpEq.
-        println!("{:?}", dst);
         if dst.reg_info.clone().unwrap_or_default().alias == "pc" {
             let mut op = MOpcode::OpJmp;
             if let Some(ref info) = self.opinfo {
@@ -230,12 +243,17 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.insts.push(MInst::new(op, MVal::null(), op1, MVal::null(), Some(self.addr)));
+            // TODO: Add comments and flags.
+            let addr = MAddr::new(self.addr);
+            let inst = MInst::new(op, MVal::null(), op1, MVal::null(), Some(addr));
+            self.insts.push(inst.clone());
             return Ok(());
         }
 
         if dst.size == op1.size {
-            self.insts.push(MInst::new(op, dst.clone(), op1, MVal::null(), Some(self.addr)));
+            let addr = MAddr::new(self.addr);
+            let inst = MInst::new(op, dst.clone(), op1, MVal::null(), Some(addr));
+            self.insts.push(inst.clone());
             return Ok(());
         }
 
@@ -255,7 +273,9 @@ impl<'a> Parser<'a> {
         // Handle "}".
         if op == MOpcode::OpCl {
             let null = MVal::null();
-            self.insts.push(MInst::new(op, null.clone(), null.clone(), null.clone(), Some(self.addr)));
+            let addr = MAddr::new(self.addr);
+            let inst = MInst::new(op, null.clone(), null.clone(), null.clone(), Some(addr));
+            self.insts.push(inst.clone());
             return Ok(());
         }
 
@@ -278,7 +298,9 @@ impl<'a> Parser<'a> {
         }
 
         if op == MOpcode::OpIf {
-            self.insts.push(MInst::new(op, MVal::null(), op2, op1, Some(self.addr)));
+            let addr = MAddr::new(self.addr);
+            let inst = MInst::new(op, MVal::null(), op2, op1, Some(addr));
+            self.insts.push(inst);
             return Ok(());
         }
 
@@ -289,7 +311,7 @@ impl<'a> Parser<'a> {
 
         // Add a check to see if dst, op1 and op2 have the same size.
         // If they do not, cast it. op2 is never 'Null'.
-        assert!(op2.location != MValType::Null);
+        assert!(op2.val_type != MValType::Null);
 
         if op.to_operator().arity == MArity::Binary {
             if op1.size > op2.size {
@@ -303,7 +325,9 @@ impl<'a> Parser<'a> {
 
         dst.size = dst_size;
 
-        self.insts.push(MInst::new(op, dst.clone(), op2, op1, Some(self.addr)));
+        let addr = MAddr::new(self.addr);
+        let inst = MInst::new(op, dst.clone(), op2, op1, Some(addr));
+        self.insts.push(inst);
         self.stack.push(dst);
 
         Ok(())
@@ -479,7 +503,7 @@ impl<'a> Parser<'a> {
 
             // Note(sushant94): We need to improve this process if we want to retain the side-effects.
             // For example, a x86 call instruction will result the corresponding esil statement to
-            // have instructions to set esp and then jump to the required location.
+            // have instructions to set esp and then jump to the required val_type.
             // We can use these side-effects to determine if it's a 'call' or just a jump.
             // This however requires study into other architectures and their esil too.
             while self.insts[i].opcode != MOpcode::OpCl && i < len - 1 {
@@ -488,8 +512,8 @@ impl<'a> Parser<'a> {
                 if inst_.opcode == MOpcode::OpJmp {
                     let res_inst = 
                         MInst::new(MOpcode::OpCJmp, MVal::null(),
-                                         inst.operand_1.clone(),
-                                         inst_.operand_1, Some(inst.addr));
+                                   inst.operand_1.clone(),
+                                   inst_.operand_1, Some(inst.addr.clone()));
                     res.push(res_inst);
                 }
             }

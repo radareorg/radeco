@@ -138,6 +138,12 @@ impl R2 {
         json::decode(&*raw_json).unwrap()
     }
 
+    pub fn get_flag_info(&mut self) -> Vec<LFlagInfo> {
+        self.send("fj");
+        let raw_json = self.recv();
+        json::decode(&*raw_json).unwrap()
+    }
+
     pub fn get_fn_list(&mut self) -> Json {
         self.send("aflj");
         self.recv_json()

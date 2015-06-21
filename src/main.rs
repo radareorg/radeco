@@ -31,9 +31,11 @@ fn main() {
     let mut r2 = r2::R2::new("./key");
     r2.init();
     let r = r2.get_reg_info();
-    println!("{:?}", r);
+    let flags = r2.get_flag_info();
+    println!("{:?}", flags);
     let mut p = parser::Parser::new(None);
     p.set_register_profile(&r);
+    p.set_flags(&flags);
 
     //let mut ops = r2.get_insts(Some(2), Some("sym.main"));
     //println!("[*] Got ops.");

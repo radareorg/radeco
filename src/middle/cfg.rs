@@ -154,15 +154,15 @@ impl CFG {
     // Iterate through the instructions and create new BasicBlocks.
     pub fn assign_bbs(&mut self, insts: &Vec<MInst>) {
         let mut insts_iter = insts.iter().peekable();
-        let first_addr = insts[0].addr;
-        let last_addr = insts.last().unwrap().addr;
+        let first_addr = insts[0].addr.clone();
+        let last_addr = insts.last().unwrap().addr.clone();
 
         // First MInst will be the start of the first BasicBlock.
         {
             let bb = self.add_new_block();
             let entry = self.entry;
-            self.add_edge(entry, bb, EdgeData::new_forward_uncond(0, first_addr));
-            self.bbs.insert(first_addr, bb);
+            self.add_edge(entry, bb, EdgeData::new_forward_uncond(0, first_addr.val));
+            self.bbs.insert(first_addr.val, bb);
         }
 
         while let Some(ref i) = insts_iter.next() {
@@ -170,16 +170,16 @@ impl CFG {
             let operand = match inst.opcode {
                 MOpcode::OpCJmp => &inst.operand_2,
                 MOpcode::OpJmp  => &inst.operand_1,
-                _              => continue,
+                _               => continue,
             };
             // TODO: Resolve the address if it's not a constant.
-            let addr = match operand.location {
+            let addr = match operand.val_type {
                 MValType::Constant => operand.value as u64,
                 _                  => continue,
             };
 
             if !self.bbs.contains_key(&addr) {
-                if addr > last_addr || addr < first_addr {
+                if addr > last_addr.val || addr < first_addr.val {
                     self.bbs.insert(addr, self.exit);
                 } else {
                     let bb = self.add_new_block();
@@ -188,9 +188,9 @@ impl CFG {
             }
 
             if let Some(j) = insts_iter.peek() {
-                if !self.bbs.contains_key(&(j.addr)) {
+                if !self.bbs.contains_key(&(j.addr.val)) {
                     let bb = self.add_new_block();
-                    self.bbs.insert(j.addr, bb);
+                    self.bbs.insert(j.addr.val, bb);
                 }
             }
         }
@@ -201,31 +201,31 @@ impl CFG {
         match inst.opcode {
             MOpcode::OpJmp => {
                 let target_addr = inst.operand_1.value as u64;
-                let edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
+                let edge_data = EdgeData::new_forward_uncond(inst.addr.val, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
                 self.add_edge(current, target, edge_data);
             },
             MOpcode::OpCJmp => {
                 let target_addr = inst.operand_2.value as u64;
-                let edge_data = EdgeData::new_true(inst.addr, target_addr);
+                let edge_data = EdgeData::new_true(inst.addr.val, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
                 self.add_edge(current, target, edge_data);
 
-                let edge_data = EdgeData::new_false(inst.addr, next_inst.addr);
+                let edge_data = EdgeData::new_false(inst.addr.val, next_inst.addr.val);
                 self.add_edge(current, next, edge_data);
             },
             _ => {
-                let edge_data = EdgeData::new_uncond(inst.addr, next_inst.addr);
+                let edge_data = EdgeData::new_uncond(inst.addr.val, next_inst.addr.val);
                 self.add_edge(current, next, edge_data);
             },
         }
     }
 
     pub fn build(&mut self, insts: &mut Vec<MInst>) {
-        insts.sort_by(|a, b| a.addr.cmp(&b.addr));
+        insts.sort_by(|a, b| a.addr.val.cmp(&b.addr.val));
         // Identify the first statement of every BasicBlock and assign them.
         self.assign_bbs(insts);
-        let mut current = self.bbs.get(&insts[0].addr).unwrap().clone();
+        let mut current = self.bbs.get(&insts[0].addr.val).unwrap().clone();
         let exit = self.exit.clone();
         let mut insts_iter = insts.iter_mut().peekable();
         let mut next = current.clone();
@@ -233,7 +233,7 @@ impl CFG {
         while let Some(inst) = insts_iter.next() {
             match insts_iter.peek() {
                 Some(next_inst) => { 
-                    if let Some(x) = self.bbs.get(&next_inst.addr) {
+                    if let Some(x) = self.bbs.get(&next_inst.addr.val) {
                         next = x.clone();
                     }
                     if next != current {
@@ -241,7 +241,7 @@ impl CFG {
                     }
                 },
                 None => {
-                    self.add_edge(current, exit, EdgeData::new_forward_uncond(inst.addr, 0));
+                    self.add_edge(current, exit, EdgeData::new_forward_uncond(inst.addr.val, 0));
                 },
             }
 

@@ -28,12 +28,19 @@ pub struct LAliasInfo {
     pub role_str: String,
 }
 
-#[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone, Default)]
 pub struct LRegProfile {
     pub name: String,
     pub offset: u64,
     pub size: u8,
     pub type_str: String,
+}
+
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone, Default)]
+pub struct LFlagInfo {
+    pub offset: u64,
+    pub name: String,
+    pub size: u64,
 }
 
 impl Decodable for LOpInfo {
