@@ -6,6 +6,7 @@ rust:
 
 notifications:
   irc: "chat.freenode.net#radare-rsoc"
+  email: false
 
 sudo: true
-install: ./scripts/install-dependecies.sh
+before_install: ./scripts/install-dependecies.sh
