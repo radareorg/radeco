@@ -3,6 +3,8 @@
 extern crate regex;
 extern crate petgraph;
 extern crate rustc_serialize;
+extern crate num;
+
 #[macro_use]
 extern crate r2pipe;
 

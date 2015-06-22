@@ -4,50 +4,22 @@
 //! Control Flow Graphs (CFG) aid in the analysis and recovery of the program
 //! structure.
 
-#![allow(dead_code, unused_variables)]
-
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::{Dfs};
 use std::collections::BTreeMap;
 
 use super::ir::*;
 
-/// A `BasicBlock` is the basic unit in a CFG.
-/// Every `Instruction` must be a part of one and only one `BasicBlock`.
 pub struct BasicBlock {
     pub reachable: bool,
-    pub instructions: Vec<Instruction>,
+    pub instructions: Vec<MInst>,
     pub label: String,
-}
-
-impl BasicBlock {
-    fn new() -> BasicBlock {
-        BasicBlock { 
-            reachable: false,
-            instructions: Vec::new(),
-            label: String::new(),
-        }
-    }
-
-    fn add_instruction(&mut self, inst: Instruction) {
-        self.instructions.push(inst);
-    }
 }
 
 pub enum NodeData {
     Block(BasicBlock),
     Entry,
     Exit,
-}
-
-impl NodeData {
-    pub fn label(&self) -> String {
-        match *self {
-            NodeData::Block(ref block) => (*(block.label)).to_string(),
-            NodeData::Entry => "n0".to_string(),
-            NodeData::Exit => "n1".to_string(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,11 +34,43 @@ pub struct Direction { d: u8, }
 pub const FORWARD: Direction  = Direction { d: 0 };
 pub const BACKWARD: Direction = Direction { d: 1 };
 
+#[allow(dead_code)]
 pub struct EdgeData {
     pub direction: Direction,
     pub edge_type: EdgeType,
     src_addr: Address,
     dst_addr: Address,
+}
+
+pub struct CFG {
+    pub g: Graph<NodeData, EdgeData>,
+    pub entry: NodeIndex,
+    pub exit: NodeIndex,
+    pub bbs: BTreeMap<Address, NodeIndex>,
+}
+
+impl BasicBlock {
+    fn new() -> BasicBlock {
+        BasicBlock { 
+            reachable: false,
+            instructions: Vec::new(),
+            label: String::new(),
+        }
+    }
+
+    fn add_instruction(&mut self, inst: MInst) {
+        self.instructions.push(inst);
+    }
+}
+
+impl NodeData {
+    pub fn label(&self) -> String {
+        match *self {
+            NodeData::Block(ref block) => (*(block.label)).to_string(),
+            NodeData::Entry => "n0".to_string(),
+            NodeData::Exit => "n1".to_string(),
+        }
+    }
 }
 
 impl EdgeData {
@@ -128,13 +132,6 @@ impl EdgeData {
     }
 }
 
-pub struct CFG {
-    pub g: Graph<NodeData, EdgeData>,
-    pub entry: NodeIndex,
-    pub exit: NodeIndex,
-    pub bbs: BTreeMap<Address, NodeIndex>,
-}
-
 impl CFG {
     pub fn new() -> CFG {
         // Initializing the cfg must init with 2 default nodes. One 'entry'
@@ -152,115 +149,105 @@ impl CFG {
     }
 
     // Iterate through the instructions and create new BasicBlocks.
-    pub fn assign_bbs(&mut self, insts: &Vec<Instruction>) {
+    pub fn assign_bbs(&mut self, insts: &Vec<MInst>) {
         let mut insts_iter = insts.iter().peekable();
-        let first_addr = insts[0].addr;
-        let last_addr = insts.last().unwrap().addr;
+        let first_addr = insts[0].addr.clone();
+        let last_addr = insts.last().unwrap().addr.clone();
 
-        // First Instruction will be the start of the first BasicBlock.
+        // First MInst will be the start of the first BasicBlock.
         {
             let bb = self.add_new_block();
             let entry = self.entry;
-            self.add_edge(entry, bb, EdgeData::new_forward_uncond(0, first_addr));
-            self.bbs.insert(first_addr, bb);
+            self.add_edge(entry, bb, EdgeData::new_forward_uncond(0, first_addr.val));
+            self.bbs.insert(first_addr.val, bb);
         }
 
-        loop {
-            match insts_iter.next() {
-                None        => break,
-                Some(ref i) => {
-                    let inst = i.clone();
-                    let operand = match inst.opcode {
-                        Opcode::OpCJmp => &inst.operand_2,
-                        Opcode::OpJmp  => &inst.operand_1,
-                        _              => continue,
-                    };
-                    // TODO: Resolve the address if it's not a constant.
-                    let addr = match operand.location {
-                        Location::Constant => operand.value as u64,
-                        _                  => continue,
-                    };
+        while let Some(ref i) = insts_iter.next() {
+            let inst = i.clone();
+            let operand = match inst.opcode {
+                MOpcode::OpCJmp => &inst.operand_2,
+                MOpcode::OpJmp  => &inst.operand_1,
+                _               => continue,
+            };
+            // TODO: Resolve the address if it's not a constant.
+            let addr = match operand.val_type {
+                MValType::Constant => operand.value as u64,
+                _                  => continue,
+            };
 
-                    if !self.bbs.contains_key(&addr) {
-                        if addr > last_addr || addr < first_addr {
-                            self.bbs.insert(addr, self.exit);
-                        } else {
-                            let bb = self.add_new_block();
-                            self.bbs.insert(addr, bb);
-                        }
-                    }
+            if !self.bbs.contains_key(&addr) {
+                if addr > last_addr.val || addr < first_addr.val {
+                    self.bbs.insert(addr, self.exit);
+                } else {
+                    let bb = self.add_new_block();
+                    self.bbs.insert(addr, bb);
+                }
+            }
 
-                    if let Some(j) = insts_iter.peek() {
-                        if !self.bbs.contains_key(&(j.addr)) {
-                            let bb = self.add_new_block();
-                            self.bbs.insert(j.addr, bb);
-                        }
-                    }
-                },
+            if let Some(j) = insts_iter.peek() {
+                if !self.bbs.contains_key(&(j.addr.val)) {
+                    let bb = self.add_new_block();
+                    self.bbs.insert(j.addr.val, bb);
+                }
             }
         }
     }
 
-    fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: Instruction, next_inst: Instruction) {
+    fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: MInst, next_inst: MInst) {
         let exit = self.exit.clone();
         match inst.opcode {
-            Opcode::OpJmp => {
+            MOpcode::OpJmp => {
                 let target_addr = inst.operand_1.value as u64;
-                let edge_data = EdgeData::new_forward_uncond(inst.addr, target_addr);
+                let edge_data = EdgeData::new_forward_uncond(inst.addr.val, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
                 self.add_edge(current, target, edge_data);
             },
-            Opcode::OpCJmp => {
+            MOpcode::OpCJmp => {
                 let target_addr = inst.operand_2.value as u64;
-                let edge_data = EdgeData::new_true(inst.addr, target_addr);
+                let edge_data = EdgeData::new_true(inst.addr.val, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
                 self.add_edge(current, target, edge_data);
 
-                let edge_data = EdgeData::new_false(inst.addr, next_inst.addr);
+                let edge_data = EdgeData::new_false(inst.addr.val, next_inst.addr.val);
                 self.add_edge(current, next, edge_data);
             },
             _ => {
-                let edge_data = EdgeData::new_uncond(inst.addr, next_inst.addr);
+                let edge_data = EdgeData::new_uncond(inst.addr.val, next_inst.addr.val);
                 self.add_edge(current, next, edge_data);
             },
         }
     }
 
-    pub fn build(&mut self, insts: &mut Vec<Instruction>) {
-        insts.sort_by(|a, b| a.addr.cmp(&b.addr));
+    pub fn build(&mut self, insts: &mut Vec<MInst>) {
+        insts.sort_by(|a, b| a.addr.val.cmp(&b.addr.val));
         // Identify the first statement of every BasicBlock and assign them.
         self.assign_bbs(insts);
-        let mut current = self.bbs.get(&insts[0].addr).unwrap().clone();
+        let mut current = self.bbs.get(&insts[0].addr.val).unwrap().clone();
         let exit = self.exit.clone();
         let mut insts_iter = insts.iter_mut().peekable();
         let mut next = current.clone();
 
-        loop {
-            match insts_iter.next() {
-                None => break,
-                Some(inst) => {
-                    match insts_iter.peek() {
-                        Some(next_inst) => { 
-                            if let Some(x) = self.bbs.get(&next_inst.addr) {
-                                next = x.clone();
-                            }
-                            if next != current {
-                                self.build_edges(current, next, inst.clone(), (*next_inst).clone());
-                            }
-                        },
-                        None => {
-                            self.add_edge(current, exit, EdgeData::new_forward_uncond(inst.addr, 0));
-                        },
+        while let Some(inst) = insts_iter.next() {
+            match insts_iter.peek() {
+                Some(next_inst) => { 
+                    if let Some(x) = self.bbs.get(&next_inst.addr.val) {
+                        next = x.clone();
                     }
-
-                    if let &mut NodeData::Block(ref mut block) = self.get_block(current) {
-                        block.add_instruction((*inst).clone());
+                    if next != current {
+                        self.build_edges(current, next, inst.clone(), (*next_inst).clone());
                     }
-                    current = next.clone();
-                }
+                },
+                None => {
+                    self.add_edge(current, exit, EdgeData::new_forward_uncond(inst.addr.val, 0));
+                },
             }
+
+            if let &mut NodeData::Block(ref mut block) = self.get_block(current) {
+                block.add_instruction((*inst).clone());
+            }
+            current = next.clone();
         }
-        
+
         self.mark_reachable();
     }
 
