@@ -1,4 +1,4 @@
-//! Module to implement the sipay traits for the IR.
+//! Module to implement the display traits for the IR.
 
 use super::ir::{MInst, MOpcode, MVal, MValType};
 use std::fmt;

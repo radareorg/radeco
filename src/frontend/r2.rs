@@ -1,12 +1,13 @@
 //! Module that provides interaction with radare2.
 //! Uses r2pipe.
-#![allow(dead_code)]
+
 use r2pipe::R2Pipe;
 
-use rustc_serialize::json::{Json, ToJson};
+use rustc_serialize::json::{Json, ToJson, DecodeResult};
 use rustc_serialize::json;
 use std::collections::BTreeMap;
 
+// All the struct required for json parsing,
 use super::structs::*;
 
 pub struct R2 {
@@ -111,16 +112,16 @@ impl R2 {
         self.flush();
     }
 
-    pub fn get_function(&mut self, func: &str) -> LFunctionInfo {
+    pub fn get_function(&mut self, func: &str) -> DecodeResult<LFunctionInfo> {
         let cmd = format!("pdfj @ {}", func);
         self.send(&*cmd);
         let raw_json = self.recv();
         // Handle Error here.
-        json::decode(&*raw_json).unwrap()
+        json::decode(&*raw_json)
     }
 
     // get 'n' (or 16) instructions at 'offset' (or current position if offset in `None`)
-    pub fn get_insts(&mut self, n: Option<u64>, offset: Option<&str>) -> Vec<LOpInfo> {
+    pub fn get_insts(&mut self, n: Option<u64>, offset: Option<&str>) -> DecodeResult<Vec<LOpInfo>> {
         let n = n.unwrap_or(16);
         let offset: &str = offset.unwrap_or_default();
         let mut cmd = format!("pdj{}", n);
@@ -129,47 +130,23 @@ impl R2 {
         }
         self.send(&*cmd);
         let raw_json = self.recv();
-        json::decode(&*raw_json).unwrap()
+        json::decode(&*raw_json)
     }
 
-    pub fn get_reg_info(&mut self) -> LRegInfo {
+    pub fn get_reg_info(&mut self) -> DecodeResult<LRegInfo> {
         self.send("drpj");
         let raw_json = self.recv();
-        json::decode(&*raw_json).unwrap()
+        json::decode(&*raw_json)
     }
 
-    pub fn get_flag_info(&mut self) -> Vec<LFlagInfo> {
+    pub fn get_flag_info(&mut self) -> DecodeResult<Vec<LFlagInfo>> {
         self.send("fj");
         let raw_json = self.recv();
-        json::decode(&*raw_json).unwrap()
+        json::decode(&*raw_json)
     }
 
     pub fn get_fn_list(&mut self) -> Json {
         self.send("aflj");
         self.recv_json()
-    }
-}
-
-
-mod test {
-#![allow(unused_imports)]
-    use frontend::r2::{R2, Search};
-
-    #[test]
-    fn test_fn_listing() {
-        let mut r2 = R2::new("./key");
-        r2.analyze();
-        let fn_data = r2.get_fn_list();
-        assert_eq!(fn_data.get_values(&["addr"], false), None);
-        assert!(fn_data.get_values(&["addr"], true).is_some());
-        println!("{}", fn_data.get_values(&["name", "offset"], false).unwrap().pretty());
-    }
-
-    #[test]
-    fn test_fn_disas() {
-        let mut r2 = R2::new("./key");
-        r2.init();
-        let data = r2.get_function("sym.main");
-        println!("{:?}", data);
     }
 }

@@ -1,6 +1,11 @@
 language: rust
 rust:
   - stable
+  - nightly
+  - beta
 
 notifications:
   irc: "chat.freenode.net#radare-rsoc"
+
+sudo: true
+install: ./scripts/install-dependecies.sh

@@ -1,4 +1,5 @@
-//! Module provides basic structs which are used for json encoding and decoding.
+//! Basic structs which are used for json encoding and decoding.
+
 use rustc_serialize::{Decodable, Decoder};
 #[derive(RustcEncodable, Debug, Clone)]
 pub struct LOpInfo {

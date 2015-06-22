@@ -1,35 +1,6 @@
-// TODO: Add License information.
+//! Implements parser to convert from ESIL to RadecoIR.
 
-//! Module to parse ESIL strings and convert them into the IR.
-//!
-//! ESIL (Evaluable Strings Intermediate Language) is the IL used by radare2.
-//!
-//! For a complete documentation of ESIL please check 
-//!  [wiki](https://github.com/radare/radare2/wiki/ESIL).
-//!
-//! # Details
-//!
-//! The `Parser` struct provides methods needed to convert a valid ESIL string
-//! into the IR. `Parser::parse()` parses the ESIL string and returns an `Err`
-//! if the ESIL string is Invalid.
-//!
-//! `Parser` also provides `Parser::emit_insts()` to extract the `MInsts` 
-//! it generates. Calling `Parser::parse()` several times will add more instructions.
-//! 
-//! # Example
-//!
-//! ```
-//! use radeco::frontend::esil;
-//! let esil = "eax,ebx,^=";
-//! let mut p = esil::Parser::new();
-//! p.parse(esil, None);
-//! for inst in &p.emit_insts() {
-//!     println!("{}", inst);
-//! }
-//! ```
-
-extern crate num;
-use self::num::traits::Num;
+use num::traits::Num;
 
 use std::collections::HashMap;
 use std::cmp;
@@ -52,6 +23,7 @@ macro_rules! hash {
     };
 }
 
+// Convert hex string ("0xbadc0de") to decimal representation.
 macro_rules! hex_to_i {
     ( $x:expr ) => {
         Num::from_str_radix($x.trim_left_matches("0x"), 16)
@@ -65,35 +37,7 @@ pub enum ParseError {
     InsufficientOperands,
 }
 
-fn map_esil_to_opset() -> HashMap<&'static str, MOpcode> {
-    // Make a map from esil string to struct MOperator.
-    // (operator: &str, op: MOperator).
-    // Possible Optimization:  Move to compile-time generation ?
-    hash![
-        ("==" , MOpcode::OpCmp),
-        ("<"  , MOpcode::OpLt),
-        (">"  , MOpcode::OpGt),
-        ("<=" , MOpcode::OpGteq),
-        (">=" , MOpcode::OpLteq),
-        ("<<" , MOpcode::OpLsl),
-        (">>" , MOpcode::OpLsr),
-        ("&"  , MOpcode::OpAnd),
-        ("|"  , MOpcode::OpOr),
-        ("="  , MOpcode::OpEq),
-        ("*"  , MOpcode::OpMul),
-        ("^"  , MOpcode::OpXor),
-        ("+"  , MOpcode::OpAdd),
-        ("-"  , MOpcode::OpSub),
-        ("/"  , MOpcode::OpDiv),
-        ("%"  , MOpcode::OpMod),
-        ("?{" , MOpcode::OpIf),
-        ("!"  , MOpcode::OpNot),
-        ("--" , MOpcode::OpDec),
-        ("++" , MOpcode::OpInc),
-        ("}"  , MOpcode::OpCl)
-    ]
-}
-
+#[allow(dead_code)]
 pub struct Parser<'a> {
     stack:        Vec<MVal>,
     insts:        Vec<MInst>,
@@ -101,12 +45,12 @@ pub struct Parser<'a> {
     regset:       HashMap<String, LRegProfile>,
     alias_info:   HashMap<String, LAliasInfo>,
     flags:        HashMap<u64, LFlagInfo>,
-    tmp_index:    u64,
     default_size: u8,
     tmp_prefix:   String,
     arch:         String,
     addr:         Address,
     opinfo:       Option<LOpInfo>,
+    tmp_index:    u64,
 }
 
 // Struct used to configure the Parser. If `None` is passed to any of the fields, then the default
@@ -116,29 +60,24 @@ pub struct ParserConfig<'a> {
     default_size: Option<u8>,
     tmp_prefix:   Option<String>,
     init_opset:   Option<fn() -> HashMap<&'a str, MOpcode>>,
-    regset:  Option<HashMap<String, LRegProfile>>,
-}
-
-// Represents the state of the parser.
-#[allow(dead_code)]
-pub struct ParserState {
-    offset:    u64,
-    tmp_index: u64,
-    opinfo:    Option<LOpInfo>,
+    regset:       Option<HashMap<String, LRegProfile>>,
+    alias_info:   Option<HashMap<String, LAliasInfo>>,
+    flags:        Option<HashMap<u64, LFlagInfo>>,
 }
 
 impl<'a> Default for ParserConfig<'a> {
     fn default() -> Self {
         ParserConfig {
-            arch: Some("x86_64".to_string()),
+            arch:         Some("x86_64".to_string()),
             default_size: Some(64),
-            tmp_prefix: Some("tmp".to_string()),
-            init_opset: Some(map_esil_to_opset),
-            regset: Some(HashMap::new()),
+            tmp_prefix:   Some("tmp".to_string()),
+            init_opset:   Some(map_esil_to_opset),
+            regset:       Some(HashMap::new()),
+            alias_info:   Some(HashMap::new()),
+            flags:        Some(HashMap::new()),
         }
     }
 }
-
 
 impl<'a> Parser<'a> {
     pub fn new(config: Option<ParserConfig<'a>>) -> Parser<'a> {
@@ -148,6 +87,8 @@ impl<'a> Parser<'a> {
         let tmp_prefix = config.tmp_prefix.unwrap_or("tmp".to_string());
         let init_opset = config.init_opset.unwrap_or(map_esil_to_opset);
         let regset = config.regset.unwrap_or(HashMap::new());
+        let alias_info = config.alias_info.unwrap_or(HashMap::new());
+        let flags = config.flags.unwrap_or(HashMap::new());
 
         Parser { 
             stack:        Vec::new(),
@@ -160,8 +101,8 @@ impl<'a> Parser<'a> {
             tmp_index:    0,
             addr:         0,
             opinfo:       None,
-            alias_info:   HashMap::new(),
-            flags:        HashMap::new(),
+            alias_info:   alias_info,
+            flags:        flags,
         }
     }
 
@@ -195,26 +136,26 @@ impl<'a> Parser<'a> {
         MVal::tmp(self.tmp_index, size)
     }
 
+    // Convert a lower field width to higher field width.
     fn add_widen_inst(&mut self, op: &mut MVal, size: u8) {
         if op.size >= size {
             return;
         }
         let dst = self.get_tmp_register(size);
         let operator = MOpcode::OpWiden;
-        // TODO: Add comments and flags.
         let addr = MAddr::new(self.addr);
         let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(addr));
         self.insts.push(inst.clone());
         *op = dst;
     }
 
+    // Convert a higher field width to lower field width.
     fn add_narrow_inst(&mut self, op: &mut MVal, size: u8) {
         if op.size <= size {
             return;
         }
         let dst = self.get_tmp_register(size);
         let operator = MOpcode::OpNarrow;
-        // TODO: Add comments and flags.
         let addr = MAddr::new(self.addr);
         let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(addr));
         self.insts.push(inst.clone());
@@ -243,7 +184,6 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // TODO: Add comments and flags.
             let addr = MAddr::new(self.addr);
             let inst = MInst::new(op, MVal::null(), op1, MVal::null(), Some(addr));
             self.insts.push(inst.clone());
@@ -524,8 +464,31 @@ impl<'a> Parser<'a> {
     }
 }
 
-#[test]
-fn testing() {
-    let mut p = Parser::new();
-    p.parse(String::from("0,0x204db1,rip,+,[1],==,%z,zf,=,%b8,cf,=,%p,pf,=,%s,sf,="), None);
+fn map_esil_to_opset() -> HashMap<&'static str, MOpcode> {
+    // Make a map from esil string to struct MOperator.
+    // (operator: &str, op: MOperator).
+    // Possible Optimization:  Move to compile-time generation ?
+    hash![
+        ("==" , MOpcode::OpCmp),
+        ("<"  , MOpcode::OpLt),
+        (">"  , MOpcode::OpGt),
+        ("<=" , MOpcode::OpGteq),
+        (">=" , MOpcode::OpLteq),
+        ("<<" , MOpcode::OpLsl),
+        (">>" , MOpcode::OpLsr),
+        ("&"  , MOpcode::OpAnd),
+        ("|"  , MOpcode::OpOr),
+        ("="  , MOpcode::OpEq),
+        ("*"  , MOpcode::OpMul),
+        ("^"  , MOpcode::OpXor),
+        ("+"  , MOpcode::OpAdd),
+        ("-"  , MOpcode::OpSub),
+        ("/"  , MOpcode::OpDiv),
+        ("%"  , MOpcode::OpMod),
+        ("?{" , MOpcode::OpIf),
+        ("!"  , MOpcode::OpNot),
+        ("--" , MOpcode::OpDec),
+        ("++" , MOpcode::OpInc),
+        ("}"  , MOpcode::OpCl)
+    ]
 }

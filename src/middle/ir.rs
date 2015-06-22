@@ -33,16 +33,6 @@ pub struct MOperator<'a> {
     pub arity: MArity,
 }
 
-impl<'a> MOperator<'a> {
-    pub fn new(op: &'a str, n: MArity) -> MOperator<'a> {
-        MOperator { op: op, arity: n }
-    }
-
-    pub fn nop() -> MOperator<'a> {
-        MOperator { op: "nop", arity: MArity::Zero }
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MOpcode {
     OpAdd,
@@ -63,18 +53,55 @@ pub enum MOpcode {
     OpLsl,
     OpLsr,
     OpIf,
-    OpJmp,  // Unconditional Jmp.
-    OpCJmp, // Conditional Jmp.
+    OpJmp,
+    OpCJmp,
     OpCall,
     OpRef,
     OpNarrow,
     OpWiden,
     OpNop,
     OpInvalid,
-    // Composite MOpcodes:
     OpInc,
     OpDec,
     OpCl, // '}'
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MRegInfo {
+    pub reg_type: String,
+    pub reg: String,
+    pub size: u8,
+    pub alias: String,
+    pub offset: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct MVal {
+    pub name: String,
+    pub size: u8,
+    pub val_type: MValType,
+    pub value: i64,
+    pub reg_info: Option<MRegInfo>,
+    pub typeset: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct MInst {
+    pub addr: MAddr,
+    pub opcode: MOpcode,
+    pub dst: MVal,
+    pub operand_1: MVal,
+    pub operand_2: MVal,
+}
+
+impl<'a> MOperator<'a> {
+    pub fn new(op: &'a str, n: MArity) -> MOperator<'a> {
+        MOperator { op: op, arity: n }
+    }
+
+    pub fn nop() -> MOperator<'a> {
+        MOperator { op: "nop", arity: MArity::Zero }
+    }
 }
 
 impl<'a> MOpcode {
@@ -114,25 +141,6 @@ impl<'a> MOpcode {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct MRegInfo {
-    pub reg_type: String,
-    pub reg: String,
-    pub size: u8,
-    pub alias: String,
-    pub offset: u64,
-}
-
-#[derive(Debug, Clone)]
-pub struct MVal {
-    pub name: String,
-    pub size: u8,
-    pub val_type: MValType,
-    pub value: i64,
-    pub reg_info: Option<MRegInfo>,
-    pub typeset: u32,
-}
-
 impl MRegInfo {
     pub fn new() -> MRegInfo {
         let def: MRegInfo = Default::default();
@@ -163,17 +171,6 @@ impl MVal {
     pub fn constant(i: i64) -> MVal {
         MVal::new(i.to_string(), 64, MValType::Constant, i, 0, None)
     }
-}
-
-
-
-#[derive(Debug, Clone)]
-pub struct MInst {
-    pub addr: MAddr,
-    pub opcode: MOpcode,
-    pub dst: MVal,
-    pub operand_1: MVal,
-    pub operand_2: MVal,
 }
 
 impl<'a> MInst {

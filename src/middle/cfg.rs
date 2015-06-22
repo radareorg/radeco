@@ -4,20 +4,49 @@
 //! Control Flow Graphs (CFG) aid in the analysis and recovery of the program
 //! structure.
 
-#![allow(dead_code, unused_variables)]
-
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::{Dfs};
 use std::collections::BTreeMap;
 
 use super::ir::*;
 
-/// A `BasicBlock` is the basic unit in a CFG.
-/// Every `MInst` must be a part of one and only one `BasicBlock`.
 pub struct BasicBlock {
     pub reachable: bool,
     pub instructions: Vec<MInst>,
     pub label: String,
+}
+
+pub enum NodeData {
+    Block(BasicBlock),
+    Entry,
+    Exit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EdgeType {
+    True,
+    False,
+    Unconditional,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Direction { d: u8, }
+pub const FORWARD: Direction  = Direction { d: 0 };
+pub const BACKWARD: Direction = Direction { d: 1 };
+
+#[allow(dead_code)]
+pub struct EdgeData {
+    pub direction: Direction,
+    pub edge_type: EdgeType,
+    src_addr: Address,
+    dst_addr: Address,
+}
+
+pub struct CFG {
+    pub g: Graph<NodeData, EdgeData>,
+    pub entry: NodeIndex,
+    pub exit: NodeIndex,
+    pub bbs: BTreeMap<Address, NodeIndex>,
 }
 
 impl BasicBlock {
@@ -34,12 +63,6 @@ impl BasicBlock {
     }
 }
 
-pub enum NodeData {
-    Block(BasicBlock),
-    Entry,
-    Exit,
-}
-
 impl NodeData {
     pub fn label(&self) -> String {
         match *self {
@@ -48,25 +71,6 @@ impl NodeData {
             NodeData::Exit => "n1".to_string(),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum EdgeType {
-    True,
-    False,
-    Unconditional,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Direction { d: u8, }
-pub const FORWARD: Direction  = Direction { d: 0 };
-pub const BACKWARD: Direction = Direction { d: 1 };
-
-pub struct EdgeData {
-    pub direction: Direction,
-    pub edge_type: EdgeType,
-    src_addr: Address,
-    dst_addr: Address,
 }
 
 impl EdgeData {
@@ -126,13 +130,6 @@ impl EdgeData {
             EdgeData::new_forward_uncond(src_addr, dst_addr)
         }
     }
-}
-
-pub struct CFG {
-    pub g: Graph<NodeData, EdgeData>,
-    pub entry: NodeIndex,
-    pub exit: NodeIndex,
-    pub bbs: BTreeMap<Address, NodeIndex>,
 }
 
 impl CFG {
