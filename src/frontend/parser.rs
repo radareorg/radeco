@@ -51,6 +51,7 @@ pub struct Parser<'a> {
     addr:         Address,
     opinfo:       Option<LOpInfo>,
     tmp_index:    u64,
+    last_assgn:   MVal,
 }
 
 // Struct used to configure the Parser. If `None` is passed to any of the fields, then the default
@@ -89,6 +90,7 @@ impl<'a> Parser<'a> {
         let regset = config.regset.unwrap_or(HashMap::new());
         let alias_info = config.alias_info.unwrap_or(HashMap::new());
         let flags = config.flags.unwrap_or(HashMap::new());
+        let val = MVal::null();
 
         Parser { 
             stack:        Vec::new(),
@@ -98,11 +100,12 @@ impl<'a> Parser<'a> {
             default_size: default_size,
             arch:         arch,
             tmp_prefix:   tmp_prefix,
-            tmp_index:    0,
             addr:         0,
             opinfo:       None,
             alias_info:   alias_info,
             flags:        flags,
+            tmp_index:    0,
+            last_assgn:  val,
         }
     }
 
@@ -173,6 +176,16 @@ impl<'a> Parser<'a> {
             None => return Err(ParseError::InsufficientOperands),
         };
 
+        // If the assignment is to an internal variable. Replace it with a set-flag instruction
+        // instead.
+        if op1.val_type == MValType::Internal {
+            let op = MOpcode::OpSetFl;
+            let addr = MAddr::new(self.addr);
+            let inst = MInst::new(op, dst, self.last_assgn.clone(), op1, Some(addr));
+            self.insts.push(inst.clone());
+            return Ok(());
+        }
+
         // Check the alias of dst. If it is the instruction pointer, the assignment should be a
         // OpJmp rather than a OpEq.
         if dst.reg_info.clone().unwrap_or_default().alias == "pc" {
@@ -188,6 +201,11 @@ impl<'a> Parser<'a> {
             let inst = MInst::new(op, MVal::null(), op1, MVal::null(), Some(addr));
             self.insts.push(inst.clone());
             return Ok(());
+        }
+
+        // If the dst is a register. Update the last_assgn information.
+        if dst.val_type == MValType::Register {
+            self.last_assgn = dst.clone();
         }
 
         if dst.size == op1.size {
@@ -333,6 +351,8 @@ impl<'a> Parser<'a> {
                 } else if let Ok(v) = hex_to_i!(token) {
                     val_type = MValType::Constant;
                     val = v;
+                } else if let Some('%') = token.chars().nth(0) {
+                    val_type = MValType::Internal
                 }
                 // TODO: Add support for internals.
                 let v = MVal::new(String::from(token), size, val_type, val, 0, reg_info);
