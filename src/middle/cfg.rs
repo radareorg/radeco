@@ -11,9 +11,9 @@ use std::collections::BTreeMap;
 use super::ir::*;
 
 pub struct BasicBlock {
-    pub reachable: bool,
+    pub reachable:    bool,
     pub instructions: Vec<MInst>,
-    pub label: String,
+    pub label:        String,
 }
 
 pub enum NodeData {
@@ -38,23 +38,23 @@ pub const BACKWARD: Direction = Direction { d: 1 };
 pub struct EdgeData {
     pub direction: Direction,
     pub edge_type: EdgeType,
-    src_addr: Address,
-    dst_addr: Address,
+    src_addr:      Address,
+    dst_addr:      Address,
 }
 
 pub struct CFG {
-    pub g: Graph<NodeData, EdgeData>,
+    pub g:     Graph<NodeData, EdgeData>,
     pub entry: NodeIndex,
-    pub exit: NodeIndex,
-    pub bbs: BTreeMap<Address, NodeIndex>,
+    pub exit:  NodeIndex,
+    pub bbs:   BTreeMap<Address, NodeIndex>,
 }
 
 impl BasicBlock {
     fn new() -> BasicBlock {
         BasicBlock { 
-            reachable: false,
+            reachable:    false,
             instructions: Vec::new(),
-            label: String::new(),
+            label:        String::new(),
         }
     }
 
@@ -67,8 +67,8 @@ impl NodeData {
     pub fn label(&self) -> String {
         match *self {
             NodeData::Block(ref block) => (*(block.label)).to_string(),
-            NodeData::Entry => "n0".to_string(),
-            NodeData::Exit => "n1".to_string(),
+            NodeData::Entry            => "n0".to_string(),
+            NodeData::Exit             => "n1".to_string(),
         }
     }
 }
@@ -78,8 +78,8 @@ impl EdgeData {
         EdgeData {
             direction: direction,
             edge_type: edge_type,
-            src_addr: src_addr,
-            dst_addr: dst_addr,
+            src_addr:  src_addr,
+            dst_addr:  dst_addr,
         }
     }
 
@@ -141,10 +141,10 @@ impl CFG {
         let exit = g.add_node(NodeData::Exit);
 
         CFG {
-            g: g,
+            g:     g,
             entry: entry,
-            exit: exit,
-            bbs: BTreeMap::new(),
+            exit:  exit,
+            bbs:   BTreeMap::new(),
         }
     }
 

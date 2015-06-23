@@ -48,8 +48,8 @@ impl Dot for EdgeData {
     fn to_dot(&self) -> String {
         let mut direction = "forward";
         let (color, label) = match self.edge_type {
-            EdgeType::True => ("green", "label=T"),
-            EdgeType::False => ("red", "label=F"),
+            EdgeType::True          => ("green", "label=T"),
+            EdgeType::False         => ("red", "label=F"),
             EdgeType::Unconditional => ("black", ""),
         };
         if self.direction == BACKWARD {
@@ -72,7 +72,7 @@ impl Dot for NodeData {
                 block.to_dot()
             },
             NodeData::Entry => "<tr><td>Entry</td></tr>".to_string(),
-            NodeData::Exit => "<tr><td>Exit</td></tr>".to_string(),
+            NodeData::Exit  => "<tr><td>Exit</td></tr>".to_string(),
         };
         result = add_strings!(result, res, "</table>>");
         add_strings!(self.label(), "[style=rounded label=", result, " shape=box color=", color,"];\n")

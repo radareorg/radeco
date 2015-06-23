@@ -1,4 +1,4 @@
-pub use super::middle::ir::{MInst, MVal, MOpcode, MOperator, MValType, Address, MArity, MRegInfo, MAddr};
+pub use super::middle::ir::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
 
 pub mod structs;
 pub mod parser;
