@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::fmt::Debug;
 use std::iter::Map;
 use std::mem;
@@ -13,7 +14,7 @@ pub struct InnerEdgeLight<I: IndexType> { target: I }
 pub struct InnerEdgeLinked<I: IndexType> { target: I, prev: I, next: I }
 
 pub trait InnerEdgeTrait: Copy + Default + Debug {
-	type NodeAux: Debug + 'static;
+	type NodeAux: Sized + Debug + 'static;
 	type Index: IndexType;
 	fn default_aux(i: Self::Index) -> Self::NodeAux;
 	fn default_aux_usize(i: usize) -> Self::NodeAux { Self::default_aux(Self::Index::from_usize(i)) }
@@ -49,7 +50,7 @@ struct InnerNode<Node, Edge: InnerEdgeTrait> {
 }
 
 pub trait AuxQuery<Edge: InnerEdgeTrait> {
-	fn access_aux<'a>(&'a mut self, i: Edge::Index) -> &'a mut Edge::NodeAux;
+	fn access_aux<'a>(&'a mut self, i: Edge::Index) -> &'a Cell<Edge::NodeAux>;
 }
 
 pub trait ManipulationWithExternal<Edge: InnerEdgeTrait, U> {
@@ -65,6 +66,12 @@ pub struct InnerGraphIter<'a, Node: Debug + 'a, Edge: InnerEdgeTrait + 'a> {
 	iter: slice::Iter<'a, InnerNode<Node, Edge>>
 }
 
+// helper function, so we can explicitly say that T is sized
+// with the current rustc the bound is not propagated properly
+fn mutref_to_cell<T: Sized>(r: &mut T) -> &Cell<T> {
+	unsafe { mem::transmute(r) }
+}
+
 impl<Node: Debug, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 	pub fn new() -> InnerGraph<Node, Edge> {
 		InnerGraph::<Node, Edge> {
@@ -77,10 +84,11 @@ impl<Node: Debug, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 	pub fn lookup<'a>(&'a self, i: Edge::Index) -> &'a Node {
 		&self.nodes[i.as_usize()].data
 	}
-	pub fn access_aux<'a>(&'a mut self, i: Edge::Index, external: &'a mut AuxQuery<Edge>) -> &'a mut Edge::NodeAux {
+	pub fn access_aux<'a>(&'a mut self, i: Edge::Index, external: &'a mut AuxQuery<Edge>) -> &'a Cell<Edge::NodeAux> {
 		if i >= Edge::Index::zero() {
 			let node = &mut self.nodes[i.as_usize()];
-			return &mut node.aux
+			// See https://github.com/rust-lang/rfcs/issues/1106 for next line
+			return mutref_to_cell(&mut node.aux)
 		} else {
 			return external.access_aux(i)
 		}
@@ -198,9 +206,9 @@ impl<Index: IndexType, N: Debug>
 		}
 
 		{
-			let aux: &mut Index = self.access_aux(target, external);
-			next = *aux;
-			*aux = i;
+			let aux: &Cell<Index> = self.access_aux(target, external);
+			next = aux.get();
+			aux.set(i);
 			if next == target { next = i }
 		}
 
@@ -235,7 +243,7 @@ impl<Index: IndexType, N: Debug>
 			if pi != i {
 				self.nodes[pi.as_usize()].next_set(oldtarget, if ni == i {pi} else {ni});
 			} else {
-				*self.access_aux(oldtarget, external) = if ni == i { oldtarget } else { ni }
+				self.access_aux(oldtarget, external).set(if ni == i { oldtarget } else { ni })
 			}
 
 			{

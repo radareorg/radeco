@@ -4,6 +4,8 @@ pub mod dot;
 pub mod indextype;
 pub mod inner;
 
+use std::cell::Cell;
+
 use super::traits::{InstructionType, Navigation, NavigationInternal};
 
 use self::indextype::IndexType;
@@ -77,7 +79,7 @@ enum IREdge<Index: IndexType, Instruction: InstructionType> {
 	ReprToBlock(Index),
 	// Points from a `IR::BasicBlock`s to `IRNode::Repr` whose target is used by operations in the basic block
 	// Contains a id of the first user in the basic block, and the id the `IRNode::Repr` is known by in the basic block
-	BlockToRepr(Index, <BasicBlock<Index, Instruction> as BlockToReprPayload>::Type),
+	BlockToRepr(Index, Cell<<BasicBlock<Index, Instruction> as BlockToReprPayload>::Type>),
 	// Points from one `IR::BasicBlock` to another. Represents control flow.
 	// It contains a vector of 'n' references to operations in the origin basic block
 	// that are used by 'n' phi operations in the target basic block.
@@ -91,7 +93,7 @@ pub type IRGraph<Index, Instruction> = Graph<
 
 pub struct NodeRef<I>(NodeIndex, I);
 struct AuxQueryImpl<'a, Index: IndexType + 'a, Instruction: InstructionType + 'a>(
-	&'a mut IRGraph<Index, Instruction>,
+	&'a IRGraph<Index, Instruction>,
 	NodeIndex
 );
 
@@ -131,13 +133,13 @@ impl<'b, Index: IndexType, Instruction: InstructionType/*, InnerEdge: InnerEdgeT
 	//use AuxQueryImpl<'b, Instruction>::InnerEdgeType as InnerEdge;
 
 	fn access_aux<'a>(&'a mut self, i: <<Self as UsedInnerEdgeType>::InnerEdgeType as InnerEdgeTrait>::Index)
-		-> &'a mut <<Self as UsedInnerEdgeType>::InnerEdgeType as InnerEdgeTrait>::NodeAux
+		-> &'a Cell<<<Self as UsedInnerEdgeType>::InnerEdgeType as InnerEdgeTrait>::NodeAux>
 	{
 		let fedge: Option<EdgeIndex> = find_edge!(self.0, self.1, Outgoing,
 			&IREdge::BlockToRepr(key, _) => { key == i }
 		);
 		if let Some(edge) = fedge {
-			if let Some(&mut IREdge::BlockToRepr(_, ref mut aux)) = self.0.edge_weight_mut(edge){
+			if let Some(&IREdge::BlockToRepr(_, ref aux)) = self.0.edge_weight(edge){
 				return aux
 			}
 		}
@@ -169,7 +171,7 @@ impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<
 		let bb = if let &IRNode::BasicBlock(ref bb) = node { bb } else { panic!() };
 		let instruction = bb.inner_graph.lookup(noderef.1);
 
-		if (instruction.is_phi()) {
+		if instruction.is_phi() {
 			let mut edges = self.walk_edges_directed(noderef.0, Incoming);
 			while let Some(edgeindex) = edges.next(&self) {
 				let edge = &self.raw_edges()[edgeindex.index()];
@@ -205,7 +207,6 @@ mod test {
 	use super::super::traits::InstructionType;
 	use super::inner::HasAdd;
 	use super::{AddIR, DefaultInnerIndex, IRGraph, IRNode, AuxQueryImpl};
-	use super::dot;
 
 	#[derive(Debug)]
 	enum TestInstr { Phi, NotPhi }
@@ -222,14 +223,15 @@ mod test {
 		let ni1 = graph.add_bb();
 		let ni2 = graph.add_bb();
 
-		/*{
+		{
 			let node = &mut graph[ni1];
 			let bb = if let &mut IRNode::BasicBlock(ref mut bb) = node { bb } else { panic!() };
 			let ig = &mut bb.inner_graph;
 			let mut external = AuxQueryImpl::<DefaultInnerIndex, TestInstr>(&mut graph, ni1);
 			let i0 = ig.add(&mut external, TestInstr::NotPhi, &[]);
 			let i1 = ig.add(&mut external, TestInstr::NotPhi, &[i0]);
-		}*/
+		}
+
 
 		let mut dot_file = File::create("ssa.dot").ok().expect("Error. Cannot create file!\n");
 		dot::dot(&mut dot_file, &graph);

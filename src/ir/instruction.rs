@@ -65,9 +65,9 @@ impl traits::InstructionType for InstructionType {
 pub fn exprtype(nd: &InstructionType) -> ValueType {
 	match *nd {
 		InstructionType::Nop                   => ValueType::Void,
-		InstructionType::Phi(valueType)        => valueType,
-		InstructionType::Select(valueType)     => valueType,
-		InstructionType::ConstBits(width)      => ValueType::Bits(mem::size_of::<Const>() as BitCount),
+		InstructionType::Phi(value_type)       => value_type,
+		InstructionType::Select(value_type)    => value_type,
+		InstructionType::ConstBits(_)          => ValueType::Bits(mem::size_of::<Const>() as BitCount),
 
 		InstructionType::Unary(width, ref op)  => ValueType::Bits(width),
 		InstructionType::Binary(width, ref op) => ValueType::Bits(width),
