@@ -13,7 +13,8 @@ pub fn dot<Index: IndexType, Instruction: InstructionType>(target: &mut Write, g
 	for i in 0..node_count {
 		let node = &graph[NodeIndex::new(i)];
 		match node {
-			&IRNode::BasicBlock(ref bb) => {
+			&IRNode::BasicBlock(ref bbr) => {
+				let bb = bbr.borrow();
 				target.write(format!("  subgraph cluster{} {{\n", i).as_bytes());
 				for (j, instr) in bb.inner_graph.iter().enumerate() {
 					// TODO properly escape

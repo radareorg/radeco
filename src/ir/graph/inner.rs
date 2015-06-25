@@ -319,8 +319,10 @@ impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, Inn
 #[cfg(test)]
 mod test {
 	use std::collections::HashSet;
+	use std::cell::Cell;
 	use ir::traits::{Manipulation, Navigation};
 	use super::super::indextype::IndexType;
+	use super::mutref_to_cell;
 	use super::*;
 
 	#[derive(Debug)]
@@ -329,8 +331,8 @@ mod test {
 	struct TestAuxQuery<Edge: InnerEdgeTrait>(Vec<Edge::NodeAux>);
 
 	impl<Edge: InnerEdgeTrait> AuxQuery<Edge> for TestAuxQuery<Edge> {
-		fn access_aux<'a>(&'a mut self, i: Edge::Index) -> &'a mut Edge::NodeAux {
-			&mut self.0[!i.as_usize()]
+		fn access_aux<'a>(&'a mut self, i: Edge::Index) -> &'a Cell<Edge::NodeAux> {
+			mutref_to_cell(&mut self.0[!i.as_usize()])
 		}
 	}
 

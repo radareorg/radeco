@@ -4,7 +4,7 @@ pub mod dot;
 pub mod indextype;
 pub mod inner;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use super::traits::{InstructionType, Navigation, NavigationInternal};
 
@@ -71,7 +71,7 @@ enum IRNode<Index: IndexType, Instruction: InstructionType> {
 	// Represents an operation of a basic block that is used by non-phi nodes outside of that basic block
 	Repr,
 	// Represents a basic block
-	BasicBlock(BasicBlock<Index, Instruction>)
+	BasicBlock(RefCell<BasicBlock<Index, Instruction>>)
 }
 
 enum IREdge<Index: IndexType, Instruction: InstructionType> {
@@ -163,12 +163,12 @@ fn deref<Index: IndexType, Instruction: InstructionType>(
 impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<Index>> for IRGraph<Index, Instruction> {
 	fn add_uses_to(&self, noderef: NodeRef<Index>, r: &mut Vec<NodeRef<Index>>) {
 		let node = &self[noderef.0];
-		let bb = if let &IRNode::BasicBlock(ref bb) = node { bb } else { panic!() };
+		let bb = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow() } else { panic!() };
 	}
 
 	fn add_args_to(&self, noderef: NodeRef<Index>, r: &mut Vec<NodeRef<Index>>) {
 		let node = &self[noderef.0];
-		let bb = if let &IRNode::BasicBlock(ref bb) = node { bb } else { panic!() };
+		let bb = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow_mut() } else { panic!() };
 		let instruction = bb.inner_graph.lookup(noderef.1);
 
 		if instruction.is_phi() {
@@ -197,16 +197,19 @@ trait AddIR {
 
 impl<Index: IndexType, Instruction: InstructionType> AddIR for IRGraph<Index, Instruction> {
 	fn add_bb(&mut self) -> NodeIndex{
-		self.add_node(IRNode::BasicBlock(BasicBlock::<Index, Instruction>::new()))
+		self.add_node(IRNode::BasicBlock(RefCell::new(BasicBlock::<Index, Instruction>::new())))
 	}
 }
 
+#[cfg(test)]
 mod test {
 	use std::fs::File;
+	use std::cell::RefMut;
 
 	use super::super::traits::InstructionType;
 	use super::inner::HasAdd;
 	use super::{AddIR, DefaultInnerIndex, IRGraph, IRNode, AuxQueryImpl};
+	use super::dot;
 
 	#[derive(Debug)]
 	enum TestInstr { Phi, NotPhi }
@@ -224,10 +227,11 @@ mod test {
 		let ni2 = graph.add_bb();
 
 		{
-			let node = &mut graph[ni1];
-			let bb = if let &mut IRNode::BasicBlock(ref mut bb) = node { bb } else { panic!() };
+			// TODO move into method
+			let node = &graph[ni1];
+			let mut bb = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow_mut() } else { panic!() };
 			let ig = &mut bb.inner_graph;
-			let mut external = AuxQueryImpl::<DefaultInnerIndex, TestInstr>(&mut graph, ni1);
+			let mut external = AuxQueryImpl::<DefaultInnerIndex, TestInstr>(&graph, ni1);
 			let i0 = ig.add(&mut external, TestInstr::NotPhi, &[]);
 			let i1 = ig.add(&mut external, TestInstr::NotPhi, &[i0]);
 		}
