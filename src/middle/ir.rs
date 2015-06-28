@@ -81,6 +81,8 @@ pub struct MVal {
     pub typeset:  u32,
 }
 
+// Minor: Change MInst to take Option<MVal> instead. This will allow us to eliminate MVal::null and
+// check for `None` instead.
 #[derive(Debug, Clone)]
 pub struct MInst {
     pub addr:      MAddr,
