@@ -11,14 +11,6 @@ use petgraph::{Dfs};
 
 use super::dot::{GraphDot, EdgeInfo, Label};
 
-// Design ideas:
-//  - We can compute a dominator tree and further the dominance frontier by using the algorithms
-//    outlined in: 
-//        * http://www.cs.rice.edu/~keith/Embed/dom.pdf
-//
-//  - We can use the same graph as the CFG and overlay the dominator tree information by indicating
-//  edges that belong to the dominator tree differently.
-
 pub type DomTree = Graph<NodeIndex, u64>;
 
 #[derive(Clone, Debug)]
@@ -36,7 +28,7 @@ impl DomResult {
     }
 }
 
-pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
+pub fn build_dom_tree<N: Clone, E: Clone>(g: &Graph<N, E>) -> DomResult {
     let mut res: DomResult = DomResult::new();
     
     {
@@ -46,13 +38,13 @@ pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
         // Make a set of all nodes except the start.
         let mut g_iter = g.raw_nodes().iter();
         let mut tmp_iter;
-        let start_n = g_iter.next().unwrap().weight.clone();
+        let start_n = g_iter.next().unwrap().clone();
 
         tmp_iter = g_iter.clone();
         let mut node_set = BTreeSet::new();
 
         while let Some(ref node) = tmp_iter.next() {
-            node_set.insert(node.weight.clone());
+            node_set.insert(node.clone());
         }
         
         d.add_node(start_n.clone());
@@ -66,8 +58,8 @@ pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
         // Add all the nodes to the DomTree.
         tmp_iter = g_iter.clone();
         while let Some(ref node) = tmp_iter.next() {
-            d.add_node(node.weight.clone());
-            doms.insert(node.weight.clone(), node_set.clone());
+            d.add_node(node.clone());
+            doms.insert(node.clone(), node_set.clone());
         }
 
         let mut change = true;
@@ -75,15 +67,15 @@ pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
         while change {
             change = false;
             while let Some(ref node) = g_iter.next() {
-                let mut preds = g.neighbors_directed((node.clone()).weight, EdgeDirection::Incoming);
+                let mut preds = g.neighbors_directed((node.clone()), EdgeDirection::Incoming);
                 let mut tmp_set = BTreeSet::new();
                 
                 if let Some(ref n) = preds.next() {
-                    tmp_set = doms.get(&(g.node_weight(*n).unwrap())).unwrap().clone();
+                    tmp_set = doms.get(&n).unwrap().clone();
                 }
 
                 while let Some(ref n) = preds.next() {
-                    let other_set = doms.get(&(g.node_weight(*n).unwrap())).unwrap();
+                    let other_set = doms.get(&n).unwrap();
                     let intersect: Vec<NodeIndex> = tmp_set.intersection(other_set).cloned().collect();
                     tmp_set.clear();
                     for e in intersect.iter(){ 
@@ -91,9 +83,9 @@ pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
                     }
                 }
 
-                tmp_set.insert(node.weight);
+                tmp_set.insert(node);
                 
-                let set = doms.get_mut(&(node.weight)).unwrap();
+                let set = doms.get_mut(&(node)).unwrap();
                 let tmp: Vec<NodeIndex> = tmp_set.difference(set).cloned().collect();
 
                 if !(tmp.is_empty()) {
