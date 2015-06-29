@@ -69,9 +69,9 @@ pub fn exprtype(nd: &InstructionType) -> ValueType {
 		InstructionType::Select(value_type)    => value_type,
 		InstructionType::ConstBits(_)          => ValueType::Bits(mem::size_of::<Const>() as BitCount),
 
-		InstructionType::Unary(width, ref op)  => ValueType::Bits(width),
-		InstructionType::Binary(width, ref op) => ValueType::Bits(width),
-		//InstructionType::Nary(width, op)   => ValueType::Bits(width),
+		InstructionType::Unary(width, _)       => ValueType::Bits(width),
+		InstructionType::Binary(width, _)      => ValueType::Bits(width),
+		//InstructionType::Nary(width, _)        => ValueType::Bits(width),
 
 		InstructionType::Extract(_)            => ValueType::Bits(32),
 		InstructionType::Inject(_)             => ValueType::MachineState

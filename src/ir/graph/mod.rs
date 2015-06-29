@@ -4,12 +4,12 @@ pub mod dot;
 pub mod indextype;
 pub mod inner;
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, RefCell, RefMut};
 
 use super::traits::{InstructionType, Navigation, NavigationInternal};
 
 use self::indextype::IndexType;
-use self::inner::{InnerGraph, InnerEdgeLight, InnerEdgeTrait, AuxQuery};
+use self::inner::{InnerGraph, InnerEdgeLight, InnerEdgeTrait, InnerGraphWithMethods, AuxQuery};
 use self::petgraph::{Incoming, Outgoing};
 use self::petgraph::graph::{Edge, EdgeIndex, Graph, NodeIndex};
 
@@ -191,13 +191,47 @@ impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<
 	}
 }
 
-trait AddIR {
+trait AddIR<Index: IndexType, Instruction: InstructionType> {
 	fn add_bb(&mut self) -> NodeIndex;
+	fn select_bb<'b, 'a: 'b>(&'a mut self, NodeIndex) -> Builder<'a, 'b, Index, Instruction>;
+	fn add_and_select_bb<'b, 'a: 'b>(&'a mut self) -> Builder<'a, 'b, Index, Instruction> {
+		let ni = self.add_bb();
+		self.select_bb(ni)
+	}
 }
 
-impl<Index: IndexType, Instruction: InstructionType> AddIR for IRGraph<Index, Instruction> {
-	fn add_bb(&mut self) -> NodeIndex{
+impl<Index: IndexType, Instruction: InstructionType> AddIR<Index, Instruction> for IRGraph<Index, Instruction> {
+	fn add_bb(&mut self) -> NodeIndex {
 		self.add_node(IRNode::BasicBlock(RefCell::new(BasicBlock::<Index, Instruction>::new())))
+	}
+	fn select_bb<'b, 'a: 'b>(&'a mut self, ni: NodeIndex) -> Builder<'a, 'b, Index, Instruction> {
+		let node = &self[ni];
+		let mut bb: RefMut<'b, BasicBlock<Index, Instruction>> = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow_mut() } else { panic!() };
+		let mut builder = Builder::<'a, 'b, Index, Instruction> {
+			nodeindex: ni,
+			bb: bb,
+			external: AuxQueryImpl::<'a, Index, Instruction>(self, ni)
+		};
+		builder
+	}
+}
+
+struct Builder<'a, 'b: 'a, Index: IndexType, Instruction: InstructionType + 'b> {
+	pub nodeindex: NodeIndex,
+	bb: RefMut<'b, BasicBlock<Index, Instruction>>,
+	external: AuxQueryImpl<'a, Index, Instruction>
+}
+
+impl<'a, 'b, Index: IndexType, Instruction: InstructionType> Builder<'a, 'b, Index, Instruction>
+	// where
+	// InnerGraph           <Instruction, <AuxQueryImpl<'a, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>:
+	// InnerGraphWithMethods<Instruction, <AuxQueryImpl<'a, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
+{
+	fn add_instr(&mut self, instr: Instruction, args: &[NodeRef<Index>]) -> NodeRef<Index> {
+		use self::inner::HasAdd;
+		let inner_args = Vec::<Index>::with_capacity(args.len());
+		let n = self.bb.inner_graph.add(&mut self.external, instr, &inner_args);
+		NodeRef::<Index>(self.nodeindex, n)
 	}
 }
 
@@ -223,19 +257,17 @@ mod test {
 	#[test]
 	fn construct() {
 		let mut graph = IRGraph::<DefaultInnerIndex, TestInstr>::new();
-		let ni1 = graph.add_bb();
-		let ni2 = graph.add_bb();
+
+		let ni1 = {
+			let mut bb1 = graph.add_and_select_bb();
+			let i0 = bb1.add_instr(TestInstr::NotPhi, &[]);
+			let i1 = bb1.add_instr(TestInstr::NotPhi, &[i0]);
+			bb1.nodeindex
+		};
 
 		{
-			// TODO move into method
-			let node = &graph[ni1];
-			let mut bb = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow_mut() } else { panic!() };
-			let ig = &mut bb.inner_graph;
-			let mut external = AuxQueryImpl::<DefaultInnerIndex, TestInstr>(&graph, ni1);
-			let i0 = ig.add(&mut external, TestInstr::NotPhi, &[]);
-			let i1 = ig.add(&mut external, TestInstr::NotPhi, &[i0]);
+			let bb2 = graph.add_and_select_bb();
 		}
-
 
 		let mut dot_file = File::create("ssa.dot").ok().expect("Error. Cannot create file!\n");
 		dot::dot(&mut dot_file, &graph);

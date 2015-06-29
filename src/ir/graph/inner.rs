@@ -5,7 +5,7 @@ use std::mem;
 use std::ops::Index;
 use std::slice;
 
-use super::super::traits::{Manipulation, NavigationInternal};
+use super::super::traits::{Manipulation, Navigation, NavigationInternal};
 use super::indextype::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -315,6 +315,18 @@ impl<Index: IndexType, N: Debug> NavigationInternal<Index> for InnerGraph<N, Inn
 		}
 	}
 }
+
+pub trait InnerGraphWithMethods<Instruction, EdgeType: InnerEdgeTrait>:
+	HasAdd<Instruction, EdgeType> +
+	Navigation<EdgeType::Index> +
+	ManipulationWithExternal<EdgeType, u8>  {}
+
+impl<Instruction: Debug, EdgeType: InnerEdgeTrait> InnerGraphWithMethods<Instruction, EdgeType>
+	for InnerGraph<Instruction, EdgeType>
+	where InnerGraph<Instruction, EdgeType>:
+	HasAdd<Instruction, EdgeType> +
+	Navigation<EdgeType::Index> +
+	ManipulationWithExternal<EdgeType, u8> {}
 
 #[cfg(test)]
 mod test {
