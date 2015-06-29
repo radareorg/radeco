@@ -5,9 +5,11 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut)]
 
 use std::collections::{BTreeSet, BTreeMap};
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edge};
 use petgraph::EdgeDirection;
 use petgraph::{Dfs};
+
+use super::dot::{GraphDot, EdgeInfo, Label};
 
 // Design ideas:
 //  - We can compute a dominator tree and further the dominance frontier by using the algorithms
@@ -102,8 +104,13 @@ pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
         }
 
         for (key, value) in doms.iter() {
+            let list: Vec<NodeIndex>  = g.neighbors_directed(key.clone(), EdgeDirection::Incoming).collect();
             for v in value.iter() {
-                d.add_edge(*key, *v, 0);
+                // If v is in the adjacency list of key, add an edge
+                // (As we need only immediate dominators for the dom tree).
+                if list.contains(v) {
+                    d.add_edge(*v, *key, 0);
+                }
             }
         }
     }
@@ -111,19 +118,97 @@ pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
     res
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of Traits to emit dot for dom.
+///////////////////////////////////////////////////////////////////////////////
+
+impl GraphDot for DomResult {
+    type NodeType = NodeIndex;
+    type EdgeType = Edge<u64>;
+
+    fn configure(&self) -> String {
+        format!("digraph cfg {{\nsplines=\"true\";\n")
+    }
+
+    fn nodes(&self) -> Vec<Self::NodeType> {
+        let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
+        res
+    }
+
+    fn edges(&self) -> Vec<Self::EdgeType> {
+        let res = self.g.raw_edges().to_vec();
+        res
+    }
+
+    fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
+        self.g.node_weight(NodeIndex::new(n))
+    }
+}
+
+impl EdgeInfo for Edge<u64> {
+    fn source(&self) -> usize {
+        self.source().index()
+    }
+
+    fn target(&self) -> usize {
+        self.target().index()
+    }
+}
+
+impl Label for Edge<u64> {
+    fn label(&self) -> String {
+        ";\n".to_string()
+    }
+     
+    fn name(&self) -> Option<String> {
+        None
+    }
+}
+
+impl Label for NodeIndex {
+    fn label(&self) -> String {
+        let tmp = format!("n{}", self.index());
+        format!("{} [label={}];\n", tmp, tmp)
+    }
+
+    fn name(&self) -> Option<String> {
+        Some(format!("n{}", self.index()))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
     use petgraph::{Dfs};
+    use super::super::dot;
+    use std::io::prelude::*;
+    use std::fs::File;
 
     #[test]
     fn dummy() {
         let mut g = Graph::<NodeIndex, u64>::new();
-        let n0 = g.add_node(NodeIndex::new(0));
-        let n1 = g.add_node(NodeIndex::new(1));
-        g.add_edge(n0, n1, 0);
+        let a = g.add_node(NodeIndex::new(0));
+        let b = g.add_node(NodeIndex::new(1));
+        let c = g.add_node(NodeIndex::new(2));
+        let d = g.add_node(NodeIndex::new(3));
+        let e = g.add_node(NodeIndex::new(4));
+        let f = g.add_node(NodeIndex::new(5));
+        let _g = g.add_node(NodeIndex::new(6));
 
-        build_dom_tree(&mut g);
+        g.add_edge(a, b, 0);
+        g.add_edge(a, _g, 0);
+        g.add_edge(b, c, 0);
+        g.add_edge(b, e, 0);
+        g.add_edge(c, d, 0);
+        g.add_edge(d, e, 0);
+        g.add_edge(e, f, 0);
+        g.add_edge(f, _g, 0);
+
+        let dom = build_dom_tree(&mut g);
+        let _dot = dot::emit_dot(&dom);
+        let mut dot_file = File::create("dom.dot").ok().expect("Error. Cannot create file!\n");
+        dot_file.write_all(_dot.as_bytes()).ok().expect("Error. Cannot write file!\n");
+
     }
 }
