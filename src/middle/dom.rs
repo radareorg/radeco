@@ -106,7 +106,7 @@ pub fn build_dom_tree(g: &Graph<NodeIndex, u64>) -> DomResult {
         for (key, value) in doms.iter() {
             let list: Vec<NodeIndex>  = g.neighbors_directed(key.clone(), EdgeDirection::Incoming).collect();
             for v in value.iter() {
-                // If v is in the adjacency list of key, add an edge
+                // If v is in the adjacency list of key, add an edge.
                 // (As we need only immediate dominators for the dom tree).
                 if list.contains(v) {
                     d.add_edge(*v, *key, 0);
@@ -209,6 +209,5 @@ mod test {
         let _dot = dot::emit_dot(&dom);
         let mut dot_file = File::create("dom.dot").ok().expect("Error. Cannot create file!\n");
         dot_file.write_all(_dot.as_bytes()).ok().expect("Error. Cannot write file!\n");
-
     }
 }
