@@ -4,18 +4,33 @@
 //! Control Flow Graphs (CFG) aid in the analysis and recovery of the program
 //! structure.
 
-use petgraph::graph::{Graph, NodeIndex};
+use petgraph::graph::{Graph, NodeIndex, Edge};
 use petgraph::{Dfs};
 use std::collections::BTreeMap;
 
 use super::ir::*;
+use super::dot::{GraphDot, EdgeInfo, Label};
 
+macro_rules! add_strings {
+    ( $( $x: expr ),* ) => {
+        {
+            let mut s = String::new();
+            $(
+                s = format!("{}{}", s, $x);
+             )*
+                s
+        }
+    };
+}
+
+#[derive(Debug, Clone)]
 pub struct BasicBlock {
     pub reachable:    bool,
     pub instructions: Vec<MInst>,
-    pub label:        String,
+    pub name:        String,
 }
 
+#[derive(Debug, Clone)]
 pub enum NodeData {
     Block(BasicBlock),
     Entry,
@@ -35,6 +50,7 @@ pub const FORWARD: Direction  = Direction { d: 0 };
 pub const BACKWARD: Direction = Direction { d: 1 };
 
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct EdgeData {
     pub direction: Direction,
     pub edge_type: EdgeType,
@@ -54,7 +70,7 @@ impl BasicBlock {
         BasicBlock { 
             reachable:    false,
             instructions: Vec::new(),
-            label:        String::new(),
+            name:        String::new(),
         }
     }
 
@@ -64,9 +80,9 @@ impl BasicBlock {
 }
 
 impl NodeData {
-    pub fn label(&self) -> String {
+    pub fn name(&self) -> String {
         match *self {
-            NodeData::Block(ref block) => (*(block.label)).to_string(),
+            NodeData::Block(ref block) => (*(block.name)).to_string(),
             NodeData::Entry            => "n0".to_string(),
             NodeData::Exit             => "n1".to_string(),
         }
@@ -262,8 +278,8 @@ impl CFG {
 
     pub fn add_new_block(&mut self) -> NodeIndex {
         let mut bb = BasicBlock::new();
-        // By default a block is always labeled as nX.
-        bb.label = format!("n{}", self.g.node_count());
+        // By default a block is always nameed as nX.
+        bb.name = format!("n{}", self.g.node_count());
         self.g.add_node(NodeData::Block(bb))
     }
 
@@ -277,5 +293,96 @@ impl CFG {
 
     pub fn add_edge(&mut self, src: NodeIndex, target: NodeIndex, edge_data: EdgeData) {
         self.g.add_edge(src, target, edge_data);
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//// Trait implementations to emit dot for CFG
+/////////////////////////////////////////////////////////////////////////////////////////
+
+impl GraphDot for CFG {
+    type NodeType = NodeData;
+    type EdgeType = Edge<EdgeData>;
+
+    fn configure(&self) -> String {
+        add_strings!("digraph cfg {\n", "splines=\"true\";\n")
+    }
+
+    fn nodes(&self) -> Vec<Self::NodeType> {
+        let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
+        res
+    }
+
+    fn edges(&self) -> Vec<Self::EdgeType> {
+        let res = self.g.raw_edges().to_vec();
+        res
+    }
+
+    fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
+        self.g.node_weight(NodeIndex::new(n))
+    }
+}
+
+impl EdgeInfo for Edge<EdgeData> {
+    fn source(&self) -> usize {
+        self.source().index()
+    }
+
+    fn target(&self) -> usize {
+        self.target().index()
+    }
+}
+
+impl Label for Edge<EdgeData> {
+    fn label(&self) -> String {
+        let wt = &self.weight;
+        let mut direction = "forward";
+        let (color, label) = match wt.edge_type {
+            EdgeType::True          => ("green", "label=T "),
+            EdgeType::False         => ("red", "label=F "),
+            EdgeType::Unconditional => ("black", ""),
+        };
+        if wt.direction == BACKWARD {
+            direction = "back";
+        }
+        add_strings!("[", label, "color=", color, " dir=", direction, "];\n")
+    }
+
+    fn name(&self) -> Option<String> {
+        None
+    }
+}
+
+impl Label for NodeData {
+    fn name(&self) -> Option<String> {
+        Some(self.name())
+    }
+
+    fn label(&self) -> String {
+        let mut result = String::new();
+        let mut color = "black";
+        result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
+        let res = match *self {
+            NodeData::Block(ref block) => {
+                let mut _result = String::new();
+                if !block.reachable {
+                    color = "red";
+                }
+                
+                // iterate throught the instructions and convert them to dot.
+                for inst in &block.instructions {
+                    let inst_dot = 
+                        format!("<tr><td align=\"left\" cellspacing=\"1\"><font color=\"grey50\"
+                                 point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>",
+                                 inst.addr.val, inst);
+                    _result = add_strings!(_result, inst_dot);
+                }
+                _result
+            },
+            NodeData::Entry => "<tr><td>Entry</td></tr>".to_string(),
+            NodeData::Exit  => "<tr><td>Exit</td></tr>".to_string(),
+        };
+        result = add_strings!(result, res, "</table>>");
+        add_strings!(self.name(), "[style=rounded label=", result, " shape=box color=", color,"];\n")
     }
 }
