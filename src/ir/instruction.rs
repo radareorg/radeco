@@ -1,5 +1,4 @@
 use std::mem;
-use super::traits;
 
 #[derive(Debug)]
 pub enum FieldSpec {
@@ -50,16 +49,6 @@ pub enum InstructionType {
 
 	Extract(FieldSpec),
 	Inject(FieldSpec)
-}
-
-impl traits::InstructionType for InstructionType {
-	type PhiType = ValueType;
-	fn make_phi(vt: ValueType) -> InstructionType {
-		InstructionType::Phi(vt)
-	}
-	fn is_phi(&self) -> bool {
-		if let &InstructionType::Phi(_) = self { true } else { false }
-	}
 }
 
 pub fn exprtype(nd: &InstructionType) -> ValueType {
