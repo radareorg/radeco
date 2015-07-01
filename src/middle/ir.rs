@@ -25,6 +25,7 @@ pub enum MValType {
     Temporary,
     Unknown,
     Null,
+    Internal,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -63,7 +64,8 @@ pub enum MOpcode {
     OpInvalid,
     OpInc,
     OpDec,
-    OpCl, // '}'
+    OpCl,    // '}'
+    OpSetFl, // pseudo-op to set flags.
 }
 
 #[derive(Debug, Clone, Default)]
@@ -136,6 +138,7 @@ impl<'a> MOpcode {
             MOpcode::OpCJmp => ("jmp if", MArity::Binary),
             MOpcode::OpCall => ("call", MArity::Unary),
             MOpcode::OpCl => ("}", MArity::Zero),
+            MOpcode::OpSetFl => ("expand_flag", MArity::Binary),
         };
         MOperator::new(op, arity).clone()
     }

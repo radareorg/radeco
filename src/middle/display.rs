@@ -35,6 +35,7 @@ impl fmt::Display for MInst {
             MOpcode::OpCJmp => format!("{} {}, {}", self.opcode, self.operand_1, self.operand_2),
             MOpcode::OpCall => format!("{} {}", self.opcode, self.operand_1),
             MOpcode::OpCl => format!("{}", self.opcode),
+            MOpcode::OpSetFl => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, self.operand_2),
             _ => format!("{} = {} {} {}", self.dst, self.operand_1, self.opcode, self.operand_2),
         };
         f.pad_integral(true, "", &s)
