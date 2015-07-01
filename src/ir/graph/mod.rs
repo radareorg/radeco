@@ -26,12 +26,13 @@ pub struct BasicBlock<Index: IndexType, Instruction: InstructionType> {
 	inner_graph: InnerGraph<Instruction, DefaultInnerEdge<Index>>
 }
 
-enum LookupResult<Index: IndexType, Instruction: InstructionType> {
+/*enum LookupResult<Index: IndexType, Instruction: InstructionType> {
 	FoundInBB(Instruction),
 	Phi(Index),
-	External(Index),
+	ExternalReprPending(Index),
+	ExternalReprCreated(Index, NodeIndex),
 	NotFound(Index)
-}
+}*/
 
 impl<Index: IndexType, Instruction: InstructionType> BlockToReprPayload for BasicBlock<Index, Instruction> {
 	type Type = <InnerEdgeLight<Index> as InnerEdgeTrait>::NodeAux;
@@ -46,11 +47,11 @@ impl<Index: IndexType, Instruction: InstructionType> BasicBlock<Index, Instructi
 		}
 	}
 
-	fn lookup(&self, i: Index) -> LookupResult<Index, Instruction> {
+	/*fn lookup(&self, i: Index) -> LookupResult<Index, Instruction> {
 		if i >= Index::zero() {
 			let instr = self.inner_graph.lookup(i);
 			if instr.is_phi() {
-				// TODO
+				unimplemented!();
 			}
 			LookupResult::NotFound(i)
 
@@ -60,9 +61,8 @@ impl<Index: IndexType, Instruction: InstructionType> BasicBlock<Index, Instructi
 		} else {
 			LookupResult::NotFound(i)
 		}
-	}
+	}*/
 }
-
 
 type DefaultInnerIndex = i16;
 type DefaultBasicBlock<Instruction> = BasicBlock<DefaultInnerIndex, Instruction>;
@@ -91,17 +91,16 @@ pub type IRGraph<Index, Instruction> = Graph<
 	IREdge<Index, Instruction>
 >;
 
+pub type IRGraphRC<Index, Instruction> = RefCell<IRGraph<Index, Instruction>>;
+
+#[derive(Copy, Clone)]
 pub struct NodeRef<I>(NodeIndex, I);
-struct AuxQueryImpl<'a, Index: IndexType + 'a, Instruction: InstructionType + 'a>(
-	&'a IRGraph<Index, Instruction>,
-	NodeIndex
-);
 
 // forward that type
 impl<Index: IndexType, Instruction: InstructionType> UsedInnerEdgeType for IRGraph<Index, Instruction> {
 	type InnerEdgeType = DefaultInnerEdge<Index>;
 }
-impl<'a, Index: IndexType, Instruction: InstructionType> UsedInnerEdgeType for AuxQueryImpl<'a, Index, Instruction> {
+impl<'a, 'b, Index: IndexType, Instruction: InstructionType> UsedInnerEdgeType for Builder<'a, Index, Instruction> {
 	type InnerEdgeType = <IRGraph<Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType;
 }
 
@@ -127,19 +126,20 @@ macro_rules! find_edge {
 }
 
 impl<'b, Index: IndexType, Instruction: InstructionType/*, InnerEdge: InnerEdgeTrait<Index=DefaultInnerIndex>*/>
-	inner::AuxQuery<<AuxQueryImpl<'b, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
-	for AuxQueryImpl<'b, Index, Instruction>
+	inner::AuxQuery<<Builder<'b, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
+	for Builder<'b, Index, Instruction>
 {
-	//use AuxQueryImpl<'b, Instruction>::InnerEdgeType as InnerEdge;
+	//use Builder<'b, Instruction>::InnerEdgeType as InnerEdge;
 
 	fn access_aux<'a>(&'a mut self, i: <<Self as UsedInnerEdgeType>::InnerEdgeType as InnerEdgeTrait>::Index)
 		-> &'a Cell<<<Self as UsedInnerEdgeType>::InnerEdgeType as InnerEdgeTrait>::NodeAux>
 	{
-		let fedge: Option<EdgeIndex> = find_edge!(self.0, self.1, Outgoing,
+		let graph = &*self.graph_rc.borrow();
+		let fedge: Option<EdgeIndex> = find_edge!(graph, self.nodeindex, Outgoing,
 			&IREdge::BlockToRepr(key, _) => { key == i }
 		);
 		if let Some(edge) = fedge {
-			if let Some(&IREdge::BlockToRepr(_, ref aux)) = self.0.edge_weight(edge){
+			if let IREdge::BlockToRepr(_, ref aux) = graph[edge] {
 				return aux
 			}
 		}
@@ -155,7 +155,7 @@ fn deref<Index: IndexType, Instruction: InstructionType>(
 		&IREdge::BlockToRepr(key, _) => { key == noderef.1 }
 	);
 	if let Some(edge) = fedge {
-		// TODO
+		unimplemented!();
 	}
 	panic!();
 }
@@ -186,51 +186,99 @@ impl<Index: IndexType, Instruction: InstructionType> NavigationInternal<NodeRef<
 			let inner_arg = bb.inner_graph.args_of(noderef.1);
 			for i in inner_arg {
 				r.push(deref(self, NodeRef::<Index>(noderef.0, i)));
-			}
+			}	
 		}
 	}
 }
 
 trait AddIR<Index: IndexType, Instruction: InstructionType> {
 	fn add_bb(&mut self) -> NodeIndex;
-	fn select_bb<'b, 'a: 'b>(&'a mut self, NodeIndex) -> Builder<'a, 'b, Index, Instruction>;
-	fn add_and_select_bb<'b, 'a: 'b>(&'a mut self) -> Builder<'a, 'b, Index, Instruction> {
+	fn ext_repr(&mut self, noderef: NodeRef<Index>) -> NodeIndex; 
+	fn enumerated_bbs(&self) -> BBIter<Index, Instruction>;
+}
+
+trait AddIR_RC<Index: IndexType, Instruction: InstructionType> {
+	fn add_bb(&self) -> NodeIndex;
+	fn select_bb<'b, 'a: 'b>(&'a self, NodeIndex) -> Builder<'a, Index, Instruction>;
+	fn add_and_select_bb<'b, 'a: 'b>(&'a self) -> Builder<'a, Index, Instruction> {
 		let ni = self.add_bb();
 		self.select_bb(ni)
 	}
 }
 
+struct BBIter<'a, Index: IndexType, Instruction: InstructionType + 'a> {
+	graph: &'a IRGraph<Index, Instruction>
+}
+
+/*impl Iterator for BBIter {
+	type Output = (NodeIndex, BasicBlock)
+	fn next() -> Option
+}*/
+
 impl<Index: IndexType, Instruction: InstructionType> AddIR<Index, Instruction> for IRGraph<Index, Instruction> {
 	fn add_bb(&mut self) -> NodeIndex {
 		self.add_node(IRNode::BasicBlock(RefCell::new(BasicBlock::<Index, Instruction>::new())))
 	}
-	fn select_bb<'b, 'a: 'b>(&'a mut self, ni: NodeIndex) -> Builder<'a, 'b, Index, Instruction> {
-		let node = &self[ni];
-		let mut bb: RefMut<'b, BasicBlock<Index, Instruction>> = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow_mut() } else { panic!() };
-		let mut builder = Builder::<'a, 'b, Index, Instruction> {
-			nodeindex: ni,
-			bb: bb,
-			external: AuxQueryImpl::<'a, Index, Instruction>(self, ni)
+	fn ext_repr(&mut self, noderef: NodeRef<Index>) -> NodeIndex {
+		let fedge: Option<EdgeIndex> = find_edge!(self, noderef.0, Outgoing,
+			&IREdge::ReprToBlock(i) => { i == noderef.1 }
+		);
+		if let Some(edge) = fedge {
+			let e = &self.raw_edges()[edge.index()];
+
+		}
+		panic!();
+	}
+	fn enumerated_bbs(&self) -> BBIter<Index, Instruction> {
+		BBIter{graph: self}
+	}
+}
+
+impl<Index: IndexType, Instruction: InstructionType> AddIR_RC<Index, Instruction> for IRGraphRC<Index, Instruction> {
+	fn add_bb(&self) -> NodeIndex {
+		(*self.borrow_mut()).add_bb()
+	}
+	fn select_bb<'b, 'a: 'b>(&'a self, ni: NodeIndex) -> Builder<'a, Index, Instruction> {
+		// let node = &self[ni];
+		// let mut bb: RefMut<'b, BasicBlock<Index, Instruction>> = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow_mut() } else { panic!() };
+		let mut builder = Builder::<'a, Index, Instruction> {
+			graph_rc: self,
+			nodeindex: ni
+			// bb: bb
 		};
 		builder
 	}
 }
 
-struct Builder<'a, 'b: 'a, Index: IndexType, Instruction: InstructionType + 'b> {
+struct Builder<'a, Index: IndexType, Instruction: InstructionType + 'a> {
 	pub nodeindex: NodeIndex,
-	bb: RefMut<'b, BasicBlock<Index, Instruction>>,
-	external: AuxQueryImpl<'a, Index, Instruction>
+	graph_rc: &'a RefCell<IRGraph<Index, Instruction>>
+	// bb: RefMut<'b, BasicBlock<Index, Instruction>>,
 }
 
-impl<'a, 'b, Index: IndexType, Instruction: InstructionType> Builder<'a, 'b, Index, Instruction>
+impl<'a, Index: IndexType, Instruction: InstructionType> Builder<'a, Index, Instruction>
 	// where
-	// InnerGraph           <Instruction, <AuxQueryImpl<'a, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>:
-	// InnerGraphWithMethods<Instruction, <AuxQueryImpl<'a, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
+	// InnerGraph           <Instruction, <Builder<'a, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>:
+	// InnerGraphWithMethods<Instruction, <Builder<'a, Index, Instruction> as UsedInnerEdgeType>::InnerEdgeType>
 {
 	fn add_instr(&mut self, instr: Instruction, args: &[NodeRef<Index>]) -> NodeRef<Index> {
 		use self::inner::HasAdd;
-		let inner_args = Vec::<Index>::with_capacity(args.len());
-		let n = self.bb.inner_graph.add(&mut self.external, instr, &inner_args);
+		let mut inner_args = Vec::<Index>::with_capacity(args.len());
+		{
+			let graph = &*self.graph_rc.borrow_mut();
+			for arg in args {
+				inner_args.push(
+					if arg.0 == self.nodeindex { arg.1 } else { Index::zero() }
+					//else { graph.ext_repr(arg) }
+				)
+			}
+		}
+		let n = {
+			let graph = &*self.graph_rc.borrow();
+			let node = &graph[self.nodeindex];
+			let mut bb: RefMut<'a, BasicBlock<Index, Instruction>> = if let &IRNode::BasicBlock(ref bb) = node { bb.borrow_mut() } else { panic!() };
+			bb.inner_graph.add(self, instr, &inner_args)
+		};
 		NodeRef::<Index>(self.nodeindex, n)
 	}
 }
@@ -238,11 +286,11 @@ impl<'a, 'b, Index: IndexType, Instruction: InstructionType> Builder<'a, 'b, Ind
 #[cfg(test)]
 mod test {
 	use std::fs::File;
-	use std::cell::RefMut;
+	use std::io::Write;
 
 	use super::super::traits::InstructionType;
 	use super::inner::HasAdd;
-	use super::{AddIR, DefaultInnerIndex, IRGraph, IRNode, AuxQueryImpl};
+	use super::{AddIR, DefaultInnerIndex, IRGraph};
 	use super::dot;
 
 	#[derive(Debug)]
@@ -258,18 +306,19 @@ mod test {
 	fn construct() {
 		let mut graph = IRGraph::<DefaultInnerIndex, TestInstr>::new();
 
-		let ni1 = {
-			let mut bb1 = graph.add_and_select_bb();
-			let i0 = bb1.add_instr(TestInstr::NotPhi, &[]);
-			let i1 = bb1.add_instr(TestInstr::NotPhi, &[i0]);
-			bb1.nodeindex
+		let (_, i0, i1) = {
+			let mut bb = graph.add_and_select_bb();
+			let i0 = bb.add_instr(TestInstr::NotPhi, &[]);
+			let i1 = bb.add_instr(TestInstr::NotPhi, &[i0, i0]);
+			(bb.nodeindex, i0, i1)
 		};
 
 		{
-			let bb2 = graph.add_and_select_bb();
+			let mut bb = graph.add_and_select_bb();
+			let i2 = bb.add_instr(TestInstr::NotPhi, &[i0, i1]);
 		}
 
-		let mut dot_file = File::create("ssa.dot").ok().expect("Error. Cannot create file!\n");
-		dot::dot(&mut dot_file, &graph);
+		let mut dot_file = File::create("ssa.dot").unwrap();
+		dot_file.write_all(&dot::dot(&graph)).unwrap();
 	}
 }

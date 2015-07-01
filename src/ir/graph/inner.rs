@@ -1,6 +1,5 @@
 use std::cell::Cell;
 use std::fmt::Debug;
-use std::iter::Map;
 use std::mem;
 use std::ops::Index;
 use std::slice;
@@ -95,6 +94,9 @@ impl<Node: Debug, Edge: InnerEdgeTrait> InnerGraph<Node, Edge> {
 	}
 	pub fn iter<'a>(&'a self) -> InnerGraphIter<'a, Node, Edge> {
 		InnerGraphIter{iter: self.nodes.iter()}
+	}
+	pub fn count(&self) -> usize {
+		self.nodes.len()
 	}
 }
 
