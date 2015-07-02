@@ -362,6 +362,7 @@ impl Label for NodeData {
         let mut result = String::new();
         let mut color = "black";
         result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
+        result = add_strings!(result, "<tr><td align=\"left\"><font color=\"grey50\" point-size=\"9\">// NodeIndex: ", self.name(),"</font></td></tr>");
         let res = match *self {
             NodeData::Block(ref block) => {
                 let mut _result = String::new();
