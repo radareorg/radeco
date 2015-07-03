@@ -1,6 +1,6 @@
 //! Implements Dominance frontier and dominance tree computation.
 
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 use petgraph::graph::{Graph, NodeIndex, Edge};
 use petgraph::EdgeDirection;
 use super::super::middle::dot::{GraphDot, EdgeInfo, Label};
@@ -52,7 +52,8 @@ pub struct DomTree {
     map:  HashMap<usize, NodeIndex>,
     rmap: HashMap<NodeIndex, usize>,
     g:    Graph<NodeIndex, u8>,
-    dom_frontier: Option<HashMap<NodeIndex, Vec<NodeIndex>>>,
+    preds_map: HashMap<NodeIndex, Vec<usize>>,
+    dom_frontier: Option<HashMap<NodeIndex, HashSet<NodeIndex>>>,
 }
 
 // Note: No method should leak out or accept the internal numbering.
@@ -63,6 +64,7 @@ impl DomTree {
             map:  HashMap::new(),
             rmap: HashMap::new(),
             g:    Graph::new(),
+            preds_map: HashMap::new(),
             dom_frontier: None,
         }
     }
@@ -112,16 +114,14 @@ impl DomTree {
             let map      = &mut (tree.map);
             let rmap     = &mut (tree.rmap);
             let dom_tree = &mut (tree.g);
+            let preds_map = &mut (tree.preds_map);
             
             let mut v      = DFSVisitor::new();
             let node_count = g.node_count();
             let invalid    = node_count;
 
-            // Compute the post-order for 'g'.
             v.dfs(&g,start_node);
             
-            // In case the graph is disconnected (usually not the case with cfgs), visit all the
-            // unvisited nodes.
             for i in 0..node_count {
                 v.dfs(&g, NodeIndex::new(i));
             }
@@ -148,11 +148,16 @@ impl DomTree {
                 map.insert(item.1, item.0.clone());
             }
 
+            {
+                let tmp = Vec::<usize>::new();
+                preds_map.insert(start_node, tmp);
+            }
+
             nodes_iter.remove(start_index);
             nodes_iter.reverse();
             
             let mut changed = true;
-            let mut preds_map: HashMap<NodeIndex, Vec<usize>> = HashMap::new();
+            //let mut preds_map: HashMap<NodeIndex, Vec<usize>> = HashMap::new();
 
             while changed {
                 changed = false;
@@ -192,6 +197,34 @@ impl DomTree {
             }
         }
         return tree;
+    }
+
+    pub fn compute_dominance_frontier(&mut self) {
+        let node_count = self.idom.len();
+        let mut frontier_map = HashMap::<NodeIndex, HashSet<NodeIndex>>::new();
+        for node in (0..node_count).map(|x| NodeIndex::new(x)) {
+            let internal_index = self.rmap.get(&node).unwrap();
+            let preds = self.preds_map.get(&node).unwrap();
+            if preds.len() < 2 {
+                continue;
+            }
+            for p in preds {
+                let mut runner = *p;
+                while runner != self.idom[*internal_index] {
+                    let runner_index = self.map.get(&runner).unwrap();
+                    frontier_map.entry(*runner_index)
+                                .or_insert(HashSet::new())
+                                .insert(node);
+
+                    runner = self.idom[runner];
+                }
+            }
+        }
+        self.dom_frontier = Some(frontier_map);
+    }
+
+    pub fn dom_frontier(&self, n: NodeIndex) -> HashSet<NodeIndex> {
+        self.dom_frontier.clone().unwrap().get(&n).unwrap().clone()
     }
 }
 
@@ -259,6 +292,7 @@ mod test {
 
     use super::*;
     use petgraph::graph::{Graph, NodeIndex};
+    use std::collections::{HashSet};
 
     #[test]
     fn dfs() {
@@ -338,5 +372,39 @@ mod test {
         assert_eq!(dom.doms(n1), doms_n1);
         assert_eq!(dom.doms(n9), doms_n9);
         assert_eq!(dom.doms(n3), doms_n3);
+    }
+
+    #[test]
+    fn dom_frontier() {
+        let mut g = Graph::<char, u8>::new();
+        let a = g.add_node('A');
+        let b = g.add_node('B');
+        let c = g.add_node('C');
+        let d = g.add_node('D');
+        let e = g.add_node('E');
+        let f = g.add_node('F');
+        let _g = g.add_node('G');
+
+        g.add_edge(a, b, 0);
+        g.add_edge(a, _g, 0);
+        g.add_edge(b, c, 0);
+        g.add_edge(b, e, 0);
+        g.add_edge(c, d, 0);
+        g.add_edge(d, e, 0);
+        g.add_edge(e, f, 0);
+        g.add_edge(f, _g, 0);
+
+        let mut dom = DomTree::build_dom_tree(&mut g, a);
+        dom.compute_dominance_frontier();
+
+        let res = dom.dom_frontier(f);
+
+        let mut dom_front_f = HashSet::new();
+        dom_front_f.insert(_g);
+
+        assert_eq!(dom_front_f.len(), res.len());
+        for i in res.iter().zip(dom_front_f) {
+            assert_eq!(*i.0, i.1);
+        }
     }
 }
