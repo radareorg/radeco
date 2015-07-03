@@ -5,28 +5,19 @@ use petgraph::graph::{Graph, NodeIndex, Edge};
 use petgraph::EdgeDirection;
 use super::super::middle::dot::{GraphDot, EdgeInfo, Label};
 
-pub struct DomTree {
-    idom: Vec<usize>,
-    // map from the internal numbering to original NodeIndex in cfg.
-    map: HashMap<usize, NodeIndex>,
-    // map from original NodeIndex in the cfg to internal numbering.
-    rmap: HashMap<NodeIndex, usize>,
-    g: Graph<NodeIndex, u8>,
-}
-
 #[derive(Debug)]
 pub struct DFSVisitor {
     post_order: Vec<NodeIndex>,
-    pre_order: Vec<NodeIndex>,
-    visited: Vec<NodeIndex>,
+    pre_order:  Vec<NodeIndex>,
+    visited:    Vec<NodeIndex>,
 }
 
 impl DFSVisitor {
     pub fn new() -> DFSVisitor {
         DFSVisitor {
             post_order: Vec::new(),
-            pre_order: Vec::new(),
-            visited: Vec::new(),
+            pre_order:  Vec::new(),
+            visited:    Vec::new(),
         }
     }
 
@@ -56,14 +47,23 @@ impl DFSVisitor {
     }
 }
 
+pub struct DomTree {
+    idom: Vec<usize>,
+    map:  HashMap<usize, NodeIndex>,
+    rmap: HashMap<NodeIndex, usize>,
+    g:    Graph<NodeIndex, u8>,
+    dom_frontier: Option<HashMap<NodeIndex, Vec<NodeIndex>>>,
+}
+
 // Note: No method should leak out or accept the internal numbering.
 impl DomTree {
     fn new() -> DomTree {
         DomTree {
             idom: Vec::new(),
-            map: HashMap::new(),
+            map:  HashMap::new(),
             rmap: HashMap::new(),
-            g: Graph::new(),
+            g:    Graph::new(),
+            dom_frontier: None,
         }
     }
 
@@ -108,14 +108,14 @@ impl DomTree {
         let mut tree = DomTree::new();
         
         {
-            let idom = &mut (tree.idom);
-            let map = &mut (tree.map);
-            let rmap = &mut (tree.rmap);
+            let idom     = &mut (tree.idom);
+            let map      = &mut (tree.map);
+            let rmap     = &mut (tree.rmap);
             let dom_tree = &mut (tree.g);
             
-            let mut v = DFSVisitor::new();
+            let mut v      = DFSVisitor::new();
             let node_count = g.node_count();
-            let invalid = node_count;
+            let invalid    = node_count;
 
             // Compute the post-order for 'g'.
             v.dfs(&g,start_node);
