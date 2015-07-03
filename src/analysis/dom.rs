@@ -1,8 +1,11 @@
 //! Implements Dominance frontier and dominance tree computation.
 
 use std::collections::{HashMap, HashSet};
+use std::ops::Index;
+use std::cmp::{Eq, PartialEq, Ord, Ordering, PartialOrd};
 use petgraph::graph::{Graph, NodeIndex, Edge};
 use petgraph::EdgeDirection;
+use std::hash::{Hash, Hasher};
 use super::super::middle::dot::{GraphDot, EdgeInfo, Label};
 
 #[derive(Debug)]
@@ -47,12 +50,66 @@ impl DFSVisitor {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct InternalIndex {
+    index: usize,
+    external: NodeIndex,
+}
+
+impl PartialEq for InternalIndex {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+
+impl Hash for InternalIndex {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
+}
+
+impl Eq for InternalIndex { }
+
+impl Index<InternalIndex> for Vec<InternalIndex> {
+    type Output = InternalIndex;
+    fn index<'a>(&'a self, _index: InternalIndex) -> &'a InternalIndex {
+        &self[_index.index]
+    }
+}
+
+impl PartialOrd for InternalIndex {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.index.partial_cmp(&other.index)
+    }
+}
+
+
+impl Ord for InternalIndex {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.index.cmp(&other.index)
+    }
+}
+
+
+impl InternalIndex {
+    pub fn new(index: usize, n: NodeIndex) -> InternalIndex {
+        InternalIndex {
+            index: index,
+            external: n,
+        }
+    }
+
+    pub fn external(&self) -> NodeIndex {
+        self.external
+    }
+}
+
 pub struct DomTree {
-    idom: Vec<usize>,
-    map:  HashMap<usize, NodeIndex>,
-    rmap: HashMap<NodeIndex, usize>,
+    idom: Vec<InternalIndex>,
+    map:  HashMap<InternalIndex, NodeIndex>,
+    rmap: HashMap<NodeIndex, InternalIndex>,
     g:    Graph<NodeIndex, u8>,
-    preds_map: HashMap<NodeIndex, Vec<usize>>,
+    preds_map: HashMap<NodeIndex, Vec<InternalIndex>>,
     dom_frontier: Option<HashMap<NodeIndex, HashSet<NodeIndex>>>,
 }
 
@@ -60,11 +117,11 @@ pub struct DomTree {
 impl DomTree {
     fn new() -> DomTree {
         DomTree {
-            idom: Vec::new(),
-            map:  HashMap::new(),
-            rmap: HashMap::new(),
-            g:    Graph::new(),
-            preds_map: HashMap::new(),
+            idom:         Vec::new(),
+            map:          HashMap::new(),
+            rmap:         HashMap::new(),
+            g:            Graph::new(),
+            preds_map:    HashMap::new(),
             dom_frontier: None,
         }
     }
@@ -76,7 +133,7 @@ impl DomTree {
     pub fn doms(&self, i: NodeIndex) -> Vec<NodeIndex> {
         let internal_index = self.rmap.get(&i).unwrap();
         let mut idom = *internal_index;
-        let mut doms = Vec::<usize>::new();
+        let mut doms = Vec::<InternalIndex>::new();
         while idom != self.idom[idom] {
             doms.push(idom.clone());
             idom = self.idom[idom];
@@ -92,7 +149,7 @@ impl DomTree {
         self.map.get(&internal_node).unwrap().clone()
     }
 
-    fn intersect(idom: &Vec<usize>, i: &usize, j: &usize) -> usize {
+    fn intersect(idom: &Vec<InternalIndex>, i: &InternalIndex, j: &InternalIndex) -> InternalIndex {
         let mut f1 = *i;
         let mut f2 = *j;
         while f1 != f2 {
@@ -108,7 +165,7 @@ impl DomTree {
 
     pub fn build_dom_tree<N, E>(g: &Graph<N, E>, start_node: NodeIndex) -> DomTree {
         let mut tree = DomTree::new();
-        
+
         {
             let idom     = &mut (tree.idom);
             let map      = &mut (tree.map);
@@ -132,52 +189,51 @@ impl DomTree {
                                                .zip(0..node_count)
                                                .collect::<Vec<(NodeIndex, usize)>>();
 
-            let mut start_index = 0;
+            let internal_invalid = InternalIndex::new(invalid.clone(), NodeIndex::new(invalid));
+            let mut start_index = internal_invalid;
             let mut dom_tree_nodes: Vec<NodeIndex> = Vec::new();
 
             for item in nodes_iter.iter() {
                 if item.0 == start_node {
-                    idom.push(item.1);
-                    start_index = item.1;
+                    start_index = InternalIndex::new(item.1, item.0.clone());
+                    idom.push(start_index);
                 } else {
-                    idom.push(invalid.clone());
+                    idom.push(internal_invalid);
                 }
 
                 dom_tree_nodes.push(dom_tree.add_node(NodeIndex::new(item.1)));
-                rmap.insert(item.0.clone(), item.1);
-                map.insert(item.1, item.0.clone());
+                rmap.insert(item.0.clone(), InternalIndex::new(item.1, item.0.clone()));
+                map.insert(InternalIndex::new(item.1, item.0.clone()), item.0.clone());
             }
 
             {
-                let tmp = Vec::<usize>::new();
+                let tmp = Vec::<InternalIndex>::new();
                 preds_map.insert(start_node, tmp);
             }
 
-            nodes_iter.remove(start_index);
+            nodes_iter.remove(start_index.index);
             nodes_iter.reverse();
             
             let mut changed = true;
-            //let mut preds_map: HashMap<NodeIndex, Vec<usize>> = HashMap::new();
-
             while changed {
                 changed = false;
                 for n in nodes_iter.iter() {
                     let node: NodeIndex = n.0;
                     let preds_iter = g.neighbors_directed(node.clone(), EdgeDirection::Incoming)
                                       .map(|x| rmap.get(&x).unwrap().clone());
-                    let preds =  preds_map.entry(node.clone())
-                                          .or_insert(preds_iter.collect::<Vec<usize>>());
+                    let preds = preds_map.entry(node.clone())
+                                         .or_insert(preds_iter.collect::<Vec<InternalIndex>>());
                     
                     let mut new_idom = preds[0];
                     for p in preds.iter() {
-                        if idom[*p] < invalid {
+                        if idom[*p] < internal_invalid {
                             new_idom = *p;
                             break;
                         }
                     }
 
                     for p in preds.iter() {
-                        if idom[*p] != invalid {
+                        if idom[*p] != internal_invalid {
                             new_idom = DomTree::intersect(&idom, &new_idom, p);
                         }
                     }
@@ -189,7 +245,7 @@ impl DomTree {
                 }
             }
 
-            for i in 0..idom.len() {
+            for i in (0..idom.len()).map(|n| InternalIndex::new(n, NodeIndex::new(node_count))) {
                 if i == idom[i] { continue; }
                 let n1 = dom_tree_nodes[map.get(&idom[i]).unwrap().index()];
                 let n2 = dom_tree_nodes[map.get(&i).unwrap().index()];
@@ -398,12 +454,20 @@ mod test {
         dom.compute_dominance_frontier();
 
         let res = dom.dom_frontier(f);
-
         let mut dom_front_f = HashSet::new();
         dom_front_f.insert(_g);
 
         assert_eq!(dom_front_f.len(), res.len());
         for i in res.iter().zip(dom_front_f) {
+            assert_eq!(*i.0, i.1);
+        }
+        
+        let res = dom.dom_frontier(d);
+        let mut dom_front_d = HashSet::new();
+        dom_front_d.insert(e);
+        
+        assert_eq!(dom_front_d.len(), res.len());
+        for i in res.iter().zip(dom_front_d) {
             assert_eq!(*i.0, i.1);
         }
     }
