@@ -1,98 +1,52 @@
 //! Module to parse and write dot files for graphs.
 
-// TODO:
-//   * Add colors to different elements of the graph.
-
-pub use super::cfg::*;
-pub use super::ir::*;
-
 macro_rules! add_strings {
     ( $( $x: expr ),* ) => {
         {
             let mut s = String::new();
             $(
                 s = format!("{}{}", s, $x);
-            )*
+             )*
                 s
         }
     };
 }
 
-pub trait Dot {
-    fn to_dot(&self) -> String;
+pub trait Label {
+    fn label(&self) -> String;
+    fn name(&self) -> Option<String>;
 }
 
-impl Dot for CFG {
-    fn to_dot(&self) -> String {
-        let mut result = String::new();
-        result = add_strings!(result, "digraph cfg {\n");
-        // Graph configurations
-        result = add_strings!(result, "splines=\"true\";\n");
-        // Node configurations
-        for node in self.g.raw_nodes().iter() {
-            result = add_strings!(result, node.weight.to_dot());
-        }
-
-        // Connect nodes by edges.
-        for edge in self.g.raw_edges().iter() {
-            let src_node = self.g.node_weight(edge.source()).unwrap();
-            let dst_node = self.g.node_weight(edge.target()).unwrap();
-            result = add_strings!(result, src_node.label(), " -> ",
-            dst_node.label(), edge.weight.to_dot());
-        }
-        add_strings!(result, "}")
-    }
+pub trait GraphDot {
+    type NodeType: Label;
+    type EdgeType: Label + EdgeInfo;
+    fn configure(&self) -> String;
+    fn nodes(&self) -> Vec<Self::NodeType>;
+    fn edges(&self) -> Vec<Self::EdgeType>;
+    fn get_node(&self, n: usize) -> Option<&Self::NodeType>;
 }
 
-impl Dot for EdgeData {
-    fn to_dot(&self) -> String {
-        let mut direction = "forward";
-        let (color, label) = match self.edge_type {
-            EdgeType::True => ("green", "label=T"),
-            EdgeType::False => ("red", "label=F"),
-            EdgeType::Unconditional => ("black", ""),
-        };
-        if self.direction == BACKWARD {
-            direction = "back";
-        }
-        add_strings!("[", label, " color=", color, " dir=", direction, "];\n")
-    }
+pub trait EdgeInfo {
+    fn source(&self) -> usize;
+    fn target(&self) -> usize;
 }
 
-impl Dot for NodeData {
-    fn to_dot(&self) -> String {
-        let mut result = String::new();
-        let mut color = "black";
-        result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
-        let res = match *self {
-            NodeData::Block(ref block) => {
-                if !block.reachable {
-                    color = "red";
-                }
-                block.to_dot()
-            },
-            NodeData::Entry => "<tr><td>Entry</td></tr>".to_string(),
-            NodeData::Exit => "<tr><td>Exit</td></tr>".to_string(),
-        };
-        result = add_strings!(result, res, "</table>>");
-        add_strings!(self.label(), "[style=rounded label=", result, " shape=box color=", color,"];\n")
-    }
-}
+pub fn emit_dot<T: GraphDot>(g: &T) -> String {
+    let mut result = String::new();
+    result = add_strings!(result, g.configure());
 
-impl Dot for BasicBlock {
-    fn to_dot(&self) -> String {
-        let mut result = String::new();
-        for inst in &self.instructions {
-            result = add_strings!(result, inst.to_dot());
-        }
-        result
+    // Node configurations
+    for node in g.nodes().iter() {
+        result = add_strings!(result, node.label());
     }
-}
 
-impl Dot for MInst {
-    fn to_dot(&self) -> String {
-        format!("<tr><td align=\"left\" cellspacing=\"1\"><font color=\"grey50\"
-            point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>",
-            self.addr.val, self)
+    // Connect nodes by edges.
+    for edge in g.edges().iter() {
+        let src_node = g.get_node(edge.source()).unwrap();
+        let dst_node = g.get_node(edge.target()).unwrap();
+        result = add_strings!(result, src_node.name().unwrap(), " -> ",
+                              dst_node.name().unwrap(), edge.label());
     }
+
+    add_strings!(result, "\n}")
 }

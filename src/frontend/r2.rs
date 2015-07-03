@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use super::structs::*;
 
 pub struct R2 {
-    pipe: R2Pipe,
+    pipe:   R2Pipe,
     readin: String,
 }
 
