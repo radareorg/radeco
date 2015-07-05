@@ -3,9 +3,13 @@
 use std::collections::{HashMap, HashSet};
 use petgraph::graph::{Graph, NodeIndex, Edge};
 use petgraph::EdgeDirection;
-use super::super::middle::dot::{GraphDot, EdgeInfo, Label};
 
-#[derive(Debug)]
+use ::middle::dot::{GraphDot, EdgeInfo, Label};
+use super::index::InternalIndex;
+
+#[derive(Clone, Debug)]
+/// Depth first visitor that stores pre- and post- order traversal over a
+/// Graph.
 pub struct DFSVisitor {
     post_order: Vec<NodeIndex>,
     pre_order:  Vec<NodeIndex>,
@@ -27,7 +31,8 @@ impl DFSVisitor {
         }
 
         self.pre_order.push(node.clone());
-        let neighbors_iter = g.neighbors_directed(node, EdgeDirection::Outgoing)
+        let direction = EdgeDirection::Outgoing;
+        let neighbors_iter = g.neighbors_directed(node, direction)
                               .collect::<Vec<NodeIndex>>();
 
         for n in neighbors_iter.iter() {
@@ -47,24 +52,115 @@ impl DFSVisitor {
     }
 }
 
+#[derive(Clone, Debug)]
+/// Wrapper struct that consolidates the Dom and PostDom information for a
+/// Graph.
+pub struct DomInfo {
+    dom:     Option<DomTree>,
+    postdom: Option<DomTree>,
+}
+
+impl DomInfo {
+    pub fn new() -> DomInfo {
+        DomInfo {
+            dom:     None,
+            postdom: None,
+        }
+    }
+
+    /// Constructs the DomTree and computes the dominance frontier for `g`.
+    pub fn build_dom_tree<N, E>(&mut self, g: &Graph<N, E>, i: NodeIndex) 
+        where N: Clone,
+              E: Clone {
+
+        let mut dom = DomTree::build_dom_tree(g, i);
+        dom.compute_dominance_frontier();
+        self.dom = Some(dom);
+    }
+    
+    /// Constructs the Post-DomTree and computes the postdominance frontier for `g`.
+    pub fn build_postdom_tree<N, E>(&mut self, g: &Graph<N, E>, i: NodeIndex)
+        where N: Clone,
+              E: Clone {
+
+        let mut _g = (*g).clone();
+        _g.reverse();
+        let mut postdom = DomTree::build_dom_tree(&_g, i);
+        postdom.compute_dominance_frontier();
+        self.postdom = Some(postdom);
+    }
+
+    /// Returns all the dominators of the node with NodeIndex `i`.
+    pub fn doms(&self, i: NodeIndex) -> Vec<NodeIndex> {
+        match self.dom {
+            None => panic!("dom not computed."),
+            Some(ref d) => d.doms(i),
+        }
+    }
+    
+    /// Returns the immediate dominator of the node with NodeIndex `i`.
+    pub fn idom(&self, i: NodeIndex) -> NodeIndex {
+        match self.dom {
+            None => panic!("dom not computed."),
+            Some(ref d) => d.idom(i),
+        }
+    }
+
+    /// Returns all nodes in the dominance frontier of `i`.
+    pub fn dom_frontier(&self, i: NodeIndex) -> HashSet<NodeIndex> {
+        match self.dom {
+            None => panic!("dom not computed."),
+            Some(ref d) => d.dom_frontier(i),
+        }
+    }
+
+    /// Returns all postdominators of `i`.
+    pub fn postdoms(&self, i: NodeIndex) -> Vec<NodeIndex> {
+        match self.postdom {
+            None => panic!("postdom not computed."),
+            Some(ref d) => d.doms(i),
+        }
+    }
+
+    /// Returns the immediate postdominator of `i`.
+    pub fn ipostdom(&self, i: NodeIndex) -> NodeIndex {
+        match self.postdom {
+            None => panic!("postdom not computed."),
+            Some(ref d) => d.idom(i),
+        }
+    }
+
+    /// Returns all nodes in the postdominance frontier of `i`.
+    pub fn postdom_frontier(&self, i: NodeIndex) -> HashSet<NodeIndex> {
+        match self.postdom {
+            None => panic!("postdom not computed."),
+            Some(ref d) => d.dom_frontier(i),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+/// Stores dominator information for a graph.
+///
+/// Provides finer grained control over the analysis of a Graph and base for
+/// DomInfo.
+///
+/// Module level documentation provides more information.
 pub struct DomTree {
-    idom: Vec<usize>,
-    map:  HashMap<usize, NodeIndex>,
-    rmap: HashMap<NodeIndex, usize>,
-    g:    Graph<NodeIndex, u8>,
-    preds_map: HashMap<NodeIndex, Vec<usize>>,
+    idom:         Vec<InternalIndex>,
+    rmap:         HashMap<NodeIndex, InternalIndex>,
+    g:            Graph<NodeIndex, u8>,
+    preds_map:    HashMap<NodeIndex, Vec<InternalIndex>>,
     dom_frontier: Option<HashMap<NodeIndex, HashSet<NodeIndex>>>,
 }
 
-// Note: No method should leak out or accept the internal numbering.
 impl DomTree {
     fn new() -> DomTree {
         DomTree {
-            idom: Vec::new(),
-            map:  HashMap::new(),
-            rmap: HashMap::new(),
-            g:    Graph::new(),
-            preds_map: HashMap::new(),
+            idom:         Vec::new(),
+            rmap:         HashMap::new(),
+            g:            Graph::new(),
+            preds_map:    HashMap::new(),
             dom_frontier: None,
         }
     }
@@ -74,25 +170,31 @@ impl DomTree {
     }
 
     pub fn doms(&self, i: NodeIndex) -> Vec<NodeIndex> {
+        assert!(self.idom.len() > 0, "Call to DomTree::doms before 
+                                      DomTree::build_dom_tree.");
+
         let internal_index = self.rmap.get(&i).unwrap();
         let mut idom = *internal_index;
-        let mut doms = Vec::<usize>::new();
+        let mut doms = Vec::<InternalIndex>::new();
         while idom != self.idom[idom] {
             doms.push(idom.clone());
             idom = self.idom[idom];
         }
 
         doms.push(idom.clone());
-        doms.iter().map(|d| self.map.get(d).unwrap().clone()).collect()
+        doms.iter().map(|d| d.external()).collect()
     }
 
     pub fn idom(&self, i: NodeIndex) -> NodeIndex {
+        assert!(self.idom.len() > 0, "Call to DomTree::idom before 
+                                      DomTree::build_dom_tree.");
+
         let internal_index = self.rmap.get(&i).unwrap();
         let internal_node = self.idom[*internal_index];
-        self.map.get(&internal_node).unwrap().clone()
+        internal_node.external()
     }
 
-    fn intersect(idom: &Vec<usize>, i: &usize, j: &usize) -> usize {
+    fn intersect(idom: &Vec<InternalIndex>, i: &InternalIndex, j: &InternalIndex) -> InternalIndex {
         let mut f1 = *i;
         let mut f2 = *j;
         while f1 != f2 {
@@ -106,22 +208,22 @@ impl DomTree {
         return f1;
     }
 
-    pub fn build_dom_tree<N, E>(g: &Graph<N, E>, start_node: NodeIndex) -> DomTree {
+    pub fn build_dom_tree<N, E>(g: &Graph<N, E>, start_node: NodeIndex) -> DomTree
+        where N: Clone,
+              E: Clone {
+
         let mut tree = DomTree::new();
-        
+
         {
-            let idom     = &mut (tree.idom);
-            let map      = &mut (tree.map);
-            let rmap     = &mut (tree.rmap);
-            let dom_tree = &mut (tree.g);
+            let idom      = &mut (tree.idom);
+            let rmap      = &mut (tree.rmap);
+            let dom_tree  = &mut (tree.g);
             let preds_map = &mut (tree.preds_map);
-            
             let mut v      = DFSVisitor::new();
             let node_count = g.node_count();
-            let invalid    = node_count;
 
+            // compute postorder numbering.
             v.dfs(&g,start_node);
-            
             for i in 0..node_count {
                 v.dfs(&g, NodeIndex::new(i));
             }
@@ -130,58 +232,56 @@ impl DomTree {
             let mut nodes_iter = v.post_order().iter()
                                                .cloned()
                                                .zip(0..node_count)
-                                               .collect::<Vec<(NodeIndex, usize)>>();
+                                               .collect::<Vec<_>>();
+            let invalid_index = InternalIndex::new(node_count, NodeIndex::new(node_count));
+            let mut start_index = invalid_index;
+            let mut dom_tree_nodes: Vec<InternalIndex> = Vec::new();
 
-            let mut start_index = 0;
-            let mut dom_tree_nodes: Vec<NodeIndex> = Vec::new();
-
+            // Initializations for nodes.
             for item in nodes_iter.iter() {
+                let i = InternalIndex::new(item.1, item.0.clone());
+                
                 if item.0 == start_node {
-                    idom.push(item.1);
-                    start_index = item.1;
+                    start_index = i; 
+                    idom.push(start_index);
                 } else {
-                    idom.push(invalid.clone());
+                    idom.push(invalid_index);
                 }
 
-                dom_tree_nodes.push(dom_tree.add_node(NodeIndex::new(item.1)));
-                rmap.insert(item.0.clone(), item.1);
-                map.insert(item.1, item.0.clone());
+                dom_tree.add_node(NodeIndex::new(item.1));
+                dom_tree_nodes.push(i);
+                rmap.insert(item.0.clone(), i);
             }
-
             {
-                let tmp = Vec::<usize>::new();
+                let tmp = Vec::<InternalIndex>::new();
                 preds_map.insert(start_node, tmp);
             }
 
-            nodes_iter.remove(start_index);
+            nodes_iter.remove(start_index.index());
             nodes_iter.reverse();
-            
             let mut changed = true;
-            //let mut preds_map: HashMap<NodeIndex, Vec<usize>> = HashMap::new();
-
             while changed {
                 changed = false;
                 for n in nodes_iter.iter() {
                     let node: NodeIndex = n.0;
                     let preds_iter = g.neighbors_directed(node.clone(), EdgeDirection::Incoming)
                                       .map(|x| rmap.get(&x).unwrap().clone());
-                    let preds =  preds_map.entry(node.clone())
-                                          .or_insert(preds_iter.collect::<Vec<usize>>());
-                    
-                    let mut new_idom = preds[0];
+                    let preds = preds_map.entry(node.clone())
+                                         .or_insert(preds_iter.collect::<Vec<_>>());
+                    let mut new_idom = invalid_index;
                     for p in preds.iter() {
-                        if idom[*p] < invalid {
+                        if idom[*p] < invalid_index {
                             new_idom = *p;
                             break;
                         }
                     }
-
+                    // Make sure we found a node.
+                    assert!(new_idom != invalid_index);
                     for p in preds.iter() {
-                        if idom[*p] != invalid {
+                        if idom[*p] != invalid_index {
                             new_idom = DomTree::intersect(&idom, &new_idom, p);
                         }
                     }
-
                     if idom[n.1] != new_idom {
                         idom[n.1] = new_idom;
                         changed = true;
@@ -189,30 +289,35 @@ impl DomTree {
                 }
             }
 
-            for i in 0..idom.len() {
-                if i == idom[i] { continue; }
-                let n1 = dom_tree_nodes[map.get(&idom[i]).unwrap().index()];
-                let n2 = dom_tree_nodes[map.get(&i).unwrap().index()];
-                dom_tree.add_edge(n1, n2, 0);
+            // Add edges to the graph based on the idom information.
+            for i in dom_tree_nodes.iter() {
+                if *i == idom[*i] { continue; }
+                dom_tree.add_edge(idom[*i].external(), i.external(), 0);
             }
         }
+
         return tree;
     }
 
     pub fn compute_dominance_frontier(&mut self) {
+        assert!(self.idom.len() > 0, "Call to DomTree::compute_dominance_frontier 
+                                      before DomTree::build_dom_tree.");
+
         let node_count = self.idom.len();
         let mut frontier_map = HashMap::<NodeIndex, HashSet<NodeIndex>>::new();
         for node in (0..node_count).map(|x| NodeIndex::new(x)) {
             let internal_index = self.rmap.get(&node).unwrap();
             let preds = self.preds_map.get(&node).unwrap();
+            
             if preds.len() < 2 {
                 continue;
             }
+
             for p in preds {
                 let mut runner = *p;
                 while runner != self.idom[*internal_index] {
-                    let runner_index = self.map.get(&runner).unwrap();
-                    frontier_map.entry(*runner_index)
+                    let runner_index = runner.external();
+                    frontier_map.entry(runner_index)
                                 .or_insert(HashSet::new())
                                 .insert(node);
 
@@ -220,10 +325,12 @@ impl DomTree {
                 }
             }
         }
+
         self.dom_frontier = Some(frontier_map);
     }
 
     pub fn dom_frontier(&self, n: NodeIndex) -> HashSet<NodeIndex> {
+        assert!(self.dom_frontier != None, "Uninitialized dom_frontier.");
         self.dom_frontier.clone().unwrap().get(&n).unwrap().clone()
     }
 }
@@ -398,12 +505,20 @@ mod test {
         dom.compute_dominance_frontier();
 
         let res = dom.dom_frontier(f);
-
         let mut dom_front_f = HashSet::new();
         dom_front_f.insert(_g);
 
         assert_eq!(dom_front_f.len(), res.len());
         for i in res.iter().zip(dom_front_f) {
+            assert_eq!(*i.0, i.1);
+        }
+        
+        let res = dom.dom_frontier(d);
+        let mut dom_front_d = HashSet::new();
+        dom_front_d.insert(e);
+        
+        assert_eq!(dom_front_d.len(), res.len());
+        for i in res.iter().zip(dom_front_d) {
             assert_eq!(*i.0, i.1);
         }
     }
