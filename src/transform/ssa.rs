@@ -50,7 +50,9 @@ impl<'a> SSAConstruction<'a> {
 	}
 
 	pub fn seal_block(&mut self, block: Block) {
-		for (variable, node) in &self.incomplete_phis[&block] {
+		let inc = self.incomplete_phis[&block].clone(); // TODO: remove clone
+
+		for (variable, node) in inc {
 			self.add_phi_operands(variable.clone(), node.clone());
 		}
 		self.sealed_blocks.insert(block);
@@ -66,7 +68,8 @@ impl<'a> SSAConstruction<'a> {
 		if !self.sealed_blocks.contains(&block) {
 			// Incomplete CFG
 			val = self.newphi(block);
-			self.incomplete_phis.get_mut(&block).unwrap().insert(variable.clone(), val);
+			let oldval = self.incomplete_phis.get_mut(&block).unwrap().insert(variable.clone(), val);
+			assert!(oldval.is_none());
 		} else {
 			let pred = self.ssa.preds_of(block);
 			if pred.len() == 1 {
