@@ -194,10 +194,7 @@ impl DomTree {
         internal_node.external()
     }
 
-    fn intersect(idom: &Vec<InternalIndex>,
-                 i:    &InternalIndex, 
-                 j:    &InternalIndex) -> InternalIndex {
-
+    fn intersect(idom: &Vec<InternalIndex>, i: &InternalIndex, j: &InternalIndex) -> InternalIndex {
         let mut f1 = *i;
         let mut f2 = *j;
         while f1 != f2 {
@@ -222,13 +219,11 @@ impl DomTree {
             let rmap      = &mut (tree.rmap);
             let dom_tree  = &mut (tree.g);
             let preds_map = &mut (tree.preds_map);
-            
             let mut v      = DFSVisitor::new();
             let node_count = g.node_count();
 
-            v.dfs(&g,start_node);
-            
             // compute postorder numbering.
+            v.dfs(&g,start_node);
             for i in 0..node_count {
                 v.dfs(&g, NodeIndex::new(i));
             }
@@ -238,7 +233,6 @@ impl DomTree {
                                                .cloned()
                                                .zip(0..node_count)
                                                .collect::<Vec<_>>();
-
             let invalid_index = InternalIndex::new(node_count, NodeIndex::new(node_count));
             let mut start_index = invalid_index;
             let mut dom_tree_nodes: Vec<InternalIndex> = Vec::new();
@@ -258,7 +252,6 @@ impl DomTree {
                 dom_tree_nodes.push(i);
                 rmap.insert(item.0.clone(), i);
             }
-
             {
                 let tmp = Vec::<InternalIndex>::new();
                 preds_map.insert(start_node, tmp);
@@ -266,7 +259,6 @@ impl DomTree {
 
             nodes_iter.remove(start_index.index());
             nodes_iter.reverse();
-            
             let mut changed = true;
             while changed {
                 changed = false;
@@ -276,7 +268,6 @@ impl DomTree {
                                       .map(|x| rmap.get(&x).unwrap().clone());
                     let preds = preds_map.entry(node.clone())
                                          .or_insert(preds_iter.collect::<Vec<_>>());
-                    
                     let mut new_idom = invalid_index;
                     for p in preds.iter() {
                         if idom[*p] < invalid_index {
@@ -284,16 +275,13 @@ impl DomTree {
                             break;
                         }
                     }
-
                     // Make sure we found a node.
                     assert!(new_idom != invalid_index);
-
                     for p in preds.iter() {
                         if idom[*p] != invalid_index {
                             new_idom = DomTree::intersect(&idom, &new_idom, p);
                         }
                     }
-
                     if idom[n.1] != new_idom {
                         idom[n.1] = new_idom;
                         changed = true;
