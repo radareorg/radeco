@@ -25,29 +25,63 @@ impl SSA {
 	pub fn new() -> SSA {
 		SSA {g: Graph::new() }
 	}
-	pub fn replace(&mut self, pattern: NodeIndex, replacement: NodeIndex) {
-		if pattern == replacement { return }
-		unimplemented!();
+
+	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode) -> NodeIndex{
+		self.g.add_node(NodeData::Op(opc))
 	}
 
+	pub fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex{
+		self.g.add_node(NodeData::Const(value))
+	}
+
+	pub fn add_phi(&mut self, block: NodeIndex) -> NodeIndex{
+		self.g.add_node(NodeData::Phi)
+	}
+
+	// TODO: Reuse code between args_of/uses_of/preds_of/succs_of
+
 	pub fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		unimplemented!();
-		return Vec::new()
+		let mut args = Vec::new();
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Data(_) = self.g[edge] {
+				args.push(othernode);
+			}
+		}
+		args
 	}
 
 	pub fn uses_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		unimplemented!();
-		return Vec::new()
+		let mut uses = Vec::new();
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Data(_) = self.g[edge] {
+				uses.push(othernode);
+			}
+		}
+		uses
 	}
 
 	pub fn preds_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		unimplemented!();
-		return Vec::new()
+		let mut preds = Vec::new();
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(_) = self.g[edge] {
+				preds.push(othernode);
+			}
+		}
+		preds
 	}
 
 	pub fn succs_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		unimplemented!();
-		return Vec::new()
+		let mut succs = Vec::new();
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(_) = self.g[edge] {
+				succs.push(othernode);
+			}
+		}
+		succs
 	}
 
 	pub fn block_of(&self, node: NodeIndex) -> NodeIndex {
@@ -65,6 +99,16 @@ impl SSA {
 		if let Option::Some(edge) = self.g.find_edge(phi, node) {
 			self.g.remove_edge(edge);
 		}
+	}
+
+	pub fn op_use(&mut self, node: NodeIndex, index: u8, argument: NodeIndex) {
+		if argument == NodeIndex::end() { return }
+		unimplemented!();
+	}
+
+	pub fn replace(&mut self, pattern: NodeIndex, replacement: NodeIndex) {
+		if pattern == replacement { return }
+		unimplemented!();
 	}
 }
 

@@ -95,7 +95,10 @@ impl<'a> SSAConstruction<'a> {
 	}
 
 	fn process_op(&mut self, block: Block, opc: MOpcode, n1: Node, n2: Node) -> Node {
-		Node::end()
+		let n = self.ssa.add_op(block, opc);
+		self.ssa.op_use(n, 0, n1);
+		self.ssa.op_use(n, 1, n2);
+		return n
 	}
 
 	fn process_block(&mut self, block: Block, source: BasicBlock) {
@@ -119,16 +122,12 @@ impl<'a> SSAConstruction<'a> {
 		}
 	}
 
-	fn newphi(&mut self, block: Block) -> Node {
-		self.ssa.g.add_node(NodeData::Phi)
-	}
-
 	fn read_variable_recursive(&mut self, variable: VarId, block: Block) -> Node {
 		let mut val;
 
 		if !self.sealed_blocks.contains(&block) {
 			// Incomplete CFG
-			val = self.newphi(block);
+			val = self.ssa.add_phi(block);
 			let oldval = self.incomplete_phis.get_mut(&block).unwrap().insert(variable.clone(), val);
 			assert!(oldval.is_none());
 		} else {
@@ -138,7 +137,7 @@ impl<'a> SSAConstruction<'a> {
 				val = self.read_variable(variable.clone(), pred[0])
 			} else {
 				// Break potential cycles with operandless phi
-				val = self.newphi(block);
+				val = self.ssa.add_phi(block);
 				// TODO: only mark (see paper)
 				self.write_variable(variable.clone(), block, val);
 				val = self.add_phi_operands(variable.clone(), val)
