@@ -2,15 +2,17 @@
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
 use petgraph::graph::{DefIndex, NodeIndex};
-use middle::cfg::CFG;
+use frontend::structs::LRegInfo;
+use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::{SSA, NodeData};
+use middle::ir::{MVal, MOpcode, MValType, MRegInfo};
 use std::collections::{HashSet, HashMap};
 
-type VarId = String; // consider transitioning to &str
-type Block = NodeIndex;
-type Node = NodeIndex;
+pub type VarId = String; // consider transitioning to &str
+pub type Block = NodeIndex;
+pub type Node = NodeIndex;
 
-struct SSAConstruction<'a> {
+pub struct SSAConstruction<'a> {
 	cfg:             &'a CFG,
 	ssa:             &'a mut SSA,
 	variables:       Vec<VarId>, // assume consequtive integers?
@@ -20,15 +22,18 @@ struct SSAConstruction<'a> {
 }
 
 impl<'a> SSAConstruction<'a> {
-	pub fn new(variables: Vec<VarId>, cfg: &'a CFG, ssa: &'a mut SSA) -> SSAConstruction<'a> {
+	pub fn new(ssa: &'a mut SSA, cfg: &'a CFG, reg_info: &LRegInfo) -> SSAConstruction<'a> {
 		let mut s = SSAConstruction {
 			cfg:             cfg,
 			ssa:             ssa,
-			variables:       variables,
+			variables:       Vec::new(),
 			sealed_blocks:   HashSet::new(),
 			current_def:     HashMap::new(),
 			incomplete_phis: HashMap::new()
 		};
+		for reg in &reg_info.reg_info {
+			s.variables.push(reg.name.clone());
+		}
 		for var in &s.variables {
 			s.current_def.insert(var.clone(), HashMap::new());
 		}
@@ -56,6 +61,62 @@ impl<'a> SSAConstruction<'a> {
 			self.add_phi_operands(variable.clone(), node.clone());
 		}
 		self.sealed_blocks.insert(block);
+	}
+
+	pub fn run(&mut self) {
+		unimplemented!();
+		// for i in 0..self.cfg.g.node_count() {
+		// 	
+		// }
+	}
+
+	fn process_in(&mut self, block: Block, mval: &MVal) -> Node {
+		match mval.val_type {
+			MValType::Memory    => unimplemented!(),
+			MValType::Register  => self.read_variable(mval.name.clone(), block),
+			MValType::Constant  => unimplemented!(),
+			MValType::Temporary => unimplemented!(),
+			MValType::Unknown   => unimplemented!(),
+			MValType::Null      => NodeIndex::end(),
+			MValType::Internal  => unimplemented!()
+		}
+	}
+
+	fn process_out(&mut self, block: Block, mval: &MVal, value: Node) {
+		match mval.val_type {
+			MValType::Memory    => unimplemented!(),
+			MValType::Register  => self.write_variable(mval.name.clone(), block, value),
+			MValType::Constant  => panic!(),
+			MValType::Temporary => unimplemented!(),
+			MValType::Unknown   => unimplemented!(),
+			MValType::Null      => {},
+			MValType::Internal  => unimplemented!()
+		}
+	}
+
+	fn process_op(&mut self, block: Block, opc: MOpcode, n1: Node, n2: Node) -> Node {
+		Node::end()
+	}
+
+	fn process_block(&mut self, block: Block, source: BasicBlock) {
+		for ref instruction in &source.instructions {
+			// instruction.addr
+			// instruction.opcode
+
+			let n1 = self.process_in(block, &instruction.operand_1);
+			let n2 = self.process_in(block, &instruction.operand_2);
+			let n0 = self.process_op(block, instruction.opcode, n1, n2);
+			self.process_out(block, &instruction.dst, n0);
+
+			/*pub struct MVal {
+				pub name:     String,
+				pub size:     u8,
+				pub val_type: MValType,
+				pub value:    i64,
+				pub reg_info: Option<MRegInfo>,
+				pub typeset:  u32,
+			}*/
+		}
 	}
 
 	fn newphi(&mut self, block: Block) -> Node {

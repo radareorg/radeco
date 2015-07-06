@@ -48,5 +48,5 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
                               dst_node.name().unwrap(), edge.label());
     }
 
-    add_strings!(result, "\n}")
+    add_strings!(result, "\n}\n")
 }
