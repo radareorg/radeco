@@ -420,20 +420,34 @@ impl<'a> Parser<'a> {
     }
 
     fn add_inst(&mut self, op: MOpcode) -> Result<(), ParseError> {
-        // Handle "}".
-        if op == MOpcode::OpCl {
-            let null = MVal::null();
-            let addr = MAddr::new(self.addr);
-            let inst = MInst::new(op, null.clone(), null.clone(), null.clone(), Some(addr));
-            self.insts.push(inst.clone());
-            return Ok(());
+        // Handle all the special cases.
+        match op {
+            MOpcode::OpCl => {
+                let null = MVal::null();
+                let addr = MAddr::new(self.addr);
+                let inst = MInst::new(op, null.clone(), null.clone(), null.clone(), Some(addr));
+                self.insts.push(inst.clone());
+                return Ok(());
+            },
+            MOpcode::OpInc |
+            MOpcode::OpDec => {
+                let _op = match op {
+                    MOpcode::OpInc => MOpcode::OpAdd,
+                    MOpcode::OpDec => MOpcode::OpSub,
+                    _              => unreachable!(),
+                };
+                let mut top = self.stack.len();
+                top -= 2;
+                self.stack.insert(top, MVal::constant(1));
+                try!(self.add_inst(_op));
+                return Ok(());
+            },
+            MOpcode::OpEq => {
+                return self.add_assign_inst(op);
+            },
+            _ => { },
         }
-
-        // Assignment operation has to be handled quite differently.
-        if op == MOpcode::OpEq {
-            return self.add_assign_inst(op);
-        }
-
+        
         let mut op2 = match self.stack.pop() {
             Some(ele) => ele,
             None      => return Err(ParseError::InsufficientOperands),
