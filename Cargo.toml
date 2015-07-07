@@ -6,13 +6,9 @@ authors = [
 	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
 ]
 
-[dependencies.rustc-data-structures]
-doc = false
-path = "src/rustc_data_structures"
-
 [dependencies]
 regex = "*"
-
-[[bin]]
-doc = false
-name = "radeco"
+petgraph = "*"
+num = "*"
+r2pipe = "*"
+rustc-serialize = "*"
