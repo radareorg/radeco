@@ -13,6 +13,8 @@ pub enum NodeData {
 	Comment(String),
 	Const(u64),
 	Phi(String),
+	Undefined,
+	Removed,
 	BasicBlock
 }
 
@@ -20,7 +22,8 @@ pub enum NodeData {
 pub enum EdgeData {
 	Control(u8),
 	Data(u8),
-	ContainedInBB
+	ContainedInBB,
+	ReplacedBy
 }
 
 impl SSA {
@@ -120,6 +123,7 @@ impl SSA {
 
 	pub fn phi_use(&mut self, phi: NodeIndex, node: NodeIndex) {
 		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
+		assert!(if let NodeData::Removed = self.g[node] { false } else { true });
 		self.g.update_edge(phi, node, EdgeData::Data(0));
 	}
 
@@ -132,6 +136,7 @@ impl SSA {
 
 	pub fn op_use(&mut self, node: NodeIndex, index: u8, argument: NodeIndex) {
 		if argument == NodeIndex::end() { return }
+		assert!(if let NodeData::Removed = self.g[argument] { false } else { true });
 		// TODO: find existing edge
 		self.g.add_edge(node, argument, EdgeData::Data(index));
 	}
@@ -151,14 +156,21 @@ impl SSA {
 			}
 			remove_us.push(edge);
 		}
-		self.remove_edges(remove_us);
+		self.g.add_node(NodeData::Removed);
+		self.g.remove_node(node);
+		self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
 	}
 
-	/// Remove multiple edges while considering that indices can change
-	fn remove_edges(&mut self, mut edges: Vec<EdgeIndex>) {
-		edges.sort_by(|a, b| b.index().cmp(&a.index()));
-		for edge in edges {
-			self.g.remove_edge(edge);
+	pub fn cleanup(&mut self) {
+		let mut i = 0;
+		let mut n = self.g.node_count();
+		while i < n {
+			if let NodeData::Removed = self.g[NodeIndex::new(i)] {
+				self.g.remove_node(NodeIndex::new(i));
+				n -= 1;
+			} else {
+				i += 1;
+			}
 		}
 	}
 }
@@ -215,7 +227,8 @@ impl Label for Edge<EdgeData> {
     	match self.weight {
     		EdgeData::Control(_)    => "[color=\"blue\"];\n",
     		EdgeData::Data(_)       => "[dir=\"back\"];\n",
-    		EdgeData::ContainedInBB => "[color=\"gray\"];\n"
+    		EdgeData::ContainedInBB => "[color=\"gray\"];\n",
+    		EdgeData::ReplacedBy    => "[color=\"red\"];\n"
     	}.to_string()
     }
 

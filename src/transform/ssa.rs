@@ -1,10 +1,12 @@
 //! Implements the SSA construction algorithm described in
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
+use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
 use frontend::structs::LRegInfo;
 use middle::cfg::NodeData as CFGNodeData;
 use middle::cfg::{CFG, BasicBlock};
+use middle::ssa::NodeData as SSANodeData;
 use middle::ssa::EdgeData as SSAEdgeData;
 use middle::ssa::{SSA, NodeData};
 use middle::ir::{MVal, MOpcode, MValType};
@@ -52,8 +54,18 @@ impl<'a> SSAConstruction<'a> {
 		}
 	}
 
+	fn replaced_by(&self, node: Node) -> Node {
+		let mut walk = self.ssa.g.walk_edges_directed(node, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.ssa.g) {
+			if let SSAEdgeData::ReplacedBy = self.ssa.g[edge] {
+				return othernode
+			}
+		}
+		return NodeIndex::end()
+	}
+
 	pub fn read_variable(&mut self, block: Block, variable: VarId) -> Node {
-		match {
+		let mut n = match {
 			if let Option::Some(vd) = self.current_def.get(&variable) {
 				vd.get(&block)
 			} else {
@@ -62,14 +74,20 @@ impl<'a> SSAConstruction<'a> {
 		}.map(|r|*r) {
 			Option::Some(r) => r,
 			Option::None => self.read_variable_recursive(variable, block)
+		};
+		while let NodeData::Removed = self.ssa.g[n] {
+			// Ask authors of this algorithm if they had to loop here too
+			n = self.replaced_by(n);
 		}
+		assert!(if let NodeData::Removed = self.ssa.g[n] { false } else { true });
+		return n
 	}
 
 	pub fn seal_block(&mut self, block: Block) {
 		let inc = self.incomplete_phis[&block].clone(); // TODO: remove clone
 
 		for (variable, node) in inc {
-			self.add_phi_operands(variable.clone(), node.clone());
+			self.add_phi_operands(block, variable.clone(), node.clone());
 		}
 		self.sealed_blocks.insert(block);
 	}
@@ -105,6 +123,7 @@ impl<'a> SSAConstruction<'a> {
 		for block in blocks {
 			self.seal_block(block);
 		}
+		self.ssa.cleanup();
 	}
 
 	fn process_in(&mut self, block: Block, mval: &MVal) -> Node {
@@ -180,16 +199,17 @@ impl<'a> SSAConstruction<'a> {
 				val = self.ssa.add_phi_comment(block, &variable);
 				// TODO: only mark (see paper)
 				self.write_variable(block, variable.clone(), val);
-				val = self.add_phi_operands(variable.clone(), val)
+				val = self.add_phi_operands(block, variable.clone(), val)
 			}
 		}
 		self.write_variable(block, variable, val);
 		return val
 	}
 
-	fn add_phi_operands(&mut self, variable: VarId, phi: Node) -> Node {
+	fn add_phi_operands(&mut self, block: Block, variable: VarId, phi: Node) -> Node {
+		assert!(block == self.ssa.block_of(phi));
 		// Determine operands from predecessors
-		for pred in self.ssa.preds_of(self.ssa.block_of(phi)) {
+		for pred in self.ssa.preds_of(block) {
 			let datasource = self.read_variable(pred, variable.clone());
 			self.ssa.phi_use(phi, datasource)
 		}
@@ -210,15 +230,11 @@ impl<'a> SSAConstruction<'a> {
 		}
 
 		if same == undef {
-			// The original algorithm doesn't check for this conditions,
-			// so that fact that I have to probably means I got something
-			// wrong that leads to this situation
-			return phi
+			same = self.ssa.g.add_node(SSANodeData::Undefined);
 		}
 
 		let users = self.ssa.uses_of(phi);
 		self.ssa.replace(phi, same); // Reroute all uses of phi to same and remove phi
-		//println!("Replacing! {:?} users", users.len());
 
 		// Try to recursively remove all phi users, which might have become trivial
 		for use_ in users {
