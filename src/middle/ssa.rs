@@ -1,6 +1,5 @@
-use std::mem;
 use petgraph::{EdgeDirection, Graph};
-use petgraph::graph::{DefIndex, Edge, Node, NodeIndex, EdgeIndex};
+use petgraph::graph::{Edge, NodeIndex, EdgeIndex};
 use super::ir;
 use super::dot::{GraphDot, EdgeInfo, Label};
 
@@ -8,17 +7,20 @@ pub struct SSA {
 	pub g: Graph<NodeData, EdgeData>
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum NodeData {
 	Op(ir::MOpcode),
+	Comment(String),
 	Const(u64),
-	Phi
+	Phi(String),
+	BasicBlock
 }
 
 #[derive(Clone, Copy)]
 pub enum EdgeData {
 	Control(u8),
-	Data(u8)
+	Data(u8),
+	ContainedInBB
 }
 
 impl SSA {
@@ -26,16 +28,38 @@ impl SSA {
 		SSA {g: Graph::new() }
 	}
 
-	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode) -> NodeIndex{
-		self.g.add_node(NodeData::Op(opc))
+	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Op(opc));
+		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		n
 	}
 
-	pub fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex{
-		self.g.add_node(NodeData::Const(value))
+	pub fn add_comment(&mut self, block: NodeIndex, msg: &String) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Comment(msg.clone()));
+		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		n
 	}
 
-	pub fn add_phi(&mut self, block: NodeIndex) -> NodeIndex{
-		self.g.add_node(NodeData::Phi)
+	pub fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Const(value));
+		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		n
+	}
+
+	pub fn add_phi(&mut self, block: NodeIndex) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Phi("".to_string()));
+		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		n
+	}
+
+	pub fn add_phi_comment(&mut self, block: NodeIndex, comment: &String) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Phi(comment.clone()));
+		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		n
+	}
+
+	pub fn add_block(&mut self) -> NodeIndex {
+		self.g.add_node(NodeData::BasicBlock)
 	}
 
 	// TODO: Reuse code between args_of/uses_of/preds_of/succs_of
@@ -85,17 +109,22 @@ impl SSA {
 	}
 
 	pub fn block_of(&self, node: NodeIndex) -> NodeIndex {
-		unimplemented!();
-		return node
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::ContainedInBB = self.g[edge] {
+				return othernode
+			}
+		}
+		return NodeIndex::end()
 	}
 
 	pub fn phi_use(&mut self, phi: NodeIndex, node: NodeIndex) {
-		assert!(if let NodeData::Phi = self.g[phi] { true } else { false });
+		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
 		self.g.update_edge(phi, node, EdgeData::Data(0));
 	}
 
 	pub fn phi_unuse(&mut self, phi: NodeIndex, node: NodeIndex) {
-		assert!(if let NodeData::Phi = self.g[phi] { true } else { false });
+		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
 		if let Option::Some(edge) = self.g.find_edge(phi, node) {
 			self.g.remove_edge(edge);
 		}
@@ -103,12 +132,34 @@ impl SSA {
 
 	pub fn op_use(&mut self, node: NodeIndex, index: u8, argument: NodeIndex) {
 		if argument == NodeIndex::end() { return }
-		unimplemented!();
+		// TODO: find existing edge
+		self.g.add_edge(node, argument, EdgeData::Data(index));
 	}
 
-	pub fn replace(&mut self, pattern: NodeIndex, replacement: NodeIndex) {
-		if pattern == replacement { return }
-		unimplemented!();
+	pub fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
+		if node == replacement { return }
+
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
+		let mut remove_us = Vec::<EdgeIndex>::new();
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Data(i) = self.g[edge] {
+				match self.g[othernode] {
+					NodeData::Op(_) => self.op_use(othernode, i, replacement),
+					NodeData::Phi(_) => self.phi_use(othernode, replacement),
+					_ => panic!()
+				}
+			}
+			remove_us.push(edge);
+		}
+		self.remove_edges(remove_us);
+	}
+
+	/// Remove multiple edges while considering that indices can change
+	fn remove_edges(&mut self, mut edges: Vec<EdgeIndex>) {
+		edges.sort_by(|a, b| b.index().cmp(&a.index()));
+		for edge in edges {
+			self.g.remove_edge(edge);
+		}
 	}
 }
 
@@ -137,17 +188,35 @@ impl GraphDot for SSA {
 
 impl EdgeInfo for Edge<EdgeData> {
     fn source(&self) -> usize {
-        self.source().index()
+		match self.weight {
+			EdgeData::Data(_) => self.target().index(),
+			_                 => self.source().index()
+		}
     }
 
     fn target(&self) -> usize {
-        self.target().index()
+		match self.weight {
+			EdgeData::Data(_) => self.source().index(),
+			_                 => self.target().index()
+		}
+    }
+
+    fn skip(&self) -> bool {
+    	if let EdgeData::ContainedInBB = self.weight {
+ 			true
+		} else {
+			false
+    	}
     }
 }
 
 impl Label for Edge<EdgeData> {
     fn label(&self) -> String {
-        ";\n".to_string()
+    	match self.weight {
+    		EdgeData::Control(_)    => "[color=\"blue\"];\n",
+    		EdgeData::Data(_)       => "[dir=\"back\"];\n",
+    		EdgeData::ContainedInBB => "[color=\"gray\"];\n"
+    	}.to_string()
     }
 
     fn name(&self) -> Option<String> {
@@ -157,7 +226,8 @@ impl Label for Edge<EdgeData> {
 
 impl Label for NodeData {
     fn label(&self) -> String {
-        format!("{} [label={:?}];\n", self.name().unwrap(), self)
+    	let l = format!("{:?}", self);
+        format!(" [label=\"{}\"];\n", l.replace("\"", "\\\""))
     }
 
     fn name(&self) -> Option<String> {

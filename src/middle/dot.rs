@@ -5,7 +5,7 @@ macro_rules! add_strings {
         {
             let mut s = String::new();
             $(
-                s = format!("{}{}", s, $x);
+                s.push_str(&format!("{}", $x));
              )*
                 s
         }
@@ -29,6 +29,7 @@ pub trait GraphDot {
 pub trait EdgeInfo {
     fn source(&self) -> usize;
     fn target(&self) -> usize;
+    fn skip(&self) -> bool { false }
 }
 
 pub fn emit_dot<T: GraphDot>(g: &T) -> String {
@@ -36,16 +37,17 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
     result = add_strings!(result, g.configure());
 
     // Node configurations
+    let mut i: usize = 0;
     for node in g.nodes().iter() {
-        result = add_strings!(result, node.label());
+        result = add_strings!(result, "n", i, node.label());
+        i += 1;
     }
 
     // Connect nodes by edges.
     for edge in g.edges().iter() {
-        let src_node = g.get_node(edge.source()).unwrap();
-        let dst_node = g.get_node(edge.target()).unwrap();
-        result = add_strings!(result, src_node.name().unwrap(), " -> ",
-                              dst_node.name().unwrap(), edge.label());
+        if edge.skip() { continue }
+        result = add_strings!(result, "n", edge.source(), " -> ",
+                              "n", edge.target(), edge.label());
     }
 
     add_strings!(result, "\n}\n")
