@@ -165,7 +165,14 @@ impl SSA {
 		let mut i = 0;
 		let mut n = self.g.node_count();
 		while i < n {
-			if let NodeData::Removed = self.g[NodeIndex::new(i)] {
+			if {
+				let ni = NodeIndex::new(i);
+				match self.g[ni] {
+					NodeData::Removed => true,
+					NodeData::Comment(_) if self.g.first_edge(ni, EdgeDirection::Incoming) == Option::None => true,
+					_ => false
+				}
+			} {
 				self.g.remove_node(NodeIndex::new(i));
 				n -= 1;
 			} else {

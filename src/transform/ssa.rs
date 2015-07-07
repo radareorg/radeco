@@ -132,7 +132,7 @@ impl<'a> SSAConstruction<'a> {
 			MValType::Register  => self.read_variable(block, mval.name.clone()),
 			MValType::Constant  => self.ssa.add_const(block, mval.value as u64),
 			MValType::Temporary => self.read_variable(block, mval.name.clone()),
-			MValType::Unknown   => unimplemented!(),
+			MValType::Unknown   => self.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
 			MValType::Null      => NodeIndex::end(),
 			MValType::Internal  => self.ssa.add_comment(block, &mval.name), // unimplemented!()
 		}

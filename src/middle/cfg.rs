@@ -372,10 +372,11 @@ impl Label for NodeData {
                 
                 // iterate throught the instructions and convert them to dot.
                 for inst in &block.instructions {
+                    let instrtext = format!("{}", inst);
                     let inst_dot = 
                         format!("<tr><td align=\"left\" cellspacing=\"1\"><font color=\"grey50\"
                                  point-size=\"9\">0x{:08x}:</font></td><td align=\"left\">{}</td></tr>",
-                                 inst.addr.val, inst);
+                                 inst.addr.val, instrtext.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"));
                     _result = add_strings!(_result, inst_dot);
                 }
                 _result
@@ -384,6 +385,6 @@ impl Label for NodeData {
             NodeData::Exit  => "<tr><td>Exit</td></tr>".to_string(),
         };
         result = add_strings!(result, res, "</table>>");
-        add_strings!(self.name(), "[style=rounded label=", result, " shape=box color=", color,"];\n")
+        add_strings!("[style=rounded label=", result, " shape=box color=", color,"];\n")
     }
 }

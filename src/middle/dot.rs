@@ -34,21 +34,23 @@ pub trait EdgeInfo {
 
 pub fn emit_dot<T: GraphDot>(g: &T) -> String {
     let mut result = String::new();
-    result = add_strings!(result, g.configure());
+    result.push_str(&*add_strings!(g.configure()));
 
     // Node configurations
     let mut i: usize = 0;
     for node in g.nodes().iter() {
-        result = add_strings!(result, "n", i, node.label());
+        result.push_str(&*add_strings!("n", i));
+        result.push_str(&*node.label());
         i += 1;
     }
 
     // Connect nodes by edges.
     for edge in g.edges().iter() {
         if edge.skip() { continue }
-        result = add_strings!(result, "n", edge.source(), " -> ",
-                              "n", edge.target(), edge.label());
+        result.push_str(&*add_strings!("n", edge.source(), " -> ",
+                              "n", edge.target(), edge.label()));
     }
 
-    add_strings!(result, "\n}\n")
+    result.push_str(&*add_strings!("\n}\n"));
+    result
 }
