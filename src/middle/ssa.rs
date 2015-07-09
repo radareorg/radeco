@@ -68,13 +68,19 @@ impl SSA {
 	// TODO: Reuse code between args_of/uses_of/preds_of/succs_of
 
 	pub fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		let mut args = Vec::new();
+		let mut args = vec![NodeIndex::end(), NodeIndex::end()]; // Vec::new();
 		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Data(_) = self.g[edge] {
-				args.push(othernode);
+			if let EdgeData::Data(index) = self.g[edge] {
+				args[index] = othernode;
+				//args.push(othernode);
 			}
 		}
+		let mut i = args.len();
+		while i > 0 && args[i-1] == NodeIndex::end() {
+			i -= 1;
+		}
+		args.truncate(i);
 		args
 	}
 
