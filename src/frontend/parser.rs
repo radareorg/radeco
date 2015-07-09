@@ -290,35 +290,48 @@ impl<'a> Parser<'a> {
     /// ```
 
     pub fn emit_insts(&mut self) -> Vec<MInst> {
-        let len = self.insts.len();
         let mut res: Vec<MInst> = Vec::new();
-        let mut i = 0;
-        while i < len {
-            let inst = self.insts[i].clone();
-            if inst.opcode != MOpcode::OpIf {
-                res.push(inst);
-                i += 1;
-                continue;
-            }
+        {
+            let mut insts_iter = self.insts.iter();
+            while let Some(inst) = insts_iter.next() {
+                if inst.opcode != MOpcode::OpIf && inst.opcode != MOpcode::OpJmp {
+                    res.push(inst.clone());
+                    continue;
+                }
 
-            // Note(sushant94): We need to improve this process if we want to retain the side-effects.
-            // For example, a x86 call instruction will result the corresponding esil statement to
-            // have instructions to set esp and then jump to the required val_type.
-            // We can use these side-effects to determine if it's a 'call' or just a jump.
-            // This however requires study into other architectures and their esil too.
-            while self.insts[i].opcode != MOpcode::OpCl && i < len - 1 {
-                i += 1;
-                let inst_ = self.insts[i].clone();
-                if inst_.opcode == MOpcode::OpJmp {
-                    let res_inst = 
+                if inst.opcode == MOpcode::OpJmp {
+                    while let Some(_inst) = insts_iter.next() {
+                        if _inst.addr.val != inst.addr.val {
+                            res.push(inst.clone());
+                            res.push(_inst.clone());
+                            break;
+                        }
+                        res.push(_inst.clone());
+                    }
+                    continue;
+                }
+
+                let mut jmp_inst = None;
+                while let Some(_inst) = insts_iter.next() {
+                    if _inst.opcode == MOpcode::OpCl {
+                        break;
+                    }
+                    if _inst.opcode != MOpcode::OpJmp {
+                        res.push(_inst.clone());
+                        continue;
+                    }
+
+                    jmp_inst = Some(
                         MInst::new(MOpcode::OpCJmp, MVal::null(),
                         inst.operand_1.clone(),
-                        inst_.operand_1, Some(inst.addr.clone()));
-                    res.push(res_inst);
+                        _inst.clone().operand_1, Some(inst.addr.clone()))
+                        );
                 }
+
+                res.push(jmp_inst.unwrap());
             }
-            i += 1;
         }
+
         self.insts = res;
         return (self).insts.clone();
     }
@@ -488,6 +501,11 @@ impl<'a> Parser<'a> {
         }
 
         dst.size = dst_size;
+        
+        // If it is a compare instruction, then the flags must be updated.
+        if op == MOpcode::OpCmp {
+            self.last_assgn = dst.clone();
+        }
 
         let addr = MAddr::new(self.addr);
         let inst = MInst::new(op, dst.clone(), op2, op1, Some(addr));
