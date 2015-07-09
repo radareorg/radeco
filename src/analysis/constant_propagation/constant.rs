@@ -46,8 +46,12 @@ pub trait SSAGraphIter {
     fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
     fn get_phis(&self, i: &NodeIndex) -> Vec<NodeIndex>;
     fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn get_def(&self, i: &NodeIndex) -> NodeIndex;
     fn get_block(&self, i: &NodeIndex) -> NodeIndex;
     fn get_ops(&self, i: &NodeIndex) -> NodeIndex;
+    fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn lhs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn rhs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
 }
 
 pub struct Analyzer<T: SSAGraphIter + Clone> {
@@ -69,56 +73,70 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
         }
     }
 
-    pub fn analyze(&mut self) {
-        let mut g = &mut (self.g);
-        let mut ssa_worklist = &mut (self.ssa_worklist);
-        let mut cfg_worklist = &mut (self.cfg_worklist);
-        let mut executable = &mut (self.executable);
-        let mut expr_val = &mut (self.expr_val);
+    pub fn visit_phi(&mut self, i: &NodeIndex) {
+        let operands = self.g.get_operands(i);
+        let mut phi_val = self.expr_val.get(i).unwrap().clone();
+        //let old_val = phi_val;
+        for o in operands.iter() {
+            //let def = self.get_def(o);
+            let b = self.g.get_block(&o);
+            let val = match *self.executable.get(&b).unwrap() {
+                true => *self.expr_val.get(&o).unwrap(),
+                false => ExprVal::Top,
+            };
+            phi_val = meet(&phi_val, &val);
+        }
+        *(self.expr_val.get_mut(i).unwrap()) = phi_val;
+    }
 
+    pub fn visit_expression(&mut self, i: NodeIndex) {
+    }
+
+    pub fn analyze(&mut self) {
         // Initializations
-        cfg_worklist.push(g.start_node());
-        for block in g.get_blocks().iter() {
-            executable.insert(block.clone(), false);
-            for expr in g.get_exprs(block) {
-                expr_val.insert(expr.clone(), ExprVal::Top);
+        self.cfg_worklist.push(self.g.start_node());
+        for block in self.g.get_blocks().iter() {
+            self.executable.insert(block.clone(), false);
+            for expr in self.g.get_exprs(block) {
+                self.expr_val.insert(expr.clone(), ExprVal::Top);
             }
         }
 
         // Iterative worklist.
-        while ssa_worklist.len() > 0 || cfg_worklist.len() > 0 {
-            while cfg_worklist.len() > 0 {
-                let block = cfg_worklist.pop().unwrap();
-                *(executable.get_mut(&block).unwrap()) = true;
-                let phis = g.get_phis(&block);
+        while self.ssa_worklist.len() > 0 || self.cfg_worklist.len() > 0 {
+            while self.cfg_worklist.len() > 0 {
+                let block = self.cfg_worklist.pop().unwrap();
+                *(self.executable.get_mut(&block).unwrap()) = true;
+                let phis = self.g.get_phis(&block);
                 // Evaluate phis
                 for phi in phis.iter() {
-                    // TODO: Actually do the meet here.
+                    // Visit the phi's and set their values.
+                    self.visit_phi(phi);
                 }
                 // Iterate through all the expression in the block.
-                for expr in g.get_exprs(&block) {
-                    // TODO: Evaluate expr and update expr_val.
-                    for _use in g.get_uses(&expr) {
-                        let owner_block = g.get_block(&_use);
-                        if *executable.get(&owner_block).unwrap() {
-                            ssa_worklist.push(_use);
+                for expr in self.g.get_exprs(&block) {
+                    // TODO: Evaluate expr and update self.expr_val.
+                    for _use in self.g.get_uses(&expr) {
+                        let owner_block = self.g.get_block(&_use);
+                        if *self.executable.get(&owner_block).unwrap() {
+                            self.ssa_worklist.push(_use);
                         }
                     }
                 }
             }
 
-            while ssa_worklist.len() > 0 {
-                let e = ssa_worklist.pop().unwrap();
-                // Get the operation/expression to which this operand belongs to.
-                let op = g.get_ops(&e);
+            while self.ssa_worklist.len() > 0 {
+                let e = self.ssa_worklist.pop().unwrap();
+                // self.get the operation/expression to which this operand belongs to.
+                let op = self.g.get_ops(&e);
                 // TODO: Evaluate the expression.
                 let t = ExprVal::Top;
-                if t != *expr_val.get(&op).unwrap() {
-                    *(expr_val.get_mut(&op).unwrap()) = ExprVal::Top;
-                    for _use in g.get_uses(&op).iter() {
-                        let b = g.get_block(_use);
-                        if *executable.get(&b).unwrap() {
-                            ssa_worklist.push(_use.clone())
+                if t != *self.expr_val.get(&op).unwrap() {
+                    *(self.expr_val.get_mut(&op).unwrap()) = ExprVal::Top;
+                    for _use in self.g.get_uses(&op).iter() {
+                        let b = self.g.get_block(_use);
+                        if *self.executable.get(&b).unwrap() {
+                            self.ssa_worklist.push(_use.clone())
                         }
                     }
                 }
