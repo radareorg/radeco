@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use petgraph::graph::{Graph, NodeIndex, Edge};
 use petgraph::EdgeDirection;
 
-use ::middle::dot::{GraphDot, EdgeInfo, Label};
+use ::middle::dot::{GraphDot, DotAttrBlock};
 use super::index::InternalIndex;
 
 #[derive(Clone, Debug)]
@@ -360,36 +360,22 @@ impl GraphDot for DomTree {
     fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
         self.g.node_weight(NodeIndex::new(n))
     }
-}
 
-impl EdgeInfo for Edge<u8> {
-    fn source(&self) -> usize {
-        self.source().index()
+    fn edge_source(&self, edge: &Edge<u8>) -> usize {
+        edge.source().index()
     }
 
-    fn target(&self) -> usize {
-        self.target().index()
-    }
-}
-
-impl Label for Edge<u8> {
-    fn label(&self) -> String {
-        ";\n".to_string()
-    }
-     
-    fn name(&self) -> Option<String> {
-        None
-    }
-}
-
-impl Label for NodeIndex {
-    fn label(&self) -> String {
-        let tmp = format!("n{}", self.index());
-        format!("{} [label={}];\n", tmp, tmp)
+    fn edge_target(&self, edge: &Edge<u8>) -> usize {
+        edge.target().index()
     }
 
-    fn name(&self) -> Option<String> {
-        Some(format!("n{}", self.index()))
+    fn edge_attrs(&self, edge: &Edge<u8>) -> DotAttrBlock {
+        DotAttrBlock::Raw("".to_string())
+    }
+
+    fn node_attrs(&self, node: &NodeIndex) -> DotAttrBlock {
+        let tmp = format!("n{}", node.index());
+        DotAttrBlock::Raw(format!("[label={}]", tmp))
     }
 }
 

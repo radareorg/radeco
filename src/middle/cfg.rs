@@ -9,7 +9,7 @@ use petgraph::{Dfs};
 use std::collections::BTreeMap;
 
 use super::ir::*;
-use super::dot::{GraphDot, EdgeInfo, Label};
+use super::dot::{GraphDot, DotAttrBlock};
 
 macro_rules! add_strings {
     ( $( $x: expr ),* ) => {
@@ -321,21 +321,17 @@ impl GraphDot for CFG {
     fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
         self.g.node_weight(NodeIndex::new(n))
     }
-}
 
-impl EdgeInfo for Edge<EdgeData> {
-    fn source(&self) -> usize {
-        self.source().index()
+    fn edge_source(&self, edge: &Edge<EdgeData>) -> usize {
+        edge.source().index()
     }
 
-    fn target(&self) -> usize {
-        self.target().index()
+    fn edge_target(&self, edge: &Edge<EdgeData>) -> usize {
+        edge.target().index()
     }
-}
 
-impl Label for Edge<EdgeData> {
-    fn label(&self) -> String {
-        let wt = &self.weight;
+    fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
+        let wt = &edge.weight;
         let mut direction = "forward";
         let (color, label) = match wt.edge_type {
             EdgeType::True          => ("green", "label=T "),
@@ -345,25 +341,15 @@ impl Label for Edge<EdgeData> {
         if wt.direction == BACKWARD {
             direction = "back";
         }
-        add_strings!("[", label, "color=", color, " dir=", direction, "];\n")
+        DotAttrBlock::Raw(add_strings!("[", label, "color=", color, " dir=", direction, "]"))
     }
 
-    fn name(&self) -> Option<String> {
-        None
-    }
-}
-
-impl Label for NodeData {
-    fn name(&self) -> Option<String> {
-        Some(self.name())
-    }
-
-    fn label(&self) -> String {
+    fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
         let mut result = String::new();
         let mut color = "black";
         result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
-        result = add_strings!(result, "<tr><td align=\"left\"><font color=\"grey50\" point-size=\"9\">// NodeIndex: ", self.name(),"</font></td></tr>");
-        let res = match *self {
+        result = add_strings!(result, "<tr><td align=\"left\"><font color=\"grey50\" point-size=\"9\">// NodeIndex: ", node.name(),"</font></td></tr>");
+        let res = match *node {
             NodeData::Block(ref block) => {
                 let mut _result = String::new();
                 if !block.reachable {
@@ -385,6 +371,6 @@ impl Label for NodeData {
             NodeData::Exit  => "<tr><td>Exit</td></tr>".to_string(),
         };
         result = add_strings!(result, res, "</table>>");
-        add_strings!("[style=rounded label=", result, " shape=box color=", color,"];\n")
+        DotAttrBlock::Raw(add_strings!("[style=rounded label=", result, " shape=box color=", color,"]"))
     }
 }

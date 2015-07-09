@@ -1,7 +1,7 @@
 use petgraph::{EdgeDirection, Graph};
 use petgraph::graph::{Edge, NodeIndex, EdgeIndex};
 use super::ir;
-use super::dot::{GraphDot, EdgeInfo, Label};
+use super::dot::{GraphDot, DotAttrBlock};
 
 pub struct SSA {
 	pub g: Graph<NodeData, EdgeData>
@@ -203,54 +203,44 @@ impl GraphDot for SSA {
     fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
         self.g.node_weight(NodeIndex::new(n))
     }
-}
 
-impl EdgeInfo for Edge<EdgeData> {
-    fn source(&self) -> usize {
-		match self.weight {
-			EdgeData::Data(_) => self.target().index(),
-			_                 => self.source().index()
+    fn edge_source(&self, edge: &Edge<EdgeData>) -> usize {
+		match edge.weight {
+			EdgeData::Data(_) => edge.target().index(),
+			_                 => edge.source().index()
 		}
     }
 
-    fn target(&self) -> usize {
-		match self.weight {
-			EdgeData::Data(_) => self.source().index(),
-			_                 => self.target().index()
+    fn edge_target(&self, edge: &Edge<EdgeData>) -> usize {
+		match edge.weight {
+			EdgeData::Data(_) => edge.source().index(),
+			_                 => edge.target().index()
 		}
     }
 
-    fn skip(&self) -> bool {
-    	if let EdgeData::ContainedInBB = self.weight {
- 			true
+    fn edge_skip(&self, edge: &Edge<EdgeData>) -> bool {
+    	if let EdgeData::ContainedInBB = edge.weight {
+    		if let NodeData::Phi(_) = self.g[edge.source()] {
+    			false
+    		} else {
+ 				true
+ 			}
 		} else {
 			false
     	}
     }
-}
 
-impl Label for Edge<EdgeData> {
-    fn label(&self) -> String {
-    	match self.weight {
-    		EdgeData::Control(_)    => "[color=\"blue\"];\n",
-    		EdgeData::Data(_)       => "[dir=\"back\"];\n",
-    		EdgeData::ContainedInBB => "[color=\"gray\"];\n",
-    		EdgeData::ReplacedBy    => "[color=\"red\"];\n"
-    	}.to_string()
+    fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
+    	DotAttrBlock::Raw(match edge.weight {
+    		EdgeData::Control(_)    => "[color=\"blue\"]",
+    		EdgeData::Data(_)       => "[dir=\"back\"]",
+    		EdgeData::ContainedInBB => "[color=\"gray\"]",
+    		EdgeData::ReplacedBy    => "[color=\"red\"]"
+    	}.to_string())
     }
 
-    fn name(&self) -> Option<String> {
-        None
-    }
-}
-
-impl Label for NodeData {
-    fn label(&self) -> String {
-    	let l = format!("{:?}", self);
-        format!(" [label=\"{}\"];\n", l.replace("\"", "\\\""))
-    }
-
-    fn name(&self) -> Option<String> {
-        Some(format!("n{:p}", self))
+    fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
+    	let l = format!("{:?}", node);
+        DotAttrBlock::Raw(format!(" [label=\"{}\"]", l.replace("\"", "\\\"")))
     }
 }
