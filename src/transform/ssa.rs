@@ -165,8 +165,26 @@ impl<'a> SSAConstruction<'a> {
 			// instruction.addr
 			// instruction.opcode
 
+
 			let n0 = self.process_in(block, &instruction.operand_1);
 			let n1 = self.process_in(block, &instruction.operand_2);
+			if instruction.opcode == MOpcode::OpJmp {
+				if instruction.operand_1.val_type == MValType::Constant {
+					// ?
+					break;
+				} else {
+					self.ssa.g.add_edge(block, n0, SSAEdgeData::DynamicControl(0));
+					break;
+				}
+			}
+			if instruction.opcode == MOpcode::OpCJmp {
+				if instruction.operand_2.val_type != MValType::Constant {
+					// ?
+				} else {
+					self.ssa.g.add_edge(n0, block, SSAEdgeData::Selector);
+					continue;
+				}
+			}
 			let nn = self.process_op(block, instruction.opcode, n0, n1);
 			self.process_out(block, &instruction.dst, nn);
 

@@ -25,7 +25,7 @@ impl DotAttrBlock {
             &mut DotAttrBlock::Attributes(ref attrs) => {
                 let mut t = " [".to_string();
                 for &(ref k, ref v) in attrs {
-                    t.push_str(&*format!("{}={}", k, v));
+                    t.push_str(&*format!(" {}={}", k, v));
                 }
                 t.push_str(" ]");
                 t

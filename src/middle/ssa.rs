@@ -20,9 +20,11 @@ pub enum NodeData {
 
 #[derive(Clone, Copy)]
 pub enum EdgeData {
+	DynamicControl(u8),
 	Control(u8),
 	Data(u8),
 	ContainedInBB,
+	Selector,
 	ReplacedBy
 }
 
@@ -68,12 +70,21 @@ impl SSA {
 	// TODO: Reuse code between args_of/uses_of/preds_of/succs_of
 
 	pub fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		let mut args = vec![NodeIndex::end(), NodeIndex::end()]; // Vec::new();
+		let ordered = if let NodeData::Phi(_) = self.g[node] { false } else { true };
+		let mut args = Vec::new();
+		if ordered {
+			args.push(NodeIndex::end());
+			args.push(NodeIndex::end());
+		}
+
 		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Data(index) = self.g[edge] {
-				args[index] = othernode;
-				//args.push(othernode);
+				if ordered {
+					args[index as usize] = othernode;
+				} else {
+					args.push(othernode);
+				}
 			}
 		}
 		let mut i = args.len();
@@ -189,64 +200,67 @@ impl SSA {
 }
 
 impl GraphDot for SSA {
-    type NodeType = NodeData;
-    type EdgeType = Edge<EdgeData>;
+	type NodeType = NodeData;
+	type EdgeType = Edge<EdgeData>;
 
-    fn configure(&self) -> String {
-        format!("digraph cfg {{\nsplines=\"true\";\n")
-    }
+	fn configure(&self) -> String {
+		format!("digraph cfg {{\nsplines=\"true\";\n")
+	}
 
-    fn nodes(&self) -> Vec<Self::NodeType> {
-        let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
-        res
-    }
+	fn nodes(&self) -> Vec<Self::NodeType> {
+		let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
+		res
+	}
 
-    fn edges(&self) -> Vec<Self::EdgeType> {
-        let res = self.g.raw_edges().to_vec();
-        res
-    }
+	fn edges(&self) -> Vec<Self::EdgeType> {
+		let res = self.g.raw_edges().to_vec();
+		res
+	}
 
-    fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
-        self.g.node_weight(NodeIndex::new(n))
-    }
+	fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
+		self.g.node_weight(NodeIndex::new(n))
+	}
 
-    fn edge_source(&self, edge: &Edge<EdgeData>) -> usize {
+	fn edge_source(&self, edge: &Edge<EdgeData>) -> usize {
 		match edge.weight {
 			EdgeData::Data(_) => edge.target().index(),
 			_                 => edge.source().index()
 		}
-    }
+	}
 
-    fn edge_target(&self, edge: &Edge<EdgeData>) -> usize {
+	fn edge_target(&self, edge: &Edge<EdgeData>) -> usize {
 		match edge.weight {
 			EdgeData::Data(_) => edge.source().index(),
 			_                 => edge.target().index()
 		}
-    }
+	}
 
-    fn edge_skip(&self, edge: &Edge<EdgeData>) -> bool {
-    	if let EdgeData::ContainedInBB = edge.weight {
-    		if let NodeData::Phi(_) = self.g[edge.source()] {
-    			false
-    		} else {
- 				true
- 			}
+	fn edge_skip(&self, edge: &Edge<EdgeData>) -> bool {
+		if let EdgeData::ContainedInBB = edge.weight {
+			if let NodeData::Phi(_) = self.g[edge.source()] {
+				false
+			} else {
+				true
+			}
 		} else {
 			false
-    	}
-    }
+		}
+	}
 
-    fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
-    	DotAttrBlock::Raw(match edge.weight {
-    		EdgeData::Control(_)    => "[color=\"blue\"]",
-    		EdgeData::Data(_)       => "[dir=\"back\"]",
-    		EdgeData::ContainedInBB => "[color=\"gray\"]",
-    		EdgeData::ReplacedBy    => "[color=\"red\"]"
-    	}.to_string())
-    }
+	fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
+		DotAttrBlock::Attributes(match edge.weight {
+			EdgeData::DynamicControl(_) => vec![("color".to_string(), "red".to_string())],
+			EdgeData::Control(_)        => vec![("color".to_string(), "blue".to_string())],
+			EdgeData::Data(i)           => vec![("dir".to_string(),   "back".to_string()),
+			                                    ("label".to_string(), format!("{}", i))],
+			EdgeData::ContainedInBB     => vec![("color".to_string(), "gray".to_string())],
+			EdgeData::Selector          => vec![("color".to_string(), "purple".to_string())],
+			EdgeData::ReplacedBy        => vec![("color".to_string(), "brown".to_string())]
+		})
+	}
 
-    fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
-    	let l = format!("{:?}", node);
-        DotAttrBlock::Raw(format!(" [label=\"{}\"]", l.replace("\"", "\\\"")))
-    }
+	fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
+		let l = format!("{:?}", node);
+		DotAttrBlock::Raw(format!(" [label=\"{}\"]", l.replace("\"", "\\\"")))
+	}
 }

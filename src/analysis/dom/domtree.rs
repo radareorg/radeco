@@ -369,7 +369,7 @@ impl GraphDot for DomTree {
         edge.target().index()
     }
 
-    fn edge_attrs(&self, edge: &Edge<u8>) -> DotAttrBlock {
+    fn edge_attrs(&self, _: &Edge<u8>) -> DotAttrBlock {
         DotAttrBlock::Raw("".to_string())
     }
 
