@@ -9,7 +9,7 @@ use petgraph::graph::{NodeIndex};
 use std::collections::{HashMap};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum ExprVal {
+pub enum ExprVal {
     Top,
     Bottom,
     Const(i64),
@@ -46,12 +46,10 @@ pub trait SSAGraphIter {
     fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
     fn get_phis(&self, i: &NodeIndex) -> Vec<NodeIndex>;
     fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex>;
-    fn get_def(&self, i: &NodeIndex) -> NodeIndex;
     fn get_block(&self, i: &NodeIndex) -> NodeIndex;
-    fn get_ops(&self, i: &NodeIndex) -> NodeIndex;
     fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex>;
-    fn lhs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
-    fn rhs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn lhs(&self, i: &NodeIndex) -> NodeIndex;
+    fn rhs(&self, i: &NodeIndex) -> NodeIndex;
 }
 
 pub struct Analyzer<T: SSAGraphIter + Clone> {
@@ -73,12 +71,10 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
         }
     }
 
-    pub fn visit_phi(&mut self, i: &NodeIndex) {
+    pub fn visit_phi(&mut self, i: &NodeIndex) -> ExprVal {
         let operands = self.g.get_operands(i);
         let mut phi_val = self.expr_val.get(i).unwrap().clone();
-        //let old_val = phi_val;
         for o in operands.iter() {
-            //let def = self.get_def(o);
             let b = self.g.get_block(&o);
             let val = match *self.executable.get(&b).unwrap() {
                 true => *self.expr_val.get(&o).unwrap(),
@@ -86,10 +82,12 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
             };
             phi_val = meet(&phi_val, &val);
         }
-        *(self.expr_val.get_mut(i).unwrap()) = phi_val;
+
+        return phi_val;
     }
 
-    pub fn visit_expression(&mut self, i: NodeIndex) {
+    pub fn visit_expression(&mut self, i: &NodeIndex) -> ExprVal {
+        ExprVal::Top
     }
 
     pub fn analyze(&mut self) {
@@ -111,11 +109,13 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
                 // Evaluate phis
                 for phi in phis.iter() {
                     // Visit the phi's and set their values.
-                    self.visit_phi(phi);
+                    let v = self.visit_phi(phi);
+                    *(self.expr_val.get_mut(phi).unwrap()) = v;
                 }
                 // Iterate through all the expression in the block.
                 for expr in self.g.get_exprs(&block) {
-                    // TODO: Evaluate expr and update self.expr_val.
+                    let val = self.visit_expression(&expr);
+                    *(self.expr_val.get_mut(&expr).unwrap()) = val;
                     for _use in self.g.get_uses(&expr) {
                         let owner_block = self.g.get_block(&_use);
                         if *self.executable.get(&owner_block).unwrap() {
@@ -128,15 +128,16 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
             while self.ssa_worklist.len() > 0 {
                 let e = self.ssa_worklist.pop().unwrap();
                 // self.get the operation/expression to which this operand belongs to.
-                let op = self.g.get_ops(&e);
-                // TODO: Evaluate the expression.
-                let t = ExprVal::Top;
-                if t != *self.expr_val.get(&op).unwrap() {
-                    *(self.expr_val.get_mut(&op).unwrap()) = ExprVal::Top;
-                    for _use in self.g.get_uses(&op).iter() {
-                        let b = self.g.get_block(_use);
-                        if *self.executable.get(&b).unwrap() {
-                            self.ssa_worklist.push(_use.clone())
+                let exprs = self.g.get_uses(&e);
+                for expr in exprs.iter() {
+                    let t = self.visit_expression(&expr);
+                    if t != *self.expr_val.get(expr).unwrap() {
+                        *(self.expr_val.get_mut(expr).unwrap()) = t;
+                        for _use in self.g.get_uses(expr).iter() {
+                            let b = self.g.get_block(_use);
+                            if *self.executable.get(&b).unwrap() {
+                                self.ssa_worklist.push(_use.clone())
+                            }
                         }
                     }
                 }
