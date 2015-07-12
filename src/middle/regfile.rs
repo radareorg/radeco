@@ -34,10 +34,7 @@ impl RegInfo {
 			let &Event(offset, index, eventtype) = event;
 			match eventtype {
 				EventKind::Begin => active.push(index as RegIndex),
-				EventKind::End   => {
-					let p = active.position_elem(&(index as RegIndex)).unwrap();
-					active.remove(p);
-				}
+				EventKind::End   => active.retain(|&active_index| active_index != (index as RegIndex))
 			}
 			if match i.peek() {
 				Option::None => true,

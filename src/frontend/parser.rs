@@ -246,7 +246,7 @@ impl<'a> Parser<'a> {
                 _  => access_size.parse::<u8>().unwrap() * 8,
             };
 
-            try!(self.add_inst(MOpcode::OpRef));
+            try!(self.add_inst(MOpcode::OpLoad));
             // Set the correct size.
             let mut x = self.stack.pop().unwrap();
             self.add_narrow_inst(&mut x, access_size);
@@ -350,9 +350,9 @@ impl<'a> Parser<'a> {
             return;
         }
         let dst = self.get_tmp_register(size);
-        let operator = MOpcode::OpWiden;
+        let operator = MOpcode::OpWiden(size);
         let addr = MAddr::new(self.addr);
-        let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(addr));
+        let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::null(), Some(addr));
         self.insts.push(inst.clone());
         *op = dst;
     }
@@ -363,33 +363,16 @@ impl<'a> Parser<'a> {
             return;
         }
         let dst = self.get_tmp_register(size);
-        let operator = MOpcode::OpNarrow;
+        let operator = MOpcode::OpNarrow(size);
         let addr = MAddr::new(self.addr);
-        let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::constant(size as i64), Some(addr));
+        let inst = MInst::new(operator, dst.clone(), op.clone(), MVal::null(), Some(addr));
         self.insts.push(inst.clone());
         *op = dst;
     }
 
     fn add_assign_inst(&mut self, op: MOpcode) -> Result<(), ParseError> {
-        let dst = match self.stack.pop() {
-            Some(ele) => ele,
-            None      => return Err(ParseError::InsufficientOperands),
-        };
-
-        let mut op1 = match self.stack.pop() {
-            Some(ele) => ele,
-            None      => return Err(ParseError::InsufficientOperands),
-        };
-
-        // If the assignment is to an internal variable. Replace it with a set-flag instruction
-        // instead.
-        if op1.val_type == MValType::Internal {
-            let op = MOpcode::OpSetFl;
-            let addr = MAddr::new(self.addr);
-            let inst = MInst::new(op, dst, self.last_assgn.clone(), op1, Some(addr));
-            self.insts.push(inst.clone());
-            return Ok(());
-        }
+        let     dst = try!(self.stack.pop().ok_or(ParseError::InsufficientOperands));
+        let mut op1 = try!(self.get_param().ok_or(ParseError::InsufficientOperands));
 
         // Check the alias of dst. If it is the instruction pointer, the assignment should be a
         // OpJmp rather than a OpEq.
@@ -460,15 +443,15 @@ impl<'a> Parser<'a> {
             },
             _ => { },
         }
-        
-        let mut op2 = match self.stack.pop() {
+
+        let mut op2 = match self.get_param() {
             Some(ele) => ele,
             None      => return Err(ParseError::InsufficientOperands),
         };
 
         let mut op1 = MVal::null();
         if op.arity() == MArity::Binary {
-            op1 = match self.stack.pop() {
+            op1 = match self.get_param() {
                 Some(ele) => ele,
                 None      => return Err(ParseError::InsufficientOperands),
             };
@@ -513,6 +496,38 @@ impl<'a> Parser<'a> {
         self.stack.push(dst);
 
         Ok(())
+    }
+
+    // correspons to r_anal_esil_get_parm
+    fn get_param(&mut self) -> Option<MVal> {
+        if let Some(mv) = self.stack.pop() {
+            Some(match mv.val_type {
+                MValType::Internal => {
+                    let addr = MAddr::new(self.addr);
+                    match mv.name.chars().nth(1).unwrap_or('\0') {
+                        '%' => {
+                            MVal::constant(self.addr as i64)
+                        },
+                        'z' => {
+                            let dst = self.get_tmp_register(1);
+                            let inst = MInst::new(MOpcode::OpCmp, dst.clone(), self.last_assgn.clone(), MVal::constant(0), Some(addr));
+                            self.insts.push(inst);
+                            dst
+                        },
+                        //'b' => _ // OpIFBorrow(u8),
+                        //'c' => _ // OpIFCarry(u8),
+                        //'o' => _ // OpIFOverflow,
+                        //'p' => _ // OpIFParity,
+                        //'r' => _ // OpIFRegSize,
+                        //'s' => _ // OpIFSign,
+                        _ => mv
+                    }
+                },
+                _ => mv
+            })
+        } else {
+            None
+        }
     }
 }
 
