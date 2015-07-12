@@ -264,3 +264,143 @@ impl GraphDot for SSA {
 		DotAttrBlock::Raw(format!(" [label=\"{}\"]", l.replace("\"", "\\\"")))
 	}
 }
+
+/// Trait for the SSA Form implementation.
+// This trait ensures that any other ssa form will be compatible with our implementations provided
+// the SSA form implements the following traits.
+pub trait SSAGraph {
+    /// Get NodeIndex of all BasicBlocks available in the SSA form.
+    fn get_blocks(&self) -> Vec<NodeIndex>;
+
+    /// Start node of the CFG.
+    fn start_node(&self) -> NodeIndex;
+
+    /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
+    fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+
+    /// Get all phis in the BasicBlock with index 'i'.
+    fn get_phis(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+
+    /// Get all the uses of the node with index 'i'.
+    fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+
+    /// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
+    fn get_block(&self, i: &NodeIndex) -> NodeIndex;
+
+    /// Get the operands for the operation with NodeIndex 'i'.
+    fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+
+    /// Get the lhs() of the Operation with NodeIndex 'i'.
+    fn lhs(&self, i: &NodeIndex) -> NodeIndex;
+    
+    /// Get the rhs() of the Operation with NodeIndex 'i'.
+    fn rhs(&self, i: &NodeIndex) -> NodeIndex;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of SSAGraph for SSA.
+///////////////////////////////////////////////////////////////////////////////
+
+impl SSAGraph for SSA {
+    fn get_blocks(&self) -> Vec<NodeIndex> {
+        let len = self.g.node_count();
+        let mut blocks = Vec::<NodeIndex>::new();
+        for i in (0..len).map(|x| NodeIndex::new(x)).collect::<Vec<NodeIndex>>().iter() {
+            match self.g[*i] {
+                NodeData::BasicBlock => blocks.push(i.clone()),
+                _ => continue,
+            }
+        }
+        return blocks;
+    }
+
+    fn start_node(&self) -> NodeIndex {
+        // TODO: Return the actual start node when we add this information to ssa.
+        NodeIndex::new(0)
+    }
+
+    fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex> {
+        let mut expressions = Vec::<NodeIndex>::new();
+        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
+        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+            if let EdgeData::ContainedInBB = self.g[edge] {
+                match self.g[othernode] {
+                      NodeData::Op(_)
+                    | NodeData::Const(_) => expressions.push(othernode.clone()),
+                    _ => continue,
+                }
+            }
+        }
+        return expressions;
+    }
+
+    fn get_phis(&self, i: &NodeIndex) -> Vec<NodeIndex> {
+        let mut phis = Vec::<NodeIndex>::new();
+        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
+        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+            if let EdgeData::ContainedInBB = self.g[edge] {
+                match self.g[othernode] {
+                    NodeData::Phi(_) => phis.push(othernode.clone()),
+                    _ => continue,
+                }
+            }
+        }
+        return phis;
+    }
+
+    fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex> {
+        let mut uses = Vec::new();
+        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
+        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+            if let EdgeData::Data(_) = self.g[edge] {
+                uses.push(othernode);
+            }
+        }
+        return uses;
+    }
+
+    fn get_block(&self, i: &NodeIndex) -> NodeIndex {
+        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
+        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+            if let EdgeData::ContainedInBB = self.g[edge] {
+                return othernode
+            }
+        }
+        return NodeIndex::end()
+    }
+
+    fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex> {
+		let ordered = if let NodeData::Phi(_) = self.g[*i] { false } else { true };
+		let mut args = Vec::new();
+		if ordered {
+			args.push(NodeIndex::end());
+			args.push(NodeIndex::end());
+		}
+
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Data(index) = self.g[edge] {
+				if ordered {
+					args[index as usize] = othernode;
+				} else {
+					args.push(othernode);
+				}
+			}
+		}
+		let mut i = args.len();
+		while i > 0 && args[i-1] == NodeIndex::end() {
+			i -= 1;
+		}
+		args.truncate(i);
+        return args;
+    }
+
+    fn lhs(&self, i: &NodeIndex) -> NodeIndex {
+        self.get_operands(i)[0]
+    }
+
+    fn rhs(&self, i: &NodeIndex) -> NodeIndex {
+        self.get_operands(i)[1]
+    }
+}
+

@@ -7,6 +7,7 @@
 
 use petgraph::graph::{NodeIndex};
 use std::collections::{HashMap};
+use ::middle::ssa::{SSAGraph};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ExprVal {
@@ -40,19 +41,7 @@ fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
     return *v1;
 }
 
-pub trait SSAGraphIter {
-    fn get_blocks(&self) -> Vec<NodeIndex>;
-    fn start_node(&self) -> NodeIndex;
-    fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
-    fn get_phis(&self, i: &NodeIndex) -> Vec<NodeIndex>;
-    fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex>;
-    fn get_block(&self, i: &NodeIndex) -> NodeIndex;
-    fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex>;
-    fn lhs(&self, i: &NodeIndex) -> NodeIndex;
-    fn rhs(&self, i: &NodeIndex) -> NodeIndex;
-}
-
-pub struct Analyzer<T: SSAGraphIter + Clone> {
+pub struct Analyzer<T: SSAGraph + Clone> {
     ssa_worklist: Vec<NodeIndex>,
     cfg_worklist: Vec<NodeIndex>,
     executable: HashMap<NodeIndex, bool>,
@@ -60,7 +49,7 @@ pub struct Analyzer<T: SSAGraphIter + Clone> {
     g: T,
 }
 
-impl<T: SSAGraphIter + Clone> Analyzer<T> {
+impl<T: SSAGraph + Clone> Analyzer<T> {
     pub fn new(g: &mut T) -> Analyzer<T> {
         Analyzer {
             ssa_worklist: Vec::new(),
@@ -87,7 +76,18 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
     }
 
     pub fn visit_expression(&mut self, i: &NodeIndex) -> ExprVal {
-        ExprVal::Top
+        let cur_val = self.expr_val.get(i).unwrap();
+        let mut new_val = *cur_val;
+        let operands = self.g.get_operands(i);
+        for operand in operands.iter() {
+            let val = self.expr_val.get(operand).unwrap();
+            new_val = meet(&new_val, val);
+        }
+        // TODO:
+        //  * Evaluate the expression actually if all it's operands are constants.
+        //  * If the expression is a branch, then add the appropriate edges to the cfg_worklist.
+        //  * If the expression is a jump, then place the target edge on the cfg_worklist.
+        return new_val;
     }
 
     pub fn analyze(&mut self) {
@@ -102,6 +102,7 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
 
         // Iterative worklist.
         while self.ssa_worklist.len() > 0 || self.cfg_worklist.len() > 0 {
+            
             while self.cfg_worklist.len() > 0 {
                 let block = self.cfg_worklist.pop().unwrap();
                 *(self.executable.get_mut(&block).unwrap()) = true;
@@ -142,6 +143,7 @@ impl<T: SSAGraphIter + Clone> Analyzer<T> {
                     }
                 }
             }
+
         }
     }
 }
