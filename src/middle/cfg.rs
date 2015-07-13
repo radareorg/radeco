@@ -186,9 +186,9 @@ impl CFG {
                 _               => continue,
             };
             // TODO: Resolve the address if it's not a constant.
-            let addr = match operand.val_type {
-                MValType::Constant => operand.value as u64,
-                _                  => continue,
+            let addr = match self.const_value_of(operand) {
+                Some(addr) => addr,
+                _ => continue,
             };
 
             if !self.bbs.contains_key(&addr) {
@@ -209,17 +209,21 @@ impl CFG {
         }
     }
 
+    fn const_value_of(&self, val: &MVal) -> Option<u64> {
+        None
+    }
+
     fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: MInst, next_inst: MInst) {
         let exit = self.exit.clone();
         match inst.opcode {
             MOpcode::OpJmp => {
-                let target_addr = inst.operand_1.value as u64;
+                let target_addr = self.const_value_of(&inst.operand_1).unwrap_or(0); // unwrap?
                 let edge_data = EdgeData::new_forward_uncond(inst.addr.val, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
                 self.add_edge(current, target, edge_data);
             },
             MOpcode::OpCJmp => {
-                let target_addr = inst.operand_2.value as u64;
+                let target_addr = self.const_value_of(&inst.operand_2).unwrap_or(0); // unwrap?
                 let edge_data = EdgeData::new_true(inst.addr.val, target_addr);
                 let target = *(self.bbs.get(&target_addr).unwrap_or(&exit));
                 self.add_edge(current, target, edge_data);

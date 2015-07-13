@@ -128,25 +128,21 @@ impl<'a> SSAConstruction<'a> {
 
 	fn process_in(&mut self, block: Block, mval: &MVal) -> Node {
 		match mval.val_type {
-			MValType::Memory    => unimplemented!(),
 			MValType::Register  => self.read_variable(block, mval.name.clone()),
-			MValType::Constant  => self.ssa.add_const(block, mval.value as u64),
 			MValType::Temporary => self.read_variable(block, mval.name.clone()),
 			MValType::Unknown   => self.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
-			MValType::Null      => NodeIndex::end(),
 			MValType::Internal  => self.ssa.add_comment(block, &mval.name), // unimplemented!()
+			MValType::Null      => NodeIndex::end(),
 		}
 	}
 
 	fn process_out(&mut self, block: Block, mval: &MVal, value: Node) {
 		match mval.val_type {
-			MValType::Memory    => unimplemented!(),
 			MValType::Register  => self.write_variable(block, mval.name.clone(), value),
-			MValType::Constant  => panic!(),
 			MValType::Temporary => self.write_variable(block, mval.name.clone(), value),
 			MValType::Unknown   => {}, // unimplemented!(),
-			MValType::Null      => {},
 			MValType::Internal  => {}, // unimplemented!()
+			MValType::Null      => {},
 		}
 	}
 
@@ -162,40 +158,21 @@ impl<'a> SSAConstruction<'a> {
 
 	fn process_block(&mut self, block: Block, source: &BasicBlock) {
 		for ref instruction in &source.instructions {
-			// instruction.addr
-			// instruction.opcode
-
-
 			let n0 = self.process_in(block, &instruction.operand_1);
 			let n1 = self.process_in(block, &instruction.operand_2);
+
 			if instruction.opcode == MOpcode::OpJmp {
-				if instruction.operand_1.val_type == MValType::Constant {
-					// ?
-					break;
-				} else {
-					self.ssa.g.add_edge(block, n0, SSAEdgeData::DynamicControl(0));
-					break;
-				}
+				self.ssa.g.add_edge(block, n0, SSAEdgeData::DynamicControl(0));
+				break;
 			}
+
 			if instruction.opcode == MOpcode::OpCJmp {
-				if instruction.operand_2.val_type != MValType::Constant {
-					// ?
-				} else {
-					self.ssa.g.add_edge(n0, block, SSAEdgeData::Selector);
-					continue;
-				}
+				self.ssa.g.add_edge(n0, block, SSAEdgeData::Selector);
+				continue;
 			}
+
 			let nn = self.process_op(block, instruction.opcode, n0, n1);
 			self.process_out(block, &instruction.dst, nn);
-
-			/*pub struct MVal {
-				pub name:     String,
-				pub size:     u8,
-				pub val_type: MValType,
-				pub value:    i64,
-				pub reg_info: Option<MRegInfo>,
-				pub typeset:  u32,
-			}*/
 		}
 	}
 

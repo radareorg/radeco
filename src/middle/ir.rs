@@ -2,11 +2,14 @@
 
 pub type Address = u64;
 
+//pub struct MCommon {
+//
+//}
+
 #[derive(Debug, Clone, Default)]
 pub struct MAddr {
-    pub val:      u64,
-    pub comments: Vec<String>,
-    pub flags:    Vec<String>,
+    // maybe store section id and offset instead
+    pub val: u64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -19,13 +22,11 @@ pub enum MArity {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MValType {
-    Memory,
     Register,
-    Constant,
     Temporary,
     Unknown,
-    Null,
     Internal,
+    Null,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -54,6 +55,7 @@ pub enum MOpcode {
     OpLoad,
     OpNarrow(u8),
     OpWiden(u8),
+    OpConst(u64),
 
     OpNop,
     OpInvalid,
@@ -76,7 +78,6 @@ pub struct MVal {
     pub name:     String,
     pub size:     u8,
     pub val_type: MValType,
-    pub value:    i64,
     pub reg_info: Option<MRegInfo>,
     pub typeset:  u32,
 }
@@ -120,17 +121,19 @@ impl MOpcode {
             MOpcode::OpGteq       => (">=", MArity::Binary),
             MOpcode::OpLsl        => ("<<", MArity::Binary),
             MOpcode::OpLsr        => (">>", MArity::Binary),
-            MOpcode::OpInc        => ("++", MArity::Unary),
-            MOpcode::OpDec        => ("--", MArity::Unary),
             MOpcode::OpIf         => ("if", MArity::Unary),
             MOpcode::OpLoad        => ("ref", MArity::Unary),
             MOpcode::OpNarrow(_)  => ("narrow", MArity::Unary),
             MOpcode::OpWiden(_)   => ("widen", MArity::Unary),
-            MOpcode::OpNop        => ("nop", MArity::Zero),
-            MOpcode::OpInvalid    => ("invalid", MArity::Zero),
             MOpcode::OpJmp        => ("jmp", MArity::Unary),
             MOpcode::OpCJmp       => ("jmp if", MArity::Binary),
             MOpcode::OpCall       => ("call", MArity::Unary),
+            MOpcode::OpConst(_)   => ("const", MArity::Zero),
+
+            MOpcode::OpNop        => ("nop", MArity::Zero),
+            MOpcode::OpInvalid    => ("invalid", MArity::Zero),
+            MOpcode::OpInc        => ("++", MArity::Unary),
+            MOpcode::OpDec        => ("--", MArity::Unary),
             MOpcode::OpCl         => ("}", MArity::Zero),
         };
         (String::from(op), arity)
@@ -145,27 +148,22 @@ impl MRegInfo {
 }
 
 impl MVal {
-    pub fn new(name: String, size: u8, val_type: MValType, value: i64, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
+    pub fn new(name: String, size: u8, val_type: MValType, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
         MVal {
             name:     name.clone(),
             size:     size,
             val_type: val_type,
-            value:    value,
             typeset:  typeset,
             reg_info: reg_info,
         }
     }
 
     pub fn null() -> MVal {
-        MVal::new("".to_string(), 0, MValType::Null, 0, 0, None)
+        MVal::new("".to_string(), 0, MValType::Null, 0, None)
     }
 
     pub fn tmp(i: u64, size: u8) -> MVal {
-        MVal::new(format!("tmp_{:x}", i), size, MValType::Temporary, 0, 0, None)
-    }
-
-    pub fn constant(i: i64) -> MVal {
-        MVal::new(i.to_string(), 64, MValType::Constant, i, 0, None)
+        MVal::new(format!("tmp_{:x}", i), size, MValType::Temporary, 0, None)
     }
 }
 
@@ -184,10 +182,6 @@ impl MInst {
 
 impl MAddr {
     pub fn new(addr: u64) -> MAddr {
-        MAddr {
-            val:      addr,
-            comments: Vec::new(),
-            flags:    Vec::new(),
-        }
+        MAddr { val: addr }
     }
 }

@@ -176,7 +176,7 @@ impl<'a> Parser<'a> {
             let re = Regex::new("[a-zA-Z]").unwrap();
             if re.is_match(&*token) {
                 let mut val_type = MValType::Unknown;
-                let mut val: i64 = 0;
+                let mut val: Option<u64> = None;
                 let mut size: u8 = self.default_size;
                 let mut reg_info: Option<MRegInfo> = None;
                 if let Some(r) = self.regset.get(&*token) {
@@ -188,25 +188,25 @@ impl<'a> Parser<'a> {
                     reg_info_.alias = alias;
                     reg_info = Some(reg_info_.clone());
                     size = r.size; 
-                } else if let Ok(v) = hex_to_i!(token) {
-                    val_type = MValType::Constant;
-                    val = v;
+                } else if let Ok::<i64, _>(v) = hex_to_i!(token) { // <u64>? will it be able to deal with negative numbers?
+                    val = Some(v as u64);
                 } else if let Some('%') = token.chars().nth(0) {
                     val_type = MValType::Internal
+                } else {
+                    panic!("Proper error handling here");
                 }
-                // TODO: Add support for internals.
-                let v = MVal::new(String::from(token), size, val_type, val, 0, reg_info);
+                let v = if let Some(cv) = val {
+                    self.constant_value(cv)
+                } else {
+                    MVal::new(String::from(token), size, val_type, 0, reg_info)
+                };
                 self.stack.push(v);
                 continue;
             }
 
             // Handle constants.
-            if let Ok(num) = token.parse::<i64>() {
-                let val_type = MValType::Constant;
-                let val = num;
-                let size  = self.default_size;
-                let name = format!("0x{:x}", num);
-                let v = MVal::new(name, size, val_type, val, 0, None);
+            if let Ok(num) = token.parse::<i64>() { // <u64>? will it be able to deal with negative numbers?
+                let v = self.constant_value(num as u64);
                 self.stack.push(v);
                 continue;
             }
@@ -434,7 +434,8 @@ impl<'a> Parser<'a> {
                 };
                 let mut top = self.stack.len();
                 top -= 2;
-                self.stack.insert(top, MVal::constant(1));
+                let v = self.constant_value(1);
+                self.stack.insert(top, v);
                 try!(self.add_inst(_op));
                 return Ok(());
             },
@@ -506,11 +507,12 @@ impl<'a> Parser<'a> {
                     let addr = MAddr::new(self.addr);
                     match mv.name.chars().nth(1).unwrap_or('\0') {
                         '%' => {
-                            MVal::constant(self.addr as i64)
+                            let addr = self.addr;
+                            self.constant_value(addr)
                         },
                         'z' => {
                             let dst = self.get_tmp_register(1);
-                            let inst = MInst::new(MOpcode::OpCmp, dst.clone(), self.last_assgn.clone(), MVal::constant(0), Some(addr));
+                            let inst = MInst::new(MOpcode::OpCmp, dst.clone(), self.last_assgn.clone(), self.constant_value(0), Some(addr));
                             self.insts.push(inst);
                             dst
                         },
@@ -528,6 +530,16 @@ impl<'a> Parser<'a> {
         } else {
             None
         }
+    }
+
+    fn constant_value(&mut self, num: u64) -> MVal {
+        let op = MOpcode::OpConst(num);
+        let size = self.default_size;
+        let dst = self.get_tmp_register(size);
+        let addr = MAddr::new(self.addr);
+        let inst = MInst::new(op, dst.clone(), MVal::null(), MVal::null(), Some(addr));
+        self.insts.push(inst);
+        dst
     }
 }
 
