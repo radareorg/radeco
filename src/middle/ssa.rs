@@ -295,6 +295,9 @@ pub trait SSAGraph {
     
     /// Get the rhs() of the Operation with NodeIndex 'i'.
     fn rhs(&self, i: &NodeIndex) -> NodeIndex;
+
+    /// Get the actual NodeData.
+    fn get_node_data(&self, i: &NodeIndex) -> NodeData;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -401,6 +404,11 @@ impl SSAGraph for SSA {
 
     fn rhs(&self, i: &NodeIndex) -> NodeIndex {
         self.get_operands(i)[1]
+    }
+
+
+    fn get_node_data(&self, i: &NodeIndex) -> NodeData {
+        self.g[*i].clone()
     }
 }
 

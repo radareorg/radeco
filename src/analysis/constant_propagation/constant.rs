@@ -7,7 +7,8 @@
 
 use petgraph::graph::{NodeIndex};
 use std::collections::{HashMap};
-use ::middle::ssa::{SSAGraph};
+use ::middle::ssa::{SSAGraph, NodeData};
+use ::middle::ir::{MOpcode, MArity};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ExprVal {
@@ -76,13 +77,98 @@ impl<T: SSAGraph + Clone> Analyzer<T> {
     }
 
     pub fn visit_expression(&mut self, i: &NodeIndex) -> ExprVal {
-        let cur_val = self.expr_val.get(i).unwrap();
-        let mut new_val = *cur_val;
-        let operands = self.g.get_operands(i);
-        for operand in operands.iter() {
-            let val = self.expr_val.get(operand).unwrap();
-            new_val = meet(&new_val, val);
+        // Get the actual node corresponding to the NodeIndex.
+        let expr = self.g.get_node_data(i);
+        let mut new_val = ExprVal::Top;
+
+        match expr {
+            NodeData::Const(val) => return ExprVal::Const(val as i64),
+            NodeData::Op(opcode) => {
+                match opcode.arity() {
+                    MArity::Unary => { 
+                        let operand = self.g.get_operands(i)[0];
+                        let val = self.expr_val.get(&operand).unwrap();
+                        let const_val = match *val {
+                            ExprVal::Bottom |
+                            ExprVal::Top => return *val,
+                            ExprVal::Const(cval) => cval,
+                        };
+                        // We have a constant, evaluate it.
+                        let _val = match opcode {
+                            MOpcode::OpNarrow(size) |
+                            MOpcode::OpWiden(size) => { 
+                                let mask = (2 << (size + 1)) - 1;
+                                const_val & mask
+                            },
+                            MOpcode::OpJmp => { 
+                                // TODO
+                                unimplemented!();
+                            },
+                            MOpcode::OpCall => { 
+                                // TODO
+                                unimplemented!();
+                            },
+                            MOpcode::OpNot  => { 
+                                !const_val as i64
+                            },
+                            _ => unreachable!(),
+                        };
+                    },
+                    
+                    MArity::Binary => { 
+                        let operands = self.g.get_operands(i)
+                                             .iter()
+                                             .map(|x| self.expr_val.get(x).unwrap())
+                                             .collect::<Vec<_>>();
+
+                        let lhs = operands[0];
+                        let rhs = operands[1];
+
+                        let lhs_val = match *lhs {
+                            ExprVal::Bottom |
+                            ExprVal::Top => { return *lhs; },
+                            ExprVal::Const(cval) => cval,
+                        };
+
+                        let rhs_val = match *rhs {
+                            ExprVal::Bottom |
+                            ExprVal::Top => { return *rhs; },
+                            ExprVal::Const(cval) => cval,
+                        };
+
+                        let _val = match opcode {
+                            MOpcode::OpAdd        => { lhs_val + rhs_val },
+                            MOpcode::OpSub        => { lhs_val - rhs_val },
+                            MOpcode::OpMul        => { lhs_val * rhs_val },
+                            MOpcode::OpDiv        => { lhs_val / rhs_val },
+                            MOpcode::OpMod        => { lhs_val % rhs_val },
+                            MOpcode::OpAnd        => { lhs_val & rhs_val },
+                            MOpcode::OpOr         => { lhs_val | rhs_val },
+                            MOpcode::OpXor        => { lhs_val ^ rhs_val },
+                            MOpcode::OpCmp        => { (lhs_val == rhs_val) as i64 },
+                            MOpcode::OpGt         => { (lhs_val > rhs_val) as i64 },
+                            MOpcode::OpLt         => { (lhs_val < rhs_val) as i64 },
+                            MOpcode::OpLteq       => { (lhs_val <= rhs_val) as i64 },
+                            MOpcode::OpGteq       => { (lhs_val >= rhs_val) as i64 },
+                            MOpcode::OpLsl        => { lhs_val << rhs_val },
+                            MOpcode::OpLsr        => { lhs_val >> rhs_val },
+                            MOpcode::OpCJmp       => { 
+                                // TODO
+                                unimplemented!();
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        new_val = ExprVal::Const(_val);
+                    },
+
+                    // Currently we do not have any operator with arity > 2.
+                    _ => unimplemented!(),
+                }
+            }
+            _ => panic!("Found something other than an Operator or Constant"),
         }
+        
         // TODO:
         //  * Evaluate the expression actually if all it's operands are constants.
         //  * If the expression is a branch, then add the appropriate edges to the cfg_worklist.
