@@ -5,7 +5,6 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
-use petgraph::graph::{NodeIndex};
 use std::collections::{HashMap};
 use ::middle::ssa::{SSA, NodeData};
 use ::middle::ir::{MOpcode, MArity};
@@ -43,10 +42,10 @@ fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
 }
 
 pub struct Analyzer<T: SSA + Clone> {
-    ssa_worklist: Vec<NodeIndex>,
-    cfg_worklist: Vec<NodeIndex>,
-    executable: HashMap<NodeIndex, bool>,
-    expr_val: HashMap<NodeIndex, ExprVal>,
+    ssa_worklist: Vec<T::ValueRef>,
+    cfg_worklist: Vec<T::ActionRef>,
+    executable: HashMap<T::ActionRef, bool>,
+    expr_val: HashMap<T::ValueRef, ExprVal>,
     g: T,
 }
 
@@ -61,7 +60,7 @@ impl<T: SSA + Clone> Analyzer<T> {
         }
     }
 
-    pub fn visit_phi(&mut self, i: &NodeIndex) -> ExprVal {
+    pub fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
         let operands = self.g.get_operands(i);
         let mut phi_val = self.expr_val.get(i).unwrap().clone();
         for o in operands.iter() {
@@ -75,17 +74,17 @@ impl<T: SSA + Clone> Analyzer<T> {
         return phi_val;
     }
 
-    pub fn evaluate_control_flow(&mut self, i: &NodeIndex, opcode: MOpcode) -> ExprVal {
+    pub fn evaluate_control_flow(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
         match opcode {
             MOpcode::OpJmp
-            | MOpcode::OpCall => { 
+            | MOpcode::OpCall => {
                 // TODO: Experimental.
                 let target = self.g.get_target(i);
                 self.cfg_worklist.push(target);
             },
-            MOpcode::OpCJmp => { 
+            MOpcode::OpCJmp => {
                 let operands = self.g.get_operands(i);
-                let cond = operands[0];
+                let cond = operands[0].clone();
                 let cond_val = self.expr_val.get(&cond).unwrap();
                 //let target = operands[1];
                 //let target_val = self.expr_val.get(&target).unwrap();
@@ -116,8 +115,8 @@ impl<T: SSA + Clone> Analyzer<T> {
         return ExprVal::Top;
     }
 
-    pub fn evaluate_unary_op(&mut self, i: &NodeIndex, opcode: MOpcode) -> ExprVal {
-        let operand = self.g.get_operands(i)[0];
+    pub fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
+        let operand = self.g.get_operands(i)[0].clone();
         let val = self.expr_val.get(&operand).unwrap();
         let const_val = if let ExprVal::Const(cval)  = *val { cval } else { return *val; };
         let _val = match opcode {
@@ -135,7 +134,7 @@ impl<T: SSA + Clone> Analyzer<T> {
         ExprVal::Const(_val)
     }
 
-    pub fn evaluate_binary_op(&mut self, i: &NodeIndex, opcode: MOpcode) -> ExprVal {
+    pub fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
         let operands = self.g.get_operands(i)
                              .iter()
                              .map(|x| self.expr_val.get(x).unwrap())
@@ -173,7 +172,7 @@ impl<T: SSA + Clone> Analyzer<T> {
     //  * Evaluate the expression actually if all it's operands are constants.
     //  * If the expression is a branch, then add the appropriate edges to the cfg_worklist.
     //  * If the expression is a jump, then place the target edge on the cfg_worklist.
-    pub fn visit_expression(&mut self, i: &NodeIndex) -> ExprVal {
+    pub fn visit_expression(&mut self, i: &T::ValueRef) -> ExprVal {
         // Get the actual node corresponding to the NodeIndex.
         let expr = self.g.get_node_data(i);
 

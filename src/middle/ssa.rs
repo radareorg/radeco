@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use petgraph::{EdgeDirection, Graph};
 use petgraph::graph::{Edge, NodeIndex, EdgeIndex};
 use super::ir;
@@ -265,48 +266,64 @@ impl GraphDot for SSAStorage {
 	}
 }
 
+// pub struct SSAStorageValueRef<'a> {
+// 	ni: NodeIndex,
+// 	_: PhantomData<'a>
+// }
+
 /// Trait for the SSA Form implementation.
 // This trait ensures that any other ssa form will be compatible with our implementations provided
 // the SSA form implements the following traits.
 pub trait SSA {
+	type ValueRef: Eq + Hash + Clone;
+	type ActionRef: Eq + Hash + Clone;
+
     /// Get NodeIndex of all BasicBlocks available in the SSA form.
-    fn get_blocks(&self) -> Vec<NodeIndex>;
+    fn get_blocks(&self) -> Vec<Self::ActionRef>;
 
     /// Start node of the CFG.
-    fn start_node(&self) -> NodeIndex;
+    fn start_node(&self) -> Self::ActionRef;
 
     /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
-    fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
     /// Get all phis in the BasicBlock with index 'i'.
-    fn get_phis(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn get_phis(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
     /// Get all the uses of the node with index 'i'.
-    fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn get_uses(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
 
     /// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
-    fn get_block(&self, i: &NodeIndex) -> NodeIndex;
+    fn get_block(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
     /// Get the operands for the operation with NodeIndex 'i'.
-    fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex>;
+    fn get_operands(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
 
     /// Get the lhs() of the Operation with NodeIndex 'i'.
-    fn lhs(&self, i: &NodeIndex) -> NodeIndex;
-    
+    fn lhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
+        self.get_operands(i)[0].clone()
+    }
+
     /// Get the rhs() of the Operation with NodeIndex 'i'.
-    fn rhs(&self, i: &NodeIndex) -> NodeIndex;
+    fn rhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
+        self.get_operands(i)[1].clone()
+    }
 
     /// Get the actual NodeData.
-    fn get_node_data(&self, i: &NodeIndex) -> NodeData;
+    fn get_node_data(&self, i: &Self::ValueRef) -> NodeData;
+
+    // NOTE:
+    // These three functions will change their signatures
+    // when we remove "jmp" from the list of ops
 
     /// Get Jump target of a call or an unconditional jump.
-    fn get_target(&self, i: &NodeIndex) -> NodeIndex;
+    fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
     /// Get true branch of a conditional jump.
-    fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex;
+    fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
     /// Get false branch of a conditional jump.
-    fn get_false_branch(&self, i: &NodeIndex) -> NodeIndex;
+    fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -314,6 +331,9 @@ pub trait SSA {
 ///////////////////////////////////////////////////////////////////////////////
 
 impl SSA for SSAStorage {
+	type ValueRef = NodeIndex;
+	type ActionRef = NodeIndex;
+
     fn get_blocks(&self) -> Vec<NodeIndex> {
         let len = self.g.node_count();
         let mut blocks = Vec::<NodeIndex>::new();
@@ -405,14 +425,6 @@ impl SSA for SSAStorage {
 		}
 		args.truncate(i);
         return args;
-    }
-
-    fn lhs(&self, i: &NodeIndex) -> NodeIndex {
-        self.get_operands(i)[0]
-    }
-
-    fn rhs(&self, i: &NodeIndex) -> NodeIndex {
-        self.get_operands(i)[1]
     }
 
     fn get_node_data(&self, i: &NodeIndex) -> NodeData {
