@@ -36,18 +36,20 @@ fn test_multiplicative_inverse_recursively(depth: usize, m: u64, n: u64) {
 
 #[test]
 fn test_multiplicative_inverse() {
-	test_multiplicative_inverse_recursively(0, 2, 1);
-	test_multiplicative_inverse_recursively(0, 3, 1);
+	test_multiplicative_inverse_recursively(3, 2, 1);
+	test_multiplicative_inverse_recursively(3, 3, 1);
 }
 
 #[test]
 fn test_blcic_tzmsk_equiv() {
 	for &i in &[
 		0x0000000000000000,
-		0x0000ffff0000ffff,
 		0x00000000ffff0000,
-		0xffffffff0000ffff,
+		0x0000ffff0000ffff,
+		0x0000ffffffffffff,
+		0xffff000000000000,
 		0xffff0000ffff0000,
+		0xffffffff0000ffff,
 		0xffffffffffffffff
 	] {
 		assert_eq!(blcic(!i), tzmsk(i).wrapping_add(1));

@@ -9,6 +9,10 @@ pub struct RegInfo {
 	compressed: Vec<RegIndex>
 }
 
+// struct RegisterSlice {
+// 
+// }
+
 impl RegInfo {
 	pub fn new(reg_info: &LRegInfo) -> RegInfo {
 		let mut info = RegInfo {
