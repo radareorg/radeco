@@ -7,7 +7,7 @@
 
 use petgraph::graph::{NodeIndex};
 use std::collections::{HashMap};
-use ::middle::ssa::{SSAGraph, NodeData};
+use ::middle::ssa::{SSA, NodeData};
 use ::middle::ir::{MOpcode, MArity};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -42,7 +42,7 @@ fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
     return *v1;
 }
 
-pub struct Analyzer<T: SSAGraph + Clone> {
+pub struct Analyzer<T: SSA + Clone> {
     ssa_worklist: Vec<NodeIndex>,
     cfg_worklist: Vec<NodeIndex>,
     executable: HashMap<NodeIndex, bool>,
@@ -50,7 +50,7 @@ pub struct Analyzer<T: SSAGraph + Clone> {
     g: T,
 }
 
-impl<T: SSAGraph + Clone> Analyzer<T> {
+impl<T: SSA + Clone> Analyzer<T> {
     pub fn new(g: &mut T) -> Analyzer<T> {
         Analyzer {
             ssa_worklist: Vec::new(),

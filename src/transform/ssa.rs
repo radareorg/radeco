@@ -9,7 +9,7 @@ use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::NodeData as SSANodeData;
 use middle::ssa::EdgeData as SSAEdgeData;
-use middle::ssa::{SSA, NodeData};
+use middle::ssa::{SSAStorage, NodeData};
 use middle::ir::{MVal, MOpcode, MValType};
 use std::collections::{HashSet, HashMap};
 
@@ -19,7 +19,7 @@ pub type Node = NodeIndex;
 
 pub struct SSAConstruction<'a> {
 	cfg:              &'a CFG,
-	ssa:              &'a mut SSA,
+	ssa:              &'a mut SSAStorage,
 	variables:        Vec<VarId>, // assume consequtive integers?
 	sealed_blocks:    HashSet<Block>, // replace with bitfield
 	current_def:      HashMap<VarId, HashMap<Block, Node>>,
@@ -28,7 +28,7 @@ pub struct SSAConstruction<'a> {
 }
 
 impl<'a> SSAConstruction<'a> {
-	pub fn new(ssa: &'a mut SSA, cfg: &'a CFG, reg_info: &LRegInfo) -> SSAConstruction<'a> {
+	pub fn new(ssa: &'a mut SSAStorage, cfg: &'a CFG, reg_info: &LRegInfo) -> SSAConstruction<'a> {
 		let mut s = SSAConstruction {
 			cfg:              cfg,
 			ssa:              ssa,

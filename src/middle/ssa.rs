@@ -3,7 +3,7 @@ use petgraph::graph::{Edge, NodeIndex, EdgeIndex};
 use super::ir;
 use super::dot::{GraphDot, DotAttrBlock};
 
-pub struct SSA {
+pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>
 }
 
@@ -28,9 +28,9 @@ pub enum EdgeData {
 	ReplacedBy
 }
 
-impl SSA {
-	pub fn new() -> SSA {
-		SSA {g: Graph::new() }
+impl SSAStorage {
+	pub fn new() -> SSAStorage {
+		SSAStorage {g: Graph::new() }
 	}
 
 	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode) -> NodeIndex {
@@ -199,7 +199,7 @@ impl SSA {
 	}
 }
 
-impl GraphDot for SSA {
+impl GraphDot for SSAStorage {
 	type NodeType = NodeData;
 	type EdgeType = Edge<EdgeData>;
 
@@ -268,7 +268,7 @@ impl GraphDot for SSA {
 /// Trait for the SSA Form implementation.
 // This trait ensures that any other ssa form will be compatible with our implementations provided
 // the SSA form implements the following traits.
-pub trait SSAGraph {
+pub trait SSA {
     /// Get NodeIndex of all BasicBlocks available in the SSA form.
     fn get_blocks(&self) -> Vec<NodeIndex>;
 
@@ -310,10 +310,10 @@ pub trait SSAGraph {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//// Implementation of SSAGraph for SSA.
+//// Implementation of SSA for SSA.
 ///////////////////////////////////////////////////////////////////////////////
 
-impl SSAGraph for SSA {
+impl SSA for SSAStorage {
     fn get_blocks(&self) -> Vec<NodeIndex> {
         let len = self.g.node_count();
         let mut blocks = Vec::<NodeIndex>::new();
