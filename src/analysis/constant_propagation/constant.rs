@@ -68,112 +68,142 @@ impl<T: SSAGraph + Clone> Analyzer<T> {
             let b = self.g.get_block(&o);
             let val = match *self.executable.get(&b).unwrap() {
                 true => *self.expr_val.get(&o).unwrap(),
-                false => ExprVal::Top,
+                false => continue,
             };
             phi_val = meet(&phi_val, &val);
         }
-
         return phi_val;
     }
 
+    pub fn evaluate_control_flow(&mut self, i: &NodeIndex, opcode: MOpcode) -> ExprVal {
+        match opcode {
+            MOpcode::OpJmp
+            | MOpcode::OpCall => { 
+                // TODO: Experimental.
+                let target = self.g.get_target(i);
+                self.cfg_worklist.push(target);
+            },
+            MOpcode::OpCJmp => { 
+                let operands = self.g.get_operands(i);
+                let cond = operands[0];
+                let cond_val = self.expr_val.get(&cond).unwrap();
+                //let target = operands[1];
+                //let target_val = self.expr_val.get(&target).unwrap();
+                let true_branch = self.g.get_true_branch(i);
+                let false_branch = self.g.get_false_branch(i);
+
+                match *cond_val {
+                    ExprVal::Bottom => {
+                        self.cfg_worklist.push(true_branch);
+                        self.cfg_worklist.push(false_branch);
+                    },
+                    ExprVal::Top => {
+                        // TODO: Not really sure what to do here.
+                        return ExprVal::Top;
+                    },
+                    ExprVal::Const(cval) => {
+                        if cval == 0 {
+                            self.cfg_worklist.push(true_branch);
+                        } else {
+                            self.cfg_worklist.push(false_branch);
+                        }
+                    },
+                }
+            },
+            _ => unreachable!()
+        }
+
+        return ExprVal::Top;
+    }
+
+    pub fn evaluate_unary_op(&mut self, i: &NodeIndex, opcode: MOpcode) -> ExprVal {
+        let operand = self.g.get_operands(i)[0];
+        let val = self.expr_val.get(&operand).unwrap();
+        let const_val = if let ExprVal::Const(cval)  = *val { cval } else { return *val; };
+        let _val = match opcode {
+            MOpcode::OpNarrow(size)
+                | MOpcode::OpWiden(size) => { 
+                    let mask = (2 << (size + 1)) - 1;
+                const_val & mask
+            },
+            MOpcode::OpNot  => { 
+                !const_val as i64
+            },
+            _ => unreachable!(),
+        };
+
+        ExprVal::Const(_val)
+    }
+
+    pub fn evaluate_binary_op(&mut self, i: &NodeIndex, opcode: MOpcode) -> ExprVal {
+        let operands = self.g.get_operands(i)
+                             .iter()
+                             .map(|x| self.expr_val.get(x).unwrap())
+                             .collect::<Vec<_>>();
+
+        let lhs = operands[0];
+        let rhs = operands[1];
+
+        let lhs_val = if let ExprVal::Const(cval) = *lhs { cval } else { return *lhs; };
+        let rhs_val = if let ExprVal::Const(cval) = *rhs { cval } else { return *rhs; };
+        
+        let _val = match opcode {
+            MOpcode::OpAdd        => { lhs_val + rhs_val },
+            MOpcode::OpSub        => { lhs_val - rhs_val },
+            MOpcode::OpMul        => { lhs_val * rhs_val },
+            MOpcode::OpDiv        => { lhs_val / rhs_val },
+            MOpcode::OpMod        => { lhs_val % rhs_val },
+            MOpcode::OpAnd        => { lhs_val & rhs_val },
+            MOpcode::OpOr         => { lhs_val | rhs_val },
+            MOpcode::OpXor        => { lhs_val ^ rhs_val },
+            MOpcode::OpCmp        => { (lhs_val == rhs_val) as i64 },
+            MOpcode::OpGt         => { (lhs_val > rhs_val) as i64 },
+            MOpcode::OpLt         => { (lhs_val < rhs_val) as i64 },
+            MOpcode::OpLteq       => { (lhs_val <= rhs_val) as i64 },
+            MOpcode::OpGteq       => { (lhs_val >= rhs_val) as i64 },
+            MOpcode::OpLsl        => { lhs_val << rhs_val },
+            MOpcode::OpLsr        => { lhs_val >> rhs_val },
+            _ => unreachable!(),
+        };
+
+        ExprVal::Const(_val)
+    }
+
+    // TODO:
+    //  * Evaluate the expression actually if all it's operands are constants.
+    //  * If the expression is a branch, then add the appropriate edges to the cfg_worklist.
+    //  * If the expression is a jump, then place the target edge on the cfg_worklist.
     pub fn visit_expression(&mut self, i: &NodeIndex) -> ExprVal {
         // Get the actual node corresponding to the NodeIndex.
         let expr = self.g.get_node_data(i);
-        let mut new_val = ExprVal::Top;
 
-        match expr {
-            NodeData::Const(val) => return ExprVal::Const(val as i64),
-            NodeData::Op(opcode) => {
-                match opcode.arity() {
-                    MArity::Unary => { 
-                        let operand = self.g.get_operands(i)[0];
-                        let val = self.expr_val.get(&operand).unwrap();
-                        let const_val = match *val {
-                            ExprVal::Bottom |
-                            ExprVal::Top => return *val,
-                            ExprVal::Const(cval) => cval,
-                        };
-                        // We have a constant, evaluate it.
-                        let _val = match opcode {
-                            MOpcode::OpNarrow(size) |
-                            MOpcode::OpWiden(size) => { 
-                                let mask = (2 << (size + 1)) - 1;
-                                const_val & mask
-                            },
-                            MOpcode::OpJmp => { 
-                                // TODO
-                                unimplemented!();
-                            },
-                            MOpcode::OpCall => { 
-                                // TODO
-                                unimplemented!();
-                            },
-                            MOpcode::OpNot  => { 
-                                !const_val as i64
-                            },
-                            _ => unreachable!(),
-                        };
-                    },
-                    
-                    MArity::Binary => { 
-                        let operands = self.g.get_operands(i)
-                                             .iter()
-                                             .map(|x| self.expr_val.get(x).unwrap())
-                                             .collect::<Vec<_>>();
-
-                        let lhs = operands[0];
-                        let rhs = operands[1];
-
-                        let lhs_val = match *lhs {
-                            ExprVal::Bottom |
-                            ExprVal::Top => { return *lhs; },
-                            ExprVal::Const(cval) => cval,
-                        };
-
-                        let rhs_val = match *rhs {
-                            ExprVal::Bottom |
-                            ExprVal::Top => { return *rhs; },
-                            ExprVal::Const(cval) => cval,
-                        };
-
-                        let _val = match opcode {
-                            MOpcode::OpAdd        => { lhs_val + rhs_val },
-                            MOpcode::OpSub        => { lhs_val - rhs_val },
-                            MOpcode::OpMul        => { lhs_val * rhs_val },
-                            MOpcode::OpDiv        => { lhs_val / rhs_val },
-                            MOpcode::OpMod        => { lhs_val % rhs_val },
-                            MOpcode::OpAnd        => { lhs_val & rhs_val },
-                            MOpcode::OpOr         => { lhs_val | rhs_val },
-                            MOpcode::OpXor        => { lhs_val ^ rhs_val },
-                            MOpcode::OpCmp        => { (lhs_val == rhs_val) as i64 },
-                            MOpcode::OpGt         => { (lhs_val > rhs_val) as i64 },
-                            MOpcode::OpLt         => { (lhs_val < rhs_val) as i64 },
-                            MOpcode::OpLteq       => { (lhs_val <= rhs_val) as i64 },
-                            MOpcode::OpGteq       => { (lhs_val >= rhs_val) as i64 },
-                            MOpcode::OpLsl        => { lhs_val << rhs_val },
-                            MOpcode::OpLsr        => { lhs_val >> rhs_val },
-                            MOpcode::OpCJmp       => { 
-                                // TODO
-                                unimplemented!();
-                            }
-                            _ => unreachable!(),
-                        };
-
-                        new_val = ExprVal::Const(_val);
-                    },
-
-                    // Currently we do not have any operator with arity > 2.
-                    _ => unimplemented!(),
-                }
-            }
-            _ => panic!("Found something other than an Operator or Constant"),
+        // Handle NodeData::Const as it is trivial.
+        if let NodeData::Const(val) = expr {
+            return ExprVal::Const(val as i64);
         }
-        
-        // TODO:
-        //  * Evaluate the expression actually if all it's operands are constants.
-        //  * If the expression is a branch, then add the appropriate edges to the cfg_worklist.
-        //  * If the expression is a jump, then place the target edge on the cfg_worklist.
-        return new_val;
+
+        // After this point, it has to be NodeData::Op.
+        let opcode = if let NodeData::Op(_opcode) = expr {
+            _opcode.clone()
+        } else { 
+            panic!("Found something other than an Operator or Constant");
+        };
+
+        // Handle conditionals and jump statements separately.
+        match opcode {
+            MOpcode::OpJmp  |
+            MOpcode::OpCJmp |
+            MOpcode::OpCall => {
+                   return self.evaluate_control_flow(i, opcode);
+            }
+            _ => { },
+        }
+
+        match opcode.arity() {
+            MArity::Unary => self.evaluate_unary_op(i, opcode),
+            MArity::Binary => self.evaluate_binary_op(i, opcode),
+            _ => unimplemented!(),
+        }
     }
 
     pub fn analyze(&mut self) {

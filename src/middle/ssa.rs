@@ -298,6 +298,15 @@ pub trait SSAGraph {
 
     /// Get the actual NodeData.
     fn get_node_data(&self, i: &NodeIndex) -> NodeData;
+
+    /// Get Jump target of a call or an unconditional jump.
+    fn get_target(&self, i: &NodeIndex) -> NodeIndex;
+
+    /// Get true branch of a conditional jump.
+    fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex;
+
+    /// Get false branch of a conditional jump.
+    fn get_false_branch(&self, i: &NodeIndex) -> NodeIndex;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -406,9 +415,41 @@ impl SSAGraph for SSA {
         self.get_operands(i)[1]
     }
 
-
     fn get_node_data(&self, i: &NodeIndex) -> NodeData {
         self.g[*i].clone()
+    }
+    
+    fn get_target(&self, i: &NodeIndex) -> NodeIndex {
+        let cur_block = self.get_block(i);
+		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(_) = self.g[edge] {
+                return othernode;
+			}
+		}
+        return NodeIndex::end()
+    }
+
+    fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex {
+        let cur_block = self.get_block(i);
+		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(1) = self.g[edge] {
+                return othernode;
+			}
+		}
+        return NodeIndex::end()
+    }
+
+    fn get_false_branch(&self, i: &NodeIndex) -> NodeIndex {
+        let cur_block = self.get_block(i);
+		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(0) = self.g[edge] {
+                return othernode;
+			}
+		}
+        return NodeIndex::end()
     }
 }
 
