@@ -16,7 +16,7 @@ fn scan_up(value: u64, zeroes: u64, ones: u64) -> Option<u64> {
 	if value & fixedbits == ones { return Option::Some(value) }
 
 	let over = bitsmear(fixedbits & (ones ^ value));
-	let bsm  = value & over; // value & !down;
+	let bsm  = value & over;
 	let increase = bitsmear(bsm) + 1;
 	let rounded = ((value & !over) | fixedbits) + (increase & !over);
 	let overwritten = (!fixedbits & rounded) | ones;
@@ -29,7 +29,7 @@ impl ScannableSet<u64> for KnownBits {
 		scan_up(value, self.zerobits, self.onebits)
 	}
 	fn scan_dn(&self, value: u64) -> Option<u64> {
-		scan_up(!value, self.onebits, self.zerobits).and_then(|x| Option::Some(!x))
+		scan_up(!value, self.onebits, self.zerobits).map(|x| !x)
 	}
 }
 

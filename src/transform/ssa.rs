@@ -5,6 +5,7 @@ use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
 use frontend::structs::LRegInfo;
 use middle::cfg::NodeData as CFGNodeData;
+use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::NodeData as SSANodeData;
 use middle::ssa::EdgeData as SSAEdgeData;
@@ -114,11 +115,15 @@ impl<'a> SSAConstruction<'a> {
 			}
 		}
 		for edge in self.cfg.g.raw_edges() {
-			// TODO more than Control(0)
+			let i = match edge.weight.edge_type {
+				CFGEdgeType::True => 1,
+				CFGEdgeType::False => 0,
+				CFGEdgeType::Unconditional => 0,
+			};
 			self.ssa.g.add_edge(
 				blocks[edge.source().index()],
 				blocks[edge.target().index()],
-				SSAEdgeData::Control(0));
+				SSAEdgeData::Control(i));
 		}
 		for block in blocks {
 			self.seal_block(block);
