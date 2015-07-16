@@ -248,11 +248,11 @@ impl GraphDot for SSAStorage {
 	}
 
 	fn edge_skip(&self, edge: &Edge<EdgeData>) -> bool {
-		if let EdgeData::ContainedInBB{..} = edge.weight {
+		if let EdgeData::ContainedInBB{is_selector: s} = edge.weight {
 			if let NodeData::Phi(_) = self.g[edge.source()] {
 				false
 			} else {
-				true
+				!s
 			}
 		} else {
 			false
