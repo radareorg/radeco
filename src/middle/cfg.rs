@@ -209,7 +209,7 @@ impl CFG {
         }
     }
 
-    fn const_value_of(&self, val: &MVal) -> Option<u64> {
+    fn const_value_of(&self, _: &MVal) -> Option<u64> {
         None
     }
 

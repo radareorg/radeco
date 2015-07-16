@@ -167,12 +167,13 @@ impl<'a> SSAConstruction<'a> {
 			let n1 = self.process_in(block, &instruction.operand_2);
 
 			if instruction.opcode == MOpcode::OpJmp {
-				self.ssa.g.add_edge(block, n0, SSAEdgeData::DynamicControl(0));
+				//TODO
+				//self.ssa.g.add_edge(block, n0, SSAEdgeData::DynamicControl(0));
 				break;
 			}
 
 			if instruction.opcode == MOpcode::OpCJmp {
-				self.ssa.g.add_edge(n0, block, SSAEdgeData::Selector);
+				self.ssa.mark_selector(n0);
 				continue;
 			}
 

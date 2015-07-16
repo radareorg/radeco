@@ -21,13 +21,13 @@ pub enum NodeData {
 
 #[derive(Clone, Copy)]
 pub enum EdgeData {
-	DynamicControl(u8),
 	Control(u8),
 	Data(u8),
-	ContainedInBB,
-	Selector,
+	ContainedInBB { is_selector: bool },
 	ReplacedBy
 }
+
+const CONTEDGE: EdgeData = EdgeData::ContainedInBB {is_selector: false};
 
 impl SSAStorage {
 	pub fn new() -> SSAStorage {
@@ -36,31 +36,31 @@ impl SSAStorage {
 
 	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Op(opc));
-		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
 
 	pub fn add_comment(&mut self, block: NodeIndex, msg: &String) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Comment(msg.clone()));
-		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
 
 	pub fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Const(value));
-		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
 
 	pub fn add_phi(&mut self, block: NodeIndex) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Phi("".to_string()));
-		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
 
 	pub fn add_phi_comment(&mut self, block: NodeIndex, comment: &String) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Phi(comment.clone()));
-		self.g.update_edge(n, block, EdgeData::ContainedInBB);
+		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
 
@@ -132,7 +132,7 @@ impl SSAStorage {
 	pub fn block_of(&self, node: NodeIndex) -> NodeIndex {
 		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::ContainedInBB = self.g[edge] {
+			if let EdgeData::ContainedInBB{..} = self.g[edge] {
 				return othernode
 			}
 		}
@@ -177,6 +177,17 @@ impl SSAStorage {
 		self.g.add_node(NodeData::Removed);
 		self.g.remove_node(node);
 		self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
+	}
+
+	pub fn mark_selector(&mut self, n: NodeIndex) {
+		let mut walk = self.g.walk_edges_directed(n, EdgeDirection::Outgoing);
+		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+			if let &mut EdgeData::ContainedInBB{is_selector: ref mut flag} = &mut self.g[edge] {
+				*flag = true;
+				return;
+			}
+		}
+		panic!("Provided node doesn't belong to any basic block.");
 	}
 
 	pub fn cleanup(&mut self) {
@@ -237,7 +248,7 @@ impl GraphDot for SSAStorage {
 	}
 
 	fn edge_skip(&self, edge: &Edge<EdgeData>) -> bool {
-		if let EdgeData::ContainedInBB = edge.weight {
+		if let EdgeData::ContainedInBB{..} = edge.weight {
 			if let NodeData::Phi(_) = self.g[edge.source()] {
 				false
 			} else {
@@ -249,14 +260,27 @@ impl GraphDot for SSAStorage {
 	}
 
 	fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
+		let target_is_bb = if let NodeData::BasicBlock = self.g[edge.target()] { true } else { false };
+
 		DotAttrBlock::Attributes(match edge.weight {
-			EdgeData::DynamicControl(_) => vec![("color".to_string(), "red".to_string())],
-			EdgeData::Control(_)        => vec![("color".to_string(), "blue".to_string())],
-			EdgeData::Data(i)           => vec![("dir".to_string(),   "back".to_string()),
-			                                    ("label".to_string(), format!("{}", i))],
-			EdgeData::ContainedInBB     => vec![("color".to_string(), "gray".to_string())],
-			EdgeData::Selector          => vec![("color".to_string(), "purple".to_string())],
-			EdgeData::ReplacedBy        => vec![("color".to_string(), "brown".to_string())]
+			EdgeData::Control(_) if !target_is_bb
+				=> vec![("color".to_string(), "red".to_string())],
+
+			EdgeData::Control(_)
+				=> vec![("color".to_string(), "blue".to_string())],
+
+			EdgeData::Data(i)
+				=> vec![("dir".to_string(),   "back".to_string()),
+				        ("label".to_string(), format!("{}", i))],
+
+			EdgeData::ContainedInBB {is_selector: false}
+				=> vec![("color".to_string(), "gray".to_string())],
+
+			EdgeData::ContainedInBB {is_selector: true}
+				=> vec![("color".to_string(), "purple".to_string())],
+
+			EdgeData::ReplacedBy
+				=> vec![("color".to_string(), "brown".to_string())]
 		})
 	}
 
@@ -355,7 +379,7 @@ impl SSA for SSAStorage {
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::ContainedInBB = self.g[edge] {
+            if let EdgeData::ContainedInBB{..} = self.g[edge] {
                 match self.g[othernode] {
                       NodeData::Op(_)
                     | NodeData::Const(_) => expressions.push(othernode.clone()),
@@ -370,7 +394,7 @@ impl SSA for SSAStorage {
         let mut phis = Vec::<NodeIndex>::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::ContainedInBB = self.g[edge] {
+            if let EdgeData::ContainedInBB{..} = self.g[edge] {
                 match self.g[othernode] {
                     NodeData::Phi(_) => phis.push(othernode.clone()),
                     _ => continue,
@@ -394,7 +418,7 @@ impl SSA for SSAStorage {
     fn get_block(&self, i: &NodeIndex) -> NodeIndex {
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::ContainedInBB = self.g[edge] {
+            if let EdgeData::ContainedInBB{..} = self.g[edge] {
                 return othernode
             }
         }
