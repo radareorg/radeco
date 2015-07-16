@@ -54,7 +54,6 @@ pub struct Parser<'a> {
     opinfo:       Option<LOpInfo>,
     tmp_index:    u64,
     last_assgn:   MVal,
-    ssa:          &'a SSAStorage,
     ssac:         Option<SSAConstruction<'a>>,
 }
 
@@ -85,7 +84,7 @@ impl<'a> Default for ParserConfig<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(config: Option<ParserConfig<'a>>, ssa: &'a mut SSAStorage) -> Parser<'a> {
+    pub fn new(config: Option<ParserConfig<'a>>) -> Parser<'a> {
         let config = config.unwrap_or_default();
         let arch = config.arch.unwrap_or("x86_64".to_string());
         let default_size = config.default_size.unwrap_or(64);
@@ -110,13 +109,13 @@ impl<'a> Parser<'a> {
             flags:        flags,
             tmp_index:    0,
             last_assgn:   val,
-            ssa:          ssa,
             ssac:         None,
         }
     }
 
-    pub fn set_register_profile(&mut self, reg_info: &LRegInfo) {
-        self.ssac = Some(SSAConstruction::new(self.ssa, reg_info));
+    pub fn set_register_profile(&mut self, reg_info: &LRegInfo, ssa: &'a mut SSAStorage) {
+        self.ssac = Some(SSAConstruction::new(ssa, reg_info));
+
         self.regset = HashMap::new();
         let mut tmp: HashMap<String, LAliasInfo> = HashMap::new();
         for alias in reg_info.alias_info.iter() {
