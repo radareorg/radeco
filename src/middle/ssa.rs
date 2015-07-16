@@ -5,12 +5,19 @@ use super::ir;
 use super::dot::{GraphDot, DotAttrBlock};
 
 pub struct SSAStorage {
-	pub g: Graph<NodeData, EdgeData>
+	pub g: Graph<NodeData, EdgeData>,
+	needs_cleaning: bool,
+	stable_indexing: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum ValueType {
+	Integer {width: u8}
 }
 
 #[derive(Clone, Debug)]
 pub enum NodeData {
-	Op(ir::MOpcode),
+	Op(ir::MOpcode, ValueType),
 	Comment(String),
 	Const(u64),
 	Phi(String),
@@ -31,11 +38,15 @@ const CONTEDGE: EdgeData = EdgeData::ContainedInBB {is_selector: false};
 
 impl SSAStorage {
 	pub fn new() -> SSAStorage {
-		SSAStorage {g: Graph::new() }
+		SSAStorage {
+			g: Graph::new(),
+			needs_cleaning: false,
+			stable_indexing: false,
+		}
 	}
 
-	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Op(opc));
+	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode, vt: ValueType) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Op(opc, vt));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
@@ -167,16 +178,21 @@ impl SSAStorage {
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Data(i) = self.g[edge] {
 				match self.g[othernode] {
-					NodeData::Op(_) => self.op_use(othernode, i, replacement),
+					NodeData::Op(_, _) => self.op_use(othernode, i, replacement),
 					NodeData::Phi(_) => self.phi_use(othernode, replacement),
 					_ => panic!()
 				}
 			}
 			remove_us.push(edge);
 		}
-		self.g.add_node(NodeData::Removed);
-		self.g.remove_node(node);
-		self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
+		if self.stable_indexing {
+			self.g.add_node(NodeData::Removed);
+			self.g.remove_node(node);
+			self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
+			self.needs_cleaning = true;
+		} else {
+			self.g.remove_node(node);
+		}
 	}
 
 	pub fn mark_selector(&mut self, n: NodeIndex) {
@@ -191,6 +207,7 @@ impl SSAStorage {
 	}
 
 	pub fn cleanup(&mut self) {
+		assert!(!self.stable_indexing);
 		let mut i = 0;
 		let mut n = self.g.node_count();
 		while i < n {
@@ -208,6 +225,7 @@ impl SSAStorage {
 				i += 1;
 			}
 		}
+		self.needs_cleaning = false;
 	}
 }
 
@@ -381,7 +399,7 @@ impl SSA for SSAStorage {
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
             if let EdgeData::ContainedInBB{..} = self.g[edge] {
                 match self.g[othernode] {
-                      NodeData::Op(_)
+                      NodeData::Op(_, _)
                     | NodeData::Const(_) => expressions.push(othernode.clone()),
                     _ => continue,
                 }

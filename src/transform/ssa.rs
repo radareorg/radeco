@@ -9,7 +9,7 @@ use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::NodeData as SSANodeData;
 use middle::ssa::EdgeData as SSAEdgeData;
-use middle::ssa::{SSAStorage, NodeData};
+use middle::ssa::{SSAStorage, NodeData, ValueType};
 use middle::ir::{MVal, MOpcode, MValType};
 use std::collections::{HashSet, HashMap};
 
@@ -18,7 +18,6 @@ pub type Block = NodeIndex;
 pub type Node = NodeIndex;
 
 pub struct SSAConstruction<'a> {
-	cfg:              &'a CFG,
 	ssa:              &'a mut SSAStorage,
 	variables:        Vec<VarId>, // assume consequtive integers?
 	sealed_blocks:    HashSet<Block>, // replace with bitfield
@@ -28,9 +27,8 @@ pub struct SSAConstruction<'a> {
 }
 
 impl<'a> SSAConstruction<'a> {
-	pub fn new(ssa: &'a mut SSAStorage, cfg: &'a CFG, reg_info: &LRegInfo) -> SSAConstruction<'a> {
+	pub fn new(ssa: &'a mut SSAStorage, reg_info: &LRegInfo) -> SSAConstruction<'a> {
 		let mut s = SSAConstruction {
-			cfg:              cfg,
 			ssa:              ssa,
 			variables:        Vec::new(),
 			sealed_blocks:    HashSet::new(),
@@ -93,14 +91,14 @@ impl<'a> SSAConstruction<'a> {
 		self.sealed_blocks.insert(block);
 	}
 
-	pub fn run(&mut self) {
+	pub fn run(&mut self, cfg: &CFG) {
 		let mut blocks = Vec::<Block>::new();
-		for i in 0..self.cfg.g.node_count() {
+		for i in 0..cfg.g.node_count() {
 		 	let block = self.ssa.add_block();
 			self.incomplete_phis.insert(block, HashMap::new());
 			blocks.push(block);
 
-			match self.cfg.g[NodeIndex::new(i)] {
+			match cfg.g[NodeIndex::new(i)] {
 		 		CFGNodeData::Block(ref srcbb) => {
 		 			self.process_block(block, srcbb);
 				},
@@ -114,7 +112,7 @@ impl<'a> SSAConstruction<'a> {
 				_ => {}
 			}
 		}
-		for edge in self.cfg.g.raw_edges() {
+		for edge in cfg.g.raw_edges() {
 			let i = match edge.weight.edge_type {
 				CFGEdgeType::True => 1,
 				CFGEdgeType::False => 0,
@@ -155,7 +153,8 @@ impl<'a> SSAConstruction<'a> {
 		if opc == MOpcode::OpEq {
 			return n0
 		}
-		let nn = self.ssa.add_op(block, opc);
+		// TODO: give correct integer type here
+		let nn = self.ssa.add_op(block, opc, ValueType::Integer{width: 64});
 		self.ssa.op_use(nn, 0, n0);
 		self.ssa.op_use(nn, 1, n1);
 		return nn

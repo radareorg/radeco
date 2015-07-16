@@ -182,7 +182,7 @@ impl<T: SSA + Clone> Analyzer<T> {
         }
 
         // After this point, it has to be NodeData::Op.
-        let opcode = if let NodeData::Op(_opcode) = expr {
+        let opcode = if let NodeData::Op(_opcode, _) = expr {
             _opcode.clone()
         } else { 
             panic!("Found something other than an Operator or Constant");
