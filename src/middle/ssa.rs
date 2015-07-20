@@ -16,6 +16,11 @@ pub enum ValueType {
 }
 
 #[derive(Clone, Debug)]
+pub struct BBInfo {
+	pub addr: u64
+}
+
+#[derive(Clone, Debug)]
 pub enum NodeData {
 	Op(ir::MOpcode, ValueType),
 	Comment(String),
@@ -23,7 +28,7 @@ pub enum NodeData {
 	Phi(String),
 	Undefined,
 	Removed,
-	BasicBlock
+	BasicBlock(BBInfo)
 }
 
 #[derive(Clone, Copy)]
@@ -45,26 +50,8 @@ impl SSAStorage {
 		}
 	}
 
-	pub fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode, vt: ValueType) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Op(opc, vt));
-		self.g.update_edge(n, block, CONTEDGE);
-		n
-	}
-
 	pub fn add_comment(&mut self, block: NodeIndex, msg: &String) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Comment(msg.clone()));
-		self.g.update_edge(n, block, CONTEDGE);
-		n
-	}
-
-	pub fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Const(value));
-		self.g.update_edge(n, block, CONTEDGE);
-		n
-	}
-
-	pub fn add_phi(&mut self, block: NodeIndex) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Phi("".to_string()));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
@@ -75,13 +62,32 @@ impl SSAStorage {
 		n
 	}
 
-	pub fn add_block(&mut self) -> NodeIndex {
-		self.g.add_node(NodeData::BasicBlock)
+	pub fn read_const(&self, ni: NodeIndex) -> Option<u64> {
+		if let &NodeData::Op(ir::MOpcode::OpConst(n), _) = &self.g[ni] {
+			Some(n)
+		} else {
+			None
+		}
 	}
 
-	// TODO: Reuse code between args_of/uses_of/preds_of/succs_of
+	fn gather_adjacent(&self, node: NodeIndex, direction: EdgeDirection, data: bool) -> Vec<NodeIndex> {
+		let mut adjacent = Vec::new();
+		let mut walk = self.g.walk_edges_directed(node, direction);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if data {
+				if let EdgeData::Control(_) = self.g[edge] {
+					adjacent.push(othernode);
+				}
+			} else {
+				if let EdgeData::Data(_) = self.g[edge] {
+					adjacent.push(othernode);
+				}
+			}
+		}
+		adjacent
+	}
 
-	pub fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
+	pub fn args_of_ordered(&self, node: NodeIndex) -> Vec<NodeIndex> {
 		let ordered = if let NodeData::Phi(_) = self.g[node] { false } else { true };
 		let mut args = Vec::new();
 		if ordered {
@@ -107,107 +113,20 @@ impl SSAStorage {
 		args
 	}
 
-	pub fn uses_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		let mut uses = Vec::new();
-		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Data(_) = self.g[edge] {
-				uses.push(othernode);
-			}
-		}
-		uses
-	}
-
-	pub fn preds_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		let mut preds = Vec::new();
-		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Control(_) = self.g[edge] {
-				preds.push(othernode);
-			}
-		}
-		preds
-	}
-
-	pub fn succs_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		let mut succs = Vec::new();
+	pub fn replaced_by(&self, node: NodeIndex) -> NodeIndex {
 		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Control(_) = self.g[edge] {
-				succs.push(othernode);
-			}
-		}
-		succs
-	}
-
-	pub fn block_of(&self, node: NodeIndex) -> NodeIndex {
-		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::ContainedInBB{..} = self.g[edge] {
+			if let EdgeData::ReplacedBy = self.g[edge] {
 				return othernode
 			}
 		}
-		return NodeIndex::end()
-	}
-
-	pub fn phi_use(&mut self, phi: NodeIndex, node: NodeIndex) {
-		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
-		assert!(if let NodeData::Removed = self.g[node] { false } else { true });
-		self.g.update_edge(phi, node, EdgeData::Data(0));
-	}
-
-	pub fn phi_unuse(&mut self, phi: NodeIndex, node: NodeIndex) {
-		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
-		if let Option::Some(edge) = self.g.find_edge(phi, node) {
-			self.g.remove_edge(edge);
-		}
-	}
-
-	pub fn op_use(&mut self, node: NodeIndex, index: u8, argument: NodeIndex) {
-		if argument == NodeIndex::end() { return }
-		assert!(if let NodeData::Removed = self.g[argument] { false } else { true });
-		// TODO: find existing edge
-		self.g.add_edge(node, argument, EdgeData::Data(index));
-	}
-
-	pub fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
-		if node == replacement { return }
-
-		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
-		let mut remove_us = Vec::<EdgeIndex>::new();
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Data(i) = self.g[edge] {
-				match self.g[othernode] {
-					NodeData::Op(_, _) => self.op_use(othernode, i, replacement),
-					NodeData::Phi(_) => self.phi_use(othernode, replacement),
-					_ => panic!()
-				}
-			}
-			remove_us.push(edge);
-		}
-		if self.stable_indexing {
-			self.g.add_node(NodeData::Removed);
-			self.g.remove_node(node);
-			self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
-			self.needs_cleaning = true;
-		} else {
-			self.g.remove_node(node);
-		}
-	}
-
-	pub fn mark_selector(&mut self, n: NodeIndex) {
-		let mut walk = self.g.walk_edges_directed(n, EdgeDirection::Outgoing);
-		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
-			if let &mut EdgeData::ContainedInBB{is_selector: ref mut flag} = &mut self.g[edge] {
-				*flag = true;
-				return;
-			}
-		}
-		panic!("Provided node doesn't belong to any basic block.");
+		panic!();
+		//return NodeIndex::end()
 	}
 
 	pub fn cleanup(&mut self) {
-		assert!(!self.stable_indexing);
+		// TODO: Add api to toggle stable_indexing to SSA trait
+		// assert!(!self.stable_indexing);
 		let mut i = 0;
 		let mut n = self.g.node_count();
 		while i < n {
@@ -278,14 +197,15 @@ impl GraphDot for SSAStorage {
 	}
 
 	fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
-		let target_is_bb = if let NodeData::BasicBlock = self.g[edge.target()] { true } else { false };
+		let target_is_bb = if let NodeData::BasicBlock(_) = self.g[edge.target()] { true } else { false };
 
 		DotAttrBlock::Attributes(match edge.weight {
 			EdgeData::Control(_) if !target_is_bb
 				=> vec![("color".to_string(), "red".to_string())],
 
-			EdgeData::Control(_)
-				=> vec![("color".to_string(), "blue".to_string())],
+			EdgeData::Control(i)
+				=> vec![("color".to_string(), "blue".to_string()),
+				        ("label".to_string(), format!("{}", i))],
 
 			EdgeData::Data(i)
 				=> vec![("dir".to_string(),   "back".to_string()),
@@ -303,7 +223,11 @@ impl GraphDot for SSAStorage {
 	}
 
 	fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
-		let l = format!("{:?}", node);
+		let l = match node {
+			&NodeData::Op(opc, ValueType::Integer{width: w}) => format!("[i{}] {:?}", w, opc),
+			&NodeData::BasicBlock(BBInfo{addr}) => format!("@{:x}", addr),
+			_ => format!("{:?}", node)
+		};
 		DotAttrBlock::Raw(format!(" [label=\"{}\"]", l.replace("\"", "\\\"")))
 	}
 }
@@ -317,8 +241,8 @@ impl GraphDot for SSAStorage {
 // This trait ensures that any other ssa form will be compatible with our implementations provided
 // the SSA form implements the following traits.
 pub trait SSA {
-	type ValueRef: Eq + Hash + Clone;
-	type ActionRef: Eq + Hash + Clone;
+	type ValueRef: Eq + Hash + Clone + Copy; // We could drop the Copy trait later and insert .clone()
+	type ActionRef: Eq + Hash + Clone + Copy;
 
     /// Get NodeIndex of all BasicBlocks available in the SSA form.
     fn get_blocks(&self) -> Vec<Self::ActionRef>;
@@ -366,6 +290,70 @@ pub trait SSA {
 
     /// Get false branch of a conditional jump.
     fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+
+    /// Gets the data dependencies of a value node in any order.
+    /// (See get_operands for ordered return value)
+	fn args_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef>;
+
+	/// Gets uses dependents of a value node.
+	/// (Equivalent as `SSAMod::get_uses`)
+	fn uses_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef>;
+
+	/// Get the predecessors of a basic block.
+	fn preds_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
+
+	/// Get the successors of a basic block.
+	fn succs_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
+
+	/// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
+	/// (Alias for get_block)
+	fn block_of(&self, i: &Self::ValueRef) -> Self::ActionRef { self.get_block(i) }
+
+	/// Updates a node reference to the latest version in case of replacement
+	// TODO: Hide his implementation detail
+	fn refresh(&self, mut node: Self::ValueRef) -> Self::ValueRef;
+
+	fn invalid_value(&self) -> Self::ValueRef;
+	fn invalid_action(&self) -> Self::ActionRef;
+}
+
+/// Trait for modifying SSA data
+pub trait SSAMod: SSA {
+
+	type BBInfo;
+
+	/// Add a new operation node.
+	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType) -> Self::ValueRef;
+
+	/// Add a new constant node.
+	fn add_const(&mut self, block: Self::ActionRef, value: u64) -> Self::ValueRef;
+
+	/// Add a new phi node.
+	fn add_phi(&mut self, block: Self::ActionRef) -> Self::ValueRef;
+
+	/// Add a new undefined node
+	fn add_undefined(&mut self, block: Self::ActionRef) -> Self::ValueRef;
+
+	/// Add a new basic block.
+	fn add_block(&mut self, info: Self::BBInfo) -> Self::ActionRef;
+
+	/// Add a control edge between to basic blocks.
+	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
+
+	/// Add a data source to a phi node.
+	fn phi_use(&mut self, phi: Self::ValueRef, node: Self::ValueRef);
+
+	/// Remove a data source from a phi node.
+	fn phi_unuse(&mut self, phi: Self::ValueRef, node: Self::ValueRef);
+
+	/// Set the index-th argument of the node.
+	fn op_use(&mut self, node: Self::ValueRef, index: u8, argument: Self::ValueRef);
+
+	/// Replace one node by another within one basic block.
+	fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
+
+	/// Mark the node as selector for the control edges away from the specified basic block
+	fn mark_selector(&mut self, block: Self::ActionRef, n: Self::ValueRef);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -381,7 +369,7 @@ impl SSA for SSAStorage {
         let mut blocks = Vec::<NodeIndex>::new();
         for i in (0..len).map(|x| NodeIndex::new(x)).collect::<Vec<NodeIndex>>().iter() {
             match self.g[*i] {
-                NodeData::BasicBlock => blocks.push(i.clone()),
+                NodeData::BasicBlock(_) => blocks.push(i.clone()),
                 _ => continue,
             }
         }
@@ -505,5 +493,131 @@ impl SSA for SSAStorage {
 		}
         return NodeIndex::end()
     }
+
+	fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
+		self.gather_adjacent(node, EdgeDirection::Outgoing, true)
+	}
+
+	fn uses_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
+		self.gather_adjacent(node, EdgeDirection::Incoming, true)
+	}
+
+	fn preds_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
+		self.gather_adjacent(node, EdgeDirection::Incoming, false)
+	}
+
+	fn succs_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
+		self.gather_adjacent(node, EdgeDirection::Outgoing, false)
+	}
+
+	fn refresh(&self, mut node: NodeIndex) -> NodeIndex {
+		if node == NodeIndex::end() { return node }
+		while let NodeData::Removed = self.g[node] {
+			node = self.replaced_by(node);
+		}
+		node
+	}
+
+	fn invalid_value(&self) -> NodeIndex { NodeIndex::end() }
+	fn invalid_action(&self) -> NodeIndex { NodeIndex::end() }
 }
 
+impl SSAMod for SSAStorage {
+
+	type BBInfo = self::BBInfo;
+
+	fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode, vt: ValueType) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Op(opc, vt));
+		self.g.update_edge(n, block, CONTEDGE);
+		n
+	}
+
+	fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Const(value));
+		self.g.update_edge(n, block, CONTEDGE);
+		n
+	}
+
+	fn add_phi(&mut self, block: NodeIndex) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Phi("".to_string()));
+		self.g.update_edge(n, block, CONTEDGE);
+		n
+	}
+
+	fn add_undefined(&mut self, block: NodeIndex) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Undefined);
+		self.g.update_edge(n, block, CONTEDGE);
+		n
+	}
+
+	fn add_block(&mut self, info: BBInfo) -> NodeIndex {
+		self.g.add_node(NodeData::BasicBlock(info))
+	}
+
+	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
+		self.g.add_edge(source, target, EdgeData::Control(index));
+	}
+
+	fn phi_use(&mut self, mut phi: NodeIndex, mut node: NodeIndex) {
+		phi = self.refresh(phi);
+		node = self.refresh(node);
+		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
+		//assert!(if let NodeData::Removed = self.g[node] { false } else { true });
+		self.g.update_edge(phi, node, EdgeData::Data(0));
+	}
+
+	fn phi_unuse(&mut self, mut phi: NodeIndex, mut node: NodeIndex) {
+		phi = self.refresh(phi);
+		node = self.refresh(node);
+		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
+		if let Option::Some(edge) = self.g.find_edge(phi, node) {
+			self.g.remove_edge(edge);
+		}
+	}
+
+	fn op_use(&mut self, mut node: NodeIndex, index: u8, mut argument: NodeIndex) {
+		node = self.refresh(node);
+		argument = self.refresh(argument);
+		if argument == NodeIndex::end() { return }
+		// assert!(if let NodeData::Removed = self.g[argument] { false } else { true });
+		// TODO: find existing edge
+		self.g.add_edge(node, argument, EdgeData::Data(index));
+	}
+
+	fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
+		if node == replacement { return }
+
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
+		let mut remove_us = Vec::<EdgeIndex>::new();
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Data(i) = self.g[edge] {
+				match self.g[othernode] {
+					NodeData::Op(_, _) => self.op_use(othernode, i, replacement),
+					NodeData::Phi(_) => self.phi_use(othernode, replacement),
+					_ => panic!()
+				}
+			}
+			remove_us.push(edge);
+		}
+		if self.stable_indexing {
+			self.g.add_node(NodeData::Removed);
+			self.g.remove_node(node);
+			self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
+			self.needs_cleaning = true;
+		} else {
+			self.g.remove_node(node);
+		}
+	}
+
+	fn mark_selector(&mut self, _: NodeIndex, n: NodeIndex) {
+		// TODO: consider first argument and unmerge edgetypes contain/select
+		let mut walk = self.g.walk_edges_directed(n, EdgeDirection::Outgoing);
+		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+			if let &mut EdgeData::ContainedInBB{is_selector: ref mut flag} = &mut self.g[edge] {
+				*flag = true;
+				return;
+			}
+		}
+		panic!("Provided node doesn't belong to any basic block.");
+	}
+}

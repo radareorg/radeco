@@ -1,33 +1,28 @@
 //! Implements the SSA construction algorithm described in
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
-use petgraph::EdgeDirection;
+use std::collections::{HashSet, HashMap};
 use petgraph::graph::NodeIndex;
 use frontend::structs::LRegInfo;
 use middle::cfg::NodeData as CFGNodeData;
 use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
-use middle::ssa::NodeData as SSANodeData;
-use middle::ssa::EdgeData as SSAEdgeData;
-use middle::ssa::{SSAStorage, NodeData, ValueType};
+use middle::ssa::{BBInfo, SSA, SSAMod, NodeData, ValueType};
 use middle::ir::{MVal, MOpcode, MValType};
-use std::collections::{HashSet, HashMap};
 
 pub type VarId = String; // consider transitioning to &str
-pub type Block = NodeIndex;
-pub type Node = NodeIndex;
 
-pub struct SSAConstruction<'a> {
-	ssa:              &'a mut SSAStorage,
+pub struct SSAConstruction<'a, T: SSAMod<BBInfo=BBInfo> + 'a> {
+	pub ssa:          &'a mut T,
 	variables:        Vec<VarId>, // assume consequtive integers?
-	sealed_blocks:    HashSet<Block>, // replace with bitfield
-	current_def:      HashMap<VarId, HashMap<Block, Node>>,
-	incomplete_phis:  HashMap<Block, HashMap<VarId, Node>>,
-	global_variables: HashMap<VarId, Node>
+	sealed_blocks:    HashSet<T::ActionRef>, // replace with bitfield
+	current_def:      HashMap<VarId, HashMap<T::ActionRef, T::ValueRef>>,
+	incomplete_phis:  HashMap<T::ActionRef, HashMap<VarId, T::ValueRef>>,
+	global_variables: HashMap<VarId, T::ValueRef>
 }
 
-impl<'a> SSAConstruction<'a> {
-	pub fn new(ssa: &'a mut SSAStorage, reg_info: &LRegInfo) -> SSAConstruction<'a> {
+impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
+	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
 		let mut s = SSAConstruction {
 			ssa:              ssa,
 			variables:        Vec::new(),
@@ -45,7 +40,7 @@ impl<'a> SSAConstruction<'a> {
 		return s
 	}
 
-	pub fn write_variable(&mut self, block: Block, variable: VarId, value: Node) {
+	pub fn write_variable(&mut self, block: T::ActionRef, variable: VarId, value: T::ValueRef) {
 		if let Option::Some(vd) = self.current_def.get_mut(&variable) {
 			vd.insert(block, value);
 		} else {
@@ -53,17 +48,7 @@ impl<'a> SSAConstruction<'a> {
 		}
 	}
 
-	fn replaced_by(&self, node: Node) -> Node {
-		let mut walk = self.ssa.g.walk_edges_directed(node, EdgeDirection::Outgoing);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.ssa.g) {
-			if let SSAEdgeData::ReplacedBy = self.ssa.g[edge] {
-				return othernode
-			}
-		}
-		return NodeIndex::end()
-	}
-
-	pub fn read_variable(&mut self, block: Block, variable: VarId) -> Node {
+	pub fn read_variable(&mut self, block: T::ActionRef, variable: VarId) -> T::ValueRef {
 		let mut n = match {
 			if let Option::Some(vd) = self.current_def.get(&variable) {
 				vd.get(&block)
@@ -74,15 +59,17 @@ impl<'a> SSAConstruction<'a> {
 			Option::Some(r) => r,
 			Option::None => self.read_variable_recursive(variable, block)
 		};
-		while let NodeData::Removed = self.ssa.g[n] {
-			// Ask authors of this algorithm if they had to loop here too
-			n = self.replaced_by(n);
-		}
-		assert!(if let NodeData::Removed = self.ssa.g[n] { false } else { true });
+		n = self.ssa.refresh(n);
 		return n
 	}
 
-	pub fn seal_block(&mut self, block: Block) {
+	pub fn add_block(&mut self, info: BBInfo) -> T::ActionRef {
+		let block = self.ssa.add_block(info);
+		self.incomplete_phis.insert(block, HashMap::new());
+		block
+	}
+
+	pub fn seal_block(&mut self, block: T::ActionRef) {
 		let inc = self.incomplete_phis[&block].clone(); // TODO: remove clone
 
 		for (variable, node) in inc {
@@ -92,9 +79,9 @@ impl<'a> SSAConstruction<'a> {
 	}
 
 	pub fn run(&mut self, cfg: &CFG) {
-		let mut blocks = Vec::<Block>::new();
+		let mut blocks = Vec::<T::ActionRef>::new();
 		for i in 0..cfg.g.node_count() {
-		 	let block = self.ssa.add_block();
+		 	let block = self.ssa.add_block(BBInfo{addr: 99});
 			self.incomplete_phis.insert(block, HashMap::new());
 			blocks.push(block);
 
@@ -106,7 +93,8 @@ impl<'a> SSAConstruction<'a> {
 					for (ref name, ref mut vd) in &mut self.current_def {
 						let mut msg = "initial_".to_string();
 						msg.push_str(name);
-						vd.insert(block, self.ssa.add_comment(block, &msg));
+						// TODO: Add OpComment?
+						//vd.insert(block, self.ssa.add_comment(block, &msg));
 					}
 				},
 				_ => {}
@@ -118,29 +106,29 @@ impl<'a> SSAConstruction<'a> {
 				CFGEdgeType::False => 0,
 				CFGEdgeType::Unconditional => 0,
 			};
-			self.ssa.g.add_edge(
+			self.ssa.add_control_edge(
 				blocks[edge.source().index()],
 				blocks[edge.target().index()],
-				SSAEdgeData::Control(i));
+				i);
 		}
 		for block in blocks {
 			self.seal_block(block);
 		}
-		self.ssa.stable_indexing = false;
-		self.ssa.cleanup();
+		//self.ssa.stable_indexing = false;
+		//self.ssa.cleanup();
 	}
 
-	fn process_in(&mut self, block: Block, mval: &MVal) -> Node {
+	fn process_in(&mut self, block: T::ActionRef, mval: &MVal) -> T::ValueRef {
 		match mval.val_type {
 			MValType::Register  => self.read_variable(block, mval.name.clone()),
 			MValType::Temporary => self.read_variable(block, mval.name.clone()),
-			MValType::Unknown   => self.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
-			MValType::Internal  => self.ssa.add_comment(block, &mval.name), // unimplemented!()
-			MValType::Null      => NodeIndex::end(),
+			MValType::Unknown   => self.ssa.invalid_value(), //self.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
+			MValType::Internal  => self.ssa.invalid_value(), //self.ssa.add_comment(block, &mval.name), // unimplemented!()
+			MValType::Null      => self.ssa.invalid_value(),
 		}
 	}
 
-	fn process_out(&mut self, block: Block, mval: &MVal, value: Node) {
+	fn process_out(&mut self, block: T::ActionRef, mval: &MVal, value: T::ValueRef) {
 		match mval.val_type {
 			MValType::Register  => self.write_variable(block, mval.name.clone(), value),
 			MValType::Temporary => self.write_variable(block, mval.name.clone(), value),
@@ -150,7 +138,7 @@ impl<'a> SSAConstruction<'a> {
 		}
 	}
 
-	fn process_op(&mut self, block: Block, opc: MOpcode, n0: Node, n1: Node) -> Node {
+	fn process_op(&mut self, block: T::ActionRef, opc: MOpcode, n0: T::ValueRef, n1: T::ValueRef) -> T::ValueRef {
 		if opc == MOpcode::OpEq {
 			return n0
 		}
@@ -161,7 +149,7 @@ impl<'a> SSAConstruction<'a> {
 		return nn
 	}
 
-	fn process_block(&mut self, block: Block, source: &BasicBlock) {
+	fn process_block(&mut self, block: T::ActionRef, source: &BasicBlock) {
 		for ref instruction in &source.instructions {
 			let n0 = self.process_in(block, &instruction.operand_1);
 			let n1 = self.process_in(block, &instruction.operand_2);
@@ -173,7 +161,7 @@ impl<'a> SSAConstruction<'a> {
 			}
 
 			if instruction.opcode == MOpcode::OpCJmp {
-				self.ssa.mark_selector(n0);
+				self.ssa.mark_selector(block, n0);
 				continue;
 			}
 
@@ -182,12 +170,14 @@ impl<'a> SSAConstruction<'a> {
 		}
 	}
 
-	fn read_variable_recursive(&mut self, variable: VarId, block: Block) -> Node {
+	fn read_variable_recursive(&mut self, variable: VarId, block: T::ActionRef) -> T::ValueRef {
 		let mut val;
 
 		if !self.sealed_blocks.contains(&block) {
 			// Incomplete CFG
-			val = self.ssa.add_phi_comment(block, &variable);
+			// TODO: bring back comments
+			// val = self.ssa.add_phi_comment(block, &variable);
+			val = self.ssa.add_phi(block);
 			let oldval = self.incomplete_phis.get_mut(&block).unwrap().insert(variable.clone(), val);
 			assert!(oldval.is_none());
 		} else {
@@ -197,7 +187,9 @@ impl<'a> SSAConstruction<'a> {
 				val = self.read_variable(pred[0], variable.clone())
 			} else {
 				// Break potential cycles with operandless phi
-				val = self.ssa.add_phi_comment(block, &variable);
+				// TODO: bring back comments
+				// val = self.ssa.add_phi_comment(block, &variable);
+				val = self.ssa.add_phi(block);
 				// TODO: only mark (see paper)
 				self.write_variable(block, variable.clone(), val);
 				val = self.add_phi_operands(block, variable.clone(), val)
@@ -207,8 +199,8 @@ impl<'a> SSAConstruction<'a> {
 		return val
 	}
 
-	fn add_phi_operands(&mut self, block: Block, variable: VarId, phi: Node) -> Node {
-		assert!(block == self.ssa.block_of(phi));
+	fn add_phi_operands(&mut self, block: T::ActionRef, variable: VarId, phi: T::ValueRef) -> T::ValueRef {
+		assert!(block == self.ssa.block_of(&phi));
 		// Determine operands from predecessors
 		for pred in self.ssa.preds_of(block) {
 			let datasource = self.read_variable(pred, variable.clone());
@@ -217,9 +209,9 @@ impl<'a> SSAConstruction<'a> {
 		return self.try_remove_trivial_phi(phi)
 	}
 
-	fn try_remove_trivial_phi(&mut self, phi: Node) -> Node {
-		let undef = NodeIndex::end();
-		let mut same: Node = undef; // The phi is unreachable or in the start block
+	fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
+		let undef = self.ssa.invalid_value();
+		let mut same: T::ValueRef = undef; // The phi is unreachable or in the start block
 		for op in self.ssa.args_of(phi) {
 			if op == same || op == phi {
 				continue // Unique value or self−reference
@@ -231,7 +223,8 @@ impl<'a> SSAConstruction<'a> {
 		}
 
 		if same == undef {
-			same = self.ssa.g.add_node(SSANodeData::Undefined);
+			let block = self.ssa.block_of(&phi);
+			same = self.ssa.add_undefined(block);
 		}
 
 		let users = self.ssa.uses_of(phi);
@@ -240,7 +233,7 @@ impl<'a> SSAConstruction<'a> {
 		// Try to recursively remove all phi users, which might have become trivial
 		for use_ in users {
 			if use_ == phi { continue; }
-			if let NodeData::Phi(_) = self.ssa.g[use_] {
+			if let NodeData::Phi(_) = self.ssa.get_node_data(&use_) {
 				//println!("After replacing {:?} by {:?}, proceeding to simplify user {:?}",
 				//	self.ssa.g[phi],
 				//	self.ssa.g[same],
@@ -252,7 +245,7 @@ impl<'a> SSAConstruction<'a> {
 		return same
 	}
 
-	/*fn remove_redundant_phis(&self, phi_functions: Vec<Node>) {
+	/*fn remove_redundant_phis(&self, phi_functions: Vec<T::ValueRef>) {
 		// should phi_functions be `Vec` or something else?
 		let sccs = compute_phi_sccs(induced_subgraph(phi_functions));
 		for scc in topological_sort(sccs) {

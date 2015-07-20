@@ -3,8 +3,10 @@
 use num::traits::Num;
 
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::cmp;
 use regex::Regex;
+use petgraph::graph::NodeIndex;
 
 use super::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
 use super::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile, LFlagInfo};
@@ -54,7 +56,10 @@ pub struct Parser<'a> {
     opinfo:       Option<LOpInfo>,
     tmp_index:    u64,
     last_assgn:   MVal,
-    ssac:         Option<SSAConstruction<'a>>,
+    ssac:         Option<SSAConstruction<'a, SSAStorage>>, // TODO: Remove the Option<> here
+    block:        NodeIndex,
+    bbs:          BTreeMap<Address, (NodeIndex, Address)>,
+    bbworklist:   Vec<Address>
 }
 
 // Struct used to configure the Parser. If `None` is passed to any of the fields, then the default
@@ -110,10 +115,14 @@ impl<'a> Parser<'a> {
             tmp_index:    0,
             last_assgn:   val,
             ssac:         None,
+            block:        <SSAStorage as SSA>::ActionRef::end(),
+            bbs:          BTreeMap::new(),
+            bbworklist:   Vec::new()
         }
     }
 
     pub fn set_register_profile(&mut self, reg_info: &LRegInfo, ssa: &'a mut SSAStorage) {
+        // TODO: use SSA methods instead of SSAStorage methods
         self.ssac = Some(SSAConstruction::new(ssa, reg_info));
 
         self.regset = HashMap::new();
@@ -130,6 +139,14 @@ impl<'a> Parser<'a> {
 
         self.alias_info = tmp.clone();
     }
+
+    /*pub fn read_const(&self, val: &MVal) -> Option<u64> {
+        if let &MVal { val_type: MValType::Temporary, node: Some(ni), .. } = val {
+            self.ssac.as_ref().unwrap().ssa.read_const(ni)
+        } else {
+            None
+        }
+    }*/
 
     pub fn set_flags(&mut self, flags: &Vec<LFlagInfo>) {
         for f in flags.iter() {
@@ -491,7 +508,7 @@ impl<'a> Parser<'a> {
         }
 
         dst.size = dst_size;
-        
+
         // If it is a compare instruction, then the flags must be updated.
         if op == MOpcode::OpCmp {
             self.last_assgn = dst.clone();
