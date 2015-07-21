@@ -541,10 +541,11 @@ impl<'a> Parser<'a> {
     fn constant_value(&mut self, num: u64) -> MVal {
         let op = MOpcode::OpConst(num);
         let size = self.default_size;
-        let dst = self.get_tmp_register(size);
+        let mut dst = self.get_tmp_register(size);
         let addr = MAddr::new(self.addr);
         let inst = MInst::new(op, dst.clone(), MVal::null(), MVal::null(), Some(addr));
         self.insts.push(inst);
+        dst.as_literal = Some(num);
         dst
     }
 }

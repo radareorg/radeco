@@ -6,8 +6,8 @@ use super::dot::{GraphDot, DotAttrBlock};
 
 pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>,
+	pub stable_indexing: bool,
 	needs_cleaning: bool,
-	stable_indexing: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -41,7 +41,7 @@ impl SSAStorage {
 		SSAStorage {
 			g: Graph::new(),
 			needs_cleaning: false,
-			stable_indexing: false,
+			stable_indexing: true,
 		}
 	}
 

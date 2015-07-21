@@ -209,8 +209,8 @@ impl CFG {
         }
     }
 
-    fn const_value_of(&self, _: &MVal) -> Option<u64> {
-        None
+    fn const_value_of(&self, val: &MVal) -> Option<u64> {
+        val.as_literal
     }
 
     fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: MInst, next_inst: MInst) {

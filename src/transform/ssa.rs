@@ -126,6 +126,7 @@ impl<'a> SSAConstruction<'a> {
 		for block in blocks {
 			self.seal_block(block);
 		}
+		self.ssa.stable_indexing = false;
 		self.ssa.cleanup();
 	}
 

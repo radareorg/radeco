@@ -75,11 +75,12 @@ pub struct MRegInfo {
 
 #[derive(Debug, Clone)]
 pub struct MVal {
-    pub name:     String,
-    pub size:     u8,
-    pub val_type: MValType,
-    pub reg_info: Option<MRegInfo>,
-    pub typeset:  u32,
+    pub name:       String,
+    pub size:       u8,
+    pub val_type:   MValType,
+    pub reg_info:   Option<MRegInfo>,
+    pub typeset:    u32,
+    pub as_literal: Option<u64>,
 }
 
 // Minor: Change MInst to take Option<MVal> instead. This will allow us to eliminate MVal::null and
@@ -150,11 +151,12 @@ impl MRegInfo {
 impl MVal {
     pub fn new(name: String, size: u8, val_type: MValType, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
         MVal {
-            name:     name.clone(),
-            size:     size,
-            val_type: val_type,
-            typeset:  typeset,
-            reg_info: reg_info,
+            name:       name.clone(),
+            size:       size,
+            val_type:   val_type,
+            typeset:    typeset,
+            reg_info:   reg_info,
+            as_literal: None
         }
     }
 
