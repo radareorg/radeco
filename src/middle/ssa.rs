@@ -161,7 +161,7 @@ impl GraphDot for SSAStorage {
 	type EdgeType = Edge<EdgeData>;
 
 	fn configure(&self) -> String {
-		format!("digraph cfg {{\nsplines=\"true\";\n")
+		format!("digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" compound=true];\nrankdit=TB;\n")
 	}
 
 	fn nodes(&self) -> Vec<Self::NodeType> {
@@ -207,39 +207,63 @@ impl GraphDot for SSAStorage {
         }
 	}
 
+    // TODO: Ordering of clusters for ssa is kind of hacky and may not run top to bottom in some
+    // cases.
 	fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
 		let target_is_bb = if let NodeData::BasicBlock(_) = self.g[edge.target()] { true } else { false };
+        DotAttrBlock::Attributes(
+            match edge.weight {
+                EdgeData::Control(_) if !target_is_bb => {
+                    vec![("color".to_string(), "red".to_string())]
+                },
+                EdgeData::Control(i) => { 
+                    // Determine the source and destination clusters.
+                    let source_cluster = edge.source().index();
+                    let dst_cluster = edge.target().index();
+                    let (color, label) = match i {
+                        0 => ("red", "F"),
+                        1 => ("green", "T"),
+                        2 => ("blue", "U"),
+                        _ => unreachable!(),
+                    };
+                    vec![("color".to_string(), color.to_string()),
+                    ("label".to_string(), format!("{}", label.to_string())),
+                    ("ltail".to_string(), format!("cluster_{}",source_cluster)),
+                    ("lhead".to_string(), format!("cluster_{}",dst_cluster)),
+                    ("minlen".to_string(), format!("9"))]
+                },
+                EdgeData::Data(i) => {
+                    vec![("dir".to_string(), "back".to_string()),
+                    ("label".to_string(), format!("{}", i))]
+                },
+                EdgeData::ContainedInBB => {
+                    vec![("color".to_string(), "gray".to_string())]
+                },
+                EdgeData::Selector => {
+                    vec![("color".to_string(), "purple".to_string())]
+                },
+                EdgeData::ReplacedBy => {
+                    vec![("color".to_string(), "brown".to_string())]
+                },
+            })
+    }
 
-		DotAttrBlock::Attributes(match edge.weight {
-			EdgeData::Control(_) if !target_is_bb
-				=> vec![("color".to_string(), "red".to_string())],
-
-			EdgeData::Control(i)
-				=> vec![("color".to_string(), "blue".to_string()),
-				        ("label".to_string(), format!("{}", i))],
-
-			EdgeData::Data(i)
-				=> vec![("dir".to_string(),   "back".to_string()),
-				        ("label".to_string(), format!("{}", i))],
-
-			EdgeData::ContainedInBB
-				=> vec![("color".to_string(), "gray".to_string())],
-
-			EdgeData::Selector
-				=> vec![("color".to_string(), "purple".to_string())],
-
-			EdgeData::ReplacedBy
-				=> vec![("color".to_string(), "brown".to_string())]
-		})
-	}
-
-	fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
-		let l = match node {
-			&NodeData::Op(opc, ValueType::Integer{width: w}) => format!("[i{}] {:?}", w, opc),
-			&NodeData::BasicBlock(BBInfo{addr}) => format!("@{:x}", addr),
-			_ => format!("{:?}", node)
+    fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
+		let l = match *node {
+			NodeData::Op(opc, ValueType::Integer{width: w}) => {
+                vec![("label".to_string(), format!("\"[i{}] {:?}\"", w, opc))]
+            },
+			NodeData::BasicBlock(BBInfo{addr}) => {
+                let label_str = format!("<<font color=\"grey50\">Basic Block Information<br/>Start Address: 0x{:X}</font>>", addr);
+                vec![("label".to_string(), label_str),
+                ("shape".to_string(), "box".to_string()),
+                ("color".to_string(), "\"grey\"".to_string())]
+            },
+			_ => {
+                vec![("label".to_string(), format!("\"{:?}\"", node))]
+            },
 		};
-		DotAttrBlock::Raw(format!(" [label=\"{}\"]", l.replace("\"", "\\\"")))
+		DotAttrBlock::Attributes(l)
 	}
 }
 

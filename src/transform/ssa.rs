@@ -80,31 +80,36 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 
 	pub fn run(&mut self, cfg: &CFG) {
 		let mut blocks = Vec::<T::ActionRef>::new();
-		for i in 0..cfg.g.node_count() {
-		 	let block = self.ssa.add_block(BBInfo{addr: 99});
-			self.incomplete_phis.insert(block, HashMap::new());
-			blocks.push(block);
+        let bb_iter = cfg.bbs.iter();
 
-			match cfg.g[NodeIndex::new(i)] {
-		 		CFGNodeData::Block(ref srcbb) => {
-		 			self.process_block(block, srcbb);
-				},
-				CFGNodeData::Entry => {
-					for (ref name, _ /*ref mut vd*/) in &mut self.current_def {
-						let mut msg = "initial_".to_string();
-						msg.push_str(name);
-						// TODO: Add OpComment?
-						//vd.insert(block, self.ssa.add_comment(block, &msg));
-					}
-				},
-				_ => {}
-			}
-		}
+        {
+            // Insert the entry and exit blocks for the ssa.
+            let block = self.ssa.add_block(BBInfo { addr: 0 });
+            self.incomplete_phis.insert(block, HashMap::new());
+            blocks.push(block);
+
+            let block = self.ssa.add_block(BBInfo { addr: 0 });
+            self.incomplete_phis.insert(block, HashMap::new());
+            blocks.push(block);
+        }
+
+        for (addr, i) in bb_iter {
+            let block = self.ssa.add_block(BBInfo { addr: *addr });
+            self.incomplete_phis.insert(block, HashMap::new());
+            blocks.push(block);
+            match cfg.g[*i] {
+                CFGNodeData::Block(ref srcbb) => {
+                    self.process_block(block, srcbb);
+                }
+                _ => unreachable!(),
+            }
+        }
+
 		for edge in cfg.g.raw_edges() {
 			let i = match edge.weight.edge_type {
 				CFGEdgeType::True => 1,
 				CFGEdgeType::False => 0,
-				CFGEdgeType::Unconditional => 0,
+				CFGEdgeType::Unconditional => 2,
 			};
 			self.ssa.add_control_edge(
 				blocks[edge.source().index()],

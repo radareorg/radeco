@@ -27,7 +27,7 @@ macro_rules! add_strings {
 pub struct BasicBlock {
     pub reachable:    bool,
     pub instructions: Vec<MInst>,
-    pub name:        String,
+    pub name:         String,
 }
 
 #[derive(Debug, Clone)]
@@ -70,7 +70,7 @@ impl BasicBlock {
         BasicBlock { 
             reachable:    false,
             instructions: Vec::new(),
-            name:        String::new(),
+            name:         String::new(),
         }
     }
 
