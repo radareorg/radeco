@@ -2,6 +2,7 @@ use std::hash::Hash;
 use petgraph::{EdgeDirection, Graph};
 use petgraph::graph::{Edge, NodeIndex, EdgeIndex};
 use super::ir;
+use super::ir::WidthSpec;
 use super::dot::{GraphDot, DotAttrBlock};
 
 pub struct SSAStorage {
@@ -12,7 +13,7 @@ pub struct SSAStorage {
 
 #[derive(Clone, Debug)]
 pub enum ValueType {
-	Integer {width: u8}
+	Integer {width: WidthSpec}
 }
 
 #[derive(Clone, Debug)]

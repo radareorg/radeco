@@ -1,6 +1,7 @@
 //! Module to contain the IR.
 
 pub type Address = u64;
+pub type WidthSpec = u16;
 
 //pub struct MCommon {
 //
@@ -53,8 +54,8 @@ pub enum MOpcode {
     OpCJmp,
     OpCall,
     OpLoad,
-    OpNarrow(u8),
-    OpWiden(u8),
+    OpNarrow(WidthSpec),
+    OpWiden(WidthSpec),
     OpConst(u64),
 
     OpNop,
@@ -68,15 +69,15 @@ pub enum MOpcode {
 pub struct MRegInfo {
     pub reg_type: String,
     pub reg:      String,
-    pub size:     u8,
+    pub size:     usize,
     pub alias:    String,
-    pub offset:   u64,
+    pub offset:   usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct MVal {
     pub name:       String,
-    pub size:       u8,
+    pub size:       WidthSpec,
     pub val_type:   MValType,
     pub reg_info:   Option<MRegInfo>,
     pub typeset:    u32,
@@ -149,7 +150,7 @@ impl MRegInfo {
 }
 
 impl MVal {
-    pub fn new(name: String, size: u8, val_type: MValType, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
+    pub fn new(name: String, size: WidthSpec, val_type: MValType, typeset: u32, reg_info: Option<MRegInfo>) -> MVal {
         MVal {
             name:       name.clone(),
             size:       size,
@@ -164,7 +165,7 @@ impl MVal {
         MVal::new("".to_string(), 0, MValType::Null, 0, None)
     }
 
-    pub fn tmp(i: u64, size: u8) -> MVal {
+    pub fn tmp(i: u64, size: WidthSpec) -> MVal {
         MVal::new(format!("tmp_{:x}", i), size, MValType::Temporary, 0, None)
     }
 }

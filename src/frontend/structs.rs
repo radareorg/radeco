@@ -32,8 +32,8 @@ pub struct LAliasInfo {
 #[derive(RustcDecodable, RustcEncodable, Debug, Clone, Default)]
 pub struct LRegProfile {
     pub name:     String,
-    pub offset:   u64,
-    pub size:     u8,
+    pub offset:   usize,
+    pub size:     usize,
     pub type_str: String,
 }
 
