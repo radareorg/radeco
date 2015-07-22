@@ -121,9 +121,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn set_register_profile(&mut self, reg_info: &LRegInfo, ssa: &'a mut SSAStorage) {
+    pub fn set_register_profile(&mut self, reg_info: &LRegInfo) {//, ssa: &'a mut SSAStorage) {
         // TODO: use SSA methods instead of SSAStorage methods
-        self.ssac = Some(SSAConstruction::new(ssa, reg_info));
+        // self.ssac = Some(SSAConstruction::new(ssa, reg_info));
 
         self.regset = HashMap::new();
         let mut tmp: HashMap<String, LAliasInfo> = HashMap::new();
