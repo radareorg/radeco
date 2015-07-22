@@ -1,7 +1,6 @@
 //! Module to parse and write dot files for graphs.
 
 use std::collections::HashMap;
-use std::collections::hash_map::{Entry, OccupiedEntry, VacantEntry};
 
 macro_rules! add_strings {
     ( $( $x: expr ),* ) => {
@@ -48,7 +47,7 @@ pub trait GraphDot {
     fn nodes(&self) -> Vec<Self::NodeType>;
     fn edges(&self) -> Vec<Self::EdgeType>;
     fn get_node(&self, n: usize) -> Option<&Self::NodeType>;
-    fn node_cluster(&self, n: usize) -> usize { 0 }
+    fn node_cluster(&self, _: usize) -> usize { 0 }
 
     fn node_skip(&self, &Self::NodeType) -> bool { false }
     fn node_attrs(&self, &Self::NodeType) -> DotAttrBlock;

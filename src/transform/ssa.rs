@@ -90,7 +90,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 		 			self.process_block(block, srcbb);
 				},
 				CFGNodeData::Entry => {
-					for (ref name, ref mut vd) in &mut self.current_def {
+					for (ref name, _ /*ref mut vd*/) in &mut self.current_def {
 						let mut msg = "initial_".to_string();
 						msg.push_str(name);
 						// TODO: Add OpComment?

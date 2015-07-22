@@ -319,7 +319,7 @@ pub trait SSA {
 
 	/// Updates a node reference to the latest version in case of replacement
 	// TODO: Hide his implementation detail
-	fn refresh(&self, mut node: Self::ValueRef) -> Self::ValueRef;
+	fn refresh(&self, node: Self::ValueRef) -> Self::ValueRef;
 
 	fn invalid_value(&self) -> Self::ValueRef;
 	fn invalid_action(&self) -> Self::ActionRef;
