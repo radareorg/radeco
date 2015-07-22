@@ -1,5 +1,8 @@
 //! Module to parse and write dot files for graphs.
 
+use std::collections::HashMap;
+use std::collections::hash_map::{Entry, OccupiedEntry, VacantEntry};
+
 macro_rules! add_strings {
     ( $( $x: expr ),* ) => {
         {
@@ -45,6 +48,7 @@ pub trait GraphDot {
     fn nodes(&self) -> Vec<Self::NodeType>;
     fn edges(&self) -> Vec<Self::EdgeType>;
     fn get_node(&self, n: usize) -> Option<&Self::NodeType>;
+    fn node_cluster(&self, n: usize) -> usize { 0 }
 
     fn node_skip(&self, &Self::NodeType) -> bool { false }
     fn node_attrs(&self, &Self::NodeType) -> DotAttrBlock;
@@ -61,12 +65,32 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
     result.push_str(&*g.configure());
 
     // Node configurations
-    let mut i: usize = 0;
-    for node in g.nodes().iter() {
-        result.push_str(&*add_strings!("n", i));
-        result.push_str(&*g.node_attrs(node).bake());
-        result.push_str(";\n");
-        i += 1;
+    {
+        let nodes = g.nodes();
+
+        let mut links: Vec<usize> = Vec::with_capacity(nodes.len());
+        let mut clustermap: HashMap<usize, (usize, usize)> = HashMap::new();
+
+        for i in 0..nodes.len() {
+            let cid = g.node_cluster(i);
+            let entry = clustermap.entry(cid);
+            let ec = entry.or_insert((i, i));
+            links.push(ec.1);
+            ec.1 = i;
+        }
+
+        for (&cid, &(first, last)) in clustermap.iter() {
+            result.push_str(&*format!("subgraph cluster_{} {{", cid));
+            let mut i = last;
+            loop {
+                result.push_str(&*add_strings!("n", i));
+                result.push_str(&*g.node_attrs(&nodes[i]).bake());
+                result.push_str(";\n");
+                if i == first { break }
+                i = links[i];
+            }
+            result.push_str("}\n");
+        }
     }
 
     // Connect nodes by edges.

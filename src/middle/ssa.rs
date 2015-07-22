@@ -170,6 +170,14 @@ impl GraphDot for SSAStorage {
 		self.g.node_weight(NodeIndex::new(n))
 	}
 
+	fn node_cluster(&self, n: usize) -> usize {
+		let ni = NodeIndex::new(n);
+		match self.g.node_weight(ni) {
+			Some(&NodeData::BasicBlock(_)) => n,
+			_ => self.get_block(&ni).index()
+		}
+	}
+
 	fn edge_source(&self, edge: &Edge<EdgeData>) -> usize {
 		match edge.weight {
 			EdgeData::Data(_) => edge.target().index(),
@@ -422,7 +430,8 @@ impl SSA for SSAStorage {
     }
 
     fn get_block(&self, i: &NodeIndex) -> NodeIndex {
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
+        let ic = self.refresh(i.clone());
+        let mut walk = self.g.walk_edges_directed(ic, EdgeDirection::Outgoing);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
             if let EdgeData::ContainedInBB{..} = self.g[edge] {
                 return othernode
