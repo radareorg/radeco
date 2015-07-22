@@ -8,6 +8,7 @@ use super::dot::{GraphDot, DotAttrBlock};
 
 pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>,
+    pub start_node: NodeIndex,
 	pub stable_indexing: bool,
 	needs_cleaning: bool,
 }
@@ -50,6 +51,7 @@ impl SSAStorage {
 			g: Graph::new(),
 			needs_cleaning: false,
 			stable_indexing: true,
+            start_node: NodeIndex::end(),
 		}
 	}
 
@@ -311,7 +313,10 @@ pub trait SSA {
     }
 
     /// Get the actual NodeData.
+    // TODO: Merge the below two functions. get_node_data should always return an Option and not
+    // panic.
     fn get_node_data(&self, i: &Self::ValueRef) -> NodeData;
+    fn safe_get_node_data(&self, i: &Self::ValueRef) -> Option<NodeData>;
 
     // NOTE:
     // These three functions will change their signatures
@@ -356,6 +361,9 @@ pub trait SSA {
 pub trait SSAMod: SSA {
 
 	type BBInfo;
+
+    /// Mark the start node for the SSA Graph.
+    fn mark_start_node(&mut self, start: &Self::ActionRef);
 
 	/// Add a new operation node.
 	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType) -> Self::ValueRef;
@@ -415,8 +423,8 @@ impl SSA for SSAStorage {
     }
 
     fn start_node(&self) -> NodeIndex {
-        // TODO: Return the actual start node when we add this information to ssa.
-        NodeIndex::new(0)
+        assert!(self.start_node != NodeIndex::end());
+        self.start_node
     }
 
     fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex> {
@@ -499,6 +507,14 @@ impl SSA for SSAStorage {
     fn get_node_data(&self, i: &NodeIndex) -> NodeData {
         self.g[*i].clone()
     }
+
+    fn safe_get_node_data(&self, i: &NodeIndex) -> Option<NodeData> {
+        if *i != NodeIndex::end() {
+            Some(self.g[*i].clone())
+        } else {
+            None
+        }
+    }
     
     fn get_target(&self, i: &NodeIndex) -> NodeIndex {
         let cur_block = self.get_block(i);
@@ -564,6 +580,10 @@ impl SSA for SSAStorage {
 impl SSAMod for SSAStorage {
 
 	type BBInfo = self::BBInfo;
+
+    fn mark_start_node(&mut self, start: &Self::ActionRef) {
+        self.start_node = *start;
+    }
 
 	fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode, vt: ValueType) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Op(opc, vt));

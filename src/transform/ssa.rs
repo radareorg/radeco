@@ -49,6 +49,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 	}
 
 	pub fn read_variable(&mut self, block: T::ActionRef, variable: VarId) -> T::ValueRef {
+        // If we are at the start node and have not found the variable. Add a definition for it.
 		let mut n = match {
 			if let Option::Some(vd) = self.current_def.get(&variable) {
 				vd.get(&block)
@@ -85,6 +86,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
         {
             // Insert the entry and exit blocks for the ssa.
             let block = self.ssa.add_block(BBInfo { addr: 0 });
+            self.ssa.mark_start_node(&block);
             self.incomplete_phis.insert(block, HashMap::new());
             blocks.push(block);
 
@@ -106,9 +108,12 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
         }
 
 		for edge in cfg.g.raw_edges() {
+            // 0 = false branch.
+            // 1 = true branch.
+            // 2 = unconditional jump.
 			let i = match edge.weight.edge_type {
-				CFGEdgeType::True => 1,
 				CFGEdgeType::False => 0,
+				CFGEdgeType::True => 1,
 				CFGEdgeType::Unconditional => 2,
 			};
 			self.ssa.add_control_edge(
@@ -147,8 +152,45 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 		if opc == MOpcode::OpEq {
 			return n0
 		}
-		// TODO: give correct integer type here
-		let nn = self.ssa.add_op(block, opc, ValueType::Integer{width: 64});
+        
+        let width = match opc {
+            MOpcode::OpNarrow(w)
+            | MOpcode::OpWiden(w) => { w },
+            MOpcode::OpCmp => { 1 },
+            _ => { 
+                let extract = |x: NodeData| -> Option<u8> {
+                    if let NodeData::Op(_, ValueType::Integer { width: w }) = x {
+                        Some(w)
+                    } else {
+                        None
+                    }
+                };
+                let w1 = self.ssa.safe_get_node_data(&n0)
+                                 .map(&extract)
+                                 .unwrap_or(None);
+
+                let w2 = self.ssa.safe_get_node_data(&n1)
+                                 .map(&extract)
+                                 .unwrap_or(None);
+
+                if w1 == None && w2 == None {
+                    // TODO: Replace by default value.
+                    64
+                } else if w1 == None {
+                    w2.unwrap()
+                } else if w2 == None {
+                    w1.unwrap()
+                } else {
+                    let w1 = w1.unwrap();
+                    let w2 = w2.unwrap();
+                    // Check the width of the two operands.
+                    assert!(w1 == w2);
+                    w1
+                }
+            },
+        };
+
+		let nn = self.ssa.add_op(block, opc, ValueType::Integer{width: width});
 		self.ssa.op_use(nn, 0, n0);
 		self.ssa.op_use(nn, 1, n1);
 		return nn
