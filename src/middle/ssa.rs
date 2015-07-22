@@ -1,3 +1,5 @@
+//! Module that holds the struct and trait implementations for the ssa form.
+
 use std::hash::Hash;
 use petgraph::{EdgeDirection, Graph};
 use petgraph::graph::{Edge, NodeIndex, EdgeIndex};
@@ -12,7 +14,7 @@ pub struct SSAStorage {
 
 #[derive(Clone, Debug)]
 pub enum ValueType {
-	Integer {width: u8}
+	Integer { width: u8 }
 }
 
 #[derive(Clone, Debug)]
@@ -35,11 +37,12 @@ pub enum NodeData {
 pub enum EdgeData {
 	Control(u8),
 	Data(u8),
-	ContainedInBB { is_selector: bool },
+	ContainedInBB,
+    Selector,
 	ReplacedBy
 }
 
-const CONTEDGE: EdgeData = EdgeData::ContainedInBB {is_selector: false};
+const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
 
 impl SSAStorage {
 	pub fn new() -> SSAStorage {
@@ -148,6 +151,11 @@ impl SSAStorage {
 	}
 }
 
+
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of GraphDot to emit Dot for SSAStorage.
+///////////////////////////////////////////////////////////////////////////////
+
 impl GraphDot for SSAStorage {
 	type NodeType = NodeData;
 	type EdgeType = Edge<EdgeData>;
@@ -193,15 +201,10 @@ impl GraphDot for SSAStorage {
 	}
 
 	fn edge_skip(&self, edge: &Edge<EdgeData>) -> bool {
-		if let EdgeData::ContainedInBB{is_selector: s} = edge.weight {
-			if let NodeData::Phi(_) = self.g[edge.source()] {
-				false
-			} else {
-				!s
-			}
-		} else {
-			false
-		}
+        match edge.weight {
+            EdgeData::ContainedInBB => true,
+            _ => false,
+        }
 	}
 
 	fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
@@ -219,10 +222,10 @@ impl GraphDot for SSAStorage {
 				=> vec![("dir".to_string(),   "back".to_string()),
 				        ("label".to_string(), format!("{}", i))],
 
-			EdgeData::ContainedInBB {is_selector: false}
+			EdgeData::ContainedInBB
 				=> vec![("color".to_string(), "gray".to_string())],
 
-			EdgeData::ContainedInBB {is_selector: true}
+			EdgeData::Selector
 				=> vec![("color".to_string(), "purple".to_string())],
 
 			EdgeData::ReplacedBy
@@ -318,7 +321,7 @@ pub trait SSA {
 	fn block_of(&self, i: &Self::ValueRef) -> Self::ActionRef { self.get_block(i) }
 
 	/// Updates a node reference to the latest version in case of replacement
-	// TODO: Hide his implementation detail
+	// TODO: Hide this implementation detail
 	fn refresh(&self, node: Self::ValueRef) -> Self::ValueRef;
 
 	fn invalid_value(&self) -> Self::ValueRef;
@@ -347,6 +350,9 @@ pub trait SSAMod: SSA {
 
 	/// Add a control edge between to basic blocks.
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
+   
+    /// Add a selector edge between a node and block.
+    fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
 
 	/// Add a data source to a phi node.
 	fn phi_use(&mut self, phi: Self::ValueRef, node: Self::ValueRef);
@@ -360,12 +366,12 @@ pub trait SSAMod: SSA {
 	/// Replace one node by another within one basic block.
 	fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
 
-	/// Mark the node as selector for the control edges away from the specified basic block
-	fn mark_selector(&mut self, block: Self::ActionRef, n: Self::ValueRef);
+	//// Mark the node as selector for the control edges away from the specified basic block
+	//fn mark_selector(&mut self, block: Self::ActionRef, n: Self::ValueRef);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//// Implementation of SSA for SSA.
+//// Implementation of SSA for SSAStorage.
 ///////////////////////////////////////////////////////////////////////////////
 
 impl SSA for SSAStorage {
@@ -393,7 +399,7 @@ impl SSA for SSAStorage {
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::ContainedInBB{..} = self.g[edge] {
+            if let EdgeData::ContainedInBB = self.g[edge] {
                 match self.g[othernode] {
                       NodeData::Op(_, _)
                     | NodeData::Const(_) => expressions.push(othernode.clone()),
@@ -408,7 +414,7 @@ impl SSA for SSAStorage {
         let mut phis = Vec::<NodeIndex>::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::ContainedInBB{..} = self.g[edge] {
+            if let EdgeData::ContainedInBB = self.g[edge] {
                 match self.g[othernode] {
                     NodeData::Phi(_) => phis.push(othernode.clone()),
                     _ => continue,
@@ -433,7 +439,7 @@ impl SSA for SSAStorage {
         let ic = self.refresh(i.clone());
         let mut walk = self.g.walk_edges_directed(ic, EdgeDirection::Outgoing);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::ContainedInBB{..} = self.g[edge] {
+            if let EdgeData::ContainedInBB = self.g[edge] {
                 return othernode
             }
         }
@@ -567,6 +573,10 @@ impl SSAMod for SSAStorage {
 		self.g.add_edge(source, target, EdgeData::Control(index));
 	}
 
+    fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
+        self.g.add_edge(block, node, EdgeData::Selector);
+    }
+
 	fn phi_use(&mut self, mut phi: NodeIndex, mut node: NodeIndex) {
 		phi = self.refresh(phi);
 		node = self.refresh(node);
@@ -618,15 +628,15 @@ impl SSAMod for SSAStorage {
 		}
 	}
 
-	fn mark_selector(&mut self, _: NodeIndex, n: NodeIndex) {
-		// TODO: consider first argument and unmerge edgetypes contain/select
-		let mut walk = self.g.walk_edges_directed(n, EdgeDirection::Outgoing);
-		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
-			if let &mut EdgeData::ContainedInBB{is_selector: ref mut flag} = &mut self.g[edge] {
-				*flag = true;
-				return;
-			}
-		}
-		panic!("Provided node doesn't belong to any basic block.");
-	}
+	//fn mark_selector(&mut self, _: NodeIndex, n: NodeIndex) {
+		//// TODO: consider first argument and unmerge edgetypes contain/select
+		//let mut walk = self.g.walk_edges_directed(n, EdgeDirection::Outgoing);
+		//while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+			//if let &mut EdgeData::ContainedInBB{is_selector: ref mut flag} = &mut self.g[edge] {
+				//*flag = true;
+				//return;
+			//}
+		//}
+		//panic!("Provided node doesn't belong to any basic block.");
+	//}
 }

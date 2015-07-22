@@ -56,7 +56,6 @@ pub enum MOpcode {
     OpNarrow(u8),
     OpWiden(u8),
     OpConst(u64),
-
     OpNop,
     OpInvalid,
     OpInc,

@@ -155,13 +155,14 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			let n1 = self.process_in(block, &instruction.operand_2);
 
 			if instruction.opcode == MOpcode::OpJmp {
-				//TODO
+				// TODO: In case of static jumps, this is trivial and does not need a selector.
+                // In case of dynamic jump, the jump targets have to be determined.
 				//self.ssa.g.add_edge(block, n0, SSAEdgeData::DynamicControl(0));
 				break;
 			}
 
 			if instruction.opcode == MOpcode::OpCJmp {
-				self.ssa.mark_selector(block, n0);
+                self.ssa.mark_selector(n0, block);
 				continue;
 			}
 

@@ -13,7 +13,13 @@ impl fmt::Display for MVal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s: String = match self.val_type {
             //MValType::Temporary => format!(...)
-            _                  => format!("{}[:{}]", self.name, self.size),
+            _                  => {
+                if let Some(v) = self.as_literal {
+                    format!("{}[:{}]", v, self.size)
+                } else {
+                    format!("{}[:{}]", self.name, self.size)
+                }
+            }
         };
         f.pad_integral(true, "", &s)
     }
@@ -35,6 +41,7 @@ impl fmt::Display for MInst {
             MOpcode::OpCJmp      => format!("{} {}, {}", self.opcode, self.operand_1, self.operand_2),
             MOpcode::OpCall      => format!("{} {}", self.opcode, self.operand_1),
             MOpcode::OpCl        => format!("{}", self.opcode),
+            MOpcode::OpConst(v)     => format!("let {} = {}", self.operand_1.name, v),
             //MOpcode::OpSetFl(ref f) => format!("{} = {}({}, {})", self.dst, self.opcode, self.operand_1, f),
             _                    => format!("{} = {} {} {}", self.dst, self.operand_1, self.opcode, self.operand_2),
         };
