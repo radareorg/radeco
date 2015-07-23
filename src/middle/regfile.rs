@@ -5,7 +5,9 @@ use middle::ssa::{BBInfo, SSAMod, ValueType};
 use middle::ir::{MOpcode, WidthSpec};
 use transform::phiplacement::PhiPlacer;
 
+#[derive(Debug)]
 pub struct SubRegister {
+	// usize or WidthSpec
 	pub base:  usize,
 	pub shift: usize,
 	pub width: usize
@@ -45,7 +47,7 @@ impl SubRegisterFile {
 			slices.insert(reg_info.reg_info[ev.0].name.clone(), SubRegister {
 				base: whole.len()-1,
 				shift: ev.1 - current.1,
-				width: current.2 - current.1
+				width: ev.2 - ev.1
 			});
 		}
 		/*for (ref name, ref sr) in &slices {
@@ -61,11 +63,50 @@ impl SubRegisterFile {
 		&self, phiplacer: &mut PhiPlacer<'a, T>, base: usize,
 		block: T::ActionRef,
 		var: &String,
-		value: T::ValueRef
+		mut value: T::ValueRef
 	) {
 		let info = &self.named_registers[var];
 		let id = info.base + base;
-		// TODO
+		match phiplacer.variable_types[id] {
+			ValueType::Integer{width} if info.width < (width as usize) => {
+				//println!("Assigning to {:?}: {:?}", var, info);
+				let vt = ValueType::Integer{width: width as WidthSpec};
+
+				let mut new_value = phiplacer.ssa.add_op(block, MOpcode::OpWiden(width as WidthSpec), vt);
+				phiplacer.ssa.op_use(new_value, 0, value);
+				value = new_value;
+
+				if info.shift > 0 {
+					//println!("Shifting by {:?}", info.shift);
+					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
+					new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsl, vt);
+					phiplacer.ssa.op_use(new_value, 0, value);
+					phiplacer.ssa.op_use(new_value, 1, shift_amount_node);
+					value = new_value;
+				}
+
+				let fullvalue: u64 = !((!1u64) << (width-1));
+				let maskvalue: u64 = ((!((!1u64) << (info.width-1))) << info.shift) ^ fullvalue;
+
+				if maskvalue != 0 {
+					//println!("Masking with {:?}", maskvalue);
+					let mut ov = phiplacer.read_variable(block, id);
+					let maskvalue_node = phiplacer.ssa.add_const(block, maskvalue);
+
+					new_value = phiplacer.ssa.add_op(block, MOpcode::OpAnd, vt);
+					phiplacer.ssa.op_use(new_value, 0, ov);
+					phiplacer.ssa.op_use(new_value, 1, maskvalue_node);
+					ov = new_value;
+
+					new_value = phiplacer.ssa.add_op(block, MOpcode::OpOr, vt);
+					phiplacer.ssa.op_use(new_value, 0, value);
+					phiplacer.ssa.op_use(new_value, 1, ov);
+					value = new_value;
+				}
+			},
+			ValueType::Integer{..} => (),
+			_ => unimplemented!()
+		}
 		phiplacer.write_variable(block, id, value);
 	}
 
@@ -84,7 +125,7 @@ impl SubRegisterFile {
 			ValueType::Integer{width} => {
 				if info.shift > 0 {
 					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
-					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsr, ValueType::Integer{width: info.width as WidthSpec});
+					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsr, ValueType::Integer{width: width as WidthSpec});
 					phiplacer.ssa.op_use(new_value, 0, value);
 					phiplacer.ssa.op_use(new_value, 1, shift_amount_node);
 					value = new_value;
@@ -96,10 +137,7 @@ impl SubRegisterFile {
 				}
 				value
 			},
-			ValueType::MachineState => {
-				value
-			}
-			/*_ => unimplemented!()*/
+			_ => unimplemented!()
 		}
 	}
 }

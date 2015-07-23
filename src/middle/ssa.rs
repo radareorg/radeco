@@ -14,7 +14,7 @@ pub struct SSAStorage {
 	needs_cleaning: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum ValueType {
 	Integer {width: WidthSpec},
 	MachineState,

@@ -284,7 +284,7 @@ impl<'a> Parser<'a> {
 
             // Simple 'poke' (=[n])
             if has_op.is_empty() {
-                try!(self.add_inst(MOpcode::OpEq));
+                try!(self.add_inst(MOpcode::OpStore));
                 continue;
             }
 
@@ -296,7 +296,7 @@ impl<'a> Parser<'a> {
             };
             try!(self.add_inst(o));
             // Reassignment.
-            self.stack.push(tmp_dst1);
+            self.stack.push(tmp_dst1); // TODO: If dst is a temporary this might break their SSA nature
             try!(self.add_inst(MOpcode::OpEq));
         }
         Ok(())
