@@ -146,6 +146,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 	}
 
 	fn process_block(&mut self, block: T::ActionRef, source: &BasicBlock) {
+		let mut machinestate = self.phiplacer.ssa.to_value(block);
 		for ref instruction in &source.instructions {
 			let n0 = self.process_in(block, &instruction.operand_1);
 			let n1 = self.process_in(block, &instruction.operand_2);
@@ -167,6 +168,15 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 				_              => ValueType::Integer{width: instruction.dst.size},
 			};
 			let nn = self.process_op(block, dsttype, instruction.opcode, n0, n1);
+
+			if instruction.opcode == MOpcode::OpLoad {
+				self.phiplacer.ssa.op_use(nn, 3, machinestate);
+			}
+			if instruction.opcode == MOpcode::OpStore {
+				self.phiplacer.ssa.op_use(nn, 3, machinestate);
+				machinestate = nn;
+			}
+
 			self.process_out(block, &instruction.dst, nn);
 		}
 	}

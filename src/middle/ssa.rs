@@ -16,7 +16,8 @@ pub struct SSAStorage {
 
 #[derive(Clone, Debug)]
 pub enum ValueType {
-	Integer {width: WidthSpec}
+	Integer {width: WidthSpec},
+	MachineState,
 }
 
 #[derive(Clone, Debug)]
@@ -81,11 +82,11 @@ impl SSAStorage {
 		let mut walk = self.g.walk_edges_directed(node, direction);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if data {
-				if let EdgeData::Control(_) = self.g[edge] {
+				if let EdgeData::Data(_) = self.g[edge] {
 					adjacent.push(othernode);
 				}
 			} else {
-				if let EdgeData::Data(_) = self.g[edge] {
+				if let EdgeData::Control(_) = self.g[edge] {
 					adjacent.push(othernode);
 				}
 			}
@@ -263,7 +264,7 @@ impl GraphDot for SSAStorage {
                 ("color".to_string(), "\"grey\"".to_string())]
             },
 			_ => {
-                vec![("label".to_string(), format!("\"{:?}\"", node))]
+                vec![("label".to_string(), format!("\"{}\"", format!("\"{:?}\"", node).replace("\"", "\\\"")))]
             },
 		};
 		DotAttrBlock::Attributes(l)
@@ -362,6 +363,9 @@ pub trait SSA {
 
 	fn invalid_value(&self) -> Self::ValueRef;
 	fn invalid_action(&self) -> Self::ActionRef;
+
+	fn to_value(&self, Self::ActionRef) -> Self::ValueRef;
+	fn to_action(&self, Self::ValueRef) -> Self::ActionRef;
 }
 
 /// Trait for modifying SSA data
@@ -571,6 +575,8 @@ impl SSA for SSAStorage {
 
 	fn invalid_value(&self) -> NodeIndex { NodeIndex::end() }
 	fn invalid_action(&self) -> NodeIndex { NodeIndex::end() }
+	fn to_value(&self, n: NodeIndex) -> NodeIndex { n }
+	fn to_action(&self, n: NodeIndex) -> NodeIndex { n }
 }
 
 impl SSAMod for SSAStorage {
@@ -667,16 +673,4 @@ impl SSAMod for SSAStorage {
 			self.g.remove_node(node);
 		}
 	}
-
-	//fn mark_selector(&mut self, _: NodeIndex, n: NodeIndex) {
-		//// TODO: consider first argument and unmerge edgetypes contain/select
-		//let mut walk = self.g.walk_edges_directed(n, EdgeDirection::Outgoing);
-		//while let Some((edge, _)) = walk.next_neighbor(&self.g) {
-			//if let &mut EdgeData::ContainedInBB{is_selector: ref mut flag} = &mut self.g[edge] {
-				//*flag = true;
-				//return;
-			//}
-		//}
-		//panic!("Provided node doesn't belong to any basic block.");
-	//}
 }
