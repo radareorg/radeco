@@ -316,7 +316,13 @@ pub trait SSA {
     // TODO: Merge the below two functions. get_node_data should always return an Option and not
     // panic.
     fn get_node_data(&self, i: &Self::ValueRef) -> NodeData;
-    fn safe_get_node_data(&self, i: &Self::ValueRef) -> Option<NodeData>;
+    fn safe_get_node_data(&self, i: &Self::ValueRef) -> Option<NodeData> {
+        if *i != self.invalid_value() {
+            Some(self.get_node_data(i))
+        } else {
+            None
+        }
+    }
 
     // NOTE:
     // These three functions will change their signatures
@@ -508,14 +514,6 @@ impl SSA for SSAStorage {
         self.g[*i].clone()
     }
 
-    fn safe_get_node_data(&self, i: &NodeIndex) -> Option<NodeData> {
-        if *i != NodeIndex::end() {
-            Some(self.g[*i].clone())
-        } else {
-            None
-        }
-    }
-    
     fn get_target(&self, i: &NodeIndex) -> NodeIndex {
         let cur_block = self.get_block(i);
 		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);

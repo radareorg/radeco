@@ -148,11 +148,13 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 		}
 	}
 
-	fn process_op(&mut self, block: T::ActionRef, opc: MOpcode, n0: T::ValueRef, n1: T::ValueRef) -> T::ValueRef {
+	fn process_op(&mut self, block: T::ActionRef, optype: ValueType, opc: MOpcode, n0: T::ValueRef, n1: T::ValueRef) -> T::ValueRef {
 		if opc == MOpcode::OpEq {
 			return n0
 		}
-        
+
+        /*
+        // TODO: When developing a ssa check pass, reuse this maybe
         let width = match opc {
             MOpcode::OpNarrow(w)
             | MOpcode::OpWiden(w) => { w },
@@ -188,9 +190,9 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
                     w1
                 }
             },
-        };
+        };*/
 
-		let nn = self.ssa.add_op(block, opc, ValueType::Integer{width: width});
+		let nn = self.ssa.add_op(block, opc, optype);
 		self.ssa.op_use(nn, 0, n0);
 		self.ssa.op_use(nn, 1, n1);
 		return nn
@@ -213,7 +215,11 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 				continue;
 			}
 
-			let nn = self.process_op(block, instruction.opcode, n0, n1);
+			let dsttype = match instruction.dst.val_type {
+				MValType::Null => ValueType::Integer{width: 0}, // there is no ValueType::None?
+				_              => ValueType::Integer{width: instruction.dst.size},
+			};
+			let nn = self.process_op(block, dsttype, instruction.opcode, n0, n1);
 			self.process_out(block, &instruction.dst, nn);
 		}
 	}
