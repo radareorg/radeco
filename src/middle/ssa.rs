@@ -4,6 +4,7 @@ use std::hash::Hash;
 use petgraph::{EdgeDirection, Graph};
 use petgraph::graph::{Edge, NodeIndex, EdgeIndex};
 use super::ir;
+use super::ir::WidthSpec;
 use super::dot::{GraphDot, DotAttrBlock};
 
 pub struct SSAStorage {
@@ -15,7 +16,7 @@ pub struct SSAStorage {
 
 #[derive(Clone, Debug)]
 pub enum ValueType {
-	Integer { width: u8 }
+	Integer {width: WidthSpec}
 }
 
 #[derive(Clone, Debug)]
@@ -389,7 +390,7 @@ pub trait SSAMod: SSA {
 	/// Add a control edge between to basic blocks.
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
    
-    /// Add a selector edge between a node and block.
+    /// Mark the node as selector for the control edges away from the specified basic block
     fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
 
 	/// Add a data source to a phi node.
@@ -403,9 +404,6 @@ pub trait SSAMod: SSA {
 
 	/// Replace one node by another within one basic block.
 	fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
-
-	//// Mark the node as selector for the control edges away from the specified basic block
-	//fn mark_selector(&mut self, block: Self::ActionRef, n: Self::ValueRef);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

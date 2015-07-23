@@ -11,6 +11,7 @@ use petgraph::graph::NodeIndex;
 use super::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
 use super::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile, LFlagInfo};
 use super::super::middle::ssa::{SSAStorage, SSA};
+use super::super::middle::ir::{WidthSpec}; // move WidthSpec to a different module?
 use super::super::transform::ssa::SSAConstruction;
 
 // Macro to return a new hash given (key, value) tuples.
@@ -49,7 +50,7 @@ pub struct Parser<'a> {
     regset:       HashMap<String, LRegProfile>,
     alias_info:   HashMap<String, LAliasInfo>,
     flags:        HashMap<u64, LFlagInfo>,
-    default_size: u8,
+    default_size: WidthSpec,
     tmp_prefix:   String,
     arch:         String,
     addr:         Address,
@@ -66,7 +67,7 @@ pub struct Parser<'a> {
 // values are set.
 pub struct ParserConfig<'a> {
     arch:         Option<String>,
-    default_size: Option<u8>,
+    default_size: Option<WidthSpec>,
     tmp_prefix:   Option<String>,
     init_opset:   Option<fn() -> HashMap<&'a str, MOpcode>>,
     regset:       Option<HashMap<String, LRegProfile>>,
@@ -200,7 +201,7 @@ impl<'a> Parser<'a> {
             if re.is_match(&*token) {
                 let mut val_type = MValType::Unknown;
                 let mut val: Option<u64> = None;
-                let mut size: u8 = self.default_size;
+                let mut size: WidthSpec = self.default_size;
                 let mut reg_info: Option<MRegInfo> = None;
                 if let Some(r) = self.regset.get(&*token) {
                     val_type = MValType::Register;
@@ -210,7 +211,7 @@ impl<'a> Parser<'a> {
                         .unwrap_or_default();
                     reg_info_.alias = alias;
                     reg_info = Some(reg_info_.clone());
-                    size = r.size; 
+                    size = r.size as WidthSpec;
                 } else if let Ok::<i64, _>(v) = hex_to_i!(token) { // <u64>? will it be able to deal with negative numbers?
                     val = Some(v as u64);
                 } else if let Some('%') = token.chars().nth(0) {
@@ -266,7 +267,7 @@ impl<'a> Parser<'a> {
             let access_size = tokens.at(3).unwrap_or("");
             let access_size = match access_size {
                 "" => self.default_size,
-                _  => access_size.parse::<u8>().unwrap() * 8,
+                _  => access_size.parse::<WidthSpec>().unwrap() * 8,
             };
 
             try!(self.add_inst(MOpcode::OpLoad));
@@ -359,7 +360,7 @@ impl<'a> Parser<'a> {
         return (self).insts.clone();
     }
 
-    fn get_tmp_register(&mut self, mut size: u8) -> MVal {
+    fn get_tmp_register(&mut self, mut size: WidthSpec) -> MVal {
         self.tmp_index += 1;
         if size == 0 {
             size = self.default_size;
@@ -368,7 +369,7 @@ impl<'a> Parser<'a> {
     }
 
     // Convert a lower field width to higher field width.
-    fn add_widen_inst(&mut self, op: &mut MVal, size: u8) {
+    fn add_widen_inst(&mut self, op: &mut MVal, size: WidthSpec) {
         if op.size >= size {
             return;
         }
@@ -381,7 +382,7 @@ impl<'a> Parser<'a> {
     }
 
     // Convert a higher field width to lower field width.
-    fn add_narrow_inst(&mut self, op: &mut MVal, size: u8) {
+    fn add_narrow_inst(&mut self, op: &mut MVal, size: WidthSpec) {
         if op.size <= size {
             return;
         }
@@ -488,7 +489,7 @@ impl<'a> Parser<'a> {
             return Ok(());
         }
 
-        let mut dst_size: u8;
+        let mut dst_size: WidthSpec;
         let mut dst: MVal;
         dst_size = cmp::max(op1.size, op2.size);
         dst = self.get_tmp_register(dst_size);

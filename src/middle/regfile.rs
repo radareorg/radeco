@@ -1,58 +1,98 @@
-use std::ops::Range;
+use std::cmp::Ordering;
+use std::collections::HashMap;
 use frontend::structs::LRegInfo;
+use middle::ssa::{BBInfo, SSAMod, ValueType};
+use middle::ir::{MOpcode, WidthSpec};
+use transform::phiplacement::PhiPlacer;
 
-type RegOffset = u64;
-type RegIndex = u16;
-
-pub struct RegInfo {
-	ranges: Vec<(RegOffset, Range<usize>)>,
-	compressed: Vec<RegIndex>
+pub struct SubRegister {
+	pub base:  usize,
+	pub shift: usize,
+	pub width: usize
 }
 
-// struct RegisterSlice {
-// 
-// }
+pub struct SubRegisterFile {
+	pub whole_registers: Vec<ValueType>, // methods don't use this, ownership transfer of whole_r outwards desirable (currently cloning)
+	pub named_registers: HashMap<String, SubRegister>
+}
 
-impl RegInfo {
-	pub fn new(reg_info: &LRegInfo) -> RegInfo {
-		let mut info = RegInfo {
-			ranges:     Vec::new(),
-			compressed: Vec::new()
-		};
-
-		#[derive(Clone, Copy)]
-		enum EventKind { Begin, End };
-		struct Event(RegOffset, RegIndex, EventKind);
-
-		let mut events: Vec<Event> = Vec::new();
+impl SubRegisterFile {
+	pub fn new(reg_info: &LRegInfo) -> SubRegisterFile {
+		let mut slices = HashMap::new();
+		let mut events: Vec<(usize, usize, usize)> = Vec::new();
 		for (i, reg) in reg_info.reg_info.iter().enumerate() {
-			events.push(Event(reg.offset,                         i as RegIndex, EventKind::Begin));
-			events.push(Event(reg.offset + reg.size as RegOffset, i as RegIndex, EventKind::End));
+			events.push((i, reg.offset, reg.offset + reg.size));
 		}
 
-		events.sort_by(|a, b| a.0.cmp(&b.0));
-		let mut i = events.iter().peekable();
+		events.sort_by(|a, b| {
+			let o = a.1.cmp(&b.1);
+			match o {
+				Ordering::Equal => b.2.cmp(&a.2),
+				_ => o
+			}
+		});
 
-		let mut active: Vec<RegIndex> = Vec::new();
-		while let Option::Some(event) = i.next() {
-			let &Event(offset, index, eventtype) = event;
-			match eventtype {
-				EventKind::Begin => active.push(index as RegIndex),
-				EventKind::End   => active.retain(|&active_index| active_index != (index as RegIndex))
+		let mut current: (usize, usize, usize) = (0, 0, 0);
+		let mut whole: Vec<ValueType> = Vec::new();
+		for &ev in &events {
+			if ev.1 >= current.2 {
+				current = ev;
+				whole.push(ValueType::Integer { width: (current.2 - current.1) as WidthSpec });
+			} else {
+				assert!(ev.2 <= current.2);
 			}
-			if match i.peek() {
-				Option::None => true,
-				Option::Some(&&Event(peek_offset, _, _)) => offset != peek_offset
-			} {
-				let start = info.compressed.len();
-				info.compressed.extend(active);
-				let end = info.compressed.len();
-				info.ranges.push((offset, Range{start: start, end: end}));
-				active = Vec::new();
-			}
+			slices.insert(reg_info.reg_info[ev.0].name.clone(), SubRegister {
+				base: whole.len()-1,
+				shift: ev.1 - current.1,
+				width: current.2 - current.1
+			});
 		}
-		info
+		SubRegisterFile {
+			whole_registers: whole,
+			named_registers: slices
+		}
+	}
+
+	pub fn write_register<'a, T: SSAMod<BBInfo=BBInfo> + 'a>(
+		&self, phiplacer: &mut PhiPlacer<'a, T>, base: usize,
+		block: T::ActionRef,
+		var: &String,
+		value: T::ValueRef
+	) {
+		let info = &self.named_registers[var];
+		let id = info.base + base;
+		// TODO
+		phiplacer.write_variable(block, id, value);
+	}
+
+	pub fn read_register<'a, T: SSAMod<BBInfo=BBInfo> + 'a>(
+		&self, phiplacer: &mut PhiPlacer<'a, T>,
+		base: usize,
+		block: T::ActionRef,
+		var: &String
+	) ->
+		T::ValueRef
+	{
+		let info = &self.named_registers[var];
+		let id = info.base + base;
+		match phiplacer.variable_types[id] {
+			ValueType::Integer{width} => {
+				let mut value = phiplacer.read_variable(block, id);
+				if info.shift > 0 {
+					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
+					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsr, ValueType::Integer{width: info.width as WidthSpec});
+					phiplacer.ssa.op_use(new_value, 0, value);
+					phiplacer.ssa.op_use(new_value, 1, shift_amount_node);
+					value = new_value;
+				}
+				if (width as usize) < info.width {
+					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpNarrow(width), ValueType::Integer{width: width as WidthSpec});
+					phiplacer.ssa.op_use(new_value, 0, value);
+					value = new_value;
+				}
+				value
+			},
+			/*_ => unimplemented!()*/
+		}
 	}
 }
-
-//pub struct RegFileMap<T>;
