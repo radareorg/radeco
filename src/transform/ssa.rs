@@ -2,7 +2,6 @@
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
 use std::collections::HashMap;
-use petgraph::graph::NodeIndex;
 use frontend::structs::LRegInfo;
 use middle::cfg::NodeData as CFGNodeData;
 use middle::cfg::EdgeType as CFGEdgeType;
@@ -38,19 +37,16 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 
         {
             // Insert the entry and exit blocks for the ssa.
-            let block = self.phiplacer.ssa.add_block(BBInfo { addr: 0 });
+            let block = self.phiplacer.add_block(BBInfo { addr: 0 });
             self.phiplacer.ssa.mark_start_node(&block);
-            self.incomplete_phis.insert(block, HashMap::new());
             blocks.push(block);
 
-            let block = self.phiplacer.ssa.add_block(BBInfo { addr: 0 });
-            self.incomplete_phis.insert(block, HashMap::new());
+            let block = self.phiplacer.add_block(BBInfo { addr: 0 });
             blocks.push(block);
         }
 
         for (addr, i) in bb_iter {
-            let block = self.phiplacer.ssa.add_block(BBInfo { addr: *addr });
-            self.phiplacer.incomplete_phis.insert(block, HashMap::new());
+            let block = self.phiplacer.add_block(BBInfo { addr: *addr });
             blocks.push(block);
             match cfg.g[*i] {
                 CFGNodeData::Block(ref srcbb) => {
