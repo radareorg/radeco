@@ -469,18 +469,10 @@ impl<'a> Parser<'a> {
             _ => { },
         }
 
-        let mut op2 = match self.get_param() {
-            Some(ele) => ele,
-            None      => return Err(ParseError::InsufficientOperands),
-        };
-
-        let mut op1 = MVal::null();
-        if op.arity() == MArity::Binary {
-            op1 = match self.get_param() {
-                Some(ele) => ele,
-                None      => return Err(ParseError::InsufficientOperands),
-            };
-        }
+        let mut op2 = try!(self.get_param().ok_or(ParseError::InsufficientOperands));
+        let mut op1 = if op.arity() == MArity::Binary {
+            try!(self.get_param().ok_or(ParseError::InsufficientOperands))
+        } else { MVal::null() };
 
         if op == MOpcode::OpIf {
             let addr = MAddr::new(self.addr);
@@ -489,27 +481,19 @@ impl<'a> Parser<'a> {
             return Ok(());
         }
 
-        let mut dst_size: WidthSpec;
-        let mut dst: MVal;
-        dst_size = cmp::max(op1.size, op2.size);
-        dst = self.get_tmp_register(dst_size);
+        let dst_size = cmp::max(op1.size, op2.size);
 
         // Add a check to see if dst, op1 and op2 have the same size.
         // If they do not, cast it. op2 is never 'Null'.
         assert!(op2.val_type != MValType::Null);
 
         if op.arity() == MArity::Binary {
-            if op1.size > op2.size {
-                dst_size = op1.size;
-                self.add_widen_inst(&mut op2, op1.size);
-            } else if op2.size > op1.size {
-                dst_size = op2.size;
-                self.add_widen_inst(&mut op1, op2.size);
-            }
+            // not all binaries want to have their operands at same size. consider OpStore.
+            self.add_widen_inst(&mut op2, op1.size);
+            self.add_widen_inst(&mut op1, op2.size);
         }
 
-        dst.size = dst_size;
-
+        let dst = self.get_tmp_register(dst_size);
         // If it is a compare instruction, then the flags must be updated.
         if op == MOpcode::OpCmp {
             self.last_assgn = dst.clone();
