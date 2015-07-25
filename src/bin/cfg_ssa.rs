@@ -3,7 +3,7 @@ extern crate radeco;
 use radeco::frontend::{parser, r2};
 use radeco::middle::{cfg};
 use radeco::middle::dot;
-use radeco::middle::ssa::SSAStorage;
+use radeco::middle::ssastorage::SSAStorage;
 use radeco::transform::ssa::SSAConstruction;
 
 use std::env;

@@ -8,11 +8,13 @@ use std::cmp;
 use regex::Regex;
 use petgraph::graph::NodeIndex;
 
-use super::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
-use super::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile, LFlagInfo};
-use super::super::middle::ssa::{SSAStorage, SSA};
-use super::super::middle::ir::{WidthSpec}; // move WidthSpec to a different module?
-use super::super::transform::ssa::SSAConstruction;
+use frontend::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
+use frontend::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile, LFlagInfo};
+
+use middle::ssa::SSA;
+use middle::ssastorage::SSAStorage;
+use middle::ir::{WidthSpec}; // move WidthSpec to a different module?
+use transform::ssa::SSAConstruction;
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]
