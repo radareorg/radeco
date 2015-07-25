@@ -2,14 +2,23 @@ use petgraph::EdgeDirection;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use middle::ir;
 use middle::ssa;
-use middle::ssa::{SSA, SSAMod, NodeData, EdgeData, ValueType};
-
-const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
+use middle::ssa::{SSA, SSAMod, NodeData, ValueType};
 
 // pub struct SSAStorageValueRef<'a> {
 // 	ni: NodeIndex,
 // 	_: PhantomData<'a>
 // }
+
+#[derive(Clone, Copy)]
+pub enum EdgeData {
+	Control(u8),
+	Data(u8),
+	ContainedInBB,
+	Selector,
+	ReplacedBy
+}
+
+const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
 
 pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>,
