@@ -1,6 +1,6 @@
 use super::{ValueSet, ScannableSet, KnownBits, UIntMultiple, UIntRange, SIntRange};
 use std::ops::{BitAnd, BitOr};
-use util::{blcic,bitsmear};
+use super::math::{blcic,bitsmear};
 
 impl ValueSet<u64> for KnownBits {
 	fn contains(&self, value: u64) -> bool {

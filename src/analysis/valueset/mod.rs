@@ -4,6 +4,8 @@ use std::ops::{BitAnd, BitOr};
 #[cfg(test)]
 mod test;
 
+mod math;
+
 mod knownbits;
 mod uintrange;
 mod sintrange;

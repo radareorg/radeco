@@ -3,7 +3,7 @@ use super::{EMPTY_UINTMULTIPLE, EMPTY_UINTRANGE, EMPTY_SINTRANGE};
 use std;
 use std::cmp::{min, max};
 use std::ops::{BitAnd, BitOr};
-use util::{tzmsk, gcd_lcm, multiplicative_inverse};
+use super::math::{tzmsk, gcd_lcm, multiplicative_inverse};
 
 const U64MIN: u64 =  std::u64::MIN;  // 0x0000000000000000;
 const U64MAX: u64 =  std::u64::MAX;  // 0xffffffffffffffff;

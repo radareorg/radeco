@@ -1,8 +1,5 @@
-
-
 #[cfg(test)]
 mod test;
-pub mod grid;
 
 // warning: rust uses '!' as bitwise not operator
 // blcic(!x) = tzmsk(x)+1 = product of the '2's of x's prime decomposition
