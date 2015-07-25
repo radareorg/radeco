@@ -3,3 +3,4 @@ pub use super::middle::ir::{MInst, MVal, MOpcode, MValType, Address, MArity, MRe
 pub mod structs;
 pub mod parser;
 pub mod r2;
+pub mod esilssa;

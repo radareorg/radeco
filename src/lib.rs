@@ -10,6 +10,5 @@ extern crate r2pipe;
 
 pub mod middle;
 pub mod analysis;
-pub mod transform;
 pub mod frontend;
 pub mod backend;

@@ -10,11 +10,11 @@ use petgraph::graph::NodeIndex;
 
 use frontend::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
 use frontend::structs::{LOpInfo, LAliasInfo, LRegInfo, LRegProfile, LFlagInfo};
+use frontend::esilssa::SSAConstruction;
 
 use middle::ssa::SSA;
 use middle::ssastorage::SSAStorage;
 use middle::ir::{WidthSpec}; // move WidthSpec to a different module?
-use transform::ssa::SSAConstruction;
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]

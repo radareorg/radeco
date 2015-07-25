@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use frontend::structs::LRegInfo;
 use middle::ssa::{BBInfo, SSAMod, ValueType};
 use middle::ir::{MOpcode, WidthSpec};
-use transform::phiplacement::PhiPlacer;
+use middle::phiplacement::PhiPlacer;
 
 #[derive(Debug)]
 pub struct SubRegister {

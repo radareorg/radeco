@@ -1,10 +1,9 @@
 extern crate radeco;
 
-use radeco::frontend::{parser, r2};
+use radeco::frontend::{parser, r2, esilssa};
 use radeco::middle::{cfg};
 use radeco::middle::dot;
 use radeco::middle::ssastorage::SSAStorage;
-use radeco::transform::ssa::SSAConstruction;
 
 use std::env;
 use std::io::prelude::*;
@@ -60,7 +59,7 @@ fn main() {
     println!("[*] Begin SSA Generation.");
 
     {
-        let mut con = SSAConstruction::new(&mut ssa, &r);
+        let mut con = esilssa::SSAConstruction::new(&mut ssa, &r);
         con.run(&cfg);
     }
 

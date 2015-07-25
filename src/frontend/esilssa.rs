@@ -9,7 +9,7 @@ use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
 use middle::ir::{MVal, MInst, MOpcode, MValType};
 use middle::regfile::SubRegisterFile;
-use transform::phiplacement::PhiPlacer;
+use middle::phiplacement::PhiPlacer;
 
 pub type VarId = usize;
 
