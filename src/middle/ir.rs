@@ -25,8 +25,10 @@ pub enum MArity {
 pub enum MValType {
     Register,
     Temporary,
-    Unknown,
     Internal,
+    EsilCur,
+    EsilOld,
+    Unknown,
     Null,
 }
 
@@ -88,11 +90,12 @@ pub struct MVal {
 // check for `None` instead.
 #[derive(Debug, Clone)]
 pub struct MInst {
-    pub addr:      MAddr,
-    pub opcode:    MOpcode,
-    pub dst:       MVal,
-    pub operand_1: MVal,
-    pub operand_2: MVal,
+    pub addr:         MAddr,
+    pub opcode:       MOpcode,
+    pub dst:          MVal,
+    pub operand_1:    MVal,
+    pub operand_2:    MVal,
+    pub update_flags: bool,
 }
 
 impl MOpcode {
@@ -169,17 +172,26 @@ impl MVal {
     pub fn tmp(i: u64, size: WidthSpec) -> MVal {
         MVal::new(format!("tmp_{:x}", i), size, MValType::Temporary, 0, None)
     }
+
+    pub fn esilcur() -> MVal {
+        MVal::new("".to_string(), 64, MValType::EsilCur, 0, None)
+    }
+
+    pub fn esilold() -> MVal {
+        MVal::new("".to_string(), 64, MValType::EsilOld, 0, None)
+    }
 }
 
 impl MInst {
     pub fn new(opcode: MOpcode, dst: MVal, op1: MVal, op2: MVal, _addr: Option<MAddr>) -> MInst {
         let addr = _addr.unwrap_or_default();
         MInst {
-            addr:      addr,
-            opcode:    opcode,
-            dst:       dst,
-            operand_1: op1,
-            operand_2: op2,
+            addr:         addr,
+            opcode:       opcode,
+            dst:          dst,
+            operand_1:    op1,
+            operand_2:    op2,
+            update_flags: false,
         }
     }
 }

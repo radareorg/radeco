@@ -58,7 +58,6 @@ pub struct Parser<'a> {
     addr:         Address,
     opinfo:       Option<LOpInfo>,
     tmp_index:    u64,
-    last_assgn:   MVal,
     ssac:         Option<SSAConstruction<'a, SSAStorage>>, // TODO: Remove the Option<> here
     block:        NodeIndex,
     bbs:          BTreeMap<Address, (NodeIndex, Address)>,
@@ -101,9 +100,8 @@ impl<'a> Parser<'a> {
         let regset = config.regset.unwrap_or(HashMap::new());
         let alias_info = config.alias_info.unwrap_or(HashMap::new());
         let flags = config.flags.unwrap_or(HashMap::new());
-        let val = MVal::null();
 
-        Parser { 
+        Parser {
             stack:        Vec::new(),
             insts:        Vec::new(),
             opset:        init_opset(),
@@ -116,7 +114,6 @@ impl<'a> Parser<'a> {
             alias_info:   alias_info,
             flags:        flags,
             tmp_index:    0,
-            last_assgn:   val,
             ssac:         None,
             block:        <SSAStorage as SSA>::ActionRef::end(),
             bbs:          BTreeMap::new(),
@@ -418,18 +415,17 @@ impl<'a> Parser<'a> {
         }
 
         // If the dst is a register. Update the last_assgn information.
-        if dst.val_type == MValType::Register {
-            self.last_assgn = dst.clone();
-        }
+        let update_flags = dst.val_type == MValType::Register;
 
         if dst.size == op1.size {
             let addr = MAddr::new(self.addr);
-            let inst = MInst::new(op, dst.clone(), op1, MVal::null(), Some(addr));
+            let mut inst = MInst::new(op, dst.clone(), op1, MVal::null(), Some(addr));
+            inst.update_flags = update_flags;
             self.insts.push(inst.clone());
             return Ok(());
         }
 
-        if dst.size > op1.size {
+        if dst.size > op1.size { // TODO: update flags based on correct value
             self.add_widen_inst(&mut op1, dst.size);
         } else {
             self.add_narrow_inst(&mut op1, dst.size);
@@ -497,12 +493,11 @@ impl<'a> Parser<'a> {
 
         let dst = self.get_tmp_register(dst_size);
         // If it is a compare instruction, then the flags must be updated.
-        if op == MOpcode::OpCmp {
-            self.last_assgn = dst.clone();
-        }
+        let update_flags = op == MOpcode::OpCmp;
 
         let addr = MAddr::new(self.addr);
-        let inst = MInst::new(op, dst.clone(), op2, op1, Some(addr));
+        let mut inst = MInst::new(op, dst.clone(), op2, op1, Some(addr));
+        inst.update_flags = update_flags;
         self.insts.push(inst);
         self.stack.push(dst);
 
@@ -522,7 +517,7 @@ impl<'a> Parser<'a> {
                         },
                         'z' => {
                             let dst = self.get_tmp_register(1);
-                            let inst = MInst::new(MOpcode::OpCmp, dst.clone(), self.last_assgn.clone(), self.constant_value(0), Some(addr));
+                            let inst = MInst::new(MOpcode::OpCmp, dst.clone(), MVal::esilcur(), self.constant_value(0), Some(addr));
                             self.insts.push(inst);
                             dst
                         },
