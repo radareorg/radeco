@@ -28,8 +28,8 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 		};
 		// make the following a method of regfile?
 		sc.phiplacer.add_variables(vec![
-			ValueType::Integer{width: 64}, // cur
-			ValueType::Integer{width: 64}  // old
+								   ValueType::Integer{width: 64}, // cur
+								   ValueType::Integer{width: 64}  // old
 		]);
 		sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
 		sc
@@ -37,31 +37,31 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 
 	pub fn run(&mut self, cfg: &CFG) {
 		let mut blocks = Vec::<T::ActionRef>::new();
-        let bb_iter = cfg.bbs.iter();
+		let bb_iter = cfg.bbs.iter();
 
-        {
-            // Insert the entry and exit blocks for the ssa.
-            let block = self.phiplacer.add_block(BBInfo { addr: 0 });
-            self.phiplacer.ssa.mark_start_node(&block);
-            let zero = self.phiplacer.ssa.add_const(block, 0);
-            self.phiplacer.write_variable(block, 0, zero); // cur = 0
-            self.phiplacer.write_variable(block, 1, zero); // old = 0
-            blocks.push(block);
+		{
+			// Insert the entry and exit blocks for the ssa.
+			let block = self.phiplacer.add_block(BBInfo { addr: 0 });
+			self.phiplacer.ssa.mark_start_node(&block);
+			let zero = self.phiplacer.ssa.add_const(block, 0);
+			self.phiplacer.write_variable(block, 0, zero); // cur = 0
+			self.phiplacer.write_variable(block, 1, zero); // old = 0
+			blocks.push(block);
 
-            let block = self.phiplacer.add_block(BBInfo { addr: 0 });
-            blocks.push(block);
-        }
+			let block = self.phiplacer.add_block(BBInfo { addr: 0 });
+			blocks.push(block);
+		}
 
-        for (addr, i) in bb_iter {
-            let block = self.phiplacer.add_block(BBInfo { addr: *addr });
-            blocks.push(block);
-            match cfg.g[*i] {
-                CFGNodeData::Block(ref srcbb) => {
-                    self.process_block(block, srcbb);
-                }
-                _ => unreachable!(),
-            }
-        }
+		for (addr, i) in bb_iter {
+			let block = self.phiplacer.add_block(BBInfo { addr: *addr });
+			blocks.push(block);
+			match cfg.g[*i] {
+				CFGNodeData::Block(ref srcbb) => {
+					self.process_block(block, srcbb);
+				}
+				_ => unreachable!(),
+			}
+		}
 
 		for edge in cfg.g.raw_edges() {
 			let i = match edge.weight.edge_type {
@@ -121,46 +121,46 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 		};
 
 
-        /*
-        // TODO: When developing a ssa check pass, reuse this maybe
-        let width = match inst.opcode {
-            MOpcode::OpNarrow(w)
-            | MOpcode::OpWiden(w) => { w },
-            MOpcode::OpCmp => { 1 },
-            _ => { 
-                let extract = |x: NodeData| -> Option<u8> {
-                    if let NodeData::Op(_, ValueType::Integer { width: w }) = x {
-                        Some(w)
-                    } else {
-                        None
-                    }
-                };
-                let w1 = self.phiplacer.ssa.safe_get_node_data(&n0)
-                                 .map(&extract)
-                                 .unwrap_or(None);
+		/*
+		// TODO: When developing a ssa check pass, reuse this maybe
+		let width = match inst.opcode {
+		MOpcode::OpNarrow(w)
+		| MOpcode::OpWiden(w) => { w },
+		MOpcode::OpCmp => { 1 },
+		_ => { 
+		let extract = |x: NodeData| -> Option<u8> {
+		if let NodeData::Op(_, ValueType::Integer { width: w }) = x {
+		Some(w)
+		} else {
+		None
+		}
+		};
+		let w1 = self.phiplacer.ssa.safe_get_node_data(&n0)
+		.map(&extract)
+		.unwrap_or(None);
 
-                let w2 = self.phiplacer.ssa.safe_get_node_data(&n1)
-                                 .map(&extract)
-                                 .unwrap_or(None);
+		let w2 = self.phiplacer.ssa.safe_get_node_data(&n1)
+		.map(&extract)
+		.unwrap_or(None);
 
-                if w1 == None && w2 == None {
-                    // TODO: Replace by default value.
-                    64
-                } else if w1 == None {
-                    w2.unwrap()
-                } else if w2 == None {
-                    w1.unwrap()
-                } else {
-                    let w1 = w1.unwrap();
-                    let w2 = w2.unwrap();
-                    // Check the width of the two operands.
-                    assert!(w1 == w2);
-                    w1
-                }
-            },
-        };*/
+		if w1 == None && w2 == None {
+		// TODO: Replace by default value.
+		64
+		} else if w1 == None {
+		w2.unwrap()
+		} else if w2 == None {
+		w1.unwrap()
+		} else {
+		let w1 = w1.unwrap();
+		let w2 = w2.unwrap();
+		// Check the width of the two operands.
+		assert!(w1 == w2);
+		w1
+		}
+		},
+		};*/
 
-        let nn = {
+		let nn = {
 			let ref mut ssa = self.phiplacer.ssa;
 			let nn = ssa.add_op(block, inst.opcode, dsttype);
 			ssa.op_use(nn, 0, n0);
@@ -185,7 +185,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 
 			if instruction.opcode == MOpcode::OpJmp {
 				// TODO: In case of static jumps, this is trivial and does not need a selector.
-                // In case of dynamic jump, the jump targets have to be determined.
+				// In case of dynamic jump, the jump targets have to be determined.
 				//self.ssa.g.add_edge(block, n0, SSAEdgeData::DynamicControl(0));
 				break;
 			}

@@ -33,64 +33,64 @@ pub trait SSA {
 	type ValueRef: Eq + Hash + Clone + Copy; // We could drop the Copy trait later and insert .clone()
 	type ActionRef: Eq + Hash + Clone + Copy;
 
-    /// Get NodeIndex of all BasicBlocks available in the SSA form.
-    fn get_blocks(&self) -> Vec<Self::ActionRef>;
+	/// Get NodeIndex of all BasicBlocks available in the SSA form.
+	fn get_blocks(&self) -> Vec<Self::ActionRef>;
 
-    /// Start node of the CFG.
-    fn start_node(&self) -> Self::ActionRef;
+	/// Start node of the CFG.
+	fn start_node(&self) -> Self::ActionRef;
 
-    /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
-    fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
+	/// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
+	fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
-    /// Get all phis in the BasicBlock with index 'i'.
-    fn get_phis(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
+	/// Get all phis in the BasicBlock with index 'i'.
+	fn get_phis(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
-    /// Get all the uses of the node with index 'i'.
-    fn get_uses(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
+	/// Get all the uses of the node with index 'i'.
+	fn get_uses(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
 
-    /// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
-    fn get_block(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	/// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
+	fn get_block(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
-    /// Get the operands for the operation with NodeIndex 'i'.
-    fn get_operands(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
+	/// Get the operands for the operation with NodeIndex 'i'.
+	fn get_operands(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
 
-    /// Get the lhs() of the Operation with NodeIndex 'i'.
-    fn lhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[0].clone()
-    }
+	/// Get the lhs() of the Operation with NodeIndex 'i'.
+	fn lhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
+		self.get_operands(i)[0].clone()
+	}
 
-    /// Get the rhs() of the Operation with NodeIndex 'i'.
-    fn rhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[1].clone()
-    }
+	/// Get the rhs() of the Operation with NodeIndex 'i'.
+	fn rhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
+		self.get_operands(i)[1].clone()
+	}
 
-    /// Get the actual NodeData.
-    // TODO: Merge the below two functions. get_node_data should always return an Option and not
-    // panic.
-    fn get_node_data(&self, i: &Self::ValueRef) -> NodeData;
-    fn safe_get_node_data(&self, i: &Self::ValueRef) -> Option<NodeData> {
-        if *i != self.invalid_value() {
-            Some(self.get_node_data(i))
-        } else {
-            None
-        }
-    }
+	/// Get the actual NodeData.
+	// TODO: Merge the below two functions. get_node_data should always return an Option and not
+	// panic.
+	fn get_node_data(&self, i: &Self::ValueRef) -> NodeData;
+	fn safe_get_node_data(&self, i: &Self::ValueRef) -> Option<NodeData> {
+		if *i != self.invalid_value() {
+			Some(self.get_node_data(i))
+		} else {
+			None
+		}
+	}
 
-    // NOTE:
-    // These three functions will change their signatures
-    // when we remove "jmp" from the list of ops
+	// NOTE:
+	// These three functions will change their signatures
+	// when we remove "jmp" from the list of ops
 
-    /// Get Jump target of a call or an unconditional jump.
-    fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	/// Get Jump target of a call or an unconditional jump.
+	fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
-    /// Get true branch of a conditional jump.
-    fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	/// Get true branch of a conditional jump.
+	fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
-    /// Get false branch of a conditional jump.
-    fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	/// Get false branch of a conditional jump.
+	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
-    /// Gets the data dependencies of a value node in any order.
-    /// (See get_operands for ordered return value)
+	/// Gets the data dependencies of a value node in any order.
+	/// (See get_operands for ordered return value)
 	fn args_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef>;
 
 	/// Gets uses dependents of a value node.
@@ -123,8 +123,8 @@ pub trait SSAMod: SSA {
 
 	type BBInfo;
 
-    /// Mark the start node for the SSA graph.
-    fn mark_start_node(&mut self, start: &Self::ActionRef);
+	/// Mark the start node for the SSA graph.
+	fn mark_start_node(&mut self, start: &Self::ActionRef);
 
 	/// Add a new operation node.
 	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType) -> Self::ValueRef;
@@ -143,9 +143,9 @@ pub trait SSAMod: SSA {
 
 	/// Add a control edge between to basic blocks.
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
-   
-    /// Mark the node as selector for the control edges away from the specified basic block
-    fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
+
+	/// Mark the node as selector for the control edges away from the specified basic block
+	fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
 
 	/// Add a data source to a phi node.
 	fn phi_use(&mut self, phi: Self::ValueRef, node: Self::ValueRef);

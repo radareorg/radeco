@@ -140,35 +140,35 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 	}
 
 	/*fn remove_redundant_phis(&self, phi_functions: Vec<T::ValueRef>) {
-		// should phi_functions be `Vec` or something else?
-		let sccs = compute_phi_sccs(induced_subgraph(phi_functions));
-		for scc in topological_sort(sccs) {
-			processSCC(scc)
-		}
+	// should phi_functions be `Vec` or something else?
+	let sccs = compute_phi_sccs(induced_subgraph(phi_functions));
+	for scc in topological_sort(sccs) {
+	processSCC(scc)
+	}
 	}*/
 
 	/*fn processSCC(&self, scc) {
-		if len(scc) = 1 { return } // we already handled trivial φ functions
+	  if len(scc) = 1 { return } // we already handled trivial φ functions
 
-		let inner = HashSet::new();
-		let outerOps = HashSet::new();
+	  let inner = HashSet::new();
+	  let outerOps = HashSet::new();
 
-		for phi in scc:
-			isInner = True
-			for operand in phi.getOperands() {
-				if operand not in scc {
-					outerOps.add(operand)
-					isInner = False
-				}
-			}
-			if isInner {
-				inner.add(phi)
-			}
+	  for phi in scc:
+	  isInner = True
+	  for operand in phi.getOperands() {
+	  if operand not in scc {
+	  outerOps.add(operand)
+	  isInner = False
+	  }
+	  }
+	  if isInner {
+	  inner.add(phi)
+	  }
 
-		if len(outerOps) == 1 {
-			replaceSCCByValue(scc, outerOps.pop())
-		} else if len(outerOps) > 1 {
-			remove_redundant_phis(inner)
-		}
-	}*/
+	  if len(outerOps) == 1 {
+	  replaceSCCByValue(scc, outerOps.pop())
+	  } else if len(outerOps) > 1 {
+	  remove_redundant_phis(inner)
+	  }
+	  }*/
 }

@@ -53,8 +53,8 @@ impl SubRegisterFile {
 			});
 		}
 		/*for (ref name, ref sr) in &slices {
-			println!("{} = (u{})(r{}>>{})", name, sr.width, sr.base, sr.shift);
-		}*/
+		  println!("{} = (u{})(r{}>>{})", name, sr.width, sr.base, sr.shift);
+		  }*/
 		SubRegisterFile {
 			whole_registers: whole,
 			named_registers: slices
@@ -66,7 +66,7 @@ impl SubRegisterFile {
 		block: T::ActionRef,
 		var: &String,
 		mut value: T::ValueRef
-	) {
+		) {
 		let info = &self.named_registers[var];
 		let id = info.base + base;
 		match phiplacer.variable_types[id] {
@@ -117,29 +117,29 @@ impl SubRegisterFile {
 		base: usize,
 		block: T::ActionRef,
 		var: &String
-	) ->
+		) ->
 		T::ValueRef
-	{
-		let info = &self.named_registers[var];
-		let id = info.base + base;
-		let mut value = phiplacer.read_variable(block, id);
-		match phiplacer.variable_types[id] {
-			ValueType::Integer{width} => {
-				if info.shift > 0 {
-					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
-					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsr, ValueType::Integer{width: width as WidthSpec});
-					phiplacer.ssa.op_use(new_value, 0, value);
-					phiplacer.ssa.op_use(new_value, 1, shift_amount_node);
-					value = new_value;
-				}
-				if (width as usize) < info.width {
-					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpNarrow(info.width as WidthSpec), ValueType::Integer{width: info.width as WidthSpec});
-					phiplacer.ssa.op_use(new_value, 0, value);
-					value = new_value;
-				}
-				value
-			},
-			_ => unimplemented!()
+		{
+			let info = &self.named_registers[var];
+			let id = info.base + base;
+			let mut value = phiplacer.read_variable(block, id);
+			match phiplacer.variable_types[id] {
+				ValueType::Integer{width} => {
+					if info.shift > 0 {
+						let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
+						let new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsr, ValueType::Integer{width: width as WidthSpec});
+						phiplacer.ssa.op_use(new_value, 0, value);
+						phiplacer.ssa.op_use(new_value, 1, shift_amount_node);
+						value = new_value;
+					}
+					if (width as usize) < info.width {
+						let new_value = phiplacer.ssa.add_op(block, MOpcode::OpNarrow(info.width as WidthSpec), ValueType::Integer{width: info.width as WidthSpec});
+						phiplacer.ssa.op_use(new_value, 0, value);
+						value = new_value;
+					}
+					value
+				},
+				_ => unimplemented!()
+			}
 		}
-	}
 }
