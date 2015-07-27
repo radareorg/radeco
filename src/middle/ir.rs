@@ -1,11 +1,9 @@
 //! Module to contain the IR.
 
+use std::default::Default;
+
 pub type Address = u64;
 pub type WidthSpec = u16;
-
-//pub struct MCommon {
-//
-//}
 
 #[derive(Debug, Clone, Default)]
 pub struct MAddr {
@@ -18,7 +16,7 @@ pub enum MArity {
 	Zero,
 	Unary,
 	Binary,
-	Ternary,
+	Ternary, // Unused for now. Maybe remove later?
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -86,6 +84,13 @@ pub struct MVal {
 	pub as_literal: Option<u64>,
 }
 
+// Default for MVal is null.
+impl Default for MVal {
+	fn default() -> Self {
+		MVal::new("".to_string(), 0, MValType::Null, 0, None)
+	}
+}
+
 // Minor: Change MInst to take Option<MVal> instead. This will allow us to eliminate MVal::null and
 // check for `None` instead.
 #[derive(Debug, Clone)]
@@ -99,6 +104,18 @@ pub struct MInst {
 }
 
 impl MOpcode {
+	pub fn to_inst(&self, dst: MVal, op1: MVal, op2: MVal, addr: Option<MAddr>) -> MInst {
+		MInst::new(*self, dst, op1, op2, addr)
+	}
+
+	pub fn is_binary(&self) -> bool {
+		self.arity() == MArity::Binary
+	}
+
+	pub fn is_unary(&self) -> bool {
+		self.arity() == MArity::Unary
+	}
+
 	pub fn arity(&self) -> MArity {
 		self.info().1
 	}
@@ -135,7 +152,6 @@ impl MOpcode {
 			MOpcode::OpCJmp       => ("jmp if", MArity::Binary),
 			MOpcode::OpCall       => ("call", MArity::Unary),
 			MOpcode::OpConst(_)   => ("const", MArity::Zero),
-
 			MOpcode::OpNop        => ("nop", MArity::Zero),
 			MOpcode::OpInvalid    => ("invalid", MArity::Zero),
 			MOpcode::OpInc        => ("++", MArity::Unary),
