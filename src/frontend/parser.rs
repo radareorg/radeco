@@ -52,6 +52,7 @@ pub struct Parser<'a> {
 	addr:         Address,
 	opinfo:       Option<LOpInfo>,
 	tmp_index:    u64,
+	constants:	  HashMap<u64, MVal>,
 }
 
 // Struct used to configure the Parser. If `None` is passed to any of the fields, then the default
@@ -104,6 +105,7 @@ impl<'a> Parser<'a> {
 			alias_info:   alias_info,
 			flags:        flags,
 			tmp_index:    0,
+			constants:    HashMap::new(),
 		}
 	}
 
@@ -510,6 +512,7 @@ impl<'a> Parser<'a> {
 		let mut tmp_p = Parser::new(None);
 		tmp_p.set_parser_index(self.tmp_index);
 		tmp_p.addr = self.addr;
+		tmp_p.constants = self.constants.clone();
 		match mv.name.chars().nth(1).unwrap_or('\0') {
 			'%' => {
 				let addr = self.addr;
@@ -575,19 +578,31 @@ impl<'a> Parser<'a> {
 
 		// Update current parser tmp index.
 		self.set_parser_index(tmp_p.tmp_index);
+		self.constants = tmp_p.constants.clone();
 		let res = insts.last().unwrap().dst.clone();
 		Ok(res)
 	}
 
 	fn constant_value(&mut self, num: u64) -> MVal {
-		let op = MOpcode::OpConst(num);
-		let size = self.default_size;
-		let mut dst = self.get_tmp_register(size);
-		let addr = MAddr::new(self.addr);
-		let inst = op.to_inst(dst.clone(), MVal::null(), MVal::null(), Some(addr));
-		self.insts.push(inst);
-		dst.as_literal = Some(num);
-		dst
+		let tmp: MVal = if !self.constants.contains_key(&num) {
+			let op = MOpcode::OpConst(num);
+			let size = self.default_size;
+			let mut next_tmp = self.get_tmp_register(size);
+			next_tmp.as_literal = Some(num);
+			let inst = op.to_inst(next_tmp.clone(), MVal::null(), MVal::null(), None);
+			self.insts.push(inst);
+			next_tmp
+		} else {
+			MVal::null()
+		};
+
+		let const_v = self.constants.entry(num)
+			                        .or_insert(tmp)
+								    .clone();
+		
+		// Assert that we actually have a constant.
+		assert!(const_v.as_literal != None);
+		const_v
 	}
 }
 
