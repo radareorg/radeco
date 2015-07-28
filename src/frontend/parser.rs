@@ -161,7 +161,7 @@ impl<'a> Parser<'a> {
 		}
 
 		let esil: Vec<String> = esil.split(',')
-									.map(|x| x.to_string())
+			                        .map(|x| x.to_string())
 									.collect();
 		for token in esil {
 			let op = match self.opset.get(&*token) {
@@ -198,11 +198,13 @@ impl<'a> Parser<'a> {
 					// TODO
 					panic!("Proper error handling here");
 				}
+				
 				let v = if let Some(cv) = val {
 					self.constant_value(cv)
 				} else {
-					MVal::new(String::from(token), size, val_type, 0, reg_info)
+					MVal::new(token, size, val_type, 0, reg_info)
 				};
+
 				self.stack.push(v);
 				continue;
 			}
@@ -486,37 +488,95 @@ impl<'a> Parser<'a> {
 		Ok(())
 	}
 
+	fn set_parser_index(&mut self, i: u64) {
+		self.tmp_index = i;
+	}
+
 	// correspons to r_anal_esil_get_parm
 	fn get_param(&mut self) -> Result<MVal, ParseError> {
-		if let Some(mv) = self.stack.pop() {
-			Ok(match mv.val_type {
-				MValType::Internal => {
-					let addr = MAddr::new(self.addr);
-					match mv.name.chars().nth(1).unwrap_or('\0') {
-						'%' => {
-							let addr = self.addr;
-							self.constant_value(addr)
-						},
-						'z' => {
-							let dst = self.get_tmp_register(1);
-							let inst = MOpcode::OpCmp.to_inst(dst.clone(), MVal::esilcur(), self.constant_value(0), Some(addr));
-							self.insts.push(inst);
-							dst
-						},
-						//'b' => _ // OpIFBorrow(u8),
-						//'c' => _ // OpIFCarry(u8),
-						//'o' => _ // OpIFOverflow,
-						//'p' => _ // OpIFParity,
-						//'r' => _ // OpIFRegSize,
-						//'s' => _ // OpIFSign,
-						_ => mv
-					}
-				},
-				_ => mv
-			})
-		} else {
-			Err(ParseError::InsufficientOperands)
+		let v = self.stack.pop();
+		let mv = try!(v.ok_or(ParseError::InsufficientOperands));
+		if mv.val_type != MValType::Internal {
+			return Ok(mv);
 		}
+
+		let bit = if mv.name.len() < 3 {
+			"0"
+		} else {
+			&mv.name[2..]
+		};
+
+		// Create a dummy temporary parser and initialize.
+		let mut tmp_p = Parser::new(None);
+		tmp_p.set_parser_index(self.tmp_index);
+		tmp_p.addr = self.addr;
+		match mv.name.chars().nth(1).unwrap_or('\0') {
+			'%' => {
+				let addr = self.addr;
+				return Ok(self.constant_value(addr))
+			},
+			'z' => {
+				let s = "==";
+				tmp_p.stack.push(self.constant_value(0));
+				tmp_p.stack.push(MVal::esilcur());
+				try!(tmp_p.parse_str(s));
+			},
+			'b' => {
+				tmp_p.stack.push(MVal::esilold());
+				let s = format!("1,{},0x3f,&,0x3f,+,0x3f,&,2,<<,-", bit);
+				try!(tmp_p.parse_str(&*s));
+				let tmp_mval = tmp_p.stack.last().unwrap().clone();
+				try!(tmp_p.parse_str("&"));
+				tmp_p.stack.push(tmp_mval);
+				tmp_p.stack.push(MVal::esilcur());
+				let s = "&,<";
+				try!(tmp_p.parse_str(s));
+			},
+			'c' => {
+				tmp_p.stack.push(MVal::esilcur());
+				let s = format!("1,{},0x3f,&,2,<<,-", bit);
+				try!(tmp_p.parse_str(&*s));
+				let tmp_mval = tmp_p.stack.last().unwrap().clone();
+				try!(tmp_p.parse_str("&"));
+				tmp_p.stack.push(tmp_mval);
+				tmp_p.stack.push(MVal::esilold());
+				let s = "&,<";
+				try!(tmp_p.parse_str(s));
+			},
+			'p' => {
+				let mut s = "1,&,^".to_string();
+				tmp_p.stack.push(self.constant_value(1));
+				tmp_p.stack.push(MVal::esilcur());
+				try!(tmp_p.parse_str(&*s));
+				for i in (1..8) {
+					s = format!("{},1,<<,&,^", i);
+					tmp_p.stack.push(MVal::esilcur());
+					try!(tmp_p.parse_str(&*s));
+				}
+			},
+			'r' => {
+				let def = self.default_size as u64;
+				return Ok(self.constant_value(def));
+			},
+			'o' => {
+				return Ok(mv.clone());
+			},
+			's' => {
+				return Ok(mv.clone());
+			},
+			_ => panic!("Invalid internal variable!"),
+		}
+
+		// Copy generated insts.
+		let insts = tmp_p.emit_insts();
+		for inst in insts.iter() {
+			self.insts.push(inst.clone());
+		}
+
+		// Update current parser tmp index.
+		self.set_parser_index(tmp_p.tmp_index);
+		let res = insts.last().unwrap().dst.clone();
+		Ok(res)
 	}
 
 	fn constant_value(&mut self, num: u64) -> MVal {

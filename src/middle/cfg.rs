@@ -362,6 +362,7 @@ impl GraphDot for CFG {
 
 				// iterate throught the instructions and convert them to dot.
 				for inst in &block.instructions {
+					if let MOpcode::OpConst(_) = inst.opcode { continue; }
 					let instrtext = format!("{}", inst);
 					let inst_dot = 
 						format!("<tr><td align=\"left\" cellspacing=\"1\"><font color=\"grey50\"
