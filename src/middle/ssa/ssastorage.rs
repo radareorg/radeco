@@ -1,13 +1,9 @@
 use petgraph::EdgeDirection;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use middle::ir;
-use middle::ssa;
-use middle::ssa::{SSA, SSAMod, NodeData, ValueType};
 
-// pub struct SSAStorageValueRef<'a> {
-// 	ni: NodeIndex,
-// 	_: PhantomData<'a>
-// }
+use super::ssa_traits;
+use super::ssa_traits::{SSA, SSAMod, NodeData, ValueType};
 
 #[derive(Clone, Copy)]
 pub enum EdgeData {
@@ -307,7 +303,7 @@ impl SSA for SSAStorage {
 
 impl SSAMod for SSAStorage {
 
-	type BBInfo = ssa::BBInfo;
+	type BBInfo = ssa_traits::BBInfo;
 
 	fn mark_start_node(&mut self, start: &Self::ActionRef) {
 		self.start_node = *start;

@@ -602,7 +602,7 @@ impl<'a> Parser<'a> {
 		
 		// Assert that we actually have a constant.
 		assert!(const_v.as_literal != None);
-		const_v
+		return const_v;
 	}
 }
 

@@ -1,7 +1,7 @@
 use petgraph::graph::{Edge, NodeIndex};
 use middle::dot::{GraphDot, DotAttrBlock};
-use middle::ssa::{SSA, SSAMod, NodeData, ValueType, BBInfo};
-use middle::ssastorage::{EdgeData, SSAStorage};
+use super::ssa_traits::{SSA, SSAMod, NodeData, ValueType, BBInfo};
+use super::ssastorage::{EdgeData, SSAStorage};
 
 ///////////////////////////////////////////////////////////////////////////////
 //// Implementation of GraphDot to emit Dot for SSAStorage.

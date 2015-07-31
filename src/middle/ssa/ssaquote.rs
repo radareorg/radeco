@@ -13,6 +13,7 @@
 // ]
 
 use middle::ir;
+use super::ssa_traits::{SSA, SSAMod};
 
 struct Variable {
 	name: String,
@@ -53,7 +54,7 @@ impl SSAQuote {
 			let i = match node.pattern {
 				Any      => binding.get_valueref(ssa, &self.variables[node.varindex]),
 				Const(n) => ssa.add_const(block, n),
-				ConstAny => ssa.add_const(block, binding.get_value(ssa, &self.variables[node.varindex]));
+				ConstAny => ssa.add_const(block, binding.get_value(ssa, &self.variables[node.varindex])),
 				Op0(op)  => ssa.add_op(block, op),
 				Op1(op, op1r) => {
 					let n = ssa.add_op(block, op);

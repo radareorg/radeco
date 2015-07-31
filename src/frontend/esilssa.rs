@@ -8,8 +8,8 @@ use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
 use middle::ir::{MVal, MInst, MOpcode, MValType};
-use middle::regfile::SubRegisterFile;
-use middle::phiplacement::PhiPlacer;
+use middle::ssa::SubRegisterFile;
+use middle::ssa::PhiPlacer;
 
 pub type VarId = usize;
 
