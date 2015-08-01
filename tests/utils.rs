@@ -10,7 +10,7 @@
 extern crate radeco;
 
 use radeco::frontend::parser::{Parser};
-use radeco::frontend::structs::{LOpInfo};
+use radeco::frontend::structs::{LOpInfo, LRegInfo};
 use radeco::frontend::r2::R2;
 use radeco::middle::ir::{MInst};
 use radeco::middle::cfg::CFG;
@@ -54,31 +54,37 @@ impl Pipeline {
 	}
 }
 
+
+
 // Enum that represents the output of a stage in the Pipeline.
 // Every stage has a corresponding Pipeout type.
+#[derive(Clone)]
 pub enum Pipeout {
+	Esil(Vec<String>),
 	LOpInfo(Vec<LOpInfo>),
 	Instructions(Vec<MInst>),
 	CFG(CFG),
 	SSA(SSAStorage),
 }
 
-// Bundles all the vars important to various stages of the pipeline together.
+// States all the vars important to various stages of the pipeline together.
 // Also acts as the result struct.
-pub struct Bundle<'a> {
+pub struct State<'a> {
 	r2: Option<R2>,
 	esil: Option<Vec<String>>,
+	reg_info: Option<LRegInfo>,
 	p: Option<Parser<'a>>,
 	cfg: Option<CFG>,
 	ssa: Option<SSAStorage>,
 	pipeout: Option<Pipeout>,
 }
 
-impl<'a> Bundle<'a> {
-	fn new() -> Bundle<'a> {
-		Bundle {
+impl<'a> State<'a> {
+	fn new() -> State<'a> {
+		State {
 			r2: None,
 			esil: None,
+			reg_info: None,
 			p: None,
 			cfg: None,
 			ssa: None,
@@ -87,30 +93,79 @@ impl<'a> Bundle<'a> {
 	}
 }
 
-// TODO: Improve this result struct.
-// Right now: `f` -> Filename to write out `res` to.
-pub struct Results {
-	f: String,
-	res: String,
+pub struct Test<'a> {
+	name: String,
+	bin_name: Option<String>,
+	addr: Option<String>,
+	pipeline: Vec<Pipeline>,
+	results: Vec<Pipeout>,
+	state: State<'a>,
 }
 
-// Function to initialize all your vars to sane defaults.
-fn init_vars() {
-}
+impl<'a> Test<'a> {
 
-// Function to run the integration test.
-// The common pipeline is esil -> cfg -> ssa.
-// Returns a result struct which can be used to assert! the results.
-fn run_test(pipeline: &Vec<Pipeline>, bundle: &mut Bundle) -> Results {
-	for stage in pipeline.iter() {
-		match *stage {
-			Pipeline::ReadFromR2 => { },
-			Pipeline::ParseEsil => { },
-			Pipeline::CFG => { },
-			Pipeline::SSA => { },
-			Pipeline::AnalyzeSSA(a) => unimplemented!(),
-			Pipeline::CWriter => unimplemented!(),
+	pub fn new(name: String, bin_name: Option<String>,
+			   addr: Option<String>, pipeline: Vec<Pipeline>) -> Test<'a> {
+		Test {
+			name: name,
+			bin_name: bin_name,
+			addr: addr,
+			pipeline: pipeline,
+			results: Vec::new(),
+			state: State::new(),
 		}
 	}
-	unimplemented!();
+
+	fn read_from_r2(&mut self) {
+		assert!(!self.bin_name.is_none());
+		assert!(!self.addr.is_none());
+
+		let bin_name = self.bin_name.clone().unwrap();
+		let mut r2 = R2::new(&*bin_name);
+		r2.init();
+		self.state.reg_info = Some(r2.get_reg_info().unwrap());
+		let addr = self.addr.clone().unwrap();
+		let func_info = r2.get_function(&*addr).unwrap();
+		self.state.pipeout = Some(Pipeout::LOpInfo(func_info.ops.unwrap()));
+		self.state.r2 = Some(r2);
+	}
+
+	fn parse_esil(&mut self) {
+		let pipein = self.state.pipeout.clone().unwrap();
+		match pipein {
+			Pipeout::Esil(s)      => { },
+			Pipeout::LOpInfo(ops) => { },
+			_                     => panic!("Incompatible type found in the pipeline!"),
+		}
+	}
+
+	fn construct_cfg(&mut self) {
+		let pipein = self.state.pipeout.clone().unwrap();
+		match pipein {
+			Pipeout::Instructions(insts) => { },
+			_ => panic!("Incompatible type found in the pipeline!"),
+		}
+	}
+
+	fn construct_ssa(&mut self) {
+		let pipein = self.state.pipeout.clone().unwrap();
+		match pipein {
+			Pipeout::CFG(cfg) => { },
+			_ => panic!("Incompatible type found in the pipeline!"),
+		}
+	}
+
+	pub fn run_test(&mut self) {
+		let pipe_iter = self.pipeline.clone();
+		for stage in pipe_iter.iter() {
+			match *stage {
+				Pipeline::ReadFromR2 => self.read_from_r2(),
+				Pipeline::ParseEsil => self.parse_esil(),
+				Pipeline::CFG => self.construct_cfg(),
+				Pipeline::SSA => self.construct_ssa(),
+				Pipeline::AnalyzeSSA(a) => unimplemented!(),
+				Pipeline::CWriter => unimplemented!(),
+			}
+		}
+	}
 }
