@@ -58,6 +58,7 @@ pub struct EdgeData {
 	dst_addr:      Address,
 }
 
+#[derive(Clone)]
 pub struct CFG {
 	pub g:     Graph<NodeData, EdgeData>,
 	pub entry: NodeIndex,

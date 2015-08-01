@@ -39,6 +39,7 @@ pub enum ParseError {
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Parser<'a> {
 	stack:        Vec<MVal>,
 	insts:        Vec<MInst>,

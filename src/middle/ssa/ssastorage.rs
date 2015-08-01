@@ -16,6 +16,7 @@ pub enum EdgeData {
 
 const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
 
+#[derive(Clone)]
 pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>,
 	pub start_node: NodeIndex,
