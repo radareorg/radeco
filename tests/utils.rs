@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_variables, unused_imports)]
 #![cfg(test)]
 /// The utils module is used by other tests to make writing tests easier.
 ///
@@ -45,22 +44,6 @@ pub enum Pipeline {
 	CWriter,
 }
 
-impl Pipeline {
-	fn to_string(&self) -> String {
-		let s = match *self {
-			Pipeline::ReadFromR2 => "r2",
-			Pipeline::ParseEsil => "radecoIR",
-			Pipeline::CFG => "cfg",
-			Pipeline::SSA => "ssa",
-			Pipeline::AnalyzeSSA(a) => unimplemented!(),
-			Pipeline::CWriter => unimplemented!(),
-		};
-		s.to_string()
-	}
-}
-
-
-
 // Enum that represents the output of a stage in the Pipeline.
 // Every stage has a corresponding Pipeout type.
 #[derive(Clone)]
@@ -87,6 +70,7 @@ impl Pipeout {
 
 // States all the vars important to various stages of the pipeline together.
 // Also acts as the result struct.
+#[allow(dead_code)]
 pub struct State<'a> {
 	r2: Option<R2>,
 	esil: Option<Vec<String>>,
@@ -148,7 +132,6 @@ impl<'a> Test<'a> {
 	fn read_from_r2(&mut self) {
 		assert!(!self.bin_name.is_none());
 		assert!(!self.addr.is_none());
-
 		out!("[*] Reading from R2", self.verbose);
 		let bin_name = self.bin_name.clone().unwrap();
 		let mut r2 = R2::new(&*bin_name);
@@ -168,7 +151,6 @@ impl<'a> Test<'a> {
 		if let Some(ref r) = self.state.reg_info {
 			p.set_register_profile(r);
 		}
-
 		match pipein {
 			Pipeout::Esil(strs) => { 
 				for _str in strs {
@@ -213,12 +195,10 @@ impl<'a> Test<'a> {
 		match pipein {
 			Pipeout::CFG {ref cfg} => {
 				let mut ssa = SSAStorage::new();
-				
 				{
 					let mut con = SSAConstruction::new(&mut ssa, &r);
 					con.run(cfg);
 				}
-
 				let pipeout = Pipeout::SSA {ssa: ssa.clone()};
 				self.set_pipeout(&pipeout);
 				self.state.ssa = Some(ssa);
@@ -230,13 +210,12 @@ impl<'a> Test<'a> {
 	pub fn run(&mut self) {
 		let pipe_iter = self.pipeline.clone();
 		for stage in pipe_iter.iter() {
-
 			match *stage {
 				Pipeline::ReadFromR2 => self.read_from_r2(),
 				Pipeline::ParseEsil => self.parse_esil(),
 				Pipeline::CFG => self.construct_cfg(),
 				Pipeline::SSA => self.construct_ssa(),
-				Pipeline::AnalyzeSSA(a) => unimplemented!(),
+				Pipeline::AnalyzeSSA(_) => unimplemented!(),
 				Pipeline::CWriter => unimplemented!(),
 			}
 			self.results.push(self.state.pipeout.clone().unwrap());
@@ -280,7 +259,6 @@ impl<'a> Test<'a> {
 					write_out.push_str(&*tmp);
 				},
 			}
-
 			let dir = format!("outputs/{}/", self.name);
 			create_dir(&*dir).ok();
 			let fname = format!("{}{}_{}.{}", dir, self.name, res.to_string(), ext);
