@@ -8,8 +8,8 @@ use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
 use middle::ir::{MVal, MInst, MOpcode, MValType};
-use middle::ssa::SubRegisterFile;
-use middle::ssa::PhiPlacer;
+use middle::phiplacement::PhiPlacer;
+use middle::regfile::SubRegisterFile;
 
 pub type VarId = usize;
 
@@ -26,11 +26,11 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			regfile:   SubRegisterFile::new(reg_info),
 			temps:     HashMap::new(),
 		};
-		// make the following a method of regfile?
 		sc.phiplacer.add_variables(vec![
 								   ValueType::Integer{width: 64}, // cur
 								   ValueType::Integer{width: 64}  // old
 		]);
+		// make the following a method of regfile?
 		sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
 		sc
 	}

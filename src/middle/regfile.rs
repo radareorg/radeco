@@ -1,9 +1,9 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use frontend::structs::LRegInfo;
-use super::ssa_traits::{BBInfo, SSAMod, ValueType};
+use middle::ssa::{BBInfo, SSAMod, ValueType};
 use middle::ir::{MOpcode, WidthSpec};
-use super::phiplacement::PhiPlacer;
+use middle::phiplacement::PhiPlacer;
 
 #[derive(Debug)]
 pub struct SubRegister {
