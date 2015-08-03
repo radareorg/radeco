@@ -107,7 +107,7 @@ impl SubRegisterFile {
 				}
 			},
 			ValueType::Integer{..} => (),
-			_ => unimplemented!()
+			//_ => unimplemented!()
 		}
 		phiplacer.write_variable(block, id, value);
 	}
@@ -139,7 +139,7 @@ impl SubRegisterFile {
 				}
 				value
 			},
-			_ => unimplemented!()
+			//_ => unimplemented!()
 		}
 	}
 }

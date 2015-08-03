@@ -11,6 +11,7 @@ pub enum EdgeData {
 	Data(u8),
 	ContainedInBB,
 	Selector,
+	RegisterState,
 	ReplacedBy
 }
 
@@ -209,6 +210,16 @@ impl SSA for SSAStorage {
 		return NodeIndex::end()
 	}
 
+	fn registers_at(&self, i: NodeIndex) -> NodeIndex {
+		let mut walk = self.g.walk_edges_directed(i, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::RegisterState = self.g[edge] {
+				return othernode
+			}
+		}
+		return NodeIndex::end()
+	}
+
 	fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex> {
 		let ordered = if let NodeData::Phi(_) = self.g[*i] { false } else { true };
 		let mut args = Vec::new();
@@ -232,6 +243,18 @@ impl SSA for SSAStorage {
 			i -= 1;
 		}
 		args.truncate(i);
+		return args;
+	}
+
+	fn get_sparse_operands(&self, i: &NodeIndex) -> Vec<(u8, NodeIndex)> {
+		let mut args = Vec::new();
+
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Data(index) = self.g[edge] {
+				args.push((index, othernode));
+			}
+		}
 		return args;
 	}
 
@@ -335,7 +358,10 @@ impl SSAMod for SSAStorage {
 	}
 
 	fn add_block(&mut self, info: Self::BBInfo) -> NodeIndex {
-		self.g.add_node(NodeData::BasicBlock(info))
+		let bb = self.g.add_node(NodeData::BasicBlock(info));
+		let rs = self.g.add_node(NodeData::RegisterState);
+		self.g.add_edge(bb, rs, EdgeData::RegisterState);
+		bb
 	}
 
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
