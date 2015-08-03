@@ -36,8 +36,12 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 	}
 
 	pub fn run(&mut self, cfg: &CFG) {
-		let mut blocks = Vec::<T::ActionRef>::new();
+		let mut blocks = Vec::<T::ActionRef>::with_capacity(cfg.g.node_count());
 		let bb_iter = cfg.bbs.iter();
+
+		for _ in 0..cfg.g.node_count() {
+			blocks.push(self.phiplacer.ssa.invalid_action());
+		}
 
 		{
 			// Insert the entry and exit blocks for the ssa.
@@ -46,15 +50,16 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			let zero = self.phiplacer.ssa.add_const(block, 0);
 			self.phiplacer.write_variable(block, 0, zero); // cur = 0
 			self.phiplacer.write_variable(block, 1, zero); // old = 0
-			blocks.push(block);
+			blocks[cfg.entry.index()] = block;
 
 			let block = self.phiplacer.add_block(BBInfo { addr: 0 });
-			blocks.push(block);
+			blocks[cfg.exit.index()] = block;
+			self.phiplacer.sync_register_state(block);
 		}
 
 		for (addr, i) in bb_iter {
 			let block = self.phiplacer.add_block(BBInfo { addr: *addr });
-			blocks.push(block);
+			blocks[i.index()] = block;
 			match cfg.g[*i] {
 				CFGNodeData::Block(ref srcbb) => {
 					self.process_block(block, srcbb);
@@ -78,7 +83,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			self.phiplacer.seal_block(block);
 		}
 		//self.phiplacer.ssa.stable_indexing = false;
-		//self.phiplacer.ssa.cleanup();
+		self.phiplacer.ssa.cleanup();
 	}
 
 	fn process_in_flag(&mut self, block: T::ActionRef, _mval: &MVal) -> T::ValueRef {

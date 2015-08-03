@@ -108,29 +108,6 @@ impl SSAStorage {
 		panic!();
 		//return NodeIndex::end()
 	}
-
-	pub fn cleanup(&mut self) {
-		// TODO: Add api to toggle stable_indexing to SSA trait
-		// assert!(!self.stable_indexing);
-		let mut i = 0;
-		let mut n = self.g.node_count();
-		while i < n {
-			if {
-				let ni = NodeIndex::new(i);
-				match self.g[ni] {
-					NodeData::Removed => true,
-					NodeData::Comment(_) if self.g.first_edge(ni, EdgeDirection::Incoming) == Option::None => true,
-					_ => false
-				}
-			} {
-				self.g.remove_node(NodeIndex::new(i));
-				n -= 1;
-			} else {
-				i += 1;
-			}
-		}
-		self.needs_cleaning = false;
-	}
 }
 
 
@@ -361,6 +338,7 @@ impl SSAMod for SSAStorage {
 		let bb = self.g.add_node(NodeData::BasicBlock(info));
 		let rs = self.g.add_node(NodeData::RegisterState);
 		self.g.add_edge(bb, rs, EdgeData::RegisterState);
+		self.g.add_edge(rs, bb, CONTEDGE);
 		bb
 	}
 
@@ -398,18 +376,27 @@ impl SSAMod for SSAStorage {
 		self.g.add_edge(node, argument, EdgeData::Data(index));
 	}
 
-	fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
+	fn replace(&mut self, mut node: NodeIndex, mut replacement: NodeIndex) {
+		node = self.refresh(node);
+		replacement = self.refresh(replacement);
+
 		if node == replacement { return }
 
 		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
 		let mut remove_us = Vec::<EdgeIndex>::new();
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Data(i) = self.g[edge] {
-				match self.g[othernode] {
-					NodeData::Op(_, _) => self.op_use(othernode, i, replacement),
-					NodeData::Phi(_) => self.phi_use(othernode, replacement),
-					_ => panic!()
-				}
+			match self.g[edge] {
+				EdgeData::Data(i) => {
+					match self.g[othernode] {
+						NodeData::Op(_, _) | NodeData::RegisterState => self.op_use(othernode, i, replacement),
+						NodeData::Phi(_) => self.phi_use(othernode, replacement),
+						_ => panic!()
+					}
+				},
+				EdgeData::ReplacedBy => {
+					self.g.add_edge(othernode, replacement, EdgeData::ReplacedBy);
+				},
+				_ => ()
 			}
 			remove_us.push(edge);
 		}
@@ -422,5 +409,27 @@ impl SSAMod for SSAStorage {
 			self.g.remove_node(node);
 		}
 	}
-}
 
+	fn cleanup(&mut self) {
+		// TODO: Add api to toggle stable_indexing to SSA trait
+		// assert!(!self.stable_indexing);
+		let mut i = 0;
+		let mut n = self.g.node_count();
+		while i < n {
+			if {
+				let ni = NodeIndex::new(i);
+				match self.g[ni] {
+					NodeData::Removed => true,
+					NodeData::Comment(_) if self.g.first_edge(ni, EdgeDirection::Incoming) == Option::None => true,
+					_ => false
+				}
+			} {
+				self.g.remove_node(NodeIndex::new(i));
+				n -= 1;
+			} else {
+				i += 1;
+			}
+		}
+		self.needs_cleaning = false;
+	}
+}

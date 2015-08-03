@@ -165,4 +165,7 @@ pub trait SSAMod: SSA {
 
 	/// Replace one node by another within one basic block.
 	fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
+
+	/// Perform a cleanup. (Will invalidate indices)
+	fn cleanup(&mut self);
 }

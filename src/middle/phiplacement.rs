@@ -139,6 +139,14 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 		return same
 	}
 
+	pub fn sync_register_state(&mut self, block: T::ActionRef) {
+		let rs = self.ssa.registers_at(block);
+		for var in 0..self.variable_types.len() {
+			let val = self.read_variable(block, var);
+			self.ssa.op_use(rs, var as u8, val);
+		}
+	}
+
 	/*fn remove_redundant_phis(&self, phi_functions: Vec<T::ValueRef>) {
 	// should phi_functions be `Vec` or something else?
 	let sccs = compute_phi_sccs(induced_subgraph(phi_functions));
