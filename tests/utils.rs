@@ -277,6 +277,7 @@ impl<'a> Test<'a> {
 				},
 			}
 			let dir = format!("outputs/{}/", self.name);
+			create_dir("outputs").ok();
 			create_dir(&*dir).ok();
 			let fname = format!("{}{}_{}.{}", dir, self.name, res.to_string(), ext);
 			write_file(&*fname, write_out);
