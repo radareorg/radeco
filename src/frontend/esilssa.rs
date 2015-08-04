@@ -8,8 +8,8 @@ use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
 use middle::ir::{MVal, MInst, MOpcode, MValType};
-use middle::ssa::SubRegisterFile;
-use middle::ssa::PhiPlacer;
+use middle::phiplacement::PhiPlacer;
+use middle::regfile::SubRegisterFile;
 
 pub type VarId = usize;
 
@@ -26,18 +26,22 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			regfile:   SubRegisterFile::new(reg_info),
 			temps:     HashMap::new(),
 		};
-		// make the following a method of regfile?
 		sc.phiplacer.add_variables(vec![
 								   ValueType::Integer{width: 64}, // cur
 								   ValueType::Integer{width: 64}  // old
 		]);
+		// make the following a method of regfile?
 		sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
 		sc
 	}
 
 	pub fn run(&mut self, cfg: &CFG) {
-		let mut blocks = Vec::<T::ActionRef>::new();
+		let mut blocks = Vec::<T::ActionRef>::with_capacity(cfg.g.node_count());
 		let bb_iter = cfg.bbs.iter();
+
+		for _ in 0..cfg.g.node_count() {
+			blocks.push(self.phiplacer.ssa.invalid_action());
+		}
 
 		{
 			// Insert the entry and exit blocks for the ssa.
@@ -46,15 +50,16 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			let zero = self.phiplacer.ssa.add_const(block, 0);
 			self.phiplacer.write_variable(block, 0, zero); // cur = 0
 			self.phiplacer.write_variable(block, 1, zero); // old = 0
-			blocks.push(block);
+			blocks[cfg.entry.index()] = block;
 
 			let block = self.phiplacer.add_block(BBInfo { addr: 0 });
-			blocks.push(block);
+			blocks[cfg.exit.index()] = block;
+			self.phiplacer.sync_register_state(block);
 		}
 
 		for (addr, i) in bb_iter {
 			let block = self.phiplacer.add_block(BBInfo { addr: *addr });
-			blocks.push(block);
+			blocks[i.index()] = block;
 			match cfg.g[*i] {
 				CFGNodeData::Block(ref srcbb) => {
 					self.process_block(block, srcbb);
@@ -78,7 +83,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			self.phiplacer.seal_block(block);
 		}
 		//self.phiplacer.ssa.stable_indexing = false;
-		//self.phiplacer.ssa.cleanup();
+		self.phiplacer.ssa.cleanup();
 	}
 
 	fn process_in_flag(&mut self, block: T::ActionRef, _mval: &MVal) -> T::ValueRef {

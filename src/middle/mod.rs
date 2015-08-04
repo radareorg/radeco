@@ -2,5 +2,7 @@ pub mod cfg;
 pub mod display;
 pub mod dot;
 pub mod ir;
+pub mod phiplacement;
+pub mod regfile;
 pub mod ssa;
 

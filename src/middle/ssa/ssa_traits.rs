@@ -7,7 +7,7 @@ use std::fmt::Debug;
 #[derive(Clone, Copy, Debug)]
 pub enum ValueType {
 	Integer {width: ir::WidthSpec},
-	MachineState,
+	//MachineState,
 }
 
 #[derive(Clone, Debug)]
@@ -24,7 +24,8 @@ pub enum NodeData {
 	Phi(String),
 	Undefined,
 	Removed,
-	BasicBlock(BBInfo)
+	BasicBlock(BBInfo),
+	RegisterState,
 }
 
 /// Trait for the SSA Form implementation.
@@ -54,6 +55,9 @@ pub trait SSA {
 
 	/// Get the operands for the operation with NodeIndex 'i'.
 	fn get_operands(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
+
+	/// Get the operands for the operation with NodeIndex 'i' as tuples.
+	fn get_sparse_operands(&self, i: &Self::ValueRef) -> Vec<(u8, Self::ValueRef)>;
 
 	/// Get the lhs() of the Operation with NodeIndex 'i'.
 	fn lhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
@@ -108,6 +112,9 @@ pub trait SSA {
 	/// (Alias for get_block)
 	fn block_of(&self, i: &Self::ValueRef) -> Self::ActionRef { self.get_block(i) }
 
+	/// Get a node that has all register values at the beginning of the specified basic block as args
+	fn registers_at(&self, Self::ActionRef) -> Self::ValueRef;
+
 	/// Updates a node reference to the latest version in case of replacement
 	// TODO: Hide this implementation detail
 	fn refresh(&self, node: Self::ValueRef) -> Self::ValueRef;
@@ -159,4 +166,7 @@ pub trait SSAMod: SSA {
 
 	/// Replace one node by another within one basic block.
 	fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
+
+	/// Perform a cleanup. (Will invalidate indices)
+	fn cleanup(&mut self);
 }

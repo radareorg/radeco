@@ -54,6 +54,7 @@ impl GraphDot for SSAStorage {
 	fn edge_skip(&self, edge: &Edge<EdgeData>) -> bool {
 		match edge.weight {
 			EdgeData::ContainedInBB => true,
+			EdgeData::RegisterState => true,
 			_ => false,
 		}
 	}
@@ -96,6 +97,7 @@ impl GraphDot for SSAStorage {
 				EdgeData::ReplacedBy => {
 					vec![("color".to_string(), "brown".to_string())]
 				},
+				EdgeData::RegisterState => unreachable!(),
 			})
 	}
 

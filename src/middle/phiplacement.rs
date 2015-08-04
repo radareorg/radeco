@@ -2,7 +2,7 @@
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
 use std::collections::{HashSet, HashMap};
-use super::ssa_traits::{BBInfo, SSA, SSAMod, NodeData, ValueType};
+use super::ssa::{BBInfo, SSA, SSAMod, NodeData, ValueType};
 
 pub type VarId = usize;
 
@@ -137,6 +137,14 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 			}
 		}
 		return same
+	}
+
+	pub fn sync_register_state(&mut self, block: T::ActionRef) {
+		let rs = self.ssa.registers_at(block);
+		for var in 0..self.variable_types.len() {
+			let val = self.read_variable(block, var);
+			self.ssa.op_use(rs, var as u8, val);
+		}
 	}
 
 	/*fn remove_redundant_phis(&self, phi_functions: Vec<T::ValueRef>) {

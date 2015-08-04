@@ -11,6 +11,7 @@ pub enum EdgeData {
 	Data(u8),
 	ContainedInBB,
 	Selector,
+	RegisterState,
 	ReplacedBy
 }
 
@@ -107,29 +108,6 @@ impl SSAStorage {
 		panic!();
 		//return NodeIndex::end()
 	}
-
-	pub fn cleanup(&mut self) {
-		// TODO: Add api to toggle stable_indexing to SSA trait
-		// assert!(!self.stable_indexing);
-		let mut i = 0;
-		let mut n = self.g.node_count();
-		while i < n {
-			if {
-				let ni = NodeIndex::new(i);
-				match self.g[ni] {
-					NodeData::Removed => true,
-					NodeData::Comment(_) if self.g.first_edge(ni, EdgeDirection::Incoming) == Option::None => true,
-					_ => false
-				}
-			} {
-				self.g.remove_node(NodeIndex::new(i));
-				n -= 1;
-			} else {
-				i += 1;
-			}
-		}
-		self.needs_cleaning = false;
-	}
 }
 
 
@@ -209,6 +187,16 @@ impl SSA for SSAStorage {
 		return NodeIndex::end()
 	}
 
+	fn registers_at(&self, i: NodeIndex) -> NodeIndex {
+		let mut walk = self.g.walk_edges_directed(i, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::RegisterState = self.g[edge] {
+				return othernode
+			}
+		}
+		return NodeIndex::end()
+	}
+
 	fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex> {
 		let ordered = if let NodeData::Phi(_) = self.g[*i] { false } else { true };
 		let mut args = Vec::new();
@@ -232,6 +220,18 @@ impl SSA for SSAStorage {
 			i -= 1;
 		}
 		args.truncate(i);
+		return args;
+	}
+
+	fn get_sparse_operands(&self, i: &NodeIndex) -> Vec<(u8, NodeIndex)> {
+		let mut args = Vec::new();
+
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Data(index) = self.g[edge] {
+				args.push((index, othernode));
+			}
+		}
 		return args;
 	}
 
@@ -335,7 +335,11 @@ impl SSAMod for SSAStorage {
 	}
 
 	fn add_block(&mut self, info: Self::BBInfo) -> NodeIndex {
-		self.g.add_node(NodeData::BasicBlock(info))
+		let bb = self.g.add_node(NodeData::BasicBlock(info));
+		let rs = self.g.add_node(NodeData::RegisterState);
+		self.g.add_edge(bb, rs, EdgeData::RegisterState);
+		self.g.add_edge(rs, bb, CONTEDGE);
+		bb
 	}
 
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
@@ -372,18 +376,27 @@ impl SSAMod for SSAStorage {
 		self.g.add_edge(node, argument, EdgeData::Data(index));
 	}
 
-	fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
+	fn replace(&mut self, mut node: NodeIndex, mut replacement: NodeIndex) {
+		node = self.refresh(node);
+		replacement = self.refresh(replacement);
+
 		if node == replacement { return }
 
 		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
 		let mut remove_us = Vec::<EdgeIndex>::new();
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Data(i) = self.g[edge] {
-				match self.g[othernode] {
-					NodeData::Op(_, _) => self.op_use(othernode, i, replacement),
-					NodeData::Phi(_) => self.phi_use(othernode, replacement),
-					_ => panic!()
-				}
+			match self.g[edge] {
+				EdgeData::Data(i) => {
+					match self.g[othernode] {
+						NodeData::Op(_, _) | NodeData::RegisterState => self.op_use(othernode, i, replacement),
+						NodeData::Phi(_) => self.phi_use(othernode, replacement),
+						_ => panic!()
+					}
+				},
+				EdgeData::ReplacedBy => {
+					self.g.add_edge(othernode, replacement, EdgeData::ReplacedBy);
+				},
+				_ => ()
 			}
 			remove_us.push(edge);
 		}
@@ -396,5 +409,27 @@ impl SSAMod for SSAStorage {
 			self.g.remove_node(node);
 		}
 	}
-}
 
+	fn cleanup(&mut self) {
+		// TODO: Add api to toggle stable_indexing to SSA trait
+		// assert!(!self.stable_indexing);
+		let mut i = 0;
+		let mut n = self.g.node_count();
+		while i < n {
+			if {
+				let ni = NodeIndex::new(i);
+				match self.g[ni] {
+					NodeData::Removed => true,
+					NodeData::Comment(_) if self.g.first_edge(ni, EdgeDirection::Incoming) == Option::None => true,
+					_ => false
+				}
+			} {
+				self.g.remove_node(NodeIndex::new(i));
+				n -= 1;
+			} else {
+				i += 1;
+			}
+		}
+		self.needs_cleaning = false;
+	}
+}
