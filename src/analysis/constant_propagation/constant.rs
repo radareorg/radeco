@@ -13,7 +13,7 @@ use ::middle::ir::{MOpcode, MArity};
 pub enum ExprVal {
 	Top,
 	Bottom,
-	Const(i64),
+	Const(u64),
 }
 
 fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
@@ -60,15 +60,19 @@ impl<T: SSA + Clone> Analyzer<T> {
 		}
 	}
 
+	pub fn dump(&self) {
+		for (h, v) in self.expr_val.iter() {
+			println!("{:?}: {:?}", h, v);
+		}
+	}
+
 	pub fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
 		let operands = self.g.get_operands(i);
-		let mut phi_val = self.expr_val.get(i).unwrap().clone();
+		let mut phi_val = self.get_value(i);
 		for o in operands.iter() {
 			let b = self.g.get_block(&o);
-			let val = match *self.executable.get(&b).unwrap() {
-				true => *self.expr_val.get(&o).unwrap(),
-				false => continue,
-			};
+			if !self.is_executable(&b) { continue; }
+			let val = self.get_value(&o);
 			phi_val = meet(&phi_val, &val);
 		}
 		return phi_val;
@@ -76,40 +80,40 @@ impl<T: SSA + Clone> Analyzer<T> {
 
 	pub fn evaluate_control_flow(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
 		match opcode {
-			MOpcode::OpJmp
-				| MOpcode::OpCall => {
-					// TODO: Experimental.
-					let target = self.g.get_target(i);
-					self.cfg_worklist.push(target);
-				},
-				MOpcode::OpCJmp => {
-					let operands = self.g.get_operands(i);
-					let cond = operands[0].clone();
-					let cond_val = self.expr_val.get(&cond).unwrap();
-					//let target = operands[1];
-					//let target_val = self.expr_val.get(&target).unwrap();
-					let true_branch = self.g.get_true_branch(i);
-					let false_branch = self.g.get_false_branch(i);
+			MOpcode::OpJmp |
+			MOpcode::OpCall => {
+				// TODO: Experimental.
+				let target = self.g.get_target(i);
+				self.cfg_worklist.push(target);
+			},
+			MOpcode::OpCJmp => {
+				let operands = self.g.get_operands(i);
+				let cond = operands[0].clone();
+				let cond_val = self.get_value(&cond);
+				//let target = operands[1];
+				//let target_val = self.expr_val.get(&target).unwrap();
+				let true_branch = self.g.get_true_branch(i);
+				let false_branch = self.g.get_false_branch(i);
 
-					match *cond_val {
-						ExprVal::Bottom => {
+				match cond_val {
+					ExprVal::Bottom => {
+						self.cfg_worklist.push(true_branch);
+						self.cfg_worklist.push(false_branch);
+					},
+					ExprVal::Top => {
+						// TODO: Not really sure what to do here.
+						return ExprVal::Top;
+					},
+					ExprVal::Const(cval) => {
+						if cval == 0 {
 							self.cfg_worklist.push(true_branch);
+						} else {
 							self.cfg_worklist.push(false_branch);
-						},
-						ExprVal::Top => {
-							// TODO: Not really sure what to do here.
-							return ExprVal::Top;
-						},
-						ExprVal::Const(cval) => {
-							if cval == 0 {
-								self.cfg_worklist.push(true_branch);
-							} else {
-								self.cfg_worklist.push(false_branch);
-							}
-						},
-					}
-				},
-				_ => unreachable!()
+						}
+					},
+				}
+			},
+			_ => unreachable!()
 		}
 
 		return ExprVal::Top;
@@ -117,18 +121,18 @@ impl<T: SSA + Clone> Analyzer<T> {
 
 	pub fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
 		let operand = self.g.get_operands(i)[0].clone();
-		let val = self.expr_val.get(&operand).unwrap();
-		let const_val = if let ExprVal::Const(cval)  = *val { cval } else { return *val; };
+		let val = self.get_value(&operand);
+		let const_val = if let ExprVal::Const(cval)  = val { cval } else { return val; };
 		let _val = match opcode {
-			MOpcode::OpNarrow(size)
-				| MOpcode::OpWiden(size) => { 
-					let mask = (2 << (size + 1)) - 1;
-					const_val & mask
-				},
-				MOpcode::OpNot  => { 
-					!const_val as i64
-				},
-				_ => unreachable!(),
+			MOpcode::OpNarrow(size) |
+			MOpcode::OpWiden(size) => { 
+				let mask = (2 << (size + 1)) - 1;
+				const_val & mask
+			},
+			MOpcode::OpNot  => { 
+				!const_val as u64
+			},
+			_ => unreachable!(),
 		};
 
 		ExprVal::Const(_val)
@@ -136,15 +140,15 @@ impl<T: SSA + Clone> Analyzer<T> {
 
 	pub fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
 		let operands = self.g.get_operands(i)
-			.iter()
-			.map(|x| self.expr_val.get(x).unwrap())
-			.collect::<Vec<_>>();
+		                     .iter()
+		                     .map(|x| self.get_value(x))
+		                     .collect::<Vec<_>>();
 
 		let lhs = operands[0];
 		let rhs = operands[1];
 
-		let lhs_val = if let ExprVal::Const(cval) = *lhs { cval } else { return *lhs; };
-		let rhs_val = if let ExprVal::Const(cval) = *rhs { cval } else { return *rhs; };
+		let lhs_val = if let ExprVal::Const(cval) = lhs { cval } else { return lhs; };
+		let rhs_val = if let ExprVal::Const(cval) = rhs { cval } else { return rhs; };
 
 		let _val = match opcode {
 			MOpcode::OpAdd        => { lhs_val + rhs_val },
@@ -155,11 +159,11 @@ impl<T: SSA + Clone> Analyzer<T> {
 			MOpcode::OpAnd        => { lhs_val & rhs_val },
 			MOpcode::OpOr         => { lhs_val | rhs_val },
 			MOpcode::OpXor        => { lhs_val ^ rhs_val },
-			MOpcode::OpCmp        => { (lhs_val == rhs_val) as i64 },
-			MOpcode::OpGt         => { (lhs_val > rhs_val) as i64 },
-			MOpcode::OpLt         => { (lhs_val < rhs_val) as i64 },
-			MOpcode::OpLteq       => { (lhs_val <= rhs_val) as i64 },
-			MOpcode::OpGteq       => { (lhs_val >= rhs_val) as i64 },
+			MOpcode::OpCmp        => { (lhs_val == rhs_val) as u64 },
+			MOpcode::OpGt         => { (lhs_val > rhs_val) as u64 },
+			MOpcode::OpLt         => { (lhs_val < rhs_val) as u64 },
+			MOpcode::OpLteq       => { (lhs_val <= rhs_val) as u64 },
+			MOpcode::OpGteq       => { (lhs_val >= rhs_val) as u64 },
 			MOpcode::OpLsl        => { lhs_val << rhs_val },
 			MOpcode::OpLsr        => { lhs_val >> rhs_val },
 			_ => unreachable!(),
@@ -178,8 +182,9 @@ impl<T: SSA + Clone> Analyzer<T> {
 
 		// Handle NodeData::Const as it is trivial.
 		if let NodeData::Const(val) = expr {
-			return ExprVal::Const(val as i64);
+			return ExprVal::Const(val as u64);
 		}
+
 
 		// After this point, it has to be NodeData::Op.
 		let opcode = if let NodeData::Op(_opcode, _) = expr {
@@ -188,13 +193,17 @@ impl<T: SSA + Clone> Analyzer<T> {
 			panic!("Found something other than an Operator or Constant");
 		};
 
+		if let MOpcode::OpConst(v) = opcode {
+			return ExprVal::Const(v as u64);
+		}
+
 		// Handle conditionals and jump statements separately.
 		match opcode {
 			MOpcode::OpJmp  |
-				MOpcode::OpCJmp |
-				MOpcode::OpCall => {
+			MOpcode::OpCJmp |
+			MOpcode::OpCall => {
 					return self.evaluate_control_flow(i, opcode);
-				}
+			}
 			_ => { },
 		}
 
@@ -207,12 +216,21 @@ impl<T: SSA + Clone> Analyzer<T> {
 
 	pub fn analyze(&mut self) {
 		// Initializations
-		self.cfg_worklist.push(self.g.start_node());
-		for block in self.g.get_blocks().iter() {
-			self.executable.insert(block.clone(), false);
-			for expr in self.g.get_exprs(block) {
-				self.expr_val.insert(expr.clone(), ExprVal::Top);
-			}
+		let start_node = self.g.start_node();
+
+		// XXX: Try doing this lazily. i.e. When we encounter a block,
+		// Add a new entry to executable and mark it as false.
+		//for block in self.g.get_blocks().iter() {
+			//self.executable.insert(block.clone(), false);
+			//for expr in self.g.get_exprs(block) {
+				//self.expr_val.insert(expr.clone(), ExprVal::Top);
+			//}
+		//}
+		
+		let succ = self.g.succs_of(start_node);
+		for next in succ.iter() {
+			self.mark_executable(next);
+			self.cfg_worklist.push(next.clone());
 		}
 
 		// Iterative worklist.
@@ -220,21 +238,21 @@ impl<T: SSA + Clone> Analyzer<T> {
 
 			while self.cfg_worklist.len() > 0 {
 				let block = self.cfg_worklist.pop().unwrap();
-				*(self.executable.get_mut(&block).unwrap()) = true;
+				self.mark_executable(&block);
 				let phis = self.g.get_phis(&block);
 				// Evaluate phis
 				for phi in phis.iter() {
 					// Visit the phi's and set their values.
 					let v = self.visit_phi(phi);
-					*(self.expr_val.get_mut(phi).unwrap()) = v;
+					self.set_value(phi, v);
 				}
 				// Iterate through all the expression in the block.
 				for expr in self.g.get_exprs(&block) {
 					let val = self.visit_expression(&expr);
-					*(self.expr_val.get_mut(&expr).unwrap()) = val;
+					self.set_value(&expr, val);
 					for _use in self.g.get_uses(&expr) {
 						let owner_block = self.g.get_block(&_use);
-						if *self.executable.get(&owner_block).unwrap() {
+						if self.is_executable(&owner_block) {
 							self.ssa_worklist.push(_use);
 						}
 					}
@@ -244,22 +262,53 @@ impl<T: SSA + Clone> Analyzer<T> {
 			while self.ssa_worklist.len() > 0 {
 				let e = self.ssa_worklist.pop().unwrap();
 				// self.get the operation/expression to which this operand belongs to.
-				let exprs = self.g.get_uses(&e);
-				for expr in exprs.iter() {
-					let t = self.visit_expression(&expr);
-					if t != *self.expr_val.get(expr).unwrap() {
-						*(self.expr_val.get_mut(expr).unwrap()) = t;
-						for _use in self.g.get_uses(expr).iter() {
-							let b = self.g.get_block(_use);
-							if *self.executable.get(&b).unwrap() {
-								self.ssa_worklist.push(_use.clone())
-							}
+				let t = self.visit_expression(&e);
+				if t !=  self.get_value(&e) {
+					self.set_value(&e, t);
+					for _use in self.g.get_uses(&e).iter() {
+						let b = self.g.get_block(_use);
+						if self.is_executable(&b) {
+							self.ssa_worklist.push(_use.clone())
 						}
 					}
 				}
+				//let exprs = self.g.get_uses(&e);
+				//for expr in exprs.iter() {
+					//let t = self.visit_expression(&expr);
+					//if t != *self.expr_val.get(expr).unwrap() {
+						//*(self.expr_val.get_mut(expr).unwrap()) = t;
+						//for _use in self.g.get_uses(expr).iter() {
+							//let b = self.g.get_block(_use);
+							//if *self.executable.get(&b).unwrap() {
+								//self.ssa_worklist.push(_use.clone())
+							//}
+						//}
+					//}
+				//}
 			}
 
 		}
+	}
+
+	///////////////////////////////////////////////////////////////////////////
+	//// Helper functions.
+	///////////////////////////////////////////////////////////////////////////
+	fn is_executable(&mut self, i: &T::ActionRef) -> bool {
+		*(self.executable.entry(*i).or_insert(false))
+	}
+
+	fn mark_executable(&mut self, i: &T::ActionRef) {
+		let n = self.executable.entry(*i).or_insert(false);
+		*n = true;
+	}
+
+	fn get_value(&mut self, i: &T::ValueRef) -> ExprVal {
+		*(self.expr_val.entry(*i).or_insert(ExprVal::Top))
+	}
+
+	fn set_value(&mut self, i: &T::ValueRef, v: ExprVal) {
+		let n = self.expr_val.entry(*i).or_insert(ExprVal::Top);
+		*n = v;
 	}
 }
 

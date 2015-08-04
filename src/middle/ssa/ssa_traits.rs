@@ -2,6 +2,7 @@
 
 use std::hash::Hash;
 use middle::ir;
+use std::fmt::Debug;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ValueType {
@@ -30,8 +31,8 @@ pub enum NodeData {
 // This trait ensures that any other ssa form will be compatible with our implementations provided
 // the SSA form implements the following traits.
 pub trait SSA {
-	type ValueRef: Eq + Hash + Clone + Copy; // We could drop the Copy trait later and insert .clone()
-	type ActionRef: Eq + Hash + Clone + Copy;
+	type ValueRef: Eq + Hash + Clone + Copy + Debug; // We could drop the Copy trait later and insert .clone()
+	type ActionRef: Eq + Hash + Clone + Copy + Debug;
 
 	/// Get NodeIndex of all BasicBlocks available in the SSA form.
 	fn get_blocks(&self) -> Vec<Self::ActionRef>;

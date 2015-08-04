@@ -16,6 +16,7 @@ use radeco::middle::ir::{MInst};
 use radeco::middle::cfg::CFG;
 use radeco::middle::dot;
 use radeco::middle::ssa::SSAStorage;
+use radeco::analysis::constant_propagation::constant;
 
 use std::io::prelude::*;
 use std::fs::{File, create_dir};
@@ -74,11 +75,11 @@ impl Pipeout {
 pub struct State<'a> {
 	r2: Option<R2>,
 	esil: Option<Vec<String>>,
-	reg_info: Option<LRegInfo>,
+	pub reg_info: Option<LRegInfo>,
 	p: Option<Parser<'a>>,
 	cfg: Option<CFG>,
 	ssa: Option<SSAStorage>,
-	pipeout: Option<Pipeout>,
+	pub pipeout: Option<Pipeout>,
 }
 
 impl<'a> State<'a> {
@@ -102,7 +103,7 @@ pub struct Test<'a> {
 	verbose: bool,
 	pipeline: Vec<Pipeline>,
 	results: Vec<Pipeout>,
-	state: State<'a>,
+	pub state: State<'a>,
 }
 
 impl<'a> Test<'a> {
@@ -207,6 +208,22 @@ impl<'a> Test<'a> {
 		}
 	}
 
+	fn analyze(&mut self, analysis: &Analysis) {
+		let pipein = self.state.pipeout.clone().unwrap();
+		let mut ssa = if let Pipeout::SSA { ssa } = pipein {
+			ssa
+		} else {
+			panic!("Incompatible type found in the pipeline!");
+		};
+		match *analysis {
+			Analysis::ConstProp => {
+				let mut analyzer = constant::Analyzer::new(&mut ssa);
+				analyzer.analyze();
+				analyzer.dump();
+			},
+		}
+	}
+
 	pub fn run(&mut self) {
 		let pipe_iter = self.pipeline.clone();
 		for stage in pipe_iter.iter() {
@@ -215,7 +232,7 @@ impl<'a> Test<'a> {
 				Pipeline::ParseEsil => self.parse_esil(),
 				Pipeline::CFG => self.construct_cfg(),
 				Pipeline::SSA => self.construct_ssa(),
-				Pipeline::AnalyzeSSA(_) => unimplemented!(),
+				Pipeline::AnalyzeSSA(ref a) => self.analyze(a),
 				Pipeline::CWriter => unimplemented!(),
 			}
 			self.results.push(self.state.pipeout.clone().unwrap());
