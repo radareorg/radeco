@@ -300,6 +300,10 @@ impl SSA for SSAStorage {
 	fn invalid_action(&self) -> NodeIndex { NodeIndex::end() }
 	fn to_value(&self, n: NodeIndex) -> NodeIndex { n }
 	fn to_action(&self, n: NodeIndex) -> NodeIndex { n }
+
+	fn node_count(&self) -> usize {
+		self.g.node_count()
+	}
 }
 
 impl SSAMod for SSAStorage {
@@ -377,6 +381,8 @@ impl SSAMod for SSAStorage {
 	}
 
 	fn replace(&mut self, mut node: NodeIndex, mut replacement: NodeIndex) {
+		assert!(self.get_block(&node) != NodeIndex::end());
+		assert!(self.get_block(&replacement) != NodeIndex::end());
 		node = self.refresh(node);
 		replacement = self.refresh(replacement);
 
@@ -400,14 +406,18 @@ impl SSAMod for SSAStorage {
 			}
 			remove_us.push(edge);
 		}
+		self.remove(node);
 		if self.stable_indexing {
-			self.g.add_node(NodeData::Removed);
-			self.g.remove_node(node);
 			self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
-			self.needs_cleaning = true;
-		} else {
-			self.g.remove_node(node);
 		}
+	}
+
+	fn remove(&mut self, node: NodeIndex) {
+		if self.stable_indexing {
+			self.needs_cleaning = true;
+			self.g.add_node(NodeData::Removed);
+		}
+		self.g.remove_node(node);
 	}
 
 	fn cleanup(&mut self) {

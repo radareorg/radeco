@@ -2,6 +2,7 @@
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
 use std::collections::HashMap;
+use petgraph::graph::NodeIndex;
 use frontend::structs::LRegInfo;
 use middle::cfg::NodeData as CFGNodeData;
 use middle::cfg::EdgeType as CFGEdgeType;
@@ -10,6 +11,7 @@ use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
 use middle::ir::{MVal, MInst, MOpcode, MValType};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
+use middle::dce;
 
 pub type VarId = usize;
 
@@ -19,7 +21,11 @@ pub struct SSAConstruction<'a, T: SSAMod<BBInfo=BBInfo> + 'a> {
 	pub temps:     HashMap<String, T::ValueRef>,
 }
 
-impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
+impl<'a, T: SSAMod<
+	BBInfo=BBInfo,
+	ValueRef=NodeIndex, // for dce::collect
+	ActionRef=NodeIndex // for dce::collect
+> + 'a> SSAConstruction<'a, T> {
 	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
 		let mut sc = SSAConstruction {
 			phiplacer: PhiPlacer::new(ssa),
@@ -79,10 +85,13 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 				blocks[edge.target().index()],
 				i);
 		}
-		for block in blocks {
+		for &block in &blocks {
 			self.phiplacer.seal_block(block);
 		}
 		//self.phiplacer.ssa.stable_indexing = false;
+		self.phiplacer.ssa.cleanup();
+		let exit_regstate = self.phiplacer.ssa.registers_at(blocks[cfg.exit.index()]);
+		dce::collect(self.phiplacer.ssa, &[exit_regstate]);
 		self.phiplacer.ssa.cleanup();
 	}
 
@@ -101,13 +110,14 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> SSAConstruction<'a, T> {
 			MValType::Internal  => self.process_in_flag(block, mval),
 			MValType::EsilCur   => self.phiplacer.read_variable(block, 0),
 			MValType::EsilOld   => self.phiplacer.read_variable(block, 1),
-			MValType::Unknown   => self.phiplacer.ssa.invalid_value(), //self.phiplacer.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
+			MValType::Unknown   => self.phiplacer.ssa.invalid_value(),
+			                       //self.phiplacer.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
 			MValType::Null      => self.phiplacer.ssa.invalid_value(),
 		}
 	}
 
 	fn process_out(&mut self, block: T::ActionRef, mval: &MVal, value: T::ValueRef) {
-		match mval.val_type {
+		match mval.val_type { 
 			MValType::Register  => self.regfile.write_register(&mut self.phiplacer, 2, block, &mval.name, value),
 			MValType::Temporary => {self.temps.insert(mval.name.clone(), value);},
 			MValType::Null      => {},

@@ -124,6 +124,8 @@ pub trait SSA {
 
 	fn to_value(&self, Self::ActionRef) -> Self::ValueRef;
 	fn to_action(&self, Self::ValueRef) -> Self::ActionRef;
+
+	fn node_count(&self) -> usize;
 }
 
 /// Trait for modifying SSA data
@@ -166,6 +168,9 @@ pub trait SSAMod: SSA {
 
 	/// Replace one node by another within one basic block.
 	fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
+
+	/// Remove a node without replacement
+	fn remove(&mut self, node: Self::ValueRef);
 
 	/// Perform a cleanup. (Will invalidate indices)
 	fn cleanup(&mut self);
