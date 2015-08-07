@@ -236,8 +236,7 @@ impl<'a> Test<'a> {
 		};
 
 		{
-			let mut dce = dce::DCE::new(&mut ssa);
-			dce.collect();
+			dce::collect(&mut ssa);
 		}
 
 		self.set_pipeout(&Pipeout::SSA { ssa: ssa.clone() });

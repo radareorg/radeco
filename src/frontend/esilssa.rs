@@ -92,8 +92,7 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 		//self.phiplacer.ssa.cleanup();
 
 		{
-			let mut dce = dce::DCE::new(self.phiplacer.ssa);
-			dce.collect();
+			dce::collect(self.phiplacer.ssa);
 		}
 		//dce::collect(self.phiplacer.ssa, &[exit_regstate]);
 		//self.phiplacer.ssa.cleanup();
