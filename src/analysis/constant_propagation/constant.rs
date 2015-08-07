@@ -6,7 +6,7 @@
 //!
 
 use std::collections::{HashMap};
-use ::middle::ssa::{SSA, NodeData};
+use ::middle::ssa::{SSA, SSAMod, NodeData};
 use ::middle::ir::{MOpcode, MArity};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -41,7 +41,7 @@ fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
 	return *v1;
 }
 
-pub struct Analyzer<T: SSA + Clone> {
+pub struct Analyzer<T: SSAMod + SSA + Clone> {
 	ssa_worklist: Vec<T::ValueRef>,
 	cfg_worklist: Vec<T::ActionRef>,
 	executable: HashMap<T::ActionRef, bool>,
@@ -49,7 +49,7 @@ pub struct Analyzer<T: SSA + Clone> {
 	g: T,
 }
 
-impl<T: SSA + Clone> Analyzer<T> {
+impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	pub fn new(g: &mut T) -> Analyzer<T> {
 		Analyzer {
 			ssa_worklist: Vec::new(),
@@ -66,60 +66,42 @@ impl<T: SSA + Clone> Analyzer<T> {
 		}
 	}
 
-	pub fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
+	fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
 		let operands = self.g.get_operands(i);
 		let mut phi_val = self.get_value(i);
-		for o in operands.iter() {
-			let b = self.g.get_block(&o);
+		for op in operands.iter() {
+			let b = self.g.get_block(&op);
 			if !self.is_executable(&b) { continue; }
-			let val = self.get_value(&o);
+			let val = self.get_value(&op);
 			phi_val = meet(&phi_val, &val);
 		}
 		return phi_val;
 	}
 
-	pub fn evaluate_control_flow(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
-		match opcode {
-			MOpcode::OpJmp |
-			MOpcode::OpCall => {
-				// TODO: Experimental.
-				let target = self.g.get_target(i);
-				self.cfg_worklist.push(target);
+	fn evaluate_control_flow(&mut self, i: &T::ValueRef) {
+		let operands = self.g.get_operands(i);
+		let cond_val = self.get_value(&operands[0]);
+		let true_branch = self.g.get_true_branch(i);
+		let false_branch = self.g.get_false_branch(i);
+		match cond_val {
+			ExprVal::Bottom => {
+				self.cfg_worklist.push(true_branch);
+				self.cfg_worklist.push(false_branch);
 			},
-			MOpcode::OpCJmp => {
-				let operands = self.g.get_operands(i);
-				let cond = operands[0].clone();
-				let cond_val = self.get_value(&cond);
-				//let target = operands[1];
-				//let target_val = self.expr_val.get(&target).unwrap();
-				let true_branch = self.g.get_true_branch(i);
-				let false_branch = self.g.get_false_branch(i);
-
-				match cond_val {
-					ExprVal::Bottom => {
-						self.cfg_worklist.push(true_branch);
-						self.cfg_worklist.push(false_branch);
-					},
-					ExprVal::Top => {
-						// TODO: Not really sure what to do here.
-						return ExprVal::Top;
-					},
-					ExprVal::Const(cval) => {
-						if cval == 0 {
-							self.cfg_worklist.push(true_branch);
-						} else {
-							self.cfg_worklist.push(false_branch);
-						}
-					},
+			ExprVal::Top => {
+				// TODO: Not really sure what to do here.
+			},
+			ExprVal::Const(cval) => {
+				if cval == 0 {
+					self.cfg_worklist.push(true_branch);
+				} else {
+					self.cfg_worklist.push(false_branch);
 				}
 			},
-			_ => unreachable!()
 		}
-
-		return ExprVal::Top;
 	}
 
-	pub fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
+	fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
 		let operand = self.g.get_operands(i)[0].clone();
 		let val = self.get_value(&operand);
 		let const_val = if let ExprVal::Const(cval)  = val { cval } else { return val; };
@@ -138,7 +120,7 @@ impl<T: SSA + Clone> Analyzer<T> {
 		ExprVal::Const(_val)
 	}
 
-	pub fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
+	fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
 		let operands = self.g.get_operands(i)
 		                     .iter()
 		                     .map(|x| self.get_value(x))
@@ -176,7 +158,14 @@ impl<T: SSA + Clone> Analyzer<T> {
 	//  * Evaluate the expression actually if all it's operands are constants.
 	//  * If the expression is a branch, then add the appropriate edges to the cfg_worklist.
 	//  * If the expression is a jump, then place the target edge on the cfg_worklist.
-	pub fn visit_expression(&mut self, i: &T::ValueRef) -> ExprVal {
+	fn visit_expression(&mut self, i: &T::ValueRef) -> ExprVal {
+		// TODO:
+		//  To adapt to the new changes, the following changes are to be made in the sccp.
+		//  1. Control flow statements/expressions no longer come in visit_expressions as they are
+		//     not enlisted in the Vec returned by get_exprs.
+		//  2. If an expression is part of a control flow modifier, then it is a 'Selector'.
+		//  3. There is no such things as NodeData::Const (Need to look into).
+
 		// Get the actual node corresponding to the NodeIndex.
 		let expr = self.g.get_node_data(i);
 
@@ -184,7 +173,6 @@ impl<T: SSA + Clone> Analyzer<T> {
 		if let NodeData::Const(val) = expr {
 			return ExprVal::Const(val as u64);
 		}
-
 
 		// After this point, it has to be NodeData::Op.
 		let opcode = if let NodeData::Op(_opcode, _) = expr {
@@ -198,67 +186,65 @@ impl<T: SSA + Clone> Analyzer<T> {
 		}
 
 		// Handle conditionals and jump statements separately.
-		match opcode {
-			MOpcode::OpJmp  |
-			MOpcode::OpCJmp |
-			MOpcode::OpCall => {
-					return self.evaluate_control_flow(i, opcode);
-			}
-			_ => { },
-		}
+		//match opcode {
+			//MOpcode::OpJmp  |
+			//MOpcode::OpCJmp |
+			//MOpcode::OpCall => {
+					//return self.evaluate_control_flow(i, opcode);
+			//}
+			//_ => { },
+		//}
 
-		match opcode.arity() {
+		let val = match opcode.arity() {
 			MArity::Unary => self.evaluate_unary_op(i, opcode),
 			MArity::Binary => self.evaluate_binary_op(i, opcode),
 			_ => unimplemented!(),
+		};
+
+		// Check if the expression is a `Selector`.
+		if self.g.is_selector(i) {
+			self.evaluate_control_flow(i);
 		}
+
+		return val;
 	}
 
 	pub fn analyze(&mut self) {
-		// Initializations
-		let start_node = self.g.start_node();
-
-		// XXX: Try doing this lazily. i.e. When we encounter a block,
-		// Add a new entry to executable and mark it as false.
-		//for block in self.g.get_blocks().iter() {
-			//self.executable.insert(block.clone(), false);
-			//for expr in self.g.get_exprs(block) {
-				//self.expr_val.insert(expr.clone(), ExprVal::Top);
-			//}
-		//}
 		
-		let succ = self.g.succs_of(start_node);
-		for next in succ.iter() {
-			self.mark_executable(next);
-			self.cfg_worklist.push(next.clone());
+		{
+			// Initializations
+			let start_node = self.g.start_node();
+			let succ = self.g.succs_of(start_node);
+			for next in succ.iter() {
+				self.mark_executable(next);
+				self.cfgwl_push(next);
+			}
 		}
 
-		// Iterative worklist.
 		while self.ssa_worklist.len() > 0 || self.cfg_worklist.len() > 0 {
-
 			while self.cfg_worklist.len() > 0 {
 				let block = self.cfg_worklist.pop().unwrap();
 				self.mark_executable(&block);
 				let phis = self.g.get_phis(&block);
-				// Evaluate phis
 				for phi in phis.iter() {
-					// Visit the phi's and set their values.
 					let v = self.visit_phi(phi);
 					self.set_value(phi, v);
 				}
-				// Iterate through all the expression in the block.
+
+				let succs = self.g.get_unconditional(&block);
+				if succs != self.g.invalid_action() {
+					self.cfgwl_push(&succs);
+					self.mark_executable(&succs);
+				}
+
 				for expr in self.g.get_exprs(&block) {
 					let val = self.visit_expression(&expr);
 					self.set_value(&expr, val);
 					for _use in self.g.get_uses(&expr) {
-						let owner_block = self.g.get_block(&_use);
-						if self.is_executable(&owner_block) {
-							self.ssa_worklist.push(_use);
-						}
+						self.ssawl_push(&_use);
 					}
 				}
 			}
-
 			while self.ssa_worklist.len() > 0 {
 				let e = self.ssa_worklist.pop().unwrap();
 				// self.get the operation/expression to which this operand belongs to.
@@ -266,28 +252,22 @@ impl<T: SSA + Clone> Analyzer<T> {
 				if t !=  self.get_value(&e) {
 					self.set_value(&e, t);
 					for _use in self.g.get_uses(&e).iter() {
-						let b = self.g.get_block(_use);
-						if self.is_executable(&b) {
-							self.ssa_worklist.push(_use.clone())
-						}
+						self.ssawl_push(_use);
 					}
 				}
-				//let exprs = self.g.get_uses(&e);
-				//for expr in exprs.iter() {
-					//let t = self.visit_expression(&expr);
-					//if t != *self.expr_val.get(expr).unwrap() {
-						//*(self.expr_val.get_mut(expr).unwrap()) = t;
-						//for _use in self.g.get_uses(expr).iter() {
-							//let b = self.g.get_block(_use);
-							//if *self.executable.get(&b).unwrap() {
-								//self.ssa_worklist.push(_use.clone())
-							//}
-						//}
-					//}
-				//}
 			}
-
 		}
+	}
+
+	pub fn emit_ssa(&mut self) -> T {
+		for (k, v) in self.expr_val.iter() {
+			if let ExprVal::Const(val) = *v {
+				let block = self.g.block_of(k);
+				let newnode = self.g.add_const(block, val);
+				self.g.replace(*k, newnode);
+			}
+		}
+		self.g.clone()
 	}
 
 	///////////////////////////////////////////////////////////////////////////
@@ -309,6 +289,17 @@ impl<T: SSA + Clone> Analyzer<T> {
 	fn set_value(&mut self, i: &T::ValueRef, v: ExprVal) {
 		let n = self.expr_val.entry(*i).or_insert(ExprVal::Top);
 		*n = v;
+	}
+
+	fn ssawl_push(&mut self, i: &T::ValueRef) {
+		let owner_block = self.g.get_block(&i);
+		if self.is_executable(&owner_block) {
+			self.ssa_worklist.push(*i);
+		}
+	}
+
+	fn cfgwl_push(&mut self, i: &T::ActionRef) {
+		self.cfg_worklist.push(*i);
 	}
 }
 

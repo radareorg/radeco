@@ -41,6 +41,9 @@ pub trait SSA {
 	/// Start node of the CFG.
 	fn start_node(&self) -> Self::ActionRef;
 
+	/// Exit node of the CFG.
+	fn exit_node(&self) -> Self::ActionRef;
+
 	/// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
 	fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
@@ -81,6 +84,9 @@ pub trait SSA {
 		}
 	}
 
+	/// Returns true if the expression acts as a `Selector` for control flow.
+	fn is_selector(&self, i:&Self::ValueRef) -> bool;
+
 	// NOTE:
 	// These three functions will change their signatures
 	// when we remove "jmp" from the list of ops
@@ -93,6 +99,9 @@ pub trait SSA {
 
 	/// Get false branch of a conditional jump.
 	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+
+	/// Get false branch of a conditional jump.
+	fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef;
 
 	/// Gets the data dependencies of a value node in any order.
 	/// (See get_operands for ordered return value)
@@ -135,6 +144,9 @@ pub trait SSAMod: SSA {
 
 	/// Mark the start node for the SSA graph.
 	fn mark_start_node(&mut self, start: &Self::ActionRef);
+	
+	/// Mark the exit node for the SSA graph.
+	fn mark_exit_node(&mut self, exit: &Self::ActionRef);
 
 	/// Add a new operation node.
 	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType) -> Self::ValueRef;

@@ -21,7 +21,11 @@ fn test1() {
 #[test]
 fn test_analysis() {
 	let esil = vec!["4,5,+".to_string(), "6,*".to_string(),
-	"100,>".to_string()];
+	                "100,>,zf,=".to_string(),
+					"5,rax,=".to_string(),
+					"6,rbx,=".to_string(),
+					"7,rbx,=".to_string()
+	               ];
 	let test_name = "test2".to_string();
     
 	// Get a new r2 instance.
@@ -30,9 +34,13 @@ fn test_analysis() {
     r2.init();
     let r = r2.get_reg_info().unwrap();
 
-	let pipeline = vec![Pipeline::ParseEsil, Pipeline::CFG,
-	                    Pipeline::SSA,
-	                    Pipeline::AnalyzeSSA(Analysis::ConstProp)];
+	let pipeline = vec![
+		Pipeline::ParseEsil,
+		Pipeline::CFG,
+		Pipeline::SSA,
+		Pipeline::AnalyzeSSA(Analysis::ConstProp),
+		Pipeline::DCE
+	];
 
 	let mut test = Test::new(test_name, None, None, true, pipeline);
 	test.state.pipeout = Some(Pipeout::Esil(esil));

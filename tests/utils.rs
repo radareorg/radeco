@@ -15,20 +15,20 @@ use radeco::frontend::esilssa::SSAConstruction;
 use radeco::middle::ir::{MInst};
 use radeco::middle::cfg::CFG;
 use radeco::middle::dot;
+use radeco::middle::dce;
 use radeco::middle::ssa::SSAStorage;
 use radeco::analysis::constant_propagation::constant;
 
 use std::io::prelude::*;
-use std::fs::{File, create_dir};
+use std::fs;
+use std::fs::{File};
+use std::path::{PathBuf};
 
 macro_rules! out {
 	($str: expr, $m: expr) => { if $m { println!($str) } }
 }
 
-fn write_file(fname: &str, res: String) {
-	let mut file = File::create(fname).ok().expect("Error. Cannot create file!\n");
-	file.write_all(res.as_bytes()).ok().expect("Error. Cannot write file!\n");
-}
+
 
 #[derive(Clone, Copy, Debug)]
 pub enum Analysis {
@@ -42,6 +42,7 @@ pub enum Pipeline {
 	CFG,
 	SSA,
 	AnalyzeSSA(Analysis),
+	DCE,
 	CWriter,
 }
 
@@ -61,7 +62,7 @@ impl Pipeout {
 		let s = match *self {
 			Pipeout::Esil(_) => "esil",
 			Pipeout::LOpInfo(_) => "esil",
-			Pipeout::Instructions {i: _} => "radecoIR",
+			Pipeout::Instructions {i: _} => "ir",
 			Pipeout::CFG {cfg: _} => "cfg",
 			Pipeout::SSA {ssa: _} => "ssa",
 		};
@@ -215,13 +216,31 @@ impl<'a> Test<'a> {
 		} else {
 			panic!("Incompatible type found in the pipeline!");
 		};
-		match *analysis {
+		let ssa = match *analysis {
 			Analysis::ConstProp => {
 				let mut analyzer = constant::Analyzer::new(&mut ssa);
 				analyzer.analyze();
-				analyzer.dump();
+				analyzer.emit_ssa()
 			},
+		};
+
+		self.set_pipeout(&Pipeout::SSA { ssa: ssa.clone() });
+	}
+
+	fn dce(&mut self) {
+		let pipein = self.state.pipeout.clone().unwrap();
+		let mut ssa = if let Pipeout::SSA { ssa } = pipein {
+			ssa
+		} else {
+			panic!("Incompatible type found in the pipeline!");
+		};
+
+		{
+			let mut dce = dce::DCE::new(&mut ssa);
+			dce.collect();
 		}
+
+		self.set_pipeout(&Pipeout::SSA { ssa: ssa.clone() });
 	}
 
 	pub fn run(&mut self) {
@@ -233,13 +252,20 @@ impl<'a> Test<'a> {
 				Pipeline::CFG => self.construct_cfg(),
 				Pipeline::SSA => self.construct_ssa(),
 				Pipeline::AnalyzeSSA(ref a) => self.analyze(a),
+				Pipeline::DCE => self.dce(),
 				Pipeline::CWriter => unimplemented!(),
 			}
 			self.results.push(self.state.pipeout.clone().unwrap());
 		}
 	}
 
+	fn write_file(&self, fname: PathBuf, res: String) {
+		let mut file = File::create(fname).ok().expect("Error. Cannot create file!\n");
+		file.write_all(res.as_bytes()).ok().expect("Error. Cannot write file!\n");
+	}
+
 	pub fn dump(&self) {
+		let mut phase_num = 1;
 		for res in self.results.iter() {
 			let mut write_out = String::new();
 			let mut ext;
@@ -276,11 +302,19 @@ impl<'a> Test<'a> {
 					write_out.push_str(&*tmp);
 				},
 			}
-			let dir = format!("outputs/{}/", self.name);
-			create_dir("outputs").ok();
-			create_dir(&*dir).ok();
-			let fname = format!("{}{}_{}.{}", dir, self.name, res.to_string(), ext);
-			write_file(&*fname, write_out);
+
+			// Format of output file name:
+			// test_name-type-phase_num.ext
+
+			let mut p = PathBuf::from("./outputs/");
+			p.push(self.name.clone());
+			let pstr = format!("{}-res_{}-phase{}", self.name, res.to_string(), phase_num.to_string());
+			fs::create_dir_all(&p).ok();
+			p.push(pstr);
+			p.set_extension(ext);
+			self.write_file(p, write_out);
+
+			phase_num += 1;
 		}
 	}
 }

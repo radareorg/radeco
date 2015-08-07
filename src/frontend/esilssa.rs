@@ -59,6 +59,7 @@ impl<'a, T: SSAMod<
 			blocks[cfg.entry.index()] = block;
 
 			let block = self.phiplacer.add_block(BBInfo { addr: 0 });
+			self.phiplacer.ssa.mark_exit_node(&block);
 			blocks[cfg.exit.index()] = block;
 			self.phiplacer.sync_register_state(block);
 		}
@@ -91,8 +92,8 @@ impl<'a, T: SSAMod<
 		//self.phiplacer.ssa.stable_indexing = false;
 		self.phiplacer.ssa.cleanup();
 		let exit_regstate = self.phiplacer.ssa.registers_at(blocks[cfg.exit.index()]);
-		dce::collect(self.phiplacer.ssa, &[exit_regstate]);
-		self.phiplacer.ssa.cleanup();
+		//dce::collect(self.phiplacer.ssa, &[exit_regstate]);
+		//self.phiplacer.ssa.cleanup();
 	}
 
 	fn process_in_flag(&mut self, block: T::ActionRef, _mval: &MVal) -> T::ValueRef {

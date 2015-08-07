@@ -21,6 +21,7 @@ const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
 pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>,
 	pub start_node: NodeIndex,
+	pub exit_node: NodeIndex,
 	pub stable_indexing: bool,
 	needs_cleaning: bool,
 }
@@ -32,6 +33,7 @@ impl SSAStorage {
 			needs_cleaning: false,
 			stable_indexing: true,
 			start_node: NodeIndex::end(),
+			exit_node: NodeIndex::end(),
 		}
 	}
 
@@ -136,6 +138,11 @@ impl SSA for SSAStorage {
 		self.start_node
 	}
 
+	fn exit_node(&self) -> NodeIndex {
+		assert!(self.exit_node != NodeIndex::end());
+		self.exit_node
+	}
+
 	fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex> {
 		let mut expressions = Vec::<NodeIndex>::new();
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
@@ -238,6 +245,16 @@ impl SSA for SSAStorage {
 	fn get_node_data(&self, i: &NodeIndex) -> NodeData {
 		self.g[*i].clone()
 	}
+	
+	fn is_selector(&self, i:&Self::ValueRef) -> bool {
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
+		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Selector = self.g[edge] {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	fn get_target(&self, i: &NodeIndex) -> NodeIndex {
 		let cur_block = self.get_block(i);
@@ -266,6 +283,17 @@ impl SSA for SSAStorage {
 		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Control(0) = self.g[edge] {
+				return othernode;
+			}
+		}
+		return NodeIndex::end()
+	}
+
+	fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef {
+		let cur_block = self.get_block(i);
+		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(2) = self.g[edge] {
 				return othernode;
 			}
 		}
@@ -312,6 +340,10 @@ impl SSAMod for SSAStorage {
 
 	fn mark_start_node(&mut self, start: &Self::ActionRef) {
 		self.start_node = *start;
+	}
+
+	fn mark_exit_node(&mut self, exit: &Self::ActionRef) {
+		self.exit_node = *exit;
 	}
 
 	fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode, vt: ValueType) -> NodeIndex {
