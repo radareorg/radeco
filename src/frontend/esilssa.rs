@@ -15,17 +15,16 @@ use middle::dce;
 
 pub type VarId = usize;
 
-pub struct SSAConstruction<'a, T: SSAMod<BBInfo=BBInfo> + 'a> {
+pub struct SSAConstruction<'a, T> 
+where T: Clone + SSAMod<BBInfo=BBInfo> + 'a {
 	pub phiplacer: PhiPlacer<'a, T>,
 	pub regfile:   SubRegisterFile,
 	pub temps:     HashMap<String, T::ValueRef>,
 }
 
-impl<'a, T: SSAMod<
-	BBInfo=BBInfo,
-	ValueRef=NodeIndex, // for dce::collect
-	ActionRef=NodeIndex // for dce::collect
-> + 'a> SSAConstruction<'a, T> {
+impl<'a, T> SSAConstruction<'a, T> 
+where T: 'a + Clone +
+SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
 		let mut sc = SSAConstruction {
 			phiplacer: PhiPlacer::new(ssa),
@@ -90,8 +89,12 @@ impl<'a, T: SSAMod<
 			self.phiplacer.seal_block(block);
 		}
 		//self.phiplacer.ssa.stable_indexing = false;
-		self.phiplacer.ssa.cleanup();
-		let exit_regstate = self.phiplacer.ssa.registers_at(blocks[cfg.exit.index()]);
+		//self.phiplacer.ssa.cleanup();
+
+		{
+			let mut dce = dce::DCE::new(self.phiplacer.ssa);
+			dce.collect();
+		}
 		//dce::collect(self.phiplacer.ssa, &[exit_regstate]);
 		//self.phiplacer.ssa.cleanup();
 	}

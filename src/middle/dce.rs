@@ -7,7 +7,7 @@ pub struct DCE<'a, T: 'a + SSA + SSAMod<ValueRef=NodeIndex, ActionRef=NodeIndex>
 	roots: T::ValueRef,
 }
 
-impl<'a, T> DCE<'a, T> 
+impl<'a, T> DCE<'a, T>
 where T: SSA +
 SSAMod<ValueRef=NodeIndex, ActionRef=NodeIndex> +
 Clone {
