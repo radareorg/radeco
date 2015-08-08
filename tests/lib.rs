@@ -48,3 +48,22 @@ fn test_analysis() {
 	test.run();
 	test.dump();
 }
+
+#[test]
+fn test_analysis2() {
+	let test_name = "test_analysis".to_string();
+	let bin_name = Some("./ex-bins/constprop.o".to_string());
+	let addr = Some("section..text".to_string());
+	let pipeline = vec![
+		Pipeline::ReadFromR2,
+		Pipeline::ParseEsil,
+		Pipeline::CFG,
+		Pipeline::SSA,
+		Pipeline::DCE,
+		Pipeline::AnalyzeSSA(Analysis::ConstProp),
+		Pipeline::DCE
+	];
+	let mut test = Test::new(test_name, bin_name, addr, true, pipeline);
+	test.run();
+	test.dump();
+}

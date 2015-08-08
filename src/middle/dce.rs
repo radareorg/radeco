@@ -38,4 +38,3 @@ pub fn collect<'a, T>(ssa: &mut T) where T:
 	ssa.cleanup();
 }
 
-

@@ -78,15 +78,9 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
 			ec.1 = i;
 		}
 
-		//result.push_str(&*format!("subgraph cluster_A {{\n{{style=invis;\n"));
-		//for (&cid, &(_, _)) in clustermap.iter() {
-		//    result.push_str(&*add_strings!("n", format!("{}", cid)));
-		//    result.push_str(";\n");
-		//}
-		//result.push_str(&*format!("}}\n"));
-
 		for (&cid, &(first, last)) in clustermap.iter() {
 			result.push_str(&*format!("subgraph cluster_{} {{\n", cid));
+			result.push_str(&*format!("rankdir=TB;\n"));
 			let mut i = last;
 			loop {
 				result.push_str(&*add_strings!("n", i));
@@ -97,9 +91,6 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
 			}
 			result.push_str("}\n");
 		}
-
-		//result.push_str("color = invis;\n");
-		//result.push_str("}\n");
 	}
 
 	// Connect nodes by edges.

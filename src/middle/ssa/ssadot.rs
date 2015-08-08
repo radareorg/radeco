@@ -12,7 +12,7 @@ impl GraphDot for SSAStorage {
 	type EdgeType = Edge<EdgeData>;
 
 	fn configure(&self) -> String {
-		format!("digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" compound=true];\nrankdit=TB;\n")
+		format!("digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" compound=true];\nrankdir=TB;\n")
 	}
 
 	fn nodes(&self) -> Vec<Self::NodeType> {

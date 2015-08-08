@@ -102,12 +102,25 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	}
 
 	fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
-		let operand = self.g.get_operands(i)[0].clone();
+		let operand = self.g.get_operands(i);
+		let operand = if operand.len() > 0 {
+			operand[0]
+		} else {
+			// TODO: panic! or return correct error.
+			//panic!("Unary operation has less than one operand!\n");
+			return ExprVal::Top;
+		};
+
 		let val = self.get_value(&operand);
 		let const_val = if let ExprVal::Const(cval)  = val { cval } else { return val; };
 		let _val = match opcode {
-			MOpcode::OpNarrow(size) |
-			MOpcode::OpWiden(size) => { 
+			MOpcode::OpWiden(_) => { 
+				// Nothing to do in case of widen as the value cannot change.
+				const_val
+			},
+			MOpcode::OpNarrow(size) => {
+				//Max size is 64. Therefore, we can _never_ narrow to 64.
+				assert!(size < 64);
 				let mask = (2 << (size + 1)) - 1;
 				const_val & mask
 			},
@@ -134,7 +147,13 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
 		let _val = match opcode {
 			MOpcode::OpAdd        => { lhs_val + rhs_val },
-			MOpcode::OpSub        => { lhs_val - rhs_val },
+			MOpcode::OpSub        => { 
+				if lhs_val > rhs_val {
+					lhs_val - rhs_val
+				} else {
+					rhs_val - lhs_val
+				}
+			},
 			MOpcode::OpMul        => { lhs_val * rhs_val },
 			MOpcode::OpDiv        => { lhs_val / rhs_val },
 			MOpcode::OpMod        => { lhs_val % rhs_val },
@@ -154,22 +173,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		ExprVal::Const(_val)
 	}
 
-	// TODO:
-	//  * Evaluate the expression actually if all it's operands are constants.
-	//  * If the expression is a branch, then add the appropriate edges to the cfg_worklist.
-	//  * If the expression is a jump, then place the target edge on the cfg_worklist.
 	fn visit_expression(&mut self, i: &T::ValueRef) -> ExprVal {
-		// TODO:
-		//  To adapt to the new changes, the following changes are to be made in the sccp.
-		//  1. Control flow statements/expressions no longer come in visit_expressions as they are
-		//     not enlisted in the Vec returned by get_exprs.
-		//  2. If an expression is part of a control flow modifier, then it is a 'Selector'.
-		//  3. There is no such things as NodeData::Const (Need to look into).
-
-		// Get the actual node corresponding to the NodeIndex.
 		let expr = self.g.get_node_data(i);
-
-		// Handle NodeData::Const as it is trivial.
 		if let NodeData::Const(val) = expr {
 			return ExprVal::Const(val as u64);
 		}
@@ -185,23 +190,14 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 			return ExprVal::Const(v as u64);
 		}
 
-		// Handle conditionals and jump statements separately.
-		//match opcode {
-			//MOpcode::OpJmp  |
-			//MOpcode::OpCJmp |
-			//MOpcode::OpCall => {
-					//return self.evaluate_control_flow(i, opcode);
-			//}
-			//_ => { },
-		//}
-
 		let val = match opcode.arity() {
 			MArity::Unary => self.evaluate_unary_op(i, opcode),
 			MArity::Binary => self.evaluate_binary_op(i, opcode),
 			_ => unimplemented!(),
 		};
 
-		// Check if the expression is a `Selector`.
+		// If expression is a `Selector` it means that it's value can affect the control flow.
+		// Hence evaluate the control flow to add edges to the cfgwl.
 		if self.g.is_selector(i) {
 			self.evaluate_control_flow(i);
 		}
@@ -265,12 +261,22 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 				self.g.replace(*k, newnode);
 			}
 		}
+
+		let blocks = self.g.get_blocks();
+
+		for block in blocks.iter() {
+			if !self.is_executable(block) {
+				self.g.remove_block(*block);
+			}
+		}
+
 		self.g.clone()
 	}
 
 	///////////////////////////////////////////////////////////////////////////
 	//// Helper functions.
 	///////////////////////////////////////////////////////////////////////////
+
 	fn is_executable(&mut self, i: &T::ActionRef) -> bool {
 		*(self.executable.entry(*i).or_insert(false))
 	}

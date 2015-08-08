@@ -210,6 +210,7 @@ impl<'a> Test<'a> {
 	}
 
 	fn analyze(&mut self, analysis: &Analysis) {
+		out!("[*] Starting Analysis", self.verbose);
 		let pipein = self.state.pipeout.clone().unwrap();
 		let mut ssa = if let Pipeout::SSA { ssa } = pipein {
 			ssa
@@ -228,6 +229,7 @@ impl<'a> Test<'a> {
 	}
 
 	fn dce(&mut self) {
+		out!("[*] Running DCE", self.verbose);
 		let pipein = self.state.pipeout.clone().unwrap();
 		let mut ssa = if let Pipeout::SSA { ssa } = pipein {
 			ssa
