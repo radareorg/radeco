@@ -190,6 +190,27 @@ impl CFGMod for SSAStorage {
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
 		self.g.add_edge(source, target, EdgeData::Control(index));
 	}
+
+	fn remove_block(&mut self, node: Self::ActionRef) {
+		let outer_stable_indexing = self.stable_indexing;
+		self.stable_indexing = true;
+		{
+			let regstate = self.registers_at(node);
+			self.remove(regstate);
+
+			let mut expressions = Vec::<NodeIndex>::new();
+			let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
+			while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+				if let EdgeData::ContainedInBB = self.g[edge] {
+					expressions.push(othernode);
+				}
+			}
+			for expr in expressions {
+				self.remove(expr);
+			}
+		}
+		self.stable_indexing = outer_stable_indexing;
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////

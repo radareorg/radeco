@@ -39,4 +39,7 @@ pub trait CFGMod: CFG {
 
 	/// Add a control edge between to basic blocks.
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
+
+	/// Will remove a node and all its associated data from the graph
+	fn remove_block(&mut self, node: Self::ActionRef);
 }
