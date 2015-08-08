@@ -5,6 +5,7 @@ use middle::ir;
 use super::ssa_traits;
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::{SSA, SSAMod, ValueType};
+use super::cfg_traits::{CFG, CFGMod};
 
 #[derive(Clone, Debug)]
 pub enum NodeData {
@@ -125,13 +126,7 @@ impl SSAStorage {
 	}
 }
 
-
-///////////////////////////////////////////////////////////////////////////////
-//// Implementation of SSA for SSAStorage.
-///////////////////////////////////////////////////////////////////////////////
-
-impl SSA for SSAStorage {
-	type ValueRef = NodeIndex;
+impl CFG for SSAStorage {
 	type ActionRef = NodeIndex;
 
 	fn get_blocks(&self) -> Vec<NodeIndex> {
@@ -155,6 +150,60 @@ impl SSA for SSAStorage {
 		assert!(self.exit_node != NodeIndex::end());
 		self.exit_node
 	}
+
+	fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef {
+		let cur_block = self.get_block(i);
+		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(2) = self.g[edge] {
+				return othernode;
+			}
+		}
+		return NodeIndex::end()
+	}
+
+	fn preds_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
+		self.gather_adjacent(node, EdgeDirection::Incoming, false)
+	}
+
+	fn succs_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
+		self.gather_adjacent(node, EdgeDirection::Outgoing, false)
+	}
+
+	fn invalid_action(&self) -> NodeIndex { NodeIndex::end() }
+}
+
+impl CFGMod for SSAStorage {
+
+	type BBInfo = ssa_traits::BBInfo;
+
+	fn mark_start_node(&mut self, start: &Self::ActionRef) {
+		self.start_node = *start;
+	}
+
+	fn mark_exit_node(&mut self, exit: &Self::ActionRef) {
+		self.exit_node = *exit;
+	}
+
+	fn add_block(&mut self, info: Self::BBInfo) -> NodeIndex {
+		let bb = self.g.add_node(NodeData::BasicBlock(info));
+		let rs = self.g.add_node(NodeData::RegisterState);
+		self.g.add_edge(bb, rs, EdgeData::RegisterState);
+		self.g.add_edge(rs, bb, CONTEDGE);
+		bb
+	}
+
+	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
+		self.g.add_edge(source, target, EdgeData::Control(index));
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of SSA for SSAStorage.
+///////////////////////////////////////////////////////////////////////////////
+
+impl SSA for SSAStorage {
+	type ValueRef = NodeIndex;
 
 	fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex> {
 		let mut expressions = Vec::<NodeIndex>::new();
@@ -202,6 +251,28 @@ impl SSA for SSAStorage {
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::ContainedInBB = self.g[edge] {
 				return othernode
+			}
+		}
+		return NodeIndex::end()
+	}
+
+	fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex {
+		let cur_block = self.get_block(i);
+		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(1) = self.g[edge] {
+				return othernode;
+			}
+		}
+		return NodeIndex::end()
+	}
+
+	fn get_false_branch(&self, i: &NodeIndex) -> NodeIndex {
+		let cur_block = self.get_block(i);
+		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(0) = self.g[edge] {
+				return othernode;
 			}
 		}
 		return NodeIndex::end()
@@ -290,53 +361,12 @@ impl SSA for SSAStorage {
 		return NodeIndex::end()
 	}
 
-	fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex {
-		let cur_block = self.get_block(i);
-		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Control(1) = self.g[edge] {
-				return othernode;
-			}
-		}
-		return NodeIndex::end()
-	}
-
-	fn get_false_branch(&self, i: &NodeIndex) -> NodeIndex {
-		let cur_block = self.get_block(i);
-		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Control(0) = self.g[edge] {
-				return othernode;
-			}
-		}
-		return NodeIndex::end()
-	}
-
-	fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef {
-		let cur_block = self.get_block(i);
-		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Control(2) = self.g[edge] {
-				return othernode;
-			}
-		}
-		return NodeIndex::end()
-	}
-
 	fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
 		self.gather_adjacent(node, EdgeDirection::Outgoing, true)
 	}
 
 	fn uses_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
 		self.gather_adjacent(node, EdgeDirection::Incoming, true)
-	}
-
-	fn preds_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		self.gather_adjacent(node, EdgeDirection::Incoming, false)
-	}
-
-	fn succs_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		self.gather_adjacent(node, EdgeDirection::Outgoing, false)
 	}
 
 	fn refresh(&self, mut node: NodeIndex) -> NodeIndex {
@@ -348,7 +378,6 @@ impl SSA for SSAStorage {
 	}
 
 	fn invalid_value(&self) -> NodeIndex { NodeIndex::end() }
-	fn invalid_action(&self) -> NodeIndex { NodeIndex::end() }
 	fn to_value(&self, n: NodeIndex) -> NodeIndex { n }
 	fn to_action(&self, n: NodeIndex) -> NodeIndex { n }
 
@@ -358,16 +387,6 @@ impl SSA for SSAStorage {
 }
 
 impl SSAMod for SSAStorage {
-
-	type BBInfo = ssa_traits::BBInfo;
-
-	fn mark_start_node(&mut self, start: &Self::ActionRef) {
-		self.start_node = *start;
-	}
-
-	fn mark_exit_node(&mut self, exit: &Self::ActionRef) {
-		self.exit_node = *exit;
-	}
 
 	fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode, vt: ValueType) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Op(opc, vt));
@@ -391,18 +410,6 @@ impl SSAMod for SSAStorage {
 		let n = self.g.add_node(NodeData::Undefined);
 		self.g.update_edge(n, block, CONTEDGE);
 		n
-	}
-
-	fn add_block(&mut self, info: Self::BBInfo) -> NodeIndex {
-		let bb = self.g.add_node(NodeData::BasicBlock(info));
-		let rs = self.g.add_node(NodeData::RegisterState);
-		self.g.add_edge(bb, rs, EdgeData::RegisterState);
-		self.g.add_edge(rs, bb, CONTEDGE);
-		bb
-	}
-
-	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
-		self.g.add_edge(source, target, EdgeData::Control(index));
 	}
 
 	fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef) {

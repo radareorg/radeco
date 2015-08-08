@@ -1,8 +1,9 @@
 //! Module that holds the struct and trait implementations for the ssa form.
 
 use std::hash::Hash;
-use middle::ir;
 use std::fmt::Debug;
+use middle::ir;
+use super::cfg_traits::{CFG, CFGMod};
 
 #[derive(Clone, Copy, Debug)]
 pub enum ValueType {
@@ -29,18 +30,8 @@ pub enum NodeData {
 /// Trait for the SSA Form implementation.
 // This trait ensures that any other ssa form will be compatible with our implementations provided
 // the SSA form implements the following traits.
-pub trait SSA {
+pub trait SSA: CFG {
 	type ValueRef: Eq + Hash + Clone + Copy + Debug; // We could drop the Copy trait later and insert .clone()
-	type ActionRef: Eq + Hash + Clone + Copy + Debug;
-
-	/// Get NodeIndex of all BasicBlocks available in the SSA form.
-	fn get_blocks(&self) -> Vec<Self::ActionRef>;
-
-	/// Start node of the CFG.
-	fn start_node(&self) -> Self::ActionRef;
-
-	/// Exit node of the CFG.
-	fn exit_node(&self) -> Self::ActionRef;
 
 	/// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
 	fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
@@ -85,10 +76,6 @@ pub trait SSA {
 	/// Returns true if the expression acts as a `Selector` for control flow.
 	fn is_selector(&self, i:&Self::ValueRef) -> bool;
 
-	// NOTE:
-	// These three functions will change their signatures
-	// when we remove "jmp" from the list of ops
-
 	/// Get Jump target of a call or an unconditional jump.
 	fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
@@ -98,9 +85,6 @@ pub trait SSA {
 	/// Get false branch of a conditional jump.
 	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
-	/// Get false branch of a conditional jump.
-	fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef;
-
 	/// Gets the data dependencies of a value node in any order.
 	/// (See get_operands for ordered return value)
 	fn args_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef>;
@@ -108,12 +92,6 @@ pub trait SSA {
 	/// Gets uses dependents of a value node.
 	/// (Equivalent as `SSAMod::get_uses`)
 	fn uses_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef>;
-
-	/// Get the predecessors of a basic block.
-	fn preds_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
-
-	/// Get the successors of a basic block.
-	fn succs_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
 
 	/// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
 	/// (Alias for get_block)
@@ -127,7 +105,6 @@ pub trait SSA {
 	fn refresh(&self, node: Self::ValueRef) -> Self::ValueRef;
 
 	fn invalid_value(&self) -> Self::ValueRef;
-	fn invalid_action(&self) -> Self::ActionRef;
 
 	fn to_value(&self, Self::ActionRef) -> Self::ValueRef;
 	fn to_action(&self, Self::ValueRef) -> Self::ActionRef;
@@ -136,15 +113,7 @@ pub trait SSA {
 }
 
 /// Trait for modifying SSA data
-pub trait SSAMod: SSA {
-
-	type BBInfo;
-
-	/// Mark the start node for the SSA graph.
-	fn mark_start_node(&mut self, start: &Self::ActionRef);
-	
-	/// Mark the exit node for the SSA graph.
-	fn mark_exit_node(&mut self, exit: &Self::ActionRef);
+pub trait SSAMod: SSA + CFGMod {
 
 	/// Add a new operation node.
 	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType) -> Self::ValueRef;
@@ -157,12 +126,6 @@ pub trait SSAMod: SSA {
 
 	/// Add a new undefined node
 	fn add_undefined(&mut self, block: Self::ActionRef) -> Self::ValueRef;
-
-	/// Add a new basic block.
-	fn add_block(&mut self, info: Self::BBInfo) -> Self::ActionRef;
-
-	/// Add a control edge between to basic blocks.
-	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
 
 	/// Mark the node as selector for the control edges away from the specified basic block
 	fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);

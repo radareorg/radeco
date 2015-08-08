@@ -222,8 +222,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		}
 
 		while self.ssa_worklist.len() > 0 || self.cfg_worklist.len() > 0 {
-			while self.cfg_worklist.len() > 0 {
-				let block = self.cfg_worklist.pop().unwrap();
+			while let Some(block) = self.cfg_worklist.pop() {
 				self.mark_executable(&block);
 				let phis = self.g.get_phis(&block);
 				for phi in phis.iter() {
@@ -245,8 +244,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 					}
 				}
 			}
-			while self.ssa_worklist.len() > 0 {
-				let e = self.ssa_worklist.pop().unwrap();
+			while let Some(e) = self.ssa_worklist.pop() {
 				// self.get the operation/expression to which this operand belongs to.
 				let t = self.visit_expression(&e);
 				if t !=  self.get_value(&e) {

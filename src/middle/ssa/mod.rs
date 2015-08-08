@@ -3,6 +3,7 @@
 //         i.e. Decide what we want to re export for convienence.
 //       - Decide which members need to be private and never exposed.
 
+pub mod cfg_traits;
 pub mod ssa_traits;
 pub mod ssastorage;
 pub mod ssadot;
