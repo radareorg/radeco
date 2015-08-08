@@ -127,6 +127,9 @@ pub trait SSAMod: SSA + CFGMod {
 	/// Add a new undefined node
 	fn add_undefined(&mut self, block: Self::ActionRef) -> Self::ValueRef;
 
+	/// Add a new comment node
+	fn add_comment(&mut self, block: Self::ActionRef, msg: String) -> Self::ValueRef;
+
 	/// Mark the node as selector for the control edges away from the specified basic block
 	fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
 

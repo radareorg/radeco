@@ -10,8 +10,8 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo=BBInfo> + 'a> {
 	pub ssa:          &'a mut T,
 	pub variable_types:   Vec<ValueType>,
 	sealed_blocks:    HashSet<T::ActionRef>, // replace with bitfield
-	pub current_def:      Vec<HashMap<T::ActionRef, T::ValueRef>>,
-	pub incomplete_phis:  HashMap<T::ActionRef, HashMap<VarId, T::ValueRef>>,
+	current_def:      Vec<HashMap<T::ActionRef, T::ValueRef>>,
+	incomplete_phis:  HashMap<T::ActionRef, HashMap<VarId, T::ValueRef>>,
 }
 
 impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {

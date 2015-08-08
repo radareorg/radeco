@@ -55,6 +55,12 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 			let zero = self.phiplacer.ssa.add_const(block, 0);
 			self.phiplacer.write_variable(block, 0, zero); // cur = 0
 			self.phiplacer.write_variable(block, 1, zero); // old = 0
+
+			for (i, name) in self.regfile.whole_names.iter().enumerate() {
+				let argnode = self.phiplacer.ssa.add_comment(block, name.clone());
+				self.phiplacer.write_variable(block, i+1, argnode);
+			}
+
 			blocks[cfg.entry.index()] = block;
 
 			let block = self.phiplacer.add_block(BBInfo { addr: 0 });

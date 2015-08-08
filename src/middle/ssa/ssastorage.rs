@@ -51,12 +51,6 @@ impl SSAStorage {
 		}
 	}
 
-	pub fn add_comment(&mut self, block: NodeIndex, msg: &String) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Comment(msg.clone()));
-		self.g.update_edge(n, block, CONTEDGE);
-		n
-	}
-
 	pub fn add_phi_comment(&mut self, block: NodeIndex, comment: &String) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Phi(comment.clone()));
 		self.g.update_edge(n, block, CONTEDGE);
@@ -408,6 +402,12 @@ impl SSAMod for SSAStorage {
 
 	fn add_undefined(&mut self, block: NodeIndex) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Undefined);
+		self.g.update_edge(n, block, CONTEDGE);
+		n
+	}
+
+	fn add_comment(&mut self, block: NodeIndex, msg: String) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Comment(msg));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}

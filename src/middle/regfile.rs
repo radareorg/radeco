@@ -15,7 +15,8 @@ pub struct SubRegister {
 
 pub struct SubRegisterFile {
 	pub whole_registers: Vec<ValueType>, // methods don't use this, ownership transfer of whole_r outwards desirable (currently cloning)
-	pub named_registers: HashMap<String, SubRegister>
+	pub named_registers: HashMap<String, SubRegister>,
+	pub whole_names:     Vec<String>,
 }
 
 impl SubRegisterFile {
@@ -39,14 +40,17 @@ impl SubRegisterFile {
 
 		let mut current: (usize, usize, usize) = (0, 0, 0);
 		let mut whole: Vec<ValueType> = Vec::new();
+		let mut names: Vec<String> = Vec::new();
 		for &ev in &events {
+			let name = &reg_info.reg_info[ev.0].name;
 			if ev.1 >= current.2 {
 				current = ev;
 				whole.push(ValueType::Integer { width: (current.2 - current.1) as WidthSpec });
+				names.push(name.clone());
 			} else {
 				assert!(ev.2 <= current.2);
 			}
-			slices.insert(reg_info.reg_info[ev.0].name.clone(), SubRegister {
+			slices.insert(name.clone(), SubRegister {
 				base: whole.len()-1,
 				shift: ev.1 - current.1,
 				width: ev.2 - ev.1
@@ -57,7 +61,8 @@ impl SubRegisterFile {
 		  }*/
 		SubRegisterFile {
 			whole_registers: whole,
-			named_registers: slices
+			named_registers: slices,
+			whole_names:     names,
 		}
 	}
 
