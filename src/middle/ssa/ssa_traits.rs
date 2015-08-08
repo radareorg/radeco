@@ -21,11 +21,9 @@ pub enum NodeData {
 	Op(ir::MOpcode, ValueType),
 	Comment(String),
 	Const(u64),
-	Phi(String),
+	Phi,
 	Undefined,
-	Removed,
-	BasicBlock(BBInfo),
-	RegisterState,
+	Invalid,
 }
 
 /// Trait for the SSA Form implementation.

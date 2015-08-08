@@ -124,6 +124,30 @@ impl MOpcode {
 		self.info().0
 	}
 
+	pub fn has_sideeffects(&self) -> bool {
+		match *self {
+			MOpcode::OpStore => true,
+			MOpcode::OpJmp   => true,
+			MOpcode::OpCJmp  => true,
+			MOpcode::OpCall  => true,
+			_ => false,
+		}
+	}
+
+	pub fn allowed_in_ssa(&self) -> bool {
+		match *self {
+			MOpcode::OpJmp     => false,
+			MOpcode::OpCJmp    => false,
+			MOpcode::OpCall    => false,
+			MOpcode::OpNop     => false,
+			MOpcode::OpInvalid => false,
+			MOpcode::OpInc     => false,
+			MOpcode::OpDec     => false,
+			MOpcode::OpCl      => false,
+			_ => true,
+		}
+	}
+
 	fn info(&self) -> (String, MArity) {
 		let (op, arity) = match *self {
 			MOpcode::OpAdd        => ("+", MArity::Binary),

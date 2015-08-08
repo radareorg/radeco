@@ -127,7 +127,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 		// Try to recursively remove all phi users, which might have become trivial
 		for use_ in users {
 			if use_ == phi { continue; }
-			if let NodeData::Phi(_) = self.ssa.get_node_data(&use_) {
+			if let NodeData::Phi = self.ssa.get_node_data(&use_) {
 				//println!("After replacing {:?} by {:?}, proceeding to simplify user {:?}",
 				//	self.ssa.g[phi],
 				//	self.ssa.g[same],

@@ -3,7 +3,20 @@ use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use middle::ir;
 
 use super::ssa_traits;
-use super::ssa_traits::{SSA, SSAMod, NodeData, ValueType};
+use super::ssa_traits::NodeData as TNodeData;
+use super::ssa_traits::{SSA, SSAMod, ValueType};
+
+#[derive(Clone, Debug)]
+pub enum NodeData {
+	Op(ir::MOpcode, ValueType),
+	Const(u64),
+	Phi(String),
+	Comment(String),
+	Undefined,
+	Removed,
+	BasicBlock(ssa_traits::BBInfo),
+	RegisterState,
+}
 
 #[derive(Clone, Copy)]
 pub enum EdgeData {
@@ -12,7 +25,7 @@ pub enum EdgeData {
 	ContainedInBB,
 	Selector,
 	RegisterState,
-	ReplacedBy
+	ReplacedBy,
 }
 
 const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
@@ -242,10 +255,20 @@ impl SSA for SSAStorage {
 		return args;
 	}
 
-	fn get_node_data(&self, i: &NodeIndex) -> NodeData {
-		self.g[*i].clone()
+	fn get_node_data(&self, i: &NodeIndex) -> TNodeData {
+		let ic = self.refresh(i.clone());
+		match self.g[ic] {
+			NodeData::Op(opc, vt)   => TNodeData::Op(opc, vt),
+			NodeData::Const(num)    => TNodeData::Const(num),
+			NodeData::Phi(_)        => TNodeData::Phi,
+			NodeData::Comment(_)    => TNodeData::Undefined,
+			NodeData::Undefined     => TNodeData::Undefined,
+			NodeData::Removed       => TNodeData::Invalid,
+			NodeData::BasicBlock(_) => TNodeData::Invalid,
+			NodeData::RegisterState => TNodeData::Invalid,
+		}
 	}
-	
+
 	fn is_selector(&self, i:&Self::ValueRef) -> bool {
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
 		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
