@@ -79,23 +79,25 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	}
 
 	fn evaluate_control_flow(&mut self, i: &T::ValueRef) {
-		let operands = self.g.get_operands(i);
-		let cond_val = self.get_value(&operands[0]);
-		let true_branch = self.g.get_true_branch(i);
-		let false_branch = self.g.get_false_branch(i);
+		assert!(self.g.is_selector(i));
+
+		let branches = self.g.get_branches(i);
+		let cond_val = self.get_value(i);
+		let true_branch = &branches.1;
+		let false_branch = &branches.0;
 		match cond_val {
 			ExprVal::Bottom => {
-				self.cfg_worklist.push(true_branch);
-				self.cfg_worklist.push(false_branch);
+				self.cfg_worklist.push(*true_branch);
+				self.cfg_worklist.push(*false_branch);
 			},
 			ExprVal::Top => {
 				// TODO: Not really sure what to do here.
 			},
 			ExprVal::Const(cval) => {
 				if cval == 0 {
-					self.cfg_worklist.push(true_branch);
+					self.cfg_worklist.push(*true_branch);
 				} else {
-					self.cfg_worklist.push(false_branch);
+					self.cfg_worklist.push(*false_branch);
 				}
 			},
 		}
@@ -198,7 +200,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
 		// If expression is a `Selector` it means that it's value can affect the control flow.
 		// Hence evaluate the control flow to add edges to the cfgwl.
+		// TODO: Handle the case where the selector of a block may belong to a different block.
 		if self.g.is_selector(i) {
+			println!("{:?} is a selector", i);
 			self.evaluate_control_flow(i);
 		}
 
@@ -210,6 +214,10 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		{
 			// Initializations
 			let start_node = self.g.start_node();
+			self.mark_executable(&start_node);
+			let exit_node = self.g.exit_node();
+			//self.mark_executable(&exit_node);
+
 			let succ = self.g.succs_of(start_node);
 			for next in succ.iter() {
 				self.mark_executable(next);
@@ -233,6 +241,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 				}
 
 				for expr in self.g.get_exprs(&block) {
+					println!("Evaluating {:?} in cfgwl", expr);
 					let val = self.visit_expression(&expr);
 					self.set_value(&expr, val);
 					for _use in self.g.get_uses(&expr) {
@@ -242,6 +251,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 			}
 			while let Some(e) = self.ssa_worklist.pop() {
 				// self.get the operation/expression to which this operand belongs to.
+				println!("Evaluating {:?} in ssawl", e);
 				let t = self.visit_expression(&e);
 				if t !=  self.get_value(&e) {
 					self.set_value(&e, t);
@@ -261,15 +271,15 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 				self.g.replace(*k, newnode);
 			}
 		}
-
 		let blocks = self.g.get_blocks();
-
 		for block in blocks.iter() {
 			if !self.is_executable(block) {
+				println!("Not reachable block: {:?}", block);
 				self.g.remove_block(*block);
+			} else {
+				println!("Reachable block: {:?}", block);
 			}
 		}
-
 		self.g.clone()
 	}
 
@@ -296,6 +306,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	}
 
 	fn ssawl_push(&mut self, i: &T::ValueRef) {
+		if !self.g.is_expr(i) { return; }
 		let owner_block = self.g.get_block(&i);
 		if self.is_executable(&owner_block) {
 			self.ssa_worklist.push(*i);

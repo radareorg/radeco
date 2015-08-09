@@ -35,6 +35,9 @@ pub trait SSA: CFG {
 	/// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
 	fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
+	/// Check if the node at the given index is a expression or not.
+	fn is_expr(&self, i: &Self::ValueRef) -> bool;
+
 	/// Get all phis in the BasicBlock with index 'i'.
 	fn get_phis(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
@@ -78,10 +81,13 @@ pub trait SSA: CFG {
 	/// Get Jump target of a call or an unconditional jump.
 	fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
-	/// Get true branch of a conditional jump.
+	/// Get branches of a selector (false_branch, true_branch).
+	fn get_branches(&self, i: &Self::ValueRef) -> (Self::ActionRef, Self::ActionRef);
+
+	/// Helper method that gets only the true branch.
 	fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
-	/// Get false branch of a conditional jump.
+	/// Helper method that gets only the false branch.
 	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
 	/// Gets the data dependencies of a value node in any order.
