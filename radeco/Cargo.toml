@@ -2,3 +2,9 @@
 name = "radeco"
 version = "0.1.0"
 authors = ["pancake"]
+
+[dependencies]
+r2pipe = "*"
+
+[dependencies.radeco-lib]
+git = "https://github.com/radare/radeco-lib"
