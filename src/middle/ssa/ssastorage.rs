@@ -159,8 +159,7 @@ impl CFG for SSAStorage {
 	}
 
 	fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef {
-		let cur_block = self.get_block(i);
-		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Control(2) = self.g[edge] {
 				return othernode;
@@ -275,6 +274,14 @@ impl SSA for SSAStorage {
 		return expressions;
 	}
 
+	fn is_expr(&self, i: &NodeIndex) -> bool {
+		match self.g[*i] {
+			NodeData::Op(_, _) |
+			NodeData::Const(_) => true,
+			_ => false,
+		}
+	}
+
 	fn get_phis(&self, i: &NodeIndex) -> Vec<NodeIndex> {
 		let mut phis = Vec::<NodeIndex>::new();
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
@@ -311,26 +318,42 @@ impl SSA for SSAStorage {
 		return NodeIndex::end()
 	}
 
-	fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex {
-		let cur_block = self.get_block(i);
-		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+	fn get_branches(&self, i: &NodeIndex) -> (NodeIndex, NodeIndex) {
+		// Make sure that the given node is actually a selector of some block.
+		assert!(self.is_selector(i));
+
+		let mut selects_for: NodeIndex = NodeIndex::end();
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Control(1) = self.g[edge] {
-				return othernode;
+			if let EdgeData::Selector = self.g[edge] {
+				selects_for = othernode;
+				break;
 			}
 		}
-		return NodeIndex::end()
+
+		// Make sure that we have a block for the selector.
+		assert!(selects_for != NodeIndex::end());
+
+		let mut true_branch = NodeIndex::end();
+		let mut false_branch = NodeIndex::end();
+		let mut walk = self.g.walk_edges_directed(selects_for, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(0) = self.g[edge] {
+				false_branch = othernode.clone();
+			} else if let EdgeData::Control(1) = self.g[edge] {
+				true_branch = othernode.clone();
+			}
+		}
+
+		return (false_branch, true_branch);
+	}
+
+	fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex {
+		self.get_branches(i).1
 	}
 
 	fn get_false_branch(&self, i: &NodeIndex) -> NodeIndex {
-		let cur_block = self.get_block(i);
-		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
-		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-			if let EdgeData::Control(0) = self.g[edge] {
-				return othernode;
-			}
-		}
-		return NodeIndex::end()
+		self.get_branches(i).0
 	}
 
 	fn registers_at(&self, i: NodeIndex) -> NodeIndex {
@@ -404,7 +427,7 @@ impl SSA for SSAStorage {
 		}
 	}
 
-	fn is_selector(&self, i:&Self::ValueRef) -> bool {
+	fn is_selector(&self, i: &Self::ValueRef) -> bool {
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
 		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Selector = self.g[edge] {

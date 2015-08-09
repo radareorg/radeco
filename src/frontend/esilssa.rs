@@ -214,6 +214,7 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 			}
 
 			if instruction.opcode == MOpcode::OpCJmp {
+				println!("Identified a selector: {:?} for block {:?}", n0, block);
 				self.phiplacer.ssa.mark_selector(n0, block);
 				continue;
 			}
