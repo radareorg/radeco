@@ -6,18 +6,18 @@
 /// The test is then returned with a result struct that contains information about all the
 /// intermediate stages to assert! for correctness.
 
-extern crate radeco;
+extern crate radeco_lib;
 
-use radeco::frontend::parser::{Parser};
-use radeco::frontend::structs::{LOpInfo, LRegInfo};
-use radeco::frontend::r2::R2;
-use radeco::frontend::esilssa::SSAConstruction;
-use radeco::middle::ir::{MInst};
-use radeco::middle::cfg::CFG;
-use radeco::middle::dot;
-use radeco::middle::dce;
-use radeco::middle::ssa::SSAStorage;
-use radeco::analysis::constant_propagation::constant;
+use radeco_lib::frontend::parser::{Parser};
+use radeco_lib::frontend::structs::{LOpInfo, LRegInfo};
+use radeco_lib::frontend::r2::R2;
+use radeco_lib::frontend::esilssa::SSAConstruction;
+use radeco_lib::middle::ir::{MInst};
+use radeco_lib::middle::cfg::CFG;
+use radeco_lib::middle::dot;
+use radeco_lib::middle::dce;
+use radeco_lib::middle::ssa::SSAStorage;
+use radeco_lib::analysis::constant_propagation::constant;
 
 use std::io::prelude::*;
 use std::fs;
