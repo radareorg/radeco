@@ -33,6 +33,7 @@ impl GraphDot for SSAStorage {
 		let ni = NodeIndex::new(n);
 		match self.g.node_weight(ni) {
 			Some(&NodeData::BasicBlock(_)) => n,
+			Some(&NodeData::DynamicAction) => n,
 			_ => self.get_block(&ni).index()
 		}
 	}

@@ -37,6 +37,9 @@ pub trait CFGMod: CFG {
 	/// Add a new basic block.
 	fn add_block(&mut self, info: Self::BBInfo) -> Self::ActionRef;
 
+	/// Add a new exit
+	fn add_dynamic(&mut self) -> Self::ActionRef;
+
 	/// Add a control edge between to basic blocks.
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
 

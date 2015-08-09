@@ -4,6 +4,8 @@ use radeco::frontend::{parser, r2, esilssa};
 use radeco::middle::{cfg};
 use radeco::middle::dot;
 use radeco::middle::ssa::SSAStorage;
+use radeco::analysis::constant_propagation::constant;
+use radeco::middle::dce;
 
 use std::env;
 use std::io::prelude::*;
@@ -62,6 +64,14 @@ fn main() {
         let mut con = esilssa::SSAConstruction::new(&mut ssa, &r);
         con.run(&cfg);
     }
+
+    println!("[*] Running constant propagation.");
+    let mut analyzer = constant::Analyzer::new(&mut ssa);
+    analyzer.analyze();
+    ssa = analyzer.emit_ssa();
+
+    println!("[*] Removing dead code.");
+    dce::collect(&mut ssa);
 
     println!("[*] Begin Dot generation.");
     let res_cfg = dot::emit_dot(&cfg);

@@ -139,6 +139,13 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 		return same
 	}
 
+	pub fn add_dynamic(&mut self) -> T::ActionRef {
+		let action = self.ssa.add_dynamic();
+		self.incomplete_phis.insert(action, HashMap::new());
+		self.sync_register_state(action);
+		action
+	}
+
 	pub fn sync_register_state(&mut self, block: T::ActionRef) {
 		let rs = self.ssa.registers_at(block);
 		for var in 0..self.variable_types.len() {

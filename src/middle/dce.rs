@@ -8,6 +8,9 @@ pub fn collect<'a, T>(ssa: &mut T) where T:
 {
 	let exit_node = ssa.exit_node();
 	let roots = ssa.registers_at(exit_node);
+	if exit_node == ssa.invalid_value() { panic!(); }
+	if roots == ssa.invalid_value() { panic!(); }
+
 	let maxindex = ssa.node_count();
 	let mut reachable = Vec::with_capacity(maxindex);
 	let mut queue: VecDeque<NodeIndex> = VecDeque::new();

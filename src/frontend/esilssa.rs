@@ -63,10 +63,9 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 
 			blocks[cfg.entry.index()] = block;
 
-			let block = self.phiplacer.add_block(BBInfo { addr: 0 });
+			let block = self.phiplacer.add_dynamic();
 			self.phiplacer.ssa.mark_exit_node(&block);
 			blocks[cfg.exit.index()] = block;
-			self.phiplacer.sync_register_state(block);
 		}
 
 		for (addr, i) in bb_iter {

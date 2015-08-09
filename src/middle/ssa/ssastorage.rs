@@ -15,7 +15,9 @@ pub enum NodeData {
 	Comment(String),
 	Undefined,
 	Removed,
+	Unreachable,
 	BasicBlock(ssa_traits::BBInfo),
+	DynamicAction,
 	RegisterState,
 }
 
@@ -115,8 +117,19 @@ impl SSAStorage {
 				return othernode
 			}
 		}
-		panic!();
-		//return NodeIndex::end()
+		NodeIndex::end()
+	}
+
+	pub fn is_block(&self, node: NodeIndex) -> bool {
+		if let NodeData::BasicBlock(_) = self.g[node] { true } else { false }
+	}
+
+	pub fn remove_with_spacer(&mut self, node: NodeIndex, spacer: NodeData) {
+		if self.stable_indexing {
+			self.needs_cleaning = true;
+			self.g.add_node(spacer);
+		}
+		self.g.remove_node(node);
 	}
 }
 
@@ -187,29 +200,42 @@ impl CFGMod for SSAStorage {
 		bb
 	}
 
+	fn add_dynamic(&mut self) -> NodeIndex {
+		let a = self.g.add_node(NodeData::DynamicAction);
+		let rs = self.g.add_node(NodeData::RegisterState);
+		self.g.add_edge(a, rs, EdgeData::RegisterState);
+		self.g.add_edge(rs, a, CONTEDGE);
+		a
+	}
+
 	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
 		self.g.add_edge(source, target, EdgeData::Control(index));
 	}
 
 	fn remove_block(&mut self, node: Self::ActionRef) {
+		assert!(self.is_block(node));
+
 		let outer_stable_indexing = self.stable_indexing;
 		self.stable_indexing = true;
-		{
-			let regstate = self.registers_at(node);
-			self.remove(regstate);
 
-			let mut expressions = Vec::<NodeIndex>::new();
-			let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
-			while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
-				if let EdgeData::ContainedInBB = self.g[edge] {
-					expressions.push(othernode);
-				}
-			}
-			for expr in expressions {
-				self.remove(expr);
+		let regstate = self.registers_at(node);
+		self.remove(regstate);
+
+		let mut expressions = Vec::<NodeIndex>::new();
+		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::ContainedInBB = self.g[edge] {
+				expressions.push(othernode);
 			}
 		}
+
+		for expr in expressions {
+			self.remove(expr);
+		}
+
 		self.stable_indexing = outer_stable_indexing;
+
+		self.remove_with_spacer(node, NodeData::Unreachable);
 	}
 }
 
@@ -294,6 +320,10 @@ impl SSA for SSAStorage {
 	}
 
 	fn registers_at(&self, i: NodeIndex) -> NodeIndex {
+		match self.g[i] {
+			NodeData::BasicBlock(_) | NodeData::DynamicAction => (),
+			_ => panic!()
+		};
 		let mut walk = self.g.walk_edges_directed(i, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::RegisterState = self.g[edge] {
@@ -343,6 +373,9 @@ impl SSA for SSAStorage {
 
 	fn get_node_data(&self, i: &NodeIndex) -> TNodeData {
 		let ic = self.refresh(i.clone());
+		if ic == NodeIndex::end() {
+			return TNodeData::Invalid
+		}
 		match self.g[ic] {
 			NodeData::Op(opc, vt)   => TNodeData::Op(opc, vt),
 			NodeData::Const(num)    => TNodeData::Const(num),
@@ -350,7 +383,9 @@ impl SSA for SSAStorage {
 			NodeData::Comment(_)    => TNodeData::Undefined,
 			NodeData::Undefined     => TNodeData::Undefined,
 			NodeData::Removed       => TNodeData::Invalid,
+			NodeData::Unreachable   => TNodeData::Invalid,
 			NodeData::BasicBlock(_) => TNodeData::Invalid,
+			NodeData::DynamicAction => TNodeData::Invalid,
 			NodeData::RegisterState => TNodeData::Invalid,
 		}
 	}
@@ -388,6 +423,7 @@ impl SSA for SSAStorage {
 		if node == NodeIndex::end() { return node }
 		while let NodeData::Removed = self.g[node] {
 			node = self.replaced_by(node);
+			if node == NodeIndex::end() { break; }
 		}
 		node
 	}
@@ -489,6 +525,9 @@ impl SSAMod for SSAStorage {
 			}
 			remove_us.push(edge);
 		}
+		if self.start_node == node {
+			self.start_node = replacement;
+		}
 		self.remove(node);
 		if self.stable_indexing {
 			self.g.add_edge(node, replacement, EdgeData::ReplacedBy);
@@ -496,11 +535,7 @@ impl SSAMod for SSAStorage {
 	}
 
 	fn remove(&mut self, node: NodeIndex) {
-		if self.stable_indexing {
-			self.needs_cleaning = true;
-			self.g.add_node(NodeData::Removed);
-		}
-		self.g.remove_node(node);
+		self.remove_with_spacer(node, NodeData::Removed);
 	}
 
 	fn cleanup(&mut self) {

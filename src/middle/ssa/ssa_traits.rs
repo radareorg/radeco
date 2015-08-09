@@ -16,7 +16,6 @@ pub struct BBInfo {
 	pub addr: u64
 }
 
-// TODO: Hide implementation details (like 'Removed' and 'BasicBlock')
 #[derive(Clone, Debug)]
 pub enum NodeData {
 	Op(ir::MOpcode, ValueType),
