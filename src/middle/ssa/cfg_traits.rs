@@ -3,6 +3,7 @@ use std::fmt::Debug;
 
 pub trait CFG {
 	type ActionRef: Eq + Hash + Clone + Copy + Debug;
+	type CFEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
 	/// Get NodeIndex of all BasicBlocks available in the SSA form.
 	fn get_blocks(&self) -> Vec<Self::ActionRef>;
@@ -23,6 +24,42 @@ pub trait CFG {
 	fn succs_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
 
 	fn invalid_action(&self) -> Self::ActionRef;
+
+	///////////////////////////////////////////////////////////////////////////
+	//// Edge accessors and helpers
+	///////////////////////////////////////////////////////////////////////////
+
+	/// Gets all the outgoing edges of a BasicBlock.
+	fn edges_of(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
+	
+	/// Gets all the incoming edges to a BasicBlock.
+	fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
+
+	/// Get info i.e. (source_edge, target_edge)
+	fn info(&self, i: &Self::CFEdgeRef) -> (Self::ActionRef, Self::ActionRef);
+
+	/// Get the ActionRef of the source of the Edge.
+	fn source_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef { self.info(i).0 }
+	
+	/// Get the ActionRef of the target of the Edge.
+	fn target_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef { self.info(i).1 }
+
+	/// Find the edge that connects the source to the target.
+	fn find_edge(&self, source: &Self::ActionRef, target: &Self::ActionRef) -> Self::CFEdgeRef;
+
+	/// Get the True Edge
+	fn true_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+
+	/// Get the False Edge
+	fn false_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+
+	/// Get the Unconditional Edge
+	fn next_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+
+	/// Invalid Action
+	// TODO: Remove this and use Option<> instead.
+	fn invalid_edge(&self) -> Self::CFEdgeRef;
+
 }
 
 pub trait CFGMod: CFG {

@@ -32,6 +32,10 @@ pub enum NodeData {
 pub trait SSA: CFG {
 	type ValueRef: Eq + Hash + Clone + Copy + Debug; // We could drop the Copy trait later and insert .clone()
 
+	///////////////////////////////////////////////////////////////////////////
+	//// Node accessors and helpers
+	///////////////////////////////////////////////////////////////////////////
+
 	/// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
 	fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
@@ -81,6 +85,9 @@ pub trait SSA: CFG {
 	/// Get Jump target of a call or an unconditional jump.
 	fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
+	/// Get the Block for which i acts as a selector.
+	fn selects_for(&self, i: &Self::ValueRef) -> Self::ActionRef;
+
 	/// Get branches of a selector (false_branch, true_branch).
 	fn get_branches(&self, i: &Self::ValueRef) -> (Self::ActionRef, Self::ActionRef);
 
@@ -115,6 +122,7 @@ pub trait SSA: CFG {
 	fn to_action(&self, Self::ValueRef) -> Self::ActionRef;
 
 	fn node_count(&self) -> usize;
+
 }
 
 /// Trait for modifying SSA data

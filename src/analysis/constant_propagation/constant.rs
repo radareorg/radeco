@@ -43,8 +43,8 @@ fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
 
 pub struct Analyzer<T: SSAMod + SSA + Clone> {
 	ssa_worklist: Vec<T::ValueRef>,
-	cfg_worklist: Vec<T::ActionRef>,
-	executable: HashMap<T::ActionRef, bool>,
+	cfg_worklist: Vec<T::CFEdgeRef>,
+	executable: HashMap<T::CFEdgeRef, bool>,
 	expr_val: HashMap<T::ValueRef, ExprVal>,
 	g: T,
 }
@@ -69,9 +69,11 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
 		let operands = self.g.get_operands(i);
 		let mut phi_val = self.get_value(i);
+		let cur_block = self.g.get_block(i);
 		for op in operands.iter() {
 			let b = self.g.get_block(&op);
-			if !self.is_executable(&b) { continue; }
+			let edge = self.g.find_edge(&b, &cur_block);
+			if !self.is_executable(&edge) { continue; }
 			let val = self.get_value(&op);
 			phi_val = meet(&phi_val, &val);
 		}
@@ -81,23 +83,23 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	fn evaluate_control_flow(&mut self, i: &T::ValueRef) {
 		assert!(self.g.is_selector(i));
 
-		let branches = self.g.get_branches(i);
 		let cond_val = self.get_value(i);
-		let true_branch = &branches.1;
-		let false_branch = &branches.0;
+		let block = self.g.selects_for(i);
+		let true_branch = self.g.true_edge_of(&block);
+		let false_branch = self.g.false_edge_of(&block);
 		match cond_val {
 			ExprVal::Bottom => {
-				self.cfg_worklist.push(*true_branch);
-				self.cfg_worklist.push(*false_branch);
+				self.cfg_worklist.push(true_branch);
+				self.cfg_worklist.push(false_branch);
 			},
 			ExprVal::Top => {
 				// TODO: Not really sure what to do here.
 			},
 			ExprVal::Const(cval) => {
 				if cval == 0 {
-					self.cfg_worklist.push(*true_branch);
+					self.cfg_worklist.push(true_branch);
 				} else {
-					self.cfg_worklist.push(*false_branch);
+					self.cfg_worklist.push(false_branch);
 				}
 			},
 		}
@@ -214,30 +216,31 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		{
 			// Initializations
 			let start_node = self.g.start_node();
-			self.mark_executable(&start_node);
-			let exit_node = self.g.exit_node();
+			//self.mark_executable(&start_node);
+			//let exit_node = self.g.exit_node();
 			//self.mark_executable(&exit_node);
 
-			let succ = self.g.succs_of(start_node);
-			for next in succ.iter() {
+			let edges = self.g.edges_of(&start_node);
+			for next in edges.iter() {
 				self.mark_executable(next);
 				self.cfgwl_push(next);
 			}
 		}
 
 		while self.ssa_worklist.len() > 0 || self.cfg_worklist.len() > 0 {
-			while let Some(block) = self.cfg_worklist.pop() {
-				self.mark_executable(&block);
+			while let Some(edge) = self.cfg_worklist.pop() {
+				let block = self.g.target_of(&edge);
+				self.mark_executable(&edge);
 				let phis = self.g.get_phis(&block);
 				for phi in phis.iter() {
 					let v = self.visit_phi(phi);
 					self.set_value(phi, v);
 				}
 
-				let succs = self.g.get_unconditional(&block);
-				if succs != self.g.invalid_action() {
-					self.cfgwl_push(&succs);
-					self.mark_executable(&succs);
+				let next_edge = self.g.next_edge_of(&block);
+				if next_edge != self.g.invalid_edge() {
+					self.cfgwl_push(&next_edge);
+					self.mark_executable(&next_edge);
 				}
 
 				for expr in self.g.get_exprs(&block) {
@@ -272,14 +275,20 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 			}
 		}
 		let blocks = self.g.get_blocks();
+		let mut remove_blocks = Vec::<T::ActionRef>::new();
 		for block in blocks.iter() {
-			if !self.is_executable(block) {
+			if !self.is_block_executable(block) {
 				println!("Not reachable block: {:?}", block);
-				self.g.remove_block(*block);
+				remove_blocks.push(*block);
 			} else {
 				println!("Reachable block: {:?}", block);
 			}
 		}
+
+		for block in remove_blocks.iter() {
+			self.g.remove_block(*block);
+		}
+
 		self.g.clone()
 	}
 
@@ -287,11 +296,11 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	//// Helper functions.
 	///////////////////////////////////////////////////////////////////////////
 
-	fn is_executable(&mut self, i: &T::ActionRef) -> bool {
+	fn is_executable(&mut self, i: &T::CFEdgeRef) -> bool {
 		*(self.executable.entry(*i).or_insert(false))
 	}
 
-	fn mark_executable(&mut self, i: &T::ActionRef) {
+	fn mark_executable(&mut self, i: &T::CFEdgeRef) {
 		let n = self.executable.entry(*i).or_insert(false);
 		*n = true;
 	}
@@ -305,15 +314,28 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		*n = v;
 	}
 
+	fn is_block_executable(&mut self, i: &T::ActionRef) -> bool {
+		// start_node is always reachable.
+		if *i == self.g.start_node() { return true; }
+
+		let incoming = self.g.incoming_edges(i);
+		for edge in incoming.iter() {
+			if self.is_executable(edge) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	fn ssawl_push(&mut self, i: &T::ValueRef) {
 		if !self.g.is_expr(i) { return; }
 		let owner_block = self.g.get_block(&i);
-		if self.is_executable(&owner_block) {
+		if self.is_block_executable(&owner_block) {
 			self.ssa_worklist.push(*i);
 		}
 	}
 
-	fn cfgwl_push(&mut self, i: &T::ActionRef) {
+	fn cfgwl_push(&mut self, i: &T::CFEdgeRef) {
 		self.cfg_worklist.push(*i);
 	}
 }

@@ -135,6 +135,7 @@ impl SSAStorage {
 
 impl CFG for SSAStorage {
 	type ActionRef = NodeIndex;
+	type CFEdgeRef = EdgeIndex;
 
 	fn get_blocks(&self) -> Vec<NodeIndex> {
 		let len = self.g.node_count();
@@ -177,6 +178,79 @@ impl CFG for SSAStorage {
 	}
 
 	fn invalid_action(&self) -> NodeIndex { NodeIndex::end() }
+
+	///////////////////////////////////////////////////////////////////////////
+	//// Edge accessors and helpers
+	///////////////////////////////////////////////////////////////////////////
+	
+	fn edges_of(&self, i: &NodeIndex) -> Vec<EdgeIndex> {
+		let mut edges = Vec::<EdgeIndex>::new();
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
+		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(_) = self.g[edge] {
+				edges.push(edge);
+			}
+		}
+		return edges;
+	}
+
+	fn info(&self, i: &EdgeIndex) -> (NodeIndex, NodeIndex) {
+		let edge_count = self.g.edge_count();
+		assert!(i.index() < edge_count);
+		let edges = self.g.raw_edges();
+		let edge_data = edges[i.index()].clone();
+		return (edge_data.source(), edge_data.target());
+	}
+
+	fn find_edge(&self, source: &NodeIndex, target: &NodeIndex) -> EdgeIndex {
+		self.g.find_edge(*source, *target).unwrap_or(EdgeIndex::end())
+	}
+
+	fn true_edge_of(&self, i: &NodeIndex) -> EdgeIndex {
+		let edges = self.edges_of(i);
+		for edge in edges.iter() {
+			if let EdgeData::Control(1) = self.g[*edge] {
+				return *edge;
+			}
+		}
+		return EdgeIndex::end();
+	}
+
+	fn false_edge_of(&self, i: &NodeIndex) -> EdgeIndex {
+		let edges = self.edges_of(i);
+		for edge in edges.iter() {
+			if let EdgeData::Control(0) = self.g[*edge] {
+				return *edge;
+			}
+		}
+		return EdgeIndex::end();
+	}
+
+	// TODO: Optimize and add asserts
+	fn next_edge_of(&self, i: &NodeIndex) -> EdgeIndex {
+		let edges = self.edges_of(i);
+		for edge in edges.iter() {
+			if let EdgeData::Control(2) = self.g[*edge] {
+				return *edge;
+			}
+		}
+		return EdgeIndex::end();
+	}
+
+	fn incoming_edges(&self, i: &NodeIndex) -> Vec<EdgeIndex> {
+		let mut edges = Vec::<EdgeIndex>::new();
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
+		while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Control(_) = self.g[edge] {
+				edges.push(edge);
+			}
+		}
+		return edges;
+	}
+
+	fn invalid_edge(&self) -> EdgeIndex {
+		EdgeIndex::end()
+	}
 }
 
 impl CFGMod for SSAStorage {
@@ -258,7 +332,6 @@ impl CFGMod for SSAStorage {
 
 impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;
-
 	fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex> {
 		let mut expressions = Vec::<NodeIndex>::new();
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
@@ -318,18 +391,20 @@ impl SSA for SSAStorage {
 		return NodeIndex::end()
 	}
 
-	fn get_branches(&self, i: &NodeIndex) -> (NodeIndex, NodeIndex) {
+	fn selects_for(&self, i: &NodeIndex) -> NodeIndex {
 		// Make sure that the given node is actually a selector of some block.
 		assert!(self.is_selector(i));
-
-		let mut selects_for: NodeIndex = NodeIndex::end();
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Selector = self.g[edge] {
-				selects_for = othernode;
-				break;
+				return othernode;
 			}
 		}
+		return NodeIndex::end();
+	}
+
+	fn get_branches(&self, i: &NodeIndex) -> (NodeIndex, NodeIndex) {
+		let selects_for = self.selects_for(i);
 
 		// Make sure that we have a block for the selector.
 		assert!(selects_for != NodeIndex::end());
@@ -472,6 +547,8 @@ impl SSA for SSAStorage {
 	fn node_count(&self) -> usize {
 		self.g.node_count()
 	}
+
+	
 }
 
 impl SSAMod for SSAStorage {
