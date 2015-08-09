@@ -214,9 +214,7 @@ impl CFGMod for SSAStorage {
 
 	fn remove_block(&mut self, node: Self::ActionRef) {
 		assert!(self.is_block(node));
-
-		let outer_stable_indexing = self.stable_indexing;
-		self.stable_indexing = true;
+		assert!(self.stable_indexing);
 
 		let regstate = self.registers_at(node);
 		self.remove(regstate);
@@ -233,9 +231,25 @@ impl CFGMod for SSAStorage {
 			self.remove(expr);
 		}
 
-		self.stable_indexing = outer_stable_indexing;
-
+		let preds = self.preds_of(node);
 		self.remove_with_spacer(node, NodeData::Unreachable);
+
+		// block removal can make predecessors lose selectors
+		for pred in preds {
+			if self.succs_of(pred).len() == 1 {
+				let mut walk = self.g.walk_edges_directed(pred, EdgeDirection::Incoming);
+				let mut seledge = None;
+				while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+					if let EdgeData::Selector = self.g[edge] {
+						seledge = Some(edge);
+						break;
+					}
+				}
+				if let Some(edge) = seledge {
+					self.g.remove_edge(edge);
+				}
+			}
+		}
 	}
 }
 
