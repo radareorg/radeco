@@ -1,9 +1,9 @@
-extern crate radeco;
+extern crate radeco_lib;
 
 pub mod utils;
 
 use utils::{Pipeline, Test, Pipeout, Analysis};
-use radeco::frontend::r2::R2;
+use radeco_lib::frontend::r2::R2;
 
 #[test]
 fn test1() {

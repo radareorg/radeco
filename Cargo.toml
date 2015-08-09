@@ -1,5 +1,5 @@
 [package]
-name = "radeco"
+name = "radeco-lib"
 version = "0.1.0"
 authors = [
 	"David Kreuter <dkreuter@gmail.com>",

@@ -1,11 +1,11 @@
-extern crate radeco;
+extern crate radeco_lib;
 
-use radeco::frontend::{parser, r2, esilssa};
-use radeco::middle::{cfg};
-use radeco::middle::dot;
-use radeco::middle::ssa::SSAStorage;
-use radeco::analysis::constant_propagation::constant;
-use radeco::middle::dce;
+use radeco_lib::frontend::{parser, r2, esilssa};
+use radeco_lib::middle::{cfg};
+use radeco_lib::middle::dot;
+use radeco_lib::middle::ssa::SSAStorage;
+use radeco_lib::analysis::constant_propagation::constant;
+use radeco_lib::middle::dce;
 
 use std::env;
 use std::io::prelude::*;

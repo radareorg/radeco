@@ -4,12 +4,12 @@
 //   * Build a DOMTree.
 //   * Emit Dot for CFG and Dom.
 
-extern crate radeco;
+extern crate radeco_lib;
 
-use radeco::frontend::{parser, r2};
-use radeco::middle::{cfg};
-use radeco::middle::dot;
-use radeco::analysis::dom::{DomTree};
+use radeco_lib::frontend::{parser, r2};
+use radeco_lib::middle::{cfg};
+use radeco_lib::middle::dot;
+use radeco_lib::analysis::dom::{DomTree};
 
 use std::io::prelude::*;
 use std::fs::{File, create_dir};
