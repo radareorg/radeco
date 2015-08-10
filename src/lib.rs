@@ -8,7 +8,9 @@ extern crate num;
 #[macro_use]
 extern crate r2pipe;
 
-pub mod middle;
 pub mod analysis;
-pub mod frontend;
 pub mod backend;
+pub mod frontend;
+pub mod middle;
+pub mod pipeline;
+pub mod web;

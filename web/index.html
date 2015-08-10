@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Radeco Web Interface</title>
+	<link rel="stylesheet" type="text/css" href="stylesheet.css"/>
+	<script type="text/javascript" src="client.js"></script>
+	<script type="text/javascript">
+		window.addEventListener("load", function() {
+			window.app = new Application();
+			new GraphVizView(document.getElementById("graph"));
+		});
+	</script>
+</head>
+<body id="body">
+	<div class="sidebar">
+		<div class="item">
+			<div class="name">r2 (not removable; has 1 ref)</div>
+			<div class="itemui">
+				Filename: ./simple2<br>
+			</div>
+		</div>
+		<div class="item">
+			<div class="name">pipeline1 [x]</div>
+			<div class="itemui">
+				<div class="pipeline">
+					<div class="pipeline-insert-point"></div>
+					<div class="pipeline-step">
+						Read Opcodes (main)
+					</div>
+					<div class="pipeline-insert-point"></div>
+					<div class="pipeline-step">
+						Build SSA
+					</div>
+					<div class="pipeline-insert-point"></div>
+					<div class="pipeline-step">
+						DCE
+					</div>
+					<div class="pipeline-insert-point"></div>
+				</div>
+			</div>
+		</div>
+		<div class="item">
+			<div class="name" contenteditable="true">name me</div>
+			<div class="itemui">
+				<a href="#">New R2</a>
+				<a href="#">New Pipeline</a>
+			</div>
+		</div>
+	</div>
+	<div class="sidebar-avoiding">
+		<embed src="../outputs/ex5-ssa.dot.svg" id="graph"/>
+	</div>
+</body>
+</html>

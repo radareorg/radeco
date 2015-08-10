@@ -1,0 +1,45 @@
+.sidebar-avoiding {
+	display: inline-block;
+	margin-right: 20em;
+	padding: 0;
+}
+
+.sidebar {
+	width: 20em;
+	height: 100%;
+	position: fixed;
+	right: 0;
+	top: 0;
+	margin: 0;
+	background-color: #cccccc;
+}
+
+.node text:hover {
+	fill: red;
+}
+
+.item {
+	margin: 0.6em;
+	padding: 0.6em;
+	background-color: #dddddd;	
+}
+
+.item .name {
+	font-weight: bold;
+}
+
+.pipeline {
+	background-color: rgb(83, 156, 181);
+	margin-top: 0.5em;
+	color: white;
+}
+
+.pipeline-step {
+	padding: 0.3em;
+	background-color: rgb(83, 156, 181);
+}
+
+.pipeline-insert-point {
+	background-color: rgba(0, 0, 0, 0.2);
+	height: 0.5em;
+}

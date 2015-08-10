@@ -7,8 +7,12 @@ authors = [
 ]
 
 [dependencies]
-regex = "*"
-petgraph = "*"
 num = "*"
+petgraph = "*"
 r2pipe = "*"
+regex = "*"
 rustc-serialize = "*"
+
+iron = "*"
+mount = "*"
+staticfile = "*"

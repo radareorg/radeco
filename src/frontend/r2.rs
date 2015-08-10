@@ -6,6 +6,7 @@ use r2pipe::R2Pipe;
 use rustc_serialize::json::{Json, ToJson, DecodeResult};
 use rustc_serialize::json;
 use std::collections::BTreeMap;
+use std::default::Default;
 
 // All the struct required for json parsing,
 use super::structs::*;
@@ -148,5 +149,11 @@ impl R2 {
 	pub fn get_fn_list(&mut self) -> Json {
 		self.send("aflj");
 		self.recv_json()
+	}
+}
+
+impl Default for R2 {
+	fn default() -> R2 {
+		R2::new("-")
 	}
 }
