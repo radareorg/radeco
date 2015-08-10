@@ -20,7 +20,6 @@ pub struct BBInfo {
 pub enum NodeData {
 	Op(ir::MOpcode, ValueType),
 	Comment(String),
-	Const(u64),
 	Phi,
 	Undefined,
 	Invalid,
@@ -37,7 +36,7 @@ pub trait SSA: CFG {
 	///////////////////////////////////////////////////////////////////////////
 
 	/// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
-	fn get_exprs(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
+	fn exprs_in(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
 	/// Check if the node at the given index is a expression or not.
 	fn is_expr(&self, i: &Self::ValueRef) -> bool;
@@ -85,11 +84,11 @@ pub trait SSA: CFG {
 	/// Returns the selector for the Block.
 	fn selector_of(&self, i: &Self::ActionRef) -> Self::ValueRef;
 
-	/// Get Jump target of a call or an unconditional jump.
-	fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
-
 	/// Get the Block for which i acts as a selector.
 	fn selects_for(&self, i: &Self::ValueRef) -> Self::ActionRef;
+
+	/// Get Jump target of a call or an unconditional jump.
+	fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
 	/// Get branches of a selector (false_branch, true_branch).
 	fn get_branches(&self, i: &Self::ValueRef) -> (Self::ActionRef, Self::ActionRef);

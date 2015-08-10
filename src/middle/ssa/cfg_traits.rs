@@ -6,7 +6,7 @@ pub trait CFG {
 	type CFEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
 	/// Get NodeIndex of all BasicBlocks available in the SSA form.
-	fn get_blocks(&self) -> Vec<Self::ActionRef>;
+	fn blocks(&self) -> Vec<Self::ActionRef>;
 
 	/// Start node of the CFG.
 	fn start_node(&self) -> Self::ActionRef;

@@ -179,15 +179,10 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
 	fn visit_expression(&mut self, i: &T::ValueRef) -> ExprVal {
 		let expr = self.g.get_node_data(i);
-		if let NodeData::Const(val) = expr {
-			return ExprVal::Const(val as u64);
-		}
-
-		// After this point, it has to be NodeData::Op.
 		let opcode = if let NodeData::Op(_opcode, _) = expr {
 			_opcode.clone()
 		} else { 
-			panic!("Found something other than an Operator or Constant");
+			panic!("Found something other than an expression!");
 		};
 
 		if let MOpcode::OpConst(v) = opcode {
@@ -243,7 +238,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 					self.mark_executable(&next_edge);
 				}
 
-				for expr in self.g.get_exprs(&block) {
+				for expr in self.g.exprs_in(&block) {
 					println!("Evaluating {:?} in cfgwl", expr);
 					let val = self.visit_expression(&expr);
 					self.set_value(&expr, val);
@@ -274,7 +269,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 				self.g.replace(*k, newnode);
 			}
 		}
-		let blocks = self.g.get_blocks();
+		let blocks = self.g.blocks();
 		let mut remove_edges = Vec::<T::CFEdgeRef>::new();
 		let mut remove_blocks = Vec::<T::ActionRef>::new();
 		for block in blocks.iter() {

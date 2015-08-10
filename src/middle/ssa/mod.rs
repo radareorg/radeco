@@ -7,6 +7,7 @@ pub mod cfg_traits;
 pub mod ssa_traits;
 pub mod ssastorage;
 pub mod ssadot;
+//pub mod verifier;
 
 pub use self::ssa_traits::{SSA, SSAMod, NodeData, ValueType, BBInfo};
 pub use self::ssastorage::{SSAStorage};

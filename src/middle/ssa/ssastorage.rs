@@ -10,7 +10,6 @@ use super::cfg_traits::{CFG, CFGMod};
 #[derive(Clone, Debug)]
 pub enum NodeData {
 	Op(ir::MOpcode, ValueType),
-	Const(u64),
 	Phi(String),
 	Comment(String),
 	Undefined,
@@ -137,7 +136,7 @@ impl CFG for SSAStorage {
 	type ActionRef = NodeIndex;
 	type CFEdgeRef = EdgeIndex;
 
-	fn get_blocks(&self) -> Vec<NodeIndex> {
+	fn blocks(&self) -> Vec<NodeIndex> {
 		let len = self.g.node_count();
 		let mut blocks = Vec::<NodeIndex>::new();
 		for i in (0..len).map(|x| NodeIndex::new(x)).collect::<Vec<NodeIndex>>().iter() {
@@ -333,15 +332,14 @@ impl CFGMod for SSAStorage {
 
 impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;
-	fn get_exprs(&self, i: &NodeIndex) -> Vec<NodeIndex> {
+	fn exprs_in(&self, i: &NodeIndex) -> Vec<NodeIndex> {
 		let mut expressions = Vec::<NodeIndex>::new();
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::ContainedInBB = self.g[edge] {
 				match self.g[othernode] {
-					NodeData::Op(_, _)
-						| NodeData::Const(_) => expressions.push(othernode.clone()),
-						_ => continue,
+					NodeData::Op(_, _) => expressions.push(othernode.clone()),
+					_ => continue,
 				}
 			}
 		}
@@ -350,8 +348,7 @@ impl SSA for SSAStorage {
 
 	fn is_expr(&self, i: &NodeIndex) -> bool {
 		match self.g[*i] {
-			NodeData::Op(_, _) |
-			NodeData::Const(_) => true,
+			NodeData::Op(_, _) => true,
 			_ => false,
 		}
 	}
@@ -491,7 +488,6 @@ impl SSA for SSAStorage {
 		}
 		match self.g[ic] {
 			NodeData::Op(opc, vt)   => TNodeData::Op(opc, vt),
-			NodeData::Const(num)    => TNodeData::Const(num),
 			NodeData::Phi(_)        => TNodeData::Phi,
 			NodeData::Comment(_)    => TNodeData::Undefined,
 			NodeData::Undefined     => TNodeData::Undefined,
@@ -574,7 +570,12 @@ impl SSAMod for SSAStorage {
 	}
 
 	fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Const(value));
+		// TODO:
+		//  - Set correct size for the data.
+		//  - Constants need/should not belong to any block.
+		let data = NodeData::Op(ir::MOpcode::OpConst(value),
+		                        ValueType::Integer { width: 64 });
+		let n = self.g.add_node(data);
 		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
@@ -692,13 +693,10 @@ impl SSAMod for SSAStorage {
 	fn remove_edge(&mut self, i: &Self::CFEdgeRef) {
 		let edge_data = self.g[*i];
 		let src_node = self.source_of(i);
-		let target_node = self.target_of(i);
-
 		if let EdgeData::Control(2) = edge_data {
 			self.g.remove_edge(*i);
 			return;
 		}
-
 		// Removing a true/false edge.
 		let selector = self.selector_of(&src_node);
 		if selector == NodeIndex::end() {
