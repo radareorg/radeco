@@ -82,6 +82,9 @@ pub trait SSA: CFG {
 	/// Returns true if the expression acts as a `Selector` for control flow.
 	fn is_selector(&self, i:&Self::ValueRef) -> bool;
 
+	/// Returns the selector for the Block.
+	fn selector_of(&self, i: &Self::ActionRef) -> Self::ValueRef;
+
 	/// Get Jump target of a call or an unconditional jump.
 	fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
 
@@ -163,4 +166,7 @@ pub trait SSAMod: SSA + CFGMod {
 
 	/// Perform a cleanup. (Will invalidate indices)
 	fn cleanup(&mut self);
+
+	/// Remove  conrtol flow edge. This is a part of SSAMod as this potentially modifies the ssa.
+	fn remove_edge(&mut self, i: &Self::CFEdgeRef);
 }

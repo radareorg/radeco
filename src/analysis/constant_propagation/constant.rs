@@ -275,20 +275,26 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 			}
 		}
 		let blocks = self.g.get_blocks();
+		let mut remove_edges = Vec::<T::CFEdgeRef>::new();
 		let mut remove_blocks = Vec::<T::ActionRef>::new();
 		for block in blocks.iter() {
+			let edges = self.g.edges_of(block);
+			for edge in edges.iter() {
+				if !self.is_executable(edge) {
+					remove_edges.push(*edge);
+				}
+			}
+			// TODO: Make this automatic in dce.
 			if !self.is_block_executable(block) {
-				println!("Not reachable block: {:?}", block);
 				remove_blocks.push(*block);
-			} else {
-				println!("Reachable block: {:?}", block);
 			}
 		}
-
+		for edge in remove_edges.iter() {
+			self.g.remove_edge(edge);
+		}
 		for block in remove_blocks.iter() {
 			self.g.remove_block(*block);
 		}
-
 		self.g.clone()
 	}
 
@@ -317,12 +323,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	fn is_block_executable(&mut self, i: &T::ActionRef) -> bool {
 		// start_node is always reachable.
 		if *i == self.g.start_node() { return true; }
-
 		let incoming = self.g.incoming_edges(i);
 		for edge in incoming.iter() {
-			if self.is_executable(edge) {
-				return true;
-			}
+			if self.is_executable(edge) { return true; }
 		}
 		return false;
 	}

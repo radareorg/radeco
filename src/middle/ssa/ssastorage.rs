@@ -21,7 +21,7 @@ pub enum NodeData {
 	RegisterState,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum EdgeData {
 	Control(u8),
 	Data(u8),
@@ -324,6 +324,7 @@ impl CFGMod for SSAStorage {
 			}
 		}
 	}
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -512,6 +513,19 @@ impl SSA for SSAStorage {
 		return false;
 	}
 
+
+	fn selector_of(&self, i: &Self::ActionRef) -> Self::ValueRef {
+		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
+		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+			if let EdgeData::Selector = self.g[edge] {
+				return othernode;
+			}
+		}
+		// TODO: Something wrong here!
+		return NodeIndex::end();
+		//panic!("No selector for this block!");
+	}
+
 	fn get_target(&self, i: &NodeIndex) -> NodeIndex {
 		let cur_block = self.get_block(i);
 		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
@@ -673,5 +687,37 @@ impl SSAMod for SSAStorage {
 			}
 		}
 		self.needs_cleaning = false;
+	}
+
+	fn remove_edge(&mut self, i: &Self::CFEdgeRef) {
+		let edge_data = self.g[*i];
+		let src_node = self.source_of(i);
+		let target_node = self.target_of(i);
+
+		if let EdgeData::Control(2) = edge_data {
+			self.g.remove_edge(*i);
+			return;
+		}
+
+		// Removing a true/false edge.
+		let selector = self.selector_of(&src_node);
+		if selector == NodeIndex::end() {
+			println!("No selector found. This may have already been replaced by a constant.");
+		} else {
+			self.remove(selector);
+		}
+
+		let other_edge = match edge_data {
+			EdgeData::Control(0) => self.true_edge_of(&src_node),
+			EdgeData::Control(1) => self.false_edge_of(&src_node),
+			_ => panic!("Found something other than a control flow edge!"),
+		};
+
+		{
+			let wt = self.g.edge_weight_mut(other_edge).unwrap();
+			*wt = EdgeData::Control(2);
+		}
+
+		self.g.remove_edge(*i);
 	}
 }

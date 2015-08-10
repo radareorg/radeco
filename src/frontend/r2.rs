@@ -80,7 +80,7 @@ impl R2 {
 	pub fn init(&mut self) {
 		self.send("e asm.esil = true");
 		self.send("e scr.color = false");
-		self.send("aa");
+		self.send("aaa");
 		self.flush();
 	}
 

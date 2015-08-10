@@ -5,7 +5,7 @@ section .text
 		;push rbp
 		;mov rbp, rsp
 		;sub rsp, 0x40
-		mov rax, 1024
+		mov rax, 2048
 		;shl rax, 5
 		;compare:
 		;shr rax, 1
