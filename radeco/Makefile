@@ -1,3 +1,8 @@
 all:
 	cargo build
-	cargo build --features deprecated
+
+run:
+	target/debug/radeco --shell /bin/ls
+
+clean:
+	cargo clean

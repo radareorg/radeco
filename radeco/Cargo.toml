@@ -5,9 +5,6 @@ authors = [
 	"pancake <pancake@nopcode.org>"
 ]
 
-[features]
-deprecated = []
-
 [dependencies]
 r2pipe = "*"
 docopt = "*"
