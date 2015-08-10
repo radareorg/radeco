@@ -40,8 +40,15 @@ impl Radeco {
     
     pub fn file(filename: String) -> Result<Radeco,&'static str> {
         let mut r = Radeco{filename: filename.to_owned(), r2p: None};
-        println!("Warning: Build with --feature deprecated until this refactor is finished");
 	let r2p = R2Pipe::spawn (&*filename).unwrap();
+	r.r2p = Some(r2p);
+        // Err("[r2pipe] initialization error")
+        Ok(r)
+    }
+
+    pub fn pipe() -> Result<Radeco,&'static str> {
+        let mut r = Radeco{filename: "".to_owned(), r2p: None};
+	let r2p = R2Pipe::open ().unwrap();
 	r.r2p = Some(r2p);
         // Err("[r2pipe] initialization error")
         Ok(r)

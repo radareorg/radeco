@@ -11,6 +11,7 @@ Type the following commands to test radeco
 	$ cargo build
 	$ target/debug/radeco --shell /bin/ls
 
-Soon, it will be possible to use radeco from inside r2:
+You can also run radeco from r2 like this:
 
-	> #!pipe radeco --shell
+	$ r2 /bin/ls
+	> #!pipe target/debug/radeco --shell -
