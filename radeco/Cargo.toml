@@ -1,10 +1,17 @@
 [package]
 name = "radeco"
 version = "0.1.0"
-authors = ["pancake"]
+authors = [
+	"pancake <pancake@nopcode.org>"
+]
+
+[features]
+deprecated = []
 
 [dependencies]
 r2pipe = "*"
+docopt = "*"
+rustc-serialize = "*"
 
 [dependencies.radeco-lib]
 git = "https://github.com/radare/radeco-lib"
