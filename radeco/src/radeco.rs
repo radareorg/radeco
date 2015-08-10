@@ -4,12 +4,13 @@ use std::io;
 use std::io::prelude::*;
 use self::r2pipe::R2Pipe;
 
-pub struct Radeco<'a> {
+pub struct Radeco {
     filename: String,
-    r2p: Option<&'a mut R2Pipe>,
+    r2p: Option<R2Pipe>,
 }
 
-impl<'a> Radeco<'a> {
+impl Radeco {
+    /* TODO: use readline, dietline or any other rust-friendly prompt library */
     pub fn shell(&mut self) -> bool {
         println!("shellify {:?}", self.filename);
         let mut stdin = io::stdin();
@@ -37,11 +38,11 @@ impl<'a> Radeco<'a> {
         true
     }
     
-    pub fn file(filename: String) -> Result<Radeco<'a>,&'static str> {
-        let r = Radeco{filename: filename.to_owned(), r2p: None};
+    pub fn file(filename: String) -> Result<Radeco,&'static str> {
+        let mut r = Radeco{filename: filename.to_owned(), r2p: None};
         println!("Warning: Build with --feature deprecated until this refactor is finished");
-	//let r2p = R2Pipe::spawn (&*filename).unwrap();
-	//r.r2p = Some(&mut r2p); // XXX this is wrong
+	let r2p = R2Pipe::spawn (&*filename).unwrap();
+	r.r2p = Some(r2p);
         // Err("[r2pipe] initialization error")
         Ok(r)
     }
