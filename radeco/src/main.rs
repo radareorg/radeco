@@ -46,6 +46,18 @@ fn radeco_file(args:&Args) -> i32 {
     0
 }
 
+fn radeco_pipe(args:&Args) -> i32 {
+    let mut r = Radeco::pipe().unwrap();
+    if args.flag_shell {
+        r.shell();
+    } else {
+        println!("Running radeco via pipe");
+	// TODO get offset, function, bin info, ..
+    }
+    r.close();
+    0
+}
+
 fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.decode())
@@ -55,7 +67,11 @@ fn main() {
         exit(0);
     }
     if args.arg_file != "" {
-        exit(radeco_file(&args));
+        if args.arg_file == "-" {
+            exit(radeco_pipe(&args));
+        } else {
+            exit(radeco_file(&args));
+        }
     }
     println!("{:?}", args);
 }
