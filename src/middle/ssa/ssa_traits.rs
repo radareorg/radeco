@@ -82,7 +82,7 @@ pub trait SSA: CFG {
 	fn is_selector(&self, i:&Self::ValueRef) -> bool;
 
 	/// Returns the selector for the Block.
-	fn selector_of(&self, i: &Self::ActionRef) -> Self::ValueRef;
+	fn selector_of(&self, i: &Self::ActionRef) -> Option<Self::ValueRef>;
 
 	/// Get the Block for which i acts as a selector.
 	fn selects_for(&self, i: &Self::ValueRef) -> Self::ActionRef;
@@ -124,6 +124,7 @@ pub trait SSA: CFG {
 	fn to_action(&self, Self::ValueRef) -> Self::ActionRef;
 
 	fn node_count(&self) -> usize;
+	fn edge_count(&self) -> usize;
 
 }
 

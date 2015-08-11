@@ -181,7 +181,6 @@ impl CFG for SSAStorage {
 	///////////////////////////////////////////////////////////////////////////
 	//// Edge accessors and helpers
 	///////////////////////////////////////////////////////////////////////////
-	
 	fn edges_of(&self, i: &NodeIndex) -> Vec<EdgeIndex> {
 		let mut edges = Vec::<EdgeIndex>::new();
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
@@ -510,16 +509,15 @@ impl SSA for SSAStorage {
 	}
 
 
-	fn selector_of(&self, i: &Self::ActionRef) -> Self::ValueRef {
+	fn selector_of(&self, i: &Self::ActionRef) -> Option<Self::ValueRef> {
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Selector = self.g[edge] {
-				return othernode;
+				return Some(othernode);
 			}
 		}
 		// TODO: Something wrong here!
-		return NodeIndex::end();
-		//panic!("No selector for this block!");
+		return None;
 	}
 
 	fn get_target(&self, i: &NodeIndex) -> NodeIndex {
@@ -558,7 +556,9 @@ impl SSA for SSAStorage {
 		self.g.node_count()
 	}
 
-	
+	fn edge_count(&self) -> usize {
+		self.g.edge_count()
+	}
 }
 
 impl SSAMod for SSAStorage {
@@ -699,10 +699,10 @@ impl SSAMod for SSAStorage {
 		}
 		// Removing a true/false edge.
 		let selector = self.selector_of(&src_node);
-		if selector == NodeIndex::end() {
+		if selector.is_none() {
 			println!("No selector found. This may have already been replaced by a constant.");
 		} else {
-			self.remove(selector);
+			self.remove(selector.unwrap());
 		}
 
 		let other_edge = match edge_data {
