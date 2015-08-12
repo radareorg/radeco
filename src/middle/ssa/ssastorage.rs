@@ -123,6 +123,13 @@ impl SSAStorage {
 		if let NodeData::BasicBlock(_) = self.g[node] { true } else { false }
 	}
 
+	pub fn is_action(&self, action: NodeIndex) -> bool {
+		match self.g[action] {
+			NodeData::BasicBlock(_) | NodeData::DynamicAction => true,
+			_ => false
+		}
+	}
+
 	pub fn remove_with_spacer(&mut self, node: NodeIndex, spacer: NodeData) {
 		if self.stable_indexing {
 			self.needs_cleaning = true;
@@ -429,10 +436,7 @@ impl SSA for SSAStorage {
 	}
 
 	fn registers_at(&self, i: NodeIndex) -> NodeIndex {
-		match self.g[i] {
-			NodeData::BasicBlock(_) | NodeData::DynamicAction => (),
-			_ => panic!()
-		};
+		assert!(self.is_action(i));
 		let mut walk = self.g.walk_edges_directed(i, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::RegisterState = self.g[edge] {

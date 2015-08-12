@@ -35,6 +35,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 	}
 
 	pub fn write_variable(&mut self, block: T::ActionRef, variable: VarId, value: T::ValueRef) {
+		assert!(!self.sealed_blocks.contains(&block));
 		self.current_def[variable].insert(block, value);
 	}
 
