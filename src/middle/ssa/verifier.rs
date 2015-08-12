@@ -5,6 +5,8 @@
 use petgraph::EdgeDirection;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 
+use std::collections::HashSet;
+
 use super::cfg_traits::{CFG, CFGMod};
 use super::ssa_traits::{SSA, ValueType};
 use super::ssastorage::{EdgeData};
@@ -28,6 +30,21 @@ impl Verify for SSAStorage {
 		let edges = self.edges_of(block);
 		// Every BB can have a maximum of 2 Outgoing CFG Edges.
 		assert!(edges.len() < 3);
+
+		let mut edgecases = [false; 256];
+
+		for edge in edges.iter() {
+			match self.g[*edge] {
+				EdgeData::Control(i) => {
+					let target = self.target_of(edge);
+					assert!(self.is_action(target));
+					assert!(!edgecases[i as usize]);
+					edgecases[i as usize] = true;
+				},
+				_ => ()
+			}
+		}
+
 		for edge in edges.iter() {
 			assert!(edge.index() < edge_count);
 			match self.g[*edge] {
@@ -35,10 +52,8 @@ impl Verify for SSAStorage {
 					// Things to lookout for:
 					//  * There must be a minimum of two edges.
 					//  * There _must_ be a selector.
-					//  * The jump targets need to be valid basic blocks.
 					//  * The jump targets must not be the same block.
 					assert!(edges.len() == 2);
-					assert!(self.selector_of(block).is_some());
 					let other_edge = match i {
 						0 => self.true_edge_of(block),
 						1 => self.false_edge_of(block),
@@ -46,21 +61,6 @@ impl Verify for SSAStorage {
 					};
 					let target_1 = self.target_of(edge);
 					let target_2 = self.target_of(&other_edge);
-					assert!(target_1.index() < node_count);
-					assert!(target_2.index() < node_count);
-					let bb1 = &self.g[target_1];
-					let bb2 = &self.g[target_2];
-					let valid_block1 = if let NodeData::BasicBlock(_)  = *bb1 {
-						true
-					} else {
-						false
-					};
-					let valid_block2 = if let NodeData::BasicBlock(_)  = *bb2 {
-						true
-					} else {
-						false
-					};
-					assert!(valid_block1 && valid_block2);
 					assert!(target_1 != target_2);
 					// No need to test the next edge.
 					break;
@@ -69,7 +69,6 @@ impl Verify for SSAStorage {
 					// Things to lookout for:
 					//  * There can be only one Unconditional Edge.
 					//  * There can be no selector.
-					//  * The target block exists and is a valid block.
 					//  * Make sure we have not introduced an unconditional jump
 					//    which self-loops.
 					let target_block = self.target_of(edge);
@@ -87,6 +86,13 @@ impl Verify for SSAStorage {
 				_ => panic!("Found something other than a control edge!"),
 			}
 		}
+
+		if edges.len() >= 2 {
+			assert!(self.selector_of(block).is_none());
+		} else {
+			assert!(self.selector_of(block).is_some());
+		}
+
 		// Make sure that this block is reachable.
 		let incoming = self.incoming_edges(block);
 		assert!((incoming.len() > 0) || *block == self.start_node());
