@@ -1,3 +1,7 @@
+//! This module offers traits for valuesets and implementations for valuesets of 64 bit integers
+//! using different compact representations, including methods for intersection and union.
+//! (Currently unused)
+
 use std::fmt::Debug;
 use std::ops::{BitAnd, BitOr};
 
@@ -12,7 +16,7 @@ mod sintrange;
 mod uintmultiple;
 mod sintmultiple;
 
-/// Value set described by bits set/cleared in the u64
+/// Value set of u64 integers with certain bits set/cleared.
 #[derive(Clone, Copy, Debug)]
 pub struct KnownBits {
     /// Bits that are cleared
@@ -21,15 +25,18 @@ pub struct KnownBits {
     pub onebits: u64
 }
 
+/// Value set of unsigned values that satisfy value % modulus = residue.
 #[derive(Clone, Copy, Debug)]
 pub struct UIntMultiple {
     pub modulus: u64,
     pub residue: u64
 }
 
+/// Value set of unsigned values between min and max.
 #[derive(Clone, Copy, Debug)]
 pub struct UIntRange { pub min: u64, pub max: u64 }
 
+/// Value set of signed values between min and max.
 #[derive(Clone, Copy, Debug)]
 pub struct SIntRange { pub min: i64, pub max: i64 }
 

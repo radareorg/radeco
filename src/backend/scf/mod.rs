@@ -1,3 +1,4 @@
+/// Data structures and algorithms for control flow restructuring.
 // SCF = Structured control flow
 
 use std::collections::BTreeMap;

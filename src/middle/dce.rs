@@ -1,7 +1,13 @@
+//! Dead code elimination
+
 use std::collections::VecDeque;
 use petgraph::graph::NodeIndex;
 use middle::ssa::{NodeData, SSAMod, SSA};
 
+/// Removes SSA nodes that are not used by any other node.
+/// The algorithm will not consider whether the uses keeping a node alive
+/// are in code that is actually executed or not. For a better analysis
+/// look at `analysis::constant_propagation`.
 pub fn collect<'a, T>(ssa: &mut T) where T:
 	SSAMod<ValueRef=NodeIndex, ActionRef=NodeIndex> +
 	Clone

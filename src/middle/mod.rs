@@ -1,3 +1,5 @@
+//! Components processing data in SSA form.
+
 pub mod cfg;
 pub mod dce;
 pub mod display;

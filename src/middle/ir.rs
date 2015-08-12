@@ -1,4 +1,5 @@
-//! Module to contain the IR.
+//! Enumerations and structs to represent instructions.
+//! Shared by the SSA representation and the intermediate representation of the ESIL parser.
 
 use std::default::Default;
 

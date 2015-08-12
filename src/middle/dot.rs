@@ -1,4 +1,4 @@
-//! Module to parse and write dot files for graphs.
+//! Graph visualization traits and functions to emit dot code.
 
 use std::collections::HashMap;
 
@@ -14,8 +14,13 @@ macro_rules! add_strings {
 	};
 }
 
+/// Represents the contents of a GraphViz attribute block
 pub enum DotAttrBlock {
+	/// The attribute block as string including the surrounding square brackets.
+	/// Values have to be escaped manually.
 	Raw(String),
+	/// List of key-value pairs.
+	/// Values will be escaped for you.
 	Attributes(Vec<(String, String)>),
 }
 
@@ -39,6 +44,7 @@ impl DotAttrBlock {
 	}
 }
 
+/// This trait enables graphs to be generated from implementors.
 pub trait GraphDot {
 	type NodeType;
 	type EdgeType;
@@ -47,6 +53,8 @@ pub trait GraphDot {
 	fn nodes(&self) -> Vec<Self::NodeType>;
 	fn edges(&self) -> Vec<Self::EdgeType>;
 	fn get_node(&self, n: usize) -> Option<&Self::NodeType>;
+
+	/// Nodes with the same node_cluster return value will be put in the same graphviz-cluster.
 	fn node_cluster(&self, _: usize) -> usize { 0 }
 
 	fn node_skip(&self, &Self::NodeType) -> bool { false }
