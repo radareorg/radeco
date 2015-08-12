@@ -33,7 +33,8 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 		};
 		sc.phiplacer.add_variables(vec![
 								   ValueType::Integer{width: 64}, // cur
-								   ValueType::Integer{width: 64}  // old
+								   ValueType::Integer{width: 64},  // old
+								   ValueType::Integer{width: 64}  // lastsz
 		]);
 		// make the following a method of regfile?
 		sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
@@ -107,6 +108,7 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 		// this would be neccesary if parser didn't use EsilCur/EsilOld
 		let _cur = self.phiplacer.read_variable(block, 0);
 		let _old = self.phiplacer.read_variable(block, 1);
+		let _lastsz = self.phiplacer.read_variable(block, 2);
 		//unimplemented!();
 		self.phiplacer.ssa.invalid_value()
 	}
@@ -118,6 +120,7 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 			MValType::Internal  => self.process_in_flag(block, mval),
 			MValType::EsilCur   => self.phiplacer.read_variable(block, 0),
 			MValType::EsilOld   => self.phiplacer.read_variable(block, 1),
+			MValType::Lastsz   => self.phiplacer.read_variable(block, 2),
 			MValType::Unknown   => self.phiplacer.ssa.invalid_value(),
 			                       //self.phiplacer.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
 			MValType::Null      => self.phiplacer.ssa.invalid_value(),
@@ -205,6 +208,11 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 		for ref instruction in &source.instructions {
 			let n0 = self.process_in(block, &instruction.operand_1);
 			let n1 = self.process_in(block, &instruction.operand_2);
+
+			if let MOpcode::OpNarrow(i) = instruction.opcode {
+				println!("Found narrow. Narrow to : {}, n0: {:?}, n1: {:?},
+				op1: {}, op2: {}", i, n0, n1, instruction.operand_1, instruction.operand_2);
+			}
 
 			if instruction.opcode == MOpcode::OpJmp {
 				// TODO: In case of static jumps, this is trivial and does not need a selector.

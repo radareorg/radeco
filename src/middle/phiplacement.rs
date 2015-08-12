@@ -41,7 +41,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 	pub fn read_variable(&mut self, block: T::ActionRef, variable: VarId) -> T::ValueRef {
 		let mut n = match {
 			self.current_def[variable].get(&block)
-		}.map(|r|*r) {
+		}.map(|r| *r) {
 			Option::Some(r) => r,
 			Option::None => self.read_variable_recursive(variable, block)
 		};

@@ -478,9 +478,12 @@ impl<'a> Parser<'a> {
 			self.add_widen_inst(&mut op1, op2.size);
 		}
 
-		let dst = self.get_tmp_register(dst_size);
-		// If it is a compare instruction, then the flags must be updated.
-		let update_flags = op == MOpcode::OpCmp;
+		let mut dst = self.get_tmp_register(dst_size);
+		let mut update_flags = false;
+		if op == MOpcode::OpCmp {
+			update_flags = true;
+			dst.size = 1;
+		}
 
 		let addr = MAddr::new(self.addr);
 		let mut inst = op.to_inst(dst.clone(), op2, op1, Some(addr));
@@ -566,7 +569,19 @@ impl<'a> Parser<'a> {
 				return Ok(mv.clone());
 			},
 			's' => {
-				return Ok(mv.clone());
+				// !!((esil->cur & (0x1<<(esil->lastsz-1)))>>(esil->lastsz-1));
+				tmp_p.stack.push(MVal::esilcur());
+				tmp_p.stack.push(MVal::esillastsz());
+				let mut s = "1,-".to_string();
+				try!(tmp_p.parse_str(&*s));
+				let v = tmp_p.stack.last().unwrap().clone();
+				let mut s = "1,<<,&";
+				try!(tmp_p.parse_str(&*s));
+				tmp_p.stack.insert(0, v.clone());
+				let mut s = ">>";
+				try!(tmp_p.parse_str(&*s));
+				s = "0,==,!";
+				try!(tmp_p.parse_str(&*s));
 			},
 			_ => panic!("Invalid internal variable!"),
 		}

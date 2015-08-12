@@ -27,6 +27,7 @@ pub enum MValType {
 	Internal,
 	EsilCur,
 	EsilOld,
+	Lastsz,
 	Unknown,
 	Null,
 }
@@ -220,6 +221,10 @@ impl MVal {
 
 	pub fn esilold() -> MVal {
 		MVal::new("".to_string(), 64, MValType::EsilOld, 0, None)
+	}
+
+	pub fn esillastsz() -> MVal {
+		MVal::new("".to_string(), 64, MValType::Lastsz, 0, None)
 	}
 }
 
