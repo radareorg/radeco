@@ -33,9 +33,9 @@ impl Verify for SSAStorage {
 			match self.g[*edge] {
 				EdgeData::Control(i) => {
 					let target = self.target_of(edge);
-					assert!(self.g.is_action(target));
-					assert!(!self.edgecases[i]);
-					self.edgecases[i] = true;
+					assert!(self.is_action(target));
+					assert!(!edgecases[i as usize]);
+					edgecases[i as usize] = true;
 				},
 				_ => ()
 			}
