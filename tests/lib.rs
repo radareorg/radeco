@@ -19,7 +19,7 @@ fn test1() {
 }
 
 #[test]
-fn test_analysis() {
+fn test_analysis1() {
 	let esil = vec!["4,5,+".to_string(), "6,*".to_string(),
 	                "100,>,zf,=".to_string(),
 					"5,rax,=".to_string(),
@@ -38,8 +38,10 @@ fn test_analysis() {
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
 		Pipeline::SSA,
+		Pipeline::Verify,
 		Pipeline::AnalyzeSSA(Analysis::ConstProp),
-		Pipeline::DCE
+		Pipeline::DCE,
+		Pipeline::Verify
 	];
 
 	let mut test = Test::new(test_name, None, None, true, pipeline);
@@ -59,6 +61,7 @@ fn test_analysis2() {
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
 		Pipeline::SSA,
+		Pipeline::Verify,
 		Pipeline::DCE,
 		Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		Pipeline::DCE

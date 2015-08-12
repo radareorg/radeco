@@ -6,9 +6,13 @@ use petgraph::EdgeDirection;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 
 use super::cfg_traits::{CFG, CFGMod};
-use super::ssa_traits::SSA;
-use super::ssastorage::{NodeData,EdgeData};
+use super::ssa_traits::{SSA, ValueType};
+use super::ssastorage::{EdgeData};
+use super::ssastorage::NodeData;
+use super::ssa_traits::NodeData as TNodeData;
+
 use super::ssastorage::SSAStorage;
+use middle::ir::{MArity, MOpcode};
 
 pub trait Verify: SSA {
 	fn verify_block(&self, i: &Self::ActionRef);
@@ -77,7 +81,7 @@ impl Verify for SSAStorage {
 					} else {
 						false
 					};
-					assert!(valid_block);
+					//assert!(valid_block);
 					assert!(*block != target_block);
 				},
 				_ => panic!("Found something other than a control edge!"),
@@ -93,8 +97,64 @@ impl Verify for SSAStorage {
 		// Make sure we have a valid node first.
 		assert!(i.index() < node_count);
 		let node_data = &self.g[*i];
+
 		match *node_data {
-			NodeData::Op(opcode, v) => {
+			NodeData::Op(opcode, ValueType::Integer { width: w }) => {
+				let operands = self.get_operands(i);
+				let op_len = operands.len();
+				let extract = |x: TNodeData| -> u16 {
+					if let TNodeData::Op(_, ValueType::Integer { width: w }) = x {
+						w
+					} else {
+						let panic_str = format!("Found {:?}, expected NodeData::Op()", x);
+						panic!(panic_str);
+					}
+				};
+
+				let n = match opcode.arity() {
+					MArity::Zero => 0,
+					MArity::Unary => 1,
+					MArity::Binary => 2,
+					_ => unimplemented!(),
+				};
+
+				{
+					let panic_str = format!("Expression {:?} has {} operands", opcode, op_len);
+					assert!(op_len == n, panic_str);
+				}
+
+				if n == 0 { return; }
+				match opcode {
+					MOpcode::OpNarrow(w0) => {
+						let w0 = self.safe_get_node_data(&operands[0])
+						             .map(&extract)
+						             .unwrap();
+						assert!(w0 > w);
+					},
+				    MOpcode::OpWiden(w0) =>  {
+						let w0 = self.safe_get_node_data(&operands[0])
+						             .map(&extract)
+						             .unwrap();
+						assert!(w0 < w);
+					},
+					MOpcode::OpCmp => {
+						let panic_str = format!("Expected width to be 1, found: {}", w);
+						assert!(w == 1, panic_str);
+					},
+					_ => {
+						let w0 = self.safe_get_node_data(&operands[0])
+						             .map(&extract)
+						             .unwrap();
+						assert!(w0 == w);
+						for op in operands.iter() {
+							let w1 = self.safe_get_node_data(op)
+							             .map(&extract)
+						                 .unwrap();
+							let panic_str = format!("{:?}: Expected size to be: {}, found: {}", opcode, w, w1);
+							assert!(w1 == w, panic_str);
+						}
+					},
+				}
 			},
 			_ => panic!("Found something other than an expression!"),
 		}

@@ -18,6 +18,7 @@ use radeco_lib::middle::dot;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ssa::SSAStorage;
 use radeco_lib::analysis::constant_propagation::constant;
+use radeco_lib::middle::ssa::verifier;
 
 use std::io::prelude::*;
 use std::fs;
@@ -43,6 +44,7 @@ pub enum Pipeline {
 	SSA,
 	AnalyzeSSA(Analysis),
 	DCE,
+	Verify,
 	CWriter,
 }
 
@@ -244,6 +246,20 @@ impl<'a> Test<'a> {
 		self.set_pipeout(&Pipeout::SSA { ssa: ssa.clone() });
 	}
 
+	fn verify(&mut self) {
+		out!("[*] Verifying the Integrity of SSA.", self.verbose);
+		let pipein = self.state.pipeout.clone().unwrap();
+		let mut ssa = if let Pipeout::SSA { ssa } = pipein {
+			ssa
+		} else {
+			panic!("Incompatible type found in the pipeline!");
+		};
+
+		{
+			verifier::verify(&ssa);
+		}
+	}
+
 	pub fn run(&mut self) {
 		let pipe_iter = self.pipeline.clone();
 		for stage in pipe_iter.iter() {
@@ -254,6 +270,7 @@ impl<'a> Test<'a> {
 				Pipeline::SSA => self.construct_ssa(),
 				Pipeline::AnalyzeSSA(ref a) => self.analyze(a),
 				Pipeline::DCE => self.dce(),
+				Pipeline::Verify => self.verify(),
 				Pipeline::CWriter => unimplemented!(),
 			}
 			self.results.push(self.state.pipeout.clone().unwrap());
