@@ -1,3 +1,6 @@
+//! Contains the struct `SubRegisterFile` which extends `PhiPlacer`s
+//! functionality by reads and writes to partial registers.
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use frontend::structs::LRegInfo;
@@ -6,20 +9,34 @@ use middle::ir::{MOpcode, WidthSpec};
 use middle::phiplacement::PhiPlacer;
 
 #[derive(Debug)]
-pub struct SubRegister {
+struct SubRegister {
 	// usize or WidthSpec
 	pub base:  usize,
 	pub shift: usize,
 	pub width: usize
 }
 
+/// A structure containing information about whole and partial registers of a platform.
+/// Upon creation it builds a vector of `ValueType`s representing whole registers
+/// to be added to a PhiPlacer.
+///
+/// It can then translate accesses to partial registers to accesses of whole registers.
+/// Shifts and masks are added automatically.
+
 pub struct SubRegisterFile {
-	pub whole_registers: Vec<ValueType>, // methods don't use this, ownership transfer of whole_r outwards desirable (currently cloning)
-	pub named_registers: HashMap<String, SubRegister>,
+	/// `ValueType`s of whole registers ready to be added to a PhiPlacer.
+	/// The index within PhiPlacer to the first register is needed
+	/// as argument `base` to `read_register` and `write_register` later.
+	// {read,write}_register don't use this, ownership transfer of whole_registers outwards desirable (currently cloning)
+	pub whole_registers: Vec<ValueType>,
+	/// Contains the respective names for the registers described in `whole_registers`
 	pub whole_names:     Vec<String>,
+
+	named_registers: HashMap<String, SubRegister>,
 }
 
 impl SubRegisterFile {
+	/// Creates a new SubRegisterFile based on a provided register profile.
 	pub fn new(reg_info: &LRegInfo) -> SubRegisterFile {
 		let mut slices = HashMap::new();
 		let mut events: Vec<(usize, usize, usize)> = Vec::new();
@@ -66,10 +83,23 @@ impl SubRegisterFile {
 		}
 	}
 
+	/// Emit code for setting the specified register to the specified value.
+	/// Will automatically insert code for shifting and masking in case of subregisters.
+	/// This implies that it also tries to read the old value of the whole register.
+	///
+	/// # Arguments
+	/// * `phiplacer` - A PhiPlacer that has already been informed of our variables.
+	///                 It will also give us access to the SSA to modify
+	/// * `base`      - Index of the PhiPlacer variable that corresponds to our first register.
+	/// * `block`     - Reference to the basic block to which operations will be appended.
+	/// * `var`       - Name of the register to write as a string.
+	/// * `value`     - An SSA node whose value shall be assigned to the register.
+	///                 As with most APIs in radeco, we will not check if the value is reachable
+	///                 from the position where the caller is trying to insert these operations.
 	pub fn write_register<'a, T: SSAMod<BBInfo=BBInfo> + 'a>(
 		&self, phiplacer: &mut PhiPlacer<'a, T>, base: usize,
 		block: T::ActionRef,
-		var: &String,
+		var: &String, // change to str?
 		mut value: T::ValueRef
 	) {
 		let info = &self.named_registers[var];
@@ -117,6 +147,20 @@ impl SubRegisterFile {
 		phiplacer.write_variable(block, id, value);
 	}
 
+	/// Emit code for reading the current value of the specified register.
+	///
+	/// # Arguments
+	/// * `phiplacer` - A PhiPlacer that has already been informed of our variables.
+	///                 It will also give us access to the SSA to modify
+	/// * `base`      - Index of the PhiPlacer variable that corresponds to our first register.
+	/// * `block`     - Reference to the basic block to which operations will be appended.
+	/// * `var`       - Name of the register to read as a string.
+	///
+	/// # Return value
+	/// A SSA node representing the value of the register as seen by the current end of `block`.
+	/// Unless prior basic blocks are marked as sealed in the PhiPlacer this will always return
+	/// a reference to a Phi node.
+	/// Either way, once nodes are sealed redundant Phi nodes are eliminated by PhiPlacer.
 	pub fn read_register<'a, T: SSAMod<BBInfo=BBInfo> + 'a>(
 		&self, phiplacer: &mut PhiPlacer<'a, T>,
 		base: usize,
