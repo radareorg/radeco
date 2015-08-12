@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `SSAStorage` struct in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, SSAStorage">
+
+    <title>radeco_lib::middle::ssa::ssastorage::SSAStorage - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>ssastorage</a></p><script>window.sidebarCurrent = {name: 'SSAStorage', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>ssastorage</a>::<wbr><a class='struct' href=''>SSAStorage</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-10554' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssastorage.rs.html#36-42' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct SSAStorage {
+    pub g: Graph&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a>, <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.EdgeData.html' title='radeco_lib::middle::ssa::ssastorage::EdgeData'>EdgeData</a>&gt;,
+    pub start_node: NodeIndex,
+    pub exit_node: NodeIndex,
+    pub stable_indexing: <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>,
+    // some fields omitted
+}</pre><h2 class='fields'>Fields</h2>
+<table><tr class='stab '>
+                                  <td id='structfield.g'><code>g</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.start_node'><code>start_node</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.exit_node'><code>exit_node</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.stable_indexing'><code>stable_indexing</code></td><td></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>() -&gt; <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h4>
+<h4 id='method.add_phi_comment' class='method'><code>fn <a href='#method.add_phi_comment' class='fnname'>add_phi_comment</a>(&amp;mut self, block: NodeIndex, comment: &amp;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>) -&gt; NodeIndex</code></h4>
+<h4 id='method.read_const' class='method'><code>fn <a href='#method.read_const' class='fnname'>read_const</a>(&amp;self, ni: NodeIndex) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>&gt;</code></h4>
+<h4 id='method.args_of_ordered' class='method'><code>fn <a href='#method.args_of_ordered' class='fnname'>args_of_ordered</a>(&amp;self, node: NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.replaced_by' class='method'><code>fn <a href='#method.replaced_by' class='fnname'>replaced_by</a>(&amp;self, node: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.is_block' class='method'><code>fn <a href='#method.is_block' class='fnname'>is_block</a>(&amp;self, node: NodeIndex) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<h4 id='method.remove_with_spacer' class='method'><code>fn <a href='#method.remove_with_spacer' class='fnname'>remove_with_spacer</a>(&amp;mut self, node: NodeIndex, spacer: <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a>)</code></h4>
+</div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFG</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='assoc_type.ActionRef' class='type'><code>type ActionRef = NodeIndex</code></h4>
+<h4 id='assoc_type.CFEdgeRef' class='type'><code>type CFEdgeRef = EdgeIndex</code></h4>
+<h4 id='method.blocks' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.blocks' class='fnname'>blocks</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.start_node' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.start_node' class='fnname'>start_node</a>(&amp;self) -&gt; NodeIndex</code></h4>
+<h4 id='method.exit_node' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.exit_node' class='fnname'>exit_node</a>(&amp;self) -&gt; NodeIndex</code></h4>
+<h4 id='method.get_unconditional' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.get_unconditional' class='fnname'>get_unconditional</a>(&amp;self, i: &amp;Self::ActionRef) -&gt; Self::ActionRef</code></h4>
+<h4 id='method.preds_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.preds_of' class='fnname'>preds_of</a>(&amp;self, node: NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.succs_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.succs_of' class='fnname'>succs_of</a>(&amp;self, node: NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.invalid_action' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.invalid_action' class='fnname'>invalid_action</a>(&amp;self) -&gt; NodeIndex</code></h4>
+<h4 id='method.edges_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.edges_of' class='fnname'>edges_of</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;EdgeIndex&gt;</code></h4>
+<h4 id='method.info' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.info' class='fnname'>info</a>(&amp;self, i: &amp;EdgeIndex) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(NodeIndex, NodeIndex)</a></code></h4>
+<h4 id='method.find_edge' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.find_edge' class='fnname'>find_edge</a>(&amp;self, source: &amp;NodeIndex, target: &amp;NodeIndex) -&gt; EdgeIndex</code></h4>
+<h4 id='method.true_edge_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.true_edge_of' class='fnname'>true_edge_of</a>(&amp;self, i: &amp;NodeIndex) -&gt; EdgeIndex</code></h4>
+<h4 id='method.false_edge_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.false_edge_of' class='fnname'>false_edge_of</a>(&amp;self, i: &amp;NodeIndex) -&gt; EdgeIndex</code></h4>
+<h4 id='method.next_edge_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.next_edge_of' class='fnname'>next_edge_of</a>(&amp;self, i: &amp;NodeIndex) -&gt; EdgeIndex</code></h4>
+<h4 id='method.incoming_edges' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.incoming_edges' class='fnname'>incoming_edges</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;EdgeIndex&gt;</code></h4>
+<h4 id='method.invalid_edge' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.invalid_edge' class='fnname'>invalid_edge</a>(&amp;self) -&gt; EdgeIndex</code></h4>
+<h4 id='method.source_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.source_of' class='fnname'>source_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h4>
+<h4 id='method.target_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html#method.target_of' class='fnname'>target_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html' title='radeco_lib::middle::ssa::cfg_traits::CFGMod'>CFGMod</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='assoc_type.BBInfo' class='type'><code>type BBInfo = <a class='struct' href='../../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a></code></h4>
+<h4 id='method.mark_start_node' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html#method.mark_start_node' class='fnname'>mark_start_node</a>(&amp;mut self, start: &amp;Self::ActionRef)</code></h4>
+<h4 id='method.mark_exit_node' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html#method.mark_exit_node' class='fnname'>mark_exit_node</a>(&amp;mut self, exit: &amp;Self::ActionRef)</code></h4>
+<h4 id='method.add_block' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html#method.add_block' class='fnname'>add_block</a>(&amp;mut self, info: Self::BBInfo) -&gt; NodeIndex</code></h4>
+<h4 id='method.add_dynamic' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html#method.add_dynamic' class='fnname'>add_dynamic</a>(&amp;mut self) -&gt; NodeIndex</code></h4>
+<h4 id='method.add_control_edge' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html#method.add_control_edge' class='fnname'>add_control_edge</a>(&amp;mut self, source: Self::ActionRef, target: Self::ActionRef, index: <a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>)</code></h4>
+<h4 id='method.remove_block' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html#method.remove_block' class='fnname'>remove_block</a>(&amp;mut self, node: Self::ActionRef)</code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>SSA</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='assoc_type.ValueRef' class='type'><code>type ValueRef = NodeIndex</code></h4>
+<h4 id='method.exprs_in' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.exprs_in' class='fnname'>exprs_in</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.is_expr' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.is_expr' class='fnname'>is_expr</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<h4 id='method.get_phis' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_phis' class='fnname'>get_phis</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.get_uses' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_uses' class='fnname'>get_uses</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.get_block' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_block' class='fnname'>get_block</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.selects_for' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.selects_for' class='fnname'>selects_for</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.get_branches' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_branches' class='fnname'>get_branches</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(NodeIndex, NodeIndex)</a></code></h4>
+<h4 id='method.get_true_branch' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_true_branch' class='fnname'>get_true_branch</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.get_false_branch' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_false_branch' class='fnname'>get_false_branch</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.registers_at' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.registers_at' class='fnname'>registers_at</a>(&amp;self, i: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.get_operands' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_operands' class='fnname'>get_operands</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.get_sparse_operands' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_sparse_operands' class='fnname'>get_sparse_operands</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>, NodeIndex)</a>&gt;</code></h4>
+<h4 id='method.get_node_data' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_node_data' class='fnname'>get_node_data</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.NodeData.html' title='radeco_lib::middle::ssa::ssa_traits::NodeData'>TNodeData</a></code></h4>
+<h4 id='method.is_selector' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.is_selector' class='fnname'>is_selector</a>(&amp;self, i: &amp;Self::ValueRef) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<h4 id='method.selector_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.selector_of' class='fnname'>selector_of</a>(&amp;self, i: &amp;Self::ActionRef) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;Self::ValueRef&gt;</code></h4>
+<h4 id='method.get_target' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_target' class='fnname'>get_target</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.args_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.args_of' class='fnname'>args_of</a>(&amp;self, node: NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.uses_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.uses_of' class='fnname'>uses_of</a>(&amp;self, node: NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
+<h4 id='method.refresh' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.refresh' class='fnname'>refresh</a>(&amp;self, node: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.invalid_value' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.invalid_value' class='fnname'>invalid_value</a>(&amp;self) -&gt; NodeIndex</code></h4>
+<h4 id='method.to_value' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.to_value' class='fnname'>to_value</a>(&amp;self, n: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.to_action' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.to_action' class='fnname'>to_action</a>(&amp;self, n: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.node_count' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.node_count' class='fnname'>node_count</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.edge_count' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.edge_count' class='fnname'>edge_count</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.lhs' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.lhs' class='fnname'>lhs</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h4>
+<h4 id='method.rhs' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.rhs' class='fnname'>rhs</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h4>
+<h4 id='method.safe_get_node_data' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.safe_get_node_data' class='fnname'>safe_get_node_data</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.NodeData.html' title='radeco_lib::middle::ssa::ssa_traits::NodeData'>NodeData</a>&gt;</code></h4>
+<h4 id='method.block_of' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.block_of' class='fnname'>block_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='method.add_op' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.add_op' class='fnname'>add_op</a>(&amp;mut self, block: NodeIndex, opc: <a class='enum' href='../../../../radeco_lib/middle/ir/enum.MOpcode.html' title='radeco_lib::middle::ir::MOpcode'>MOpcode</a>, vt: <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>) -&gt; NodeIndex</code></h4>
+<h4 id='method.add_const' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.add_const' class='fnname'>add_const</a>(&amp;mut self, block: NodeIndex, value: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; NodeIndex</code></h4>
+<h4 id='method.add_phi' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.add_phi' class='fnname'>add_phi</a>(&amp;mut self, block: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.add_undefined' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.add_undefined' class='fnname'>add_undefined</a>(&amp;mut self, block: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.add_comment' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.add_comment' class='fnname'>add_comment</a>(&amp;mut self, block: NodeIndex, msg: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>) -&gt; NodeIndex</code></h4>
+<h4 id='method.mark_selector' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.mark_selector' class='fnname'>mark_selector</a>(&amp;mut self, node: Self::ValueRef, block: Self::ActionRef)</code></h4>
+<h4 id='method.phi_use' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.phi_use' class='fnname'>phi_use</a>(&amp;mut self, phi: NodeIndex, node: NodeIndex)</code></h4>
+<h4 id='method.phi_unuse' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.phi_unuse' class='fnname'>phi_unuse</a>(&amp;mut self, phi: NodeIndex, node: NodeIndex)</code></h4>
+<h4 id='method.op_use' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.op_use' class='fnname'>op_use</a>(&amp;mut self, node: NodeIndex, index: <a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>, argument: NodeIndex)</code></h4>
+<h4 id='method.replace' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.replace' class='fnname'>replace</a>(&amp;mut self, node: NodeIndex, replacement: NodeIndex)</code></h4>
+<h4 id='method.remove' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.remove' class='fnname'>remove</a>(&amp;mut self, node: NodeIndex)</code></h4>
+<h4 id='method.cleanup' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.cleanup' class='fnname'>cleanup</a>(&amp;mut self)</code></h4>
+<h4 id='method.remove_edge' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html#method.remove_edge' class='fnname'>remove_edge</a>(&amp;mut self, i: &amp;Self::CFEdgeRef)</code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='../../../../radeco_lib/middle/dot/trait.GraphDot.html' title='radeco_lib::middle::dot::GraphDot'>GraphDot</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='assoc_type.NodeType' class='type'><code>type NodeType = <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a></code></h4>
+<h4 id='assoc_type.EdgeType' class='type'><code>type EdgeType = Edge&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.EdgeData.html' title='radeco_lib::middle::ssa::ssastorage::EdgeData'>EdgeData</a>&gt;</code></h4>
+<h4 id='method.configure' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.configure' class='fnname'>configure</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a></code></h4>
+<h4 id='method.nodes' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.nodes' class='fnname'>nodes</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::NodeType&gt;</code></h4>
+<h4 id='method.edges' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edges' class='fnname'>edges</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::EdgeType&gt;</code></h4>
+<h4 id='method.get_node' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.get_node' class='fnname'>get_node</a>(&amp;self, n: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;&amp;Self::NodeType&gt;</code></h4>
+<h4 id='method.node_cluster' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.node_cluster' class='fnname'>node_cluster</a>(&amp;self, n: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.edge_source' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_source' class='fnname'>edge_source</a>(&amp;self, edge: &amp;Edge&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.EdgeData.html' title='radeco_lib::middle::ssa::ssastorage::EdgeData'>EdgeData</a>&gt;) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.edge_target' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_target' class='fnname'>edge_target</a>(&amp;self, edge: &amp;Edge&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.EdgeData.html' title='radeco_lib::middle::ssa::ssastorage::EdgeData'>EdgeData</a>&gt;) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.edge_skip' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_skip' class='fnname'>edge_skip</a>(&amp;self, edge: &amp;Edge&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.EdgeData.html' title='radeco_lib::middle::ssa::ssastorage::EdgeData'>EdgeData</a>&gt;) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<h4 id='method.edge_attrs' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_attrs' class='fnname'>edge_attrs</a>(&amp;self, edge: &amp;Edge&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.EdgeData.html' title='radeco_lib::middle::ssa::ssastorage::EdgeData'>EdgeData</a>&gt;) -&gt; <a class='enum' href='../../../../radeco_lib/middle/dot/enum.DotAttrBlock.html' title='radeco_lib::middle::dot::DotAttrBlock'>DotAttrBlock</a></code></h4>
+<h4 id='method.node_attrs' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.node_attrs' class='fnname'>node_attrs</a>(&amp;self, node: &amp;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a>) -&gt; <a class='enum' href='../../../../radeco_lib/middle/dot/enum.DotAttrBlock.html' title='radeco_lib::middle::dot::DotAttrBlock'>DotAttrBlock</a></code></h4>
+<h4 id='method.node_skip' class='method'><code>fn <a href='../../../../radeco_lib/middle/dot/trait.GraphDot.html#method.node_skip' class='fnname'>node_skip</a>(&amp;self, &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/dot/trait.GraphDot.html' title='radeco_lib::middle::dot::GraphDot'>NodeType</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/verifier/trait.Verify.html' title='radeco_lib::middle::ssa::verifier::Verify'>Verify</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='method.verify_block' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/verifier/trait.Verify.html#method.verify_block' class='fnname'>verify_block</a>(&amp;self, block: &amp;NodeIndex)</code></h4>
+<h4 id='method.verify_expr' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/verifier/trait.Verify.html#method.verify_expr' class='fnname'>verify_expr</a>(&amp;self, i: &amp;NodeIndex)</code></h4>
+</div><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h3><div class='impl-items'><h4 id='method.clone' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></h4>
+<h4 id='method.clone_from' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../../jquery.js"></script>
+    <script src="../../../../main.js"></script>
+    
+    <script async src="../../../../search-index.js"></script>
+</body>
+</html>

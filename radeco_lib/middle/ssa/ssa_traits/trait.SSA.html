@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `SSA` trait in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, SSA">
+
+    <title>radeco_lib::middle::ssa::ssa_traits::SSA - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>ssa_traits</a></p><script>window.sidebarCurrent = {name: 'SSA', ty: 'trait', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content trait">
+<h1 class='fqn'><span class='in-band'>Trait <a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>ssa_traits</a>::<wbr><a class='trait' href=''>SSA</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-9697' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssa_traits.rs.html#31-129' title='goto source code'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait SSA: <a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFG</a> {
+    type ValueRef: <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html' title='core::cmp::Eq'>Eq</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>;
+    fn <a href='#tymethod.exprs_in' class='fnname'>exprs_in</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;;
+    fn <a href='#tymethod.is_expr' class='fnname'>is_expr</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>;
+    fn <a href='#tymethod.get_phis' class='fnname'>get_phis</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;;
+    fn <a href='#tymethod.get_uses' class='fnname'>get_uses</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;;
+    fn <a href='#tymethod.get_block' class='fnname'>get_block</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>;
+    fn <a href='#tymethod.get_operands' class='fnname'>get_operands</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;;
+    fn <a href='#tymethod.get_sparse_operands' class='fnname'>get_sparse_operands</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>)</a>&gt;;
+    fn <a href='#tymethod.get_node_data' class='fnname'>get_node_data</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.NodeData.html' title='radeco_lib::middle::ssa::ssa_traits::NodeData'>NodeData</a>;
+    fn <a href='#tymethod.is_selector' class='fnname'>is_selector</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>;
+    fn <a href='#tymethod.selector_of' class='fnname'>selector_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;;
+    fn <a href='#tymethod.selects_for' class='fnname'>selects_for</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>;
+    fn <a href='#tymethod.get_target' class='fnname'>get_target</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>;
+    fn <a href='#tymethod.get_branches' class='fnname'>get_branches</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>)</a>;
+    fn <a href='#tymethod.get_true_branch' class='fnname'>get_true_branch</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>;
+    fn <a href='#tymethod.get_false_branch' class='fnname'>get_false_branch</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>;
+    fn <a href='#tymethod.args_of' class='fnname'>args_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;;
+    fn <a href='#tymethod.uses_of' class='fnname'>uses_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;;
+    fn <a href='#tymethod.registers_at' class='fnname'>registers_at</a>(&amp;self, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>;
+    fn <a href='#tymethod.refresh' class='fnname'>refresh</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>;
+    fn <a href='#tymethod.invalid_value' class='fnname'>invalid_value</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>;
+    fn <a href='#tymethod.to_value' class='fnname'>to_value</a>(&amp;self, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>;
+    fn <a href='#tymethod.to_action' class='fnname'>to_action</a>(&amp;self, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>;
+    fn <a href='#tymethod.node_count' class='fnname'>node_count</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>;
+    fn <a href='#tymethod.edge_count' class='fnname'>edge_count</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>;
+
+    fn <a href='#method.lhs' class='fnname'>lhs</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a> { ... }
+    fn <a href='#method.rhs' class='fnname'>rhs</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a> { ... }
+    fn <a href='#method.safe_get_node_data' class='fnname'>safe_get_node_data</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.NodeData.html' title='radeco_lib::middle::ssa::ssa_traits::NodeData'>NodeData</a>&gt; { ... }
+    fn <a href='#method.block_of' class='fnname'>block_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a> { ... }
+}</pre><div class='docblock'><p>Trait for the SSA Form implementation.</p>
+</div>
+            <h2 id='associated-types'>Associated Types</h2>
+            <div class='methods'>
+        <h3 id='associatedtype.ValueRef' class='method stab '><code>type ValueRef: <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html' title='core::cmp::Eq'>Eq</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a></code></h3></div>
+            <h2 id='required-methods'>Required Methods</h2>
+            <div class='methods'>
+        <h3 id='tymethod.exprs_in' class='method stab '><code>fn <a href='#tymethod.exprs_in' class='fnname'>exprs_in</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;</code></h3><div class='docblock'><p>Get all the NodeIndex of all operations/expressions in the BasicBlock with index &#39;i&#39;.</p>
+</div><h3 id='tymethod.is_expr' class='method stab '><code>fn <a href='#tymethod.is_expr' class='fnname'>is_expr</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h3><div class='docblock'><p>Check if the node at the given index is a expression or not.</p>
+</div><h3 id='tymethod.get_phis' class='method stab '><code>fn <a href='#tymethod.get_phis' class='fnname'>get_phis</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;</code></h3><div class='docblock'><p>Get all phis in the BasicBlock with index &#39;i&#39;.</p>
+</div><h3 id='tymethod.get_uses' class='method stab '><code>fn <a href='#tymethod.get_uses' class='fnname'>get_uses</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;</code></h3><div class='docblock'><p>Get all the uses of the node with index &#39;i&#39;.</p>
+</div><h3 id='tymethod.get_block' class='method stab '><code>fn <a href='#tymethod.get_block' class='fnname'>get_block</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h3><div class='docblock'><p>Get the NodeIndex of the BasicBlock to which node with index &#39;i&#39; belongs to.</p>
+</div><h3 id='tymethod.get_operands' class='method stab '><code>fn <a href='#tymethod.get_operands' class='fnname'>get_operands</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;</code></h3><div class='docblock'><p>Get the operands for the operation with NodeIndex &#39;i&#39;.</p>
+</div><h3 id='tymethod.get_sparse_operands' class='method stab '><code>fn <a href='#tymethod.get_sparse_operands' class='fnname'>get_sparse_operands</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>)</a>&gt;</code></h3><div class='docblock'><p>Get the operands for the operation with NodeIndex &#39;i&#39; as tuples.</p>
+</div><h3 id='tymethod.get_node_data' class='method stab '><code>fn <a href='#tymethod.get_node_data' class='fnname'>get_node_data</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.NodeData.html' title='radeco_lib::middle::ssa::ssa_traits::NodeData'>NodeData</a></code></h3><div class='docblock'><p>Get the actual NodeData.</p>
+</div><h3 id='tymethod.is_selector' class='method stab '><code>fn <a href='#tymethod.is_selector' class='fnname'>is_selector</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h3><div class='docblock'><p>Returns true if the expression acts as a <code>Selector</code> for control flow.</p>
+</div><h3 id='tymethod.selector_of' class='method stab '><code>fn <a href='#tymethod.selector_of' class='fnname'>selector_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;</code></h3><div class='docblock'><p>Returns the selector for the Block.</p>
+</div><h3 id='tymethod.selects_for' class='method stab '><code>fn <a href='#tymethod.selects_for' class='fnname'>selects_for</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h3><div class='docblock'><p>Get the Block for which i acts as a selector.</p>
+</div><h3 id='tymethod.get_target' class='method stab '><code>fn <a href='#tymethod.get_target' class='fnname'>get_target</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h3><div class='docblock'><p>Get Jump target of a call or an unconditional jump.</p>
+</div><h3 id='tymethod.get_branches' class='method stab '><code>fn <a href='#tymethod.get_branches' class='fnname'>get_branches</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>)</a></code></h3><div class='docblock'><p>Get branches of a selector (false_branch, true_branch).</p>
+</div><h3 id='tymethod.get_true_branch' class='method stab '><code>fn <a href='#tymethod.get_true_branch' class='fnname'>get_true_branch</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h3><div class='docblock'><p>Helper method that gets only the true branch.</p>
+</div><h3 id='tymethod.get_false_branch' class='method stab '><code>fn <a href='#tymethod.get_false_branch' class='fnname'>get_false_branch</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h3><div class='docblock'><p>Helper method that gets only the false branch.</p>
+</div><h3 id='tymethod.args_of' class='method stab '><code>fn <a href='#tymethod.args_of' class='fnname'>args_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;</code></h3><div class='docblock'><p>Gets the data dependencies of a value node in any order.
+(See get_operands for ordered return value)</p>
+</div><h3 id='tymethod.uses_of' class='method stab '><code>fn <a href='#tymethod.uses_of' class='fnname'>uses_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>&gt;</code></h3><div class='docblock'><p>Gets uses dependents of a value node.
+(Equivalent as <code>SSAMod::get_uses</code>)</p>
+</div><h3 id='tymethod.registers_at' class='method stab '><code>fn <a href='#tymethod.registers_at' class='fnname'>registers_at</a>(&amp;self, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h3><div class='docblock'><p>Get a node that has all register values at the beginning of the specified basic block as args</p>
+</div><h3 id='tymethod.refresh' class='method stab '><code>fn <a href='#tymethod.refresh' class='fnname'>refresh</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h3><div class='docblock'><p>Updates a node reference to the latest version in case of replacement</p>
+</div><h3 id='tymethod.invalid_value' class='method stab '><code>fn <a href='#tymethod.invalid_value' class='fnname'>invalid_value</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h3><h3 id='tymethod.to_value' class='method stab '><code>fn <a href='#tymethod.to_value' class='fnname'>to_value</a>(&amp;self, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h3><h3 id='tymethod.to_action' class='method stab '><code>fn <a href='#tymethod.to_action' class='fnname'>to_action</a>(&amp;self, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h3><h3 id='tymethod.node_count' class='method stab '><code>fn <a href='#tymethod.node_count' class='fnname'>node_count</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h3><h3 id='tymethod.edge_count' class='method stab '><code>fn <a href='#tymethod.edge_count' class='fnname'>edge_count</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h3></div>
+            <h2 id='provided-methods'>Provided Methods</h2>
+            <div class='methods'>
+        <h3 id='method.lhs' class='method stab '><code>fn <a href='#method.lhs' class='fnname'>lhs</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h3><div class='docblock'><p>Get the lhs() of the Operation with NodeIndex &#39;i&#39;.</p>
+</div><h3 id='method.rhs' class='method stab '><code>fn <a href='#method.rhs' class='fnname'>rhs</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a></code></h3><div class='docblock'><p>Get the rhs() of the Operation with NodeIndex &#39;i&#39;.</p>
+</div><h3 id='method.safe_get_node_data' class='method stab '><code>fn <a href='#method.safe_get_node_data' class='fnname'>safe_get_node_data</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.NodeData.html' title='radeco_lib::middle::ssa::ssa_traits::NodeData'>NodeData</a>&gt;</code></h3><h3 id='method.block_of' class='method stab '><code>fn <a href='#method.block_of' class='fnname'>block_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ValueRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>ActionRef</a></code></h3><div class='docblock'><p>Get the NodeIndex of the BasicBlock to which node with index &#39;i&#39; belongs to.
+(Alias for get_block)</p>
+</div></div>
+        <h2 id='implementors'>Implementors</h2>
+        <ul class='item-list' id='implementors-list'>
+    <li><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>SSA</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></li>
+</ul><script type="text/javascript" async
+                              src="../../../../implementors/radeco_lib/middle/ssa/ssa_traits/trait.SSA.js">
+                      </script></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../../jquery.js"></script>
+    <script src="../../../../main.js"></script>
+    
+    <script async src="../../../../search-index.js"></script>
+</body>
+</html>

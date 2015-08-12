@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `valueset` mod in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, valueset">
+
+    <title>radeco_lib::analysis::valueset - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>analysis</a></p><script>window.sidebarCurrent = {name: 'valueset', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Module <a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>analysis</a>::<wbr><a class='mod' href=''>valueset</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-15731' class='srclink' href='../../../src/radeco_lib/analysis/valueset/mod.rs.html#1-106' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>This module offers traits for valuesets and implementations for valuesets of 64 bit integers
+using different compact representations, including methods for intersection and union.
+(Currently unused)</p>
+</div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.KnownBits.html'
+                               title='radeco_lib::analysis::valueset::KnownBits'>KnownBits</a></td>
+                        <td class='docblock short'>
+                             <p>Value set of u64 integers with certain bits set/cleared.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.SIntRange.html'
+                               title='radeco_lib::analysis::valueset::SIntRange'>SIntRange</a></td>
+                        <td class='docblock short'>
+                             <p>Value set of signed values between min and max.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.UIntMultiple.html'
+                               title='radeco_lib::analysis::valueset::UIntMultiple'>UIntMultiple</a></td>
+                        <td class='docblock short'>
+                             <p>Value set of unsigned values that satisfy value % modulus = residue.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.UIntRange.html'
+                               title='radeco_lib::analysis::valueset::UIntRange'>UIntRange</a></td>
+                        <td class='docblock short'>
+                             <p>Value set of unsigned values between min and max.</p>
+
+                        </td>
+                    </tr>
+                </table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.ScannableSet.html'
+                               title='radeco_lib::analysis::valueset::ScannableSet'>ScannableSet</a></td>
+                        <td class='docblock short'>
+                             <p>A value set over a totally ordered domain with methods to query the next greater or smaller value</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.ValueSet.html'
+                               title='radeco_lib::analysis::valueset::ValueSet'>ValueSet</a></td>
+                        <td class='docblock short'>
+                             <p>A value set. Some implementations introduce false positives when intersected or unified with each other.</p>
+
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["SubRegisterFile","A structure containing information about whole and partial registers of a platform. Upon creation it builds a vector of `ValueType`s representing whole registers to be added to a PhiPlacer."]]});

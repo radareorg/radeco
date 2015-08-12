@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `SubRegisterFile` struct in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, SubRegisterFile">
+
+    <title>radeco_lib::middle::regfile::SubRegisterFile - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>regfile</a></p><script>window.sidebarCurrent = {name: 'SubRegisterFile', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>regfile</a>::<wbr><a class='struct' href=''>SubRegisterFile</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-8483' class='srclink' href='../../../src/radeco_lib/middle/regfile.rs.html#26-36' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct SubRegisterFile {
+    pub whole_registers: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='enum' href='../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>&gt;,
+    pub whole_names: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;,
+    // some fields omitted
+}</pre><div class='docblock'><p>A structure containing information about whole and partial registers of a platform.
+Upon creation it builds a vector of <code>ValueType</code>s representing whole registers
+to be added to a PhiPlacer.</p>
+
+<p>It can then translate accesses to partial registers to accesses of whole registers.
+Shifts and masks are added automatically.</p>
+</div><h2 class='fields'>Fields</h2>
+<table><tr class='stab '>
+                                  <td id='structfield.whole_registers'><code>whole_registers</code></td><td><div class='docblock'><p><code>ValueType</code>s of whole registers ready to be added to a PhiPlacer.
+The index within PhiPlacer to the first register is needed
+as argument <code>base</code> to <code>read_register</code> and <code>write_register</code> later.</p>
+</div></td></tr><tr class='stab '>
+                                  <td id='structfield.whole_names'><code>whole_names</code></td><td><div class='docblock'><p>Contains the respective names for the registers described in <code>whole_registers</code></p>
+</div></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../../../radeco_lib/middle/regfile/struct.SubRegisterFile.html' title='radeco_lib::middle::regfile::SubRegisterFile'>SubRegisterFile</a></code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>(reg_info: &amp;<a class='struct' href='../../../radeco_lib/frontend/structs/struct.LRegInfo.html' title='radeco_lib::frontend::structs::LRegInfo'>LRegInfo</a>) -&gt; <a class='struct' href='../../../radeco_lib/middle/regfile/struct.SubRegisterFile.html' title='radeco_lib::middle::regfile::SubRegisterFile'>SubRegisterFile</a></code></h4>
+<div class='docblock'><p>Creates a new SubRegisterFile based on a provided register profile.</p>
+</div><h4 id='method.write_register' class='method'><code>fn <a href='#method.write_register' class='fnname'>write_register</a>&lt;'a, T: <a class='trait' href='../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a>&lt;BBInfo=<a class='struct' href='../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a>&gt; + 'a&gt;(&amp;self, phiplacer: &amp;mut <a class='struct' href='../../../radeco_lib/middle/phiplacement/struct.PhiPlacer.html' title='radeco_lib::middle::phiplacement::PhiPlacer'>PhiPlacer</a>&lt;'a, T&gt;, base: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, block: T::ActionRef, var: &amp;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>, value: T::ValueRef)</code></h4>
+<div class='docblock'><p>Emit code for setting the specified register to the specified value.
+Will automatically insert code for shifting and masking in case of subregisters.
+This implies that it also tries to read the old value of the whole register.</p>
+
+<h1 id="arguments" class='section-header'><a
+                           href="#arguments">Arguments</a></h1>
+<ul>
+<li><code>phiplacer</code> - A PhiPlacer that has already been informed of our variables.
+            It will also give us access to the SSA to modify</li>
+<li><code>base</code>      - Index of the PhiPlacer variable that corresponds to our first register.</li>
+<li><code>block</code>     - Reference to the basic block to which operations will be appended.</li>
+<li><code>var</code>       - Name of the register to write as a string.</li>
+<li><code>value</code>     - An SSA node whose value shall be assigned to the register.
+            As with most APIs in radeco, we will not check if the value is reachable
+            from the position where the caller is trying to insert these operations.</li>
+</ul>
+</div><h4 id='method.read_register' class='method'><code>fn <a href='#method.read_register' class='fnname'>read_register</a>&lt;'a, T: <a class='trait' href='../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a>&lt;BBInfo=<a class='struct' href='../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a>&gt; + 'a&gt;(&amp;self, phiplacer: &amp;mut <a class='struct' href='../../../radeco_lib/middle/phiplacement/struct.PhiPlacer.html' title='radeco_lib::middle::phiplacement::PhiPlacer'>PhiPlacer</a>&lt;'a, T&gt;, base: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, block: T::ActionRef, var: &amp;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>) -&gt; T::ValueRef</code></h4>
+<div class='docblock'><p>Emit code for reading the current value of the specified register.</p>
+
+<h1 id="arguments" class='section-header'><a
+                           href="#arguments">Arguments</a></h1>
+<ul>
+<li><code>phiplacer</code> - A PhiPlacer that has already been informed of our variables.
+            It will also give us access to the SSA to modify</li>
+<li><code>base</code>      - Index of the PhiPlacer variable that corresponds to our first register.</li>
+<li><code>block</code>     - Reference to the basic block to which operations will be appended.</li>
+<li><code>var</code>       - Name of the register to read as a string.</li>
+</ul>
+
+<h1 id="return-value" class='section-header'><a
+                           href="#return-value">Return value</a></h1>
+<p>A SSA node representing the value of the register as seen by the current end of <code>block</code>.
+Unless prior basic blocks are marked as sealed in the PhiPlacer this will always return
+a reference to a Phi node.
+Either way, once nodes are sealed redundant Phi nodes are eliminated by PhiPlacer.</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

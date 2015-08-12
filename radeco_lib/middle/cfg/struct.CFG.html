@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `CFG` struct in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, CFG">
+
+    <title>radeco_lib::middle::cfg::CFG - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>cfg</a></p><script>window.sidebarCurrent = {name: 'CFG', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>cfg</a>::<wbr><a class='struct' href=''>CFG</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-663' class='srclink' href='../../../src/radeco_lib/middle/cfg.rs.html#62-67' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct CFG {
+    pub g: Graph&lt;<a class='enum' href='../../../radeco_lib/middle/cfg/enum.NodeData.html' title='radeco_lib::middle::cfg::NodeData'>NodeData</a>, <a class='struct' href='../../../radeco_lib/middle/cfg/struct.EdgeData.html' title='radeco_lib::middle::cfg::EdgeData'>EdgeData</a>&gt;,
+    pub entry: NodeIndex,
+    pub exit: NodeIndex,
+    pub bbs: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/btree/map/struct.BTreeMap.html' title='collections::btree::map::BTreeMap'>BTreeMap</a>&lt;<a class='type' href='../../../radeco_lib/middle/ir/type.Address.html' title='radeco_lib::middle::ir::Address'>Address</a>, NodeIndex&gt;,
+}</pre><h2 class='fields'>Fields</h2>
+<table><tr class='stab '>
+                                  <td id='structfield.g'><code>g</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.entry'><code>entry</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.exit'><code>exit</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.bbs'><code>bbs</code></td><td></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../../../radeco_lib/middle/cfg/struct.CFG.html' title='radeco_lib::middle::cfg::CFG'>CFG</a></code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>() -&gt; <a class='struct' href='../../../radeco_lib/middle/cfg/struct.CFG.html' title='radeco_lib::middle::cfg::CFG'>CFG</a></code></h4>
+<h4 id='method.assign_bbs' class='method'><code>fn <a href='#method.assign_bbs' class='fnname'>assign_bbs</a>(&amp;mut self, insts: &amp;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../../../radeco_lib/middle/ir/struct.MInst.html' title='radeco_lib::middle::ir::MInst'>MInst</a>&gt;)</code></h4>
+<h4 id='method.build' class='method'><code>fn <a href='#method.build' class='fnname'>build</a>(&amp;mut self, insts: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../../../radeco_lib/middle/ir/struct.MInst.html' title='radeco_lib::middle::ir::MInst'>MInst</a>&gt;)</code></h4>
+<h4 id='method.mark_reachable' class='method'><code>fn <a href='#method.mark_reachable' class='fnname'>mark_reachable</a>(&amp;mut self)</code></h4>
+<h4 id='method.add_new_block' class='method'><code>fn <a href='#method.add_new_block' class='fnname'>add_new_block</a>(&amp;mut self) -&gt; NodeIndex</code></h4>
+<h4 id='method.add_block' class='method'><code>fn <a href='#method.add_block' class='fnname'>add_block</a>(&amp;mut self, bb: <a class='struct' href='../../../radeco_lib/middle/cfg/struct.BasicBlock.html' title='radeco_lib::middle::cfg::BasicBlock'>BasicBlock</a>)</code></h4>
+<h4 id='method.get_block' class='method'><code>fn <a href='#method.get_block' class='fnname'>get_block</a>(&amp;mut self, n: NodeIndex) -&gt; &amp;mut <a class='enum' href='../../../radeco_lib/middle/cfg/enum.NodeData.html' title='radeco_lib::middle::cfg::NodeData'>NodeData</a></code></h4>
+<h4 id='method.add_edge' class='method'><code>fn <a href='#method.add_edge' class='fnname'>add_edge</a>(&amp;mut self, src: NodeIndex, target: NodeIndex, edge_data: <a class='struct' href='../../../radeco_lib/middle/cfg/struct.EdgeData.html' title='radeco_lib::middle::cfg::EdgeData'>EdgeData</a>)</code></h4>
+</div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><code>impl <a class='trait' href='../../../radeco_lib/middle/dot/trait.GraphDot.html' title='radeco_lib::middle::dot::GraphDot'>GraphDot</a> for <a class='struct' href='../../../radeco_lib/middle/cfg/struct.CFG.html' title='radeco_lib::middle::cfg::CFG'>CFG</a></code></h3><div class='impl-items'><h4 id='assoc_type.NodeType' class='type'><code>type NodeType = <a class='enum' href='../../../radeco_lib/middle/cfg/enum.NodeData.html' title='radeco_lib::middle::cfg::NodeData'>NodeData</a></code></h4>
+<h4 id='assoc_type.EdgeType' class='type'><code>type EdgeType = Edge&lt;<a class='struct' href='../../../radeco_lib/middle/cfg/struct.EdgeData.html' title='radeco_lib::middle::cfg::EdgeData'>EdgeData</a>&gt;</code></h4>
+<h4 id='method.configure' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.configure' class='fnname'>configure</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a></code></h4>
+<h4 id='method.nodes' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.nodes' class='fnname'>nodes</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::NodeType&gt;</code></h4>
+<h4 id='method.edges' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edges' class='fnname'>edges</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::EdgeType&gt;</code></h4>
+<h4 id='method.get_node' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.get_node' class='fnname'>get_node</a>(&amp;self, n: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;&amp;Self::NodeType&gt;</code></h4>
+<h4 id='method.edge_source' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_source' class='fnname'>edge_source</a>(&amp;self, edge: &amp;Edge&lt;<a class='struct' href='../../../radeco_lib/middle/cfg/struct.EdgeData.html' title='radeco_lib::middle::cfg::EdgeData'>EdgeData</a>&gt;) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.edge_target' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_target' class='fnname'>edge_target</a>(&amp;self, edge: &amp;Edge&lt;<a class='struct' href='../../../radeco_lib/middle/cfg/struct.EdgeData.html' title='radeco_lib::middle::cfg::EdgeData'>EdgeData</a>&gt;) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.edge_attrs' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_attrs' class='fnname'>edge_attrs</a>(&amp;self, edge: &amp;Edge&lt;<a class='struct' href='../../../radeco_lib/middle/cfg/struct.EdgeData.html' title='radeco_lib::middle::cfg::EdgeData'>EdgeData</a>&gt;) -&gt; <a class='enum' href='../../../radeco_lib/middle/dot/enum.DotAttrBlock.html' title='radeco_lib::middle::dot::DotAttrBlock'>DotAttrBlock</a></code></h4>
+<h4 id='method.node_attrs' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.node_attrs' class='fnname'>node_attrs</a>(&amp;self, node: &amp;<a class='enum' href='../../../radeco_lib/middle/cfg/enum.NodeData.html' title='radeco_lib::middle::cfg::NodeData'>NodeData</a>) -&gt; <a class='enum' href='../../../radeco_lib/middle/dot/enum.DotAttrBlock.html' title='radeco_lib::middle::dot::DotAttrBlock'>DotAttrBlock</a></code></h4>
+<h4 id='method.node_cluster' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.node_cluster' class='fnname'>node_cluster</a>(&amp;self, _: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.node_skip' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.node_skip' class='fnname'>node_skip</a>(&amp;self, &amp;Self::<a class='trait' href='../../../radeco_lib/middle/dot/trait.GraphDot.html' title='radeco_lib::middle::dot::GraphDot'>NodeType</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<h4 id='method.edge_skip' class='method'><code>fn <a href='../../../radeco_lib/middle/dot/trait.GraphDot.html#method.edge_skip' class='fnname'>edge_skip</a>(&amp;self, &amp;Self::<a class='trait' href='../../../radeco_lib/middle/dot/trait.GraphDot.html' title='radeco_lib::middle::dot::GraphDot'>EdgeType</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+</div><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='struct' href='../../../radeco_lib/middle/cfg/struct.CFG.html' title='radeco_lib::middle::cfg::CFG'>CFG</a></code></h3><div class='impl-items'><h4 id='method.clone' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='struct' href='../../../radeco_lib/middle/cfg/struct.CFG.html' title='radeco_lib::middle::cfg::CFG'>CFG</a></code></h4>
+<h4 id='method.clone_from' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

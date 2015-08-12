@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `MVal` struct in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, MVal">
+
+    <title>radeco_lib::middle::ir::MVal - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>ir</a></p><script>window.sidebarCurrent = {name: 'MVal', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>ir</a>::<wbr><a class='struct' href=''>MVal</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-6919' class='srclink' href='../../../src/radeco_lib/middle/ir.rs.html#79-86' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct MVal {
+    pub name: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>,
+    pub size: <a class='type' href='../../../radeco_lib/middle/ir/type.WidthSpec.html' title='radeco_lib::middle::ir::WidthSpec'>WidthSpec</a>,
+    pub val_type: <a class='enum' href='../../../radeco_lib/middle/ir/enum.MValType.html' title='radeco_lib::middle::ir::MValType'>MValType</a>,
+    pub reg_info: <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='../../../radeco_lib/middle/ir/struct.MRegInfo.html' title='radeco_lib::middle::ir::MRegInfo'>MRegInfo</a>&gt;,
+    pub typeset: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>,
+    pub as_literal: <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>&gt;,
+}</pre><h2 class='fields'>Fields</h2>
+<table><tr class='stab '>
+                                  <td id='structfield.name'><code>name</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.size'><code>size</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.val_type'><code>val_type</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.reg_info'><code>reg_info</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.typeset'><code>typeset</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.as_literal'><code>as_literal</code></td><td></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>(name: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>, size: <a class='type' href='../../../radeco_lib/middle/ir/type.WidthSpec.html' title='radeco_lib::middle::ir::WidthSpec'>WidthSpec</a>, val_type: <a class='enum' href='../../../radeco_lib/middle/ir/enum.MValType.html' title='radeco_lib::middle::ir::MValType'>MValType</a>, typeset: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>, reg_info: <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='../../../radeco_lib/middle/ir/struct.MRegInfo.html' title='radeco_lib::middle::ir::MRegInfo'>MRegInfo</a>&gt;) -&gt; <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h4>
+<h4 id='method.null' class='method'><code>fn <a href='#method.null' class='fnname'>null</a>() -&gt; <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h4>
+<h4 id='method.tmp' class='method'><code>fn <a href='#method.tmp' class='fnname'>tmp</a>(i: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, size: <a class='type' href='../../../radeco_lib/middle/ir/type.WidthSpec.html' title='radeco_lib::middle::ir::WidthSpec'>WidthSpec</a>) -&gt; <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h4>
+<h4 id='method.esilcur' class='method'><code>fn <a href='#method.esilcur' class='fnname'>esilcur</a>() -&gt; <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h4>
+<h4 id='method.esilold' class='method'><code>fn <a href='#method.esilold' class='fnname'>esilold</a>() -&gt; <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h4>
+</div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Display.html' title='core::fmt::Display'>Display</a> for <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/fmt/trait.Display.html#method.fmt' class='fnname'>fmt</a>(&amp;self, f: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/default/trait.Default.html' title='core::default::Default'>Default</a> for <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h3><div class='impl-items'><h4 id='method.default' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/default/trait.Default.html#method.default' class='fnname'>default</a>() -&gt; Self</code></h4>
+</div><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h3><div class='impl-items'><h4 id='method.clone' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h4>
+<h4 id='method.clone_from' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='struct' href='../../../radeco_lib/middle/ir/struct.MVal.html' title='radeco_lib::middle::ir::MVal'>MVal</a></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#method.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

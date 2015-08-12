@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `CFG` trait in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, CFG">
+
+    <title>radeco_lib::middle::ssa::cfg_traits::CFG - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>cfg_traits</a></p><script>window.sidebarCurrent = {name: 'CFG', ty: 'trait', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content trait">
+<h1 class='fqn'><span class='in-band'>Trait <a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>cfg_traits</a>::<wbr><a class='trait' href=''>CFG</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-9170' class='srclink' href='../../../../src/radeco_lib/middle/ssa/cfg_traits.rs.html#4-63' title='goto source code'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait CFG {
+    type ActionRef: <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html' title='core::cmp::Eq'>Eq</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>;
+    type CFEdgeRef: <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html' title='core::cmp::Eq'>Eq</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>;
+    fn <a href='#tymethod.blocks' class='fnname'>blocks</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>&gt;;
+    fn <a href='#tymethod.start_node' class='fnname'>start_node</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>;
+    fn <a href='#tymethod.exit_node' class='fnname'>exit_node</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>;
+    fn <a href='#tymethod.get_unconditional' class='fnname'>get_unconditional</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>;
+    fn <a href='#tymethod.preds_of' class='fnname'>preds_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>&gt;;
+    fn <a href='#tymethod.succs_of' class='fnname'>succs_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>&gt;;
+    fn <a href='#tymethod.invalid_action' class='fnname'>invalid_action</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>;
+    fn <a href='#tymethod.edges_of' class='fnname'>edges_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>&gt;;
+    fn <a href='#tymethod.incoming_edges' class='fnname'>incoming_edges</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>&gt;;
+    fn <a href='#tymethod.info' class='fnname'>info</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>)</a>;
+    fn <a href='#tymethod.find_edge' class='fnname'>find_edge</a>(&amp;self, source: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>, target: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>;
+    fn <a href='#tymethod.true_edge_of' class='fnname'>true_edge_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>;
+    fn <a href='#tymethod.false_edge_of' class='fnname'>false_edge_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>;
+    fn <a href='#tymethod.next_edge_of' class='fnname'>next_edge_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>;
+    fn <a href='#tymethod.invalid_edge' class='fnname'>invalid_edge</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>;
+
+    fn <a href='#method.source_of' class='fnname'>source_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a> { ... }
+    fn <a href='#method.target_of' class='fnname'>target_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a> { ... }
+}</pre>
+            <h2 id='associated-types'>Associated Types</h2>
+            <div class='methods'>
+        <h3 id='associatedtype.ActionRef' class='method stab '><code>type ActionRef: <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html' title='core::cmp::Eq'>Eq</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a></code></h3><h3 id='associatedtype.CFEdgeRef' class='method stab '><code>type CFEdgeRef: <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html' title='core::cmp::Eq'>Eq</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a></code></h3></div>
+            <h2 id='required-methods'>Required Methods</h2>
+            <div class='methods'>
+        <h3 id='tymethod.blocks' class='method stab '><code>fn <a href='#tymethod.blocks' class='fnname'>blocks</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>&gt;</code></h3><div class='docblock'><p>Get NodeIndex of all BasicBlocks available in the SSA form.</p>
+</div><h3 id='tymethod.start_node' class='method stab '><code>fn <a href='#tymethod.start_node' class='fnname'>start_node</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h3><div class='docblock'><p>Start node of the CFG.</p>
+</div><h3 id='tymethod.exit_node' class='method stab '><code>fn <a href='#tymethod.exit_node' class='fnname'>exit_node</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h3><div class='docblock'><p>Exit node of the CFG.</p>
+</div><h3 id='tymethod.get_unconditional' class='method stab '><code>fn <a href='#tymethod.get_unconditional' class='fnname'>get_unconditional</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h3><div class='docblock'><p>Get false branch of a conditional jump.</p>
+</div><h3 id='tymethod.preds_of' class='method stab '><code>fn <a href='#tymethod.preds_of' class='fnname'>preds_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>&gt;</code></h3><div class='docblock'><p>Get the predecessors of a basic block.</p>
+</div><h3 id='tymethod.succs_of' class='method stab '><code>fn <a href='#tymethod.succs_of' class='fnname'>succs_of</a>(&amp;self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>&gt;</code></h3><div class='docblock'><p>Get the successors of a basic block.</p>
+</div><h3 id='tymethod.invalid_action' class='method stab '><code>fn <a href='#tymethod.invalid_action' class='fnname'>invalid_action</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h3><h3 id='tymethod.edges_of' class='method stab '><code>fn <a href='#tymethod.edges_of' class='fnname'>edges_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>&gt;</code></h3><div class='docblock'><p>Gets all the outgoing edges of a BasicBlock.</p>
+</div><h3 id='tymethod.incoming_edges' class='method stab '><code>fn <a href='#tymethod.incoming_edges' class='fnname'>incoming_edges</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>&gt;</code></h3><div class='docblock'><p>Gets all the incoming edges to a BasicBlock.</p>
+</div><h3 id='tymethod.info' class='method stab '><code>fn <a href='#tymethod.info' class='fnname'>info</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>, Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>)</a></code></h3><div class='docblock'><p>Get info i.e. (source_edge, target_edge)</p>
+</div><h3 id='tymethod.find_edge' class='method stab '><code>fn <a href='#tymethod.find_edge' class='fnname'>find_edge</a>(&amp;self, source: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>, target: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a></code></h3><div class='docblock'><p>Find the edge that connects the source to the target.</p>
+</div><h3 id='tymethod.true_edge_of' class='method stab '><code>fn <a href='#tymethod.true_edge_of' class='fnname'>true_edge_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a></code></h3><div class='docblock'><p>Get the True Edge</p>
+</div><h3 id='tymethod.false_edge_of' class='method stab '><code>fn <a href='#tymethod.false_edge_of' class='fnname'>false_edge_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a></code></h3><div class='docblock'><p>Get the False Edge</p>
+</div><h3 id='tymethod.next_edge_of' class='method stab '><code>fn <a href='#tymethod.next_edge_of' class='fnname'>next_edge_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a></code></h3><div class='docblock'><p>Get the Unconditional Edge</p>
+</div><h3 id='tymethod.invalid_edge' class='method stab '><code>fn <a href='#tymethod.invalid_edge' class='fnname'>invalid_edge</a>(&amp;self) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a></code></h3><div class='docblock'><p>Invalid Action</p>
+</div></div>
+            <h2 id='provided-methods'>Provided Methods</h2>
+            <div class='methods'>
+        <h3 id='method.source_of' class='method stab '><code>fn <a href='#method.source_of' class='fnname'>source_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h3><div class='docblock'><p>Get the ActionRef of the source of the Edge.</p>
+</div><h3 id='method.target_of' class='method stab '><code>fn <a href='#method.target_of' class='fnname'>target_of</a>(&amp;self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFEdgeRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>ActionRef</a></code></h3><div class='docblock'><p>Get the ActionRef of the target of the Edge.</p>
+</div></div>
+        <h2 id='implementors'>Implementors</h2>
+        <ul class='item-list' id='implementors-list'>
+    <li><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFG.html' title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFG</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></li>
+</ul><script type="text/javascript" async
+                              src="../../../../implementors/radeco_lib/middle/ssa/cfg_traits/trait.CFG.js">
+                      </script></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../../jquery.js"></script>
+    <script src="../../../../main.js"></script>
+    
+    <script async src="../../../../search-index.js"></script>
+</body>
+</html>

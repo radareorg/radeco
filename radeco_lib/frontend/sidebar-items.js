@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["esilssa","Implements the SSA construction algorithm described in \"Simple and Efficient Construction of Static Single Assignment Form\""],["parser","Implements parser to convert from ESIL to RadecoIR."],["r2","Module that provides interaction with radare2. Uses r2pipe."],["structs","Basic structs which are used for json encoding and decoding."]]});

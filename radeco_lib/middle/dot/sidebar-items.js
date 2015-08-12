@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["DotAttrBlock","Represents the contents of a GraphViz attribute block"]],"fn":[["emit_dot",""]],"trait":[["GraphDot","This trait enables graphs to be generated from implementors."]]});

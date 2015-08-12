@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Parser` struct in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Parser">
+
+    <title>radeco_lib::frontend::parser::Parser - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>frontend</a>::<wbr><a href='index.html'>parser</a></p><script>window.sidebarCurrent = {name: 'Parser', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>frontend</a>::<wbr><a href='index.html'>parser</a>::<wbr><a class='struct' href=''>Parser</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-24545' class='srclink' href='../../../src/radeco_lib/frontend/parser.rs.html#43-57' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Parser&lt;'a&gt; {
+    // some fields omitted
+}</pre><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl&lt;'a&gt; <a class='struct' href='../../../radeco_lib/frontend/parser/struct.Parser.html' title='radeco_lib::frontend::parser::Parser'>Parser</a>&lt;'a&gt;</code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>(config: <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='../../../radeco_lib/frontend/parser/struct.ParserConfig.html' title='radeco_lib::frontend::parser::ParserConfig'>ParserConfig</a>&lt;'a&gt;&gt;) -&gt; <a class='struct' href='../../../radeco_lib/frontend/parser/struct.Parser.html' title='radeco_lib::frontend::parser::Parser'>Parser</a>&lt;'a&gt;</code></h4>
+<h4 id='method.set_register_profile' class='method'><code>fn <a href='#method.set_register_profile' class='fnname'>set_register_profile</a>(&amp;mut self, reg_info: &amp;<a class='struct' href='../../../radeco_lib/frontend/structs/struct.LRegInfo.html' title='radeco_lib::frontend::structs::LRegInfo'>LRegInfo</a>)</code></h4>
+<h4 id='method.set_flags' class='method'><code>fn <a href='#method.set_flags' class='fnname'>set_flags</a>(&amp;mut self, flags: &amp;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../../../radeco_lib/frontend/structs/struct.LFlagInfo.html' title='radeco_lib::frontend::structs::LFlagInfo'>LFlagInfo</a>&gt;)</code></h4>
+<h4 id='method.new_mreg_info' class='method'><code>fn <a href='#method.new_mreg_info' class='fnname'>new_mreg_info</a>(&amp;self, info: <a class='struct' href='../../../radeco_lib/frontend/structs/struct.LRegProfile.html' title='radeco_lib::frontend::structs::LRegProfile'>LRegProfile</a>) -&gt; <a class='struct' href='../../../radeco_lib/middle/ir/struct.MRegInfo.html' title='radeco_lib::middle::ir::MRegInfo'>MRegInfo</a></code></h4>
+<h4 id='method.parse_opinfo' class='method'><code>fn <a href='#method.parse_opinfo' class='fnname'>parse_opinfo</a>(&amp;mut self, opinfo: &amp;<a class='struct' href='../../../radeco_lib/frontend/structs/struct.LOpInfo.html' title='radeco_lib::frontend::structs::LOpInfo'>LOpInfo</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, <a class='enum' href='../../../radeco_lib/frontend/parser/enum.ParseError.html' title='radeco_lib::frontend::parser::ParseError'>ParseError</a>&gt;</code></h4>
+<h4 id='method.parse_str' class='method'><code>fn <a href='#method.parse_str' class='fnname'>parse_str</a>(&amp;mut self, esil: &amp;<a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, <a class='enum' href='../../../radeco_lib/frontend/parser/enum.ParseError.html' title='radeco_lib::frontend::parser::ParseError'>ParseError</a>&gt;</code></h4>
+<h4 id='method.emit_insts' class='method'><code>fn <a href='#method.emit_insts' class='fnname'>emit_insts</a>(&amp;mut self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../../../radeco_lib/middle/ir/struct.MInst.html' title='radeco_lib::middle::ir::MInst'>MInst</a>&gt;</code></h4>
+<div class='docblock'><p>Emit-instructions converts certain compound instructions to simpler instructions.
+For example, the sequence of instructions,
+<code>none if zf (OpIf) jump addr (OpJmp)</code>
+is converted to a single conditional jump as,
+<code>none if zf jump addr (OpCJmp)</code></p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl&lt;'a&gt; <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='struct' href='../../../radeco_lib/frontend/parser/struct.Parser.html' title='radeco_lib::frontend::parser::Parser'>Parser</a>&lt;'a&gt;</code></h3><div class='impl-items'><h4 id='method.clone' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='struct' href='../../../radeco_lib/frontend/parser/struct.Parser.html' title='radeco_lib::frontend::parser::Parser'>Parser</a>&lt;'a&gt;</code></h4>
+<h4 id='method.clone_from' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

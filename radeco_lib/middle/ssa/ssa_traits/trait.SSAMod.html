@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `SSAMod` trait in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, SSAMod">
+
+    <title>radeco_lib::middle::ssa::ssa_traits::SSAMod - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>ssa_traits</a></p><script>window.sidebarCurrent = {name: 'SSAMod', ty: 'trait', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content trait">
+<h1 class='fqn'><span class='in-band'>Trait <a href='../../../index.html'>radeco_lib</a>::<wbr><a href='../../index.html'>middle</a>::<wbr><a href='../index.html'>ssa</a>::<wbr><a href='index.html'>ssa_traits</a>::<wbr><a class='trait' href=''>SSAMod</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-10015' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssa_traits.rs.html#132-172' title='goto source code'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait SSAMod: <a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html' title='radeco_lib::middle::ssa::ssa_traits::SSA'>SSA</a> + <a class='trait' href='../../../../radeco_lib/middle/ssa/cfg_traits/trait.CFGMod.html' title='radeco_lib::middle::ssa::cfg_traits::CFGMod'>CFGMod</a> {
+    fn <a href='#tymethod.add_op' class='fnname'>add_op</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>, opc: <a class='enum' href='../../../../radeco_lib/middle/ir/enum.MOpcode.html' title='radeco_lib::middle::ir::MOpcode'>MOpcode</a>, vt: <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>;
+    fn <a href='#tymethod.add_const' class='fnname'>add_const</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>, value: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>;
+    fn <a href='#tymethod.add_phi' class='fnname'>add_phi</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>;
+    fn <a href='#tymethod.add_undefined' class='fnname'>add_undefined</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>;
+    fn <a href='#tymethod.add_comment' class='fnname'>add_comment</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>, msg: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>;
+    fn <a href='#tymethod.mark_selector' class='fnname'>mark_selector</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>);
+    fn <a href='#tymethod.phi_use' class='fnname'>phi_use</a>(&amp;mut self, phi: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>);
+    fn <a href='#tymethod.phi_unuse' class='fnname'>phi_unuse</a>(&amp;mut self, phi: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>);
+    fn <a href='#tymethod.op_use' class='fnname'>op_use</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, index: <a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>, argument: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>);
+    fn <a href='#tymethod.replace' class='fnname'>replace</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, replacement: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>);
+    fn <a href='#tymethod.remove' class='fnname'>remove</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>);
+    fn <a href='#tymethod.cleanup' class='fnname'>cleanup</a>(&amp;mut self);
+    fn <a href='#tymethod.remove_edge' class='fnname'>remove_edge</a>(&amp;mut self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>CFEdgeRef</a>);
+}</pre><div class='docblock'><p>Trait for modifying SSA data</p>
+</div>
+            <h2 id='required-methods'>Required Methods</h2>
+            <div class='methods'>
+        <h3 id='tymethod.add_op' class='method stab '><code>fn <a href='#tymethod.add_op' class='fnname'>add_op</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>, opc: <a class='enum' href='../../../../radeco_lib/middle/ir/enum.MOpcode.html' title='radeco_lib::middle::ir::MOpcode'>MOpcode</a>, vt: <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a></code></h3><div class='docblock'><p>Add a new operation node.</p>
+</div><h3 id='tymethod.add_const' class='method stab '><code>fn <a href='#tymethod.add_const' class='fnname'>add_const</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>, value: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a></code></h3><div class='docblock'><p>Add a new constant node.</p>
+</div><h3 id='tymethod.add_phi' class='method stab '><code>fn <a href='#tymethod.add_phi' class='fnname'>add_phi</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a></code></h3><div class='docblock'><p>Add a new phi node.</p>
+</div><h3 id='tymethod.add_undefined' class='method stab '><code>fn <a href='#tymethod.add_undefined' class='fnname'>add_undefined</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a></code></h3><div class='docblock'><p>Add a new undefined node</p>
+</div><h3 id='tymethod.add_comment' class='method stab '><code>fn <a href='#tymethod.add_comment' class='fnname'>add_comment</a>(&amp;mut self, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>, msg: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>) -&gt; Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a></code></h3><div class='docblock'><p>Add a new comment node</p>
+</div><h3 id='tymethod.mark_selector' class='method stab '><code>fn <a href='#tymethod.mark_selector' class='fnname'>mark_selector</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, block: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ActionRef</a>)</code></h3><div class='docblock'><p>Mark the node as selector for the control edges away from the specified basic block</p>
+</div><h3 id='tymethod.phi_use' class='method stab '><code>fn <a href='#tymethod.phi_use' class='fnname'>phi_use</a>(&amp;mut self, phi: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>)</code></h3><div class='docblock'><p>Add a data source to a phi node.</p>
+</div><h3 id='tymethod.phi_unuse' class='method stab '><code>fn <a href='#tymethod.phi_unuse' class='fnname'>phi_unuse</a>(&amp;mut self, phi: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>)</code></h3><div class='docblock'><p>Remove a data source from a phi node.</p>
+</div><h3 id='tymethod.op_use' class='method stab '><code>fn <a href='#tymethod.op_use' class='fnname'>op_use</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, index: <a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>, argument: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>)</code></h3><div class='docblock'><p>Set the index-th argument of the node.</p>
+</div><h3 id='tymethod.replace' class='method stab '><code>fn <a href='#tymethod.replace' class='fnname'>replace</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>, replacement: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>)</code></h3><div class='docblock'><p>Replace one node by another within one basic block.</p>
+</div><h3 id='tymethod.remove' class='method stab '><code>fn <a href='#tymethod.remove' class='fnname'>remove</a>(&amp;mut self, node: Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>ValueRef</a>)</code></h3><div class='docblock'><p>Remove a node without replacement</p>
+</div><h3 id='tymethod.cleanup' class='method stab '><code>fn <a href='#tymethod.cleanup' class='fnname'>cleanup</a>(&amp;mut self)</code></h3><div class='docblock'><p>Perform a cleanup. (Will invalidate indices)</p>
+</div><h3 id='tymethod.remove_edge' class='method stab '><code>fn <a href='#tymethod.remove_edge' class='fnname'>remove_edge</a>(&amp;mut self, i: &amp;Self::<a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>CFEdgeRef</a>)</code></h3><div class='docblock'><p>Remove  conrtol flow edge. This is a part of SSAMod as this potentially modifies the ssa.</p>
+</div></div>
+        <h2 id='implementors'>Implementors</h2>
+        <ul class='item-list' id='implementors-list'>
+    <li><code>impl <a class='trait' href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a> for <a class='struct' href='../../../../radeco_lib/middle/ssa/ssastorage/struct.SSAStorage.html' title='radeco_lib::middle::ssa::ssastorage::SSAStorage'>SSAStorage</a></code></li>
+</ul><script type="text/javascript" async
+                              src="../../../../implementors/radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.js">
+                      </script></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../../jquery.js"></script>
+    <script src="../../../../main.js"></script>
+    
+    <script async src="../../../../search-index.js"></script>
+</body>
+</html>

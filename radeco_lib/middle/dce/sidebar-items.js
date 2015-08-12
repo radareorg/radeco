@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["collect","Removes SSA nodes that are not used by any other node. The algorithm will not consider whether the uses keeping a node alive are in code that is actually executed or not. For a better analysis look at `analysis::constant_propagation`."]]});

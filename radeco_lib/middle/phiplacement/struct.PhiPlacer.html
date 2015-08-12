@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `PhiPlacer` struct in crate `radeco_lib`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, PhiPlacer">
+
+    <title>radeco_lib::middle::phiplacement::PhiPlacer - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>phiplacement</a></p><script>window.sidebarCurrent = {name: 'PhiPlacer', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>radeco_lib</a>::<wbr><a href='../index.html'>middle</a>::<wbr><a href='index.html'>phiplacement</a>::<wbr><a class='struct' href=''>PhiPlacer</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-7681' class='srclink' href='../../../src/radeco_lib/middle/phiplacement.rs.html#9-15' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct PhiPlacer&lt;'a, T: <a class='trait' href='../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a>&lt;BBInfo=<a class='struct' href='../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a>&gt; + 'a&gt; {
+    pub ssa: &amp;'a mut T,
+    pub variable_types: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='enum' href='../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>&gt;,
+    // some fields omitted
+}</pre><h2 class='fields'>Fields</h2>
+<table><tr class='stab '>
+                                  <td id='structfield.ssa'><code>ssa</code></td><td></td></tr><tr class='stab '>
+                                  <td id='structfield.variable_types'><code>variable_types</code></td><td></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl&lt;'a, T: <a class='trait' href='../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a>&lt;BBInfo=<a class='struct' href='../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a>&gt; + 'a&gt; <a class='struct' href='../../../radeco_lib/middle/phiplacement/struct.PhiPlacer.html' title='radeco_lib::middle::phiplacement::PhiPlacer'>PhiPlacer</a>&lt;'a, T&gt;</code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>(ssa: &amp;'a mut T) -&gt; <a class='struct' href='../../../radeco_lib/middle/phiplacement/struct.PhiPlacer.html' title='radeco_lib::middle::phiplacement::PhiPlacer'>PhiPlacer</a>&lt;'a, T&gt;</code></h4>
+<h4 id='method.add_variables' class='method'><code>fn <a href='#method.add_variables' class='fnname'>add_variables</a>(&amp;mut self, variable_types: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='enum' href='../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>&gt;) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></h4>
+<h4 id='method.write_variable' class='method'><code>fn <a href='#method.write_variable' class='fnname'>write_variable</a>(&amp;mut self, block: T::ActionRef, variable: <a class='type' href='../../../radeco_lib/middle/phiplacement/type.VarId.html' title='radeco_lib::middle::phiplacement::VarId'>VarId</a>, value: T::ValueRef)</code></h4>
+<h4 id='method.read_variable' class='method'><code>fn <a href='#method.read_variable' class='fnname'>read_variable</a>(&amp;mut self, block: T::ActionRef, variable: <a class='type' href='../../../radeco_lib/middle/phiplacement/type.VarId.html' title='radeco_lib::middle::phiplacement::VarId'>VarId</a>) -&gt; T::ValueRef</code></h4>
+<h4 id='method.add_block' class='method'><code>fn <a href='#method.add_block' class='fnname'>add_block</a>(&amp;mut self, info: <a class='struct' href='../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a>) -&gt; T::ActionRef</code></h4>
+<h4 id='method.seal_block' class='method'><code>fn <a href='#method.seal_block' class='fnname'>seal_block</a>(&amp;mut self, block: T::ActionRef)</code></h4>
+<h4 id='method.add_dynamic' class='method'><code>fn <a href='#method.add_dynamic' class='fnname'>add_dynamic</a>(&amp;mut self) -&gt; T::ActionRef</code></h4>
+<h4 id='method.sync_register_state' class='method'><code>fn <a href='#method.sync_register_state' class='fnname'>sync_register_state</a>(&amp;mut self, block: T::ActionRef)</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "radeco_lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

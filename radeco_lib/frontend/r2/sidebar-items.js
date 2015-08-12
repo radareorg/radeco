@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["R2",""]],"trait":[["Search",""]]});
