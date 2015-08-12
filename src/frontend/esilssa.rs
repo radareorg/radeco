@@ -1,5 +1,4 @@
-//! Implements the SSA construction algorithm described in
-//! "Simple and Efficient Construction of Static Single Assignment Form"
+//! Converts the from ESIL/CFG representation to SSA.
 
 use std::collections::HashMap;
 use petgraph::graph::NodeIndex;
@@ -142,46 +141,6 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 			MValType::Null => ValueType::Integer{width: 0}, // there is no ValueType::None?
 			_              => ValueType::Integer{width: inst.dst.size},
 		};
-
-
-		/*
-		// TODO: When developing a ssa check pass, reuse this maybe
-		let width = match inst.opcode {
-		MOpcode::OpNarrow(w)
-		| MOpcode::OpWiden(w) => { w },
-		MOpcode::OpCmp => { 1 },
-		_ => { 
-		let extract = |x: NodeData| -> Option<u8> {
-		if let NodeData::Op(_, ValueType::Integer { width: w }) = x {
-		Some(w)
-		} else {
-		None
-		}
-		};
-		let w1 = self.phiplacer.ssa.safe_get_node_data(&n0)
-		.map(&extract)
-		.unwrap_or(None);
-
-		let w2 = self.phiplacer.ssa.safe_get_node_data(&n1)
-		.map(&extract)
-		.unwrap_or(None);
-
-		if w1 == None && w2 == None {
-		// TODO: Replace by default value.
-		64
-		} else if w1 == None {
-		w2.unwrap()
-		} else if w2 == None {
-		w1.unwrap()
-		} else {
-		let w1 = w1.unwrap();
-		let w2 = w2.unwrap();
-		// Check the width of the two operands.
-		assert!(w1 == w2);
-		w1
-		}
-		},
-		};*/
 
 		let nn = {
 			let ref mut ssa = self.phiplacer.ssa;
