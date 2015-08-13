@@ -17,13 +17,17 @@ pub struct BBInfo {
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeEnum {
+pub enum NodeType {
 	Op(ir::MOpcode),
 	Phi,
 	Undefined,
 }
 
-pub type NodeData = Option<(ValueType, NodeEnum)>;
+#[derive(Clone, Debug)]
+pub struct NodeData {
+	pub vt: ValueType,
+	pub nt: NodeType,
+}
 
 /// Trait for the SSA Form implementation.
 // This trait ensures that any other ssa form will be compatible with our implementations provided
@@ -67,16 +71,7 @@ pub trait SSA: CFG {
 	}
 
 	/// Get the actual NodeData.
-	// TODO: Merge the below two functions. get_node_data should always return an Option and not
-	// panic.
-	fn get_node_data(&self, i: &Self::ValueRef) -> NodeData;
-	fn safe_get_node_data(&self, i: &Self::ValueRef) -> Option<NodeData> {
-		if *i != self.invalid_value() {
-			Some(self.get_node_data(i))
-		} else {
-			None
-		}
-	}
+	fn get_node_data(&self, i: &Self::ValueRef) -> Result<NodeData, Box<Debug>>;
 
 	/// Returns true if the expression acts as a `Selector` for control flow.
 	fn is_selector(&self, i:&Self::ValueRef) -> bool;

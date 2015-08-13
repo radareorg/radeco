@@ -1,9 +1,12 @@
+use std::fmt::Debug;
+
 use petgraph::EdgeDirection;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use middle::ir;
 
 use super::ssa_traits;
 use super::ssa_traits::NodeData as TNodeData;
+use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAMod, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 
@@ -52,11 +55,11 @@ impl SSAStorage {
 		}
 	}
 
-	pub fn add_phi_comment(&mut self, block: NodeIndex, comment: &String) -> NodeIndex {
+	/*pub fn add_phi_comment(&mut self, block: NodeIndex, comment: &String) -> NodeIndex {
 		let n = self.g.add_node(NodeData::Phi(comment.clone()));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
-	}
+	}*/
 
 	pub fn read_const(&self, ni: NodeIndex) -> Option<u64> {
 		if let &NodeData::Op(ir::MOpcode::OpConst(n), _) = &self.g[ni] {
@@ -84,7 +87,7 @@ impl SSAStorage {
 	}
 
 	pub fn args_of_ordered(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		let ordered = if let NodeData::Phi(_) = self.g[node] { false } else { true };
+		let ordered = if let NodeData::Phi(_, _) = self.g[node] { false } else { true };
 		let mut args = Vec::new();
 		if ordered {
 			args.push(NodeIndex::end());
@@ -365,7 +368,7 @@ impl SSA for SSAStorage {
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::ContainedInBB = self.g[edge] {
 				match self.g[othernode] {
-					NodeData::Phi(_) => phis.push(othernode.clone()),
+					NodeData::Phi(_, _) => phis.push(othernode.clone()),
 					_ => continue,
 				}
 			}
@@ -447,7 +450,7 @@ impl SSA for SSAStorage {
 	}
 
 	fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex> {
-		let ordered = if let NodeData::Phi(_) = self.g[*i] { false } else { true };
+		let ordered = if let NodeData::Phi(_, _) = self.g[*i] { false } else { true };
 		let mut args = Vec::new();
 		if ordered {
 			args.push(NodeIndex::end());
@@ -484,21 +487,21 @@ impl SSA for SSAStorage {
 		return args;
 	}
 
-	fn get_node_data(&self, i: &NodeIndex) -> TNodeData {
+	fn get_node_data(&self, i: &NodeIndex) -> Result<TNodeData, Box<Debug>> {
 		let ic = self.refresh(i.clone());
 		if ic == NodeIndex::end() {
-			return None
+			return Err(Box::new(""))
 		}
 		match self.g[ic] {
-			NodeData::Op(opc, vt)    => Some((vt, TNodeData::Op(opc))),
-			NodeData::Phi(vt, _)     => Some((vt, TNodeData::Phi)),
-			NodeData::Comment(vt, _) => Some((vt, TNodeData::Undefined)),
-			NodeData::Undefined(vt)  => Some((vt, TNodeData::Undefined)),
-			NodeData::Removed        => None,
-			NodeData::Unreachable    => None,
-			NodeData::BasicBlock(_)  => None,
-			NodeData::DynamicAction  => None,
-			NodeData::RegisterState  => None,
+			NodeData::Op(opc, vt)    => Ok(TNodeData {vt: vt, nt: TNodeType::Op(opc)}),
+			NodeData::Phi(vt, _)     => Ok(TNodeData {vt: vt, nt: TNodeType::Phi}),
+			NodeData::Comment(vt, _) => Ok(TNodeData {vt: vt, nt: TNodeType::Undefined}),
+			NodeData::Undefined(vt)  => Ok(TNodeData {vt: vt, nt: TNodeType::Undefined}),
+			NodeData::Removed        |
+			NodeData::Unreachable    |
+			NodeData::BasicBlock(_)  |
+			NodeData::DynamicAction  |
+			NodeData::RegisterState  => Err(Box::new(self.g[ic].clone())),
 		}
 	}
 
@@ -609,7 +612,7 @@ impl SSAMod for SSAStorage {
 	fn phi_use(&mut self, mut phi: NodeIndex, mut node: NodeIndex) {
 		phi = self.refresh(phi);
 		node = self.refresh(node);
-		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
+		assert!(if let NodeData::Phi(_, _) = self.g[phi] { true } else { false });
 		//assert!(if let NodeData::Removed = self.g[node] { false } else { true });
 		self.g.update_edge(phi, node, EdgeData::Data(0));
 	}
@@ -617,7 +620,7 @@ impl SSAMod for SSAStorage {
 	fn phi_unuse(&mut self, mut phi: NodeIndex, mut node: NodeIndex) {
 		phi = self.refresh(phi);
 		node = self.refresh(node);
-		assert!(if let NodeData::Phi(_) = self.g[phi] { true } else { false });
+		assert!(if let NodeData::Phi(_, _) = self.g[phi] { true } else { false });
 		if let Option::Some(edge) = self.g.find_edge(phi, node) {
 			self.g.remove_edge(edge);
 		}
@@ -647,7 +650,7 @@ impl SSAMod for SSAStorage {
 				EdgeData::Data(i) => {
 					match self.g[othernode] {
 						NodeData::Op(_, _) | NodeData::RegisterState => self.op_use(othernode, i, replacement),
-						NodeData::Phi(_) => self.phi_use(othernode, replacement),
+						NodeData::Phi(_, _) => self.phi_use(othernode, replacement),
 						_ => panic!()
 					}
 				},
@@ -681,7 +684,7 @@ impl SSAMod for SSAStorage {
 				let ni = NodeIndex::new(i);
 				match self.g[ni] {
 					NodeData::Removed => true,
-					NodeData::Comment(_) if self.g.first_edge(ni, EdgeDirection::Incoming) == Option::None => true,
+					NodeData::Comment(_, _) if self.g.first_edge(ni, EdgeDirection::Incoming) == Option::None => true,
 					_ => false
 				}
 			} {

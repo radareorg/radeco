@@ -113,7 +113,7 @@ impl GraphDot for SSAStorage {
 				("shape".to_string(), "box".to_string()),
 				("color".to_string(), "\"grey\"".to_string())]
 			},
-			NodeData::Comment(ref msg) => {
+			NodeData::Comment(_, ref msg) => {
 				vec![("label".to_string(), format!("\"{}\"", msg.replace("\"", "\\\"")))]
 			},
 			_ => {

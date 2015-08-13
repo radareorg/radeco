@@ -125,11 +125,12 @@ impl Verify for SSAStorage {
 				let operands = self.get_operands(i);
 				let op_len = operands.len();
 				let extract = |x: TNodeData| -> u16 {
-					if let TNodeData::Op(_, ValueType::Integer { width: w }) = x {
-						w
-					} else {
-						let panic_str = format!("Found {:?}, expected NodeData::Op()", x);
-						panic!(panic_str);
+					match x.vt {
+						ValueType::Integer { width: w } => w,
+						/*_ => {
+							let panic_str = format!("Found {:?}, expected ValueType::Integer", x);
+							panic!(panic_str);
+						}*/
 					}
 				};
 
@@ -148,13 +149,13 @@ impl Verify for SSAStorage {
 				if n == 0 { return; }
 				match opcode {
 					MOpcode::OpNarrow(w0) => {
-						let w0 = self.safe_get_node_data(&operands[0])
+						let w0 = self.get_node_data(&operands[0])
 						             .map(&extract)
 						             .unwrap();
 						assert!(w0 > w);
 					},
 				    MOpcode::OpWiden(w0) =>  {
-						let w0 = self.safe_get_node_data(&operands[0])
+						let w0 = self.get_node_data(&operands[0])
 						             .map(&extract)
 						             .unwrap();
 						assert!(w0 < w);
@@ -164,12 +165,12 @@ impl Verify for SSAStorage {
 						assert!(w == 1, panic_str);
 					},
 					_ => {
-						let w0 = self.safe_get_node_data(&operands[0])
+						let w0 = self.get_node_data(&operands[0])
 						             .map(&extract)
 						             .unwrap();
 						assert!(w0 == w, format!("{:?} == {:?}; {:?}", w0, w, opcode));
 						for op in operands.iter() {
-							let w1 = self.safe_get_node_data(op)
+							let w1 = self.get_node_data(op)
 							             .map(&extract)
 						                 .unwrap();
 							let panic_str = format!("{:?}: Expected size to be: {}, found: {}", opcode, w, w1);

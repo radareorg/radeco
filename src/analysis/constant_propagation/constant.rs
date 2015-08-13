@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap};
 use ::middle::ssa::{SSA, SSAMod, NodeData};
+use ::middle::ssa::ssa_traits::NodeType;
 use ::middle::ir::{MOpcode, MArity};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -178,8 +179,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	}
 
 	fn visit_expression(&mut self, i: &T::ValueRef) -> ExprVal {
-		let expr = self.g.get_node_data(i);
-		let opcode = if let NodeData::Op(_opcode, _) = expr {
+		let expr = self.g.get_node_data(i).unwrap(); //"visit_expression() received invalid valueref");
+		let opcode = if let NodeType::Op(_opcode) = expr.nt {
 			_opcode.clone()
 		} else { 
 			panic!("Found something other than an expression!");
