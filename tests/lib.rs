@@ -60,11 +60,11 @@ fn test_analysis2() {
 		Pipeline::ReadFromR2,
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
-		Pipeline::SSA,
-		Pipeline::Verify,
-		Pipeline::DCE,
-		Pipeline::AnalyzeSSA(Analysis::ConstProp),
-		Pipeline::DCE
+		Pipeline::SSA
+		//Pipeline::Verify,
+		//Pipeline::DCE,
+		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
+		//Pipeline::DCE
 	];
 	let mut test = Test::new(test_name, bin_name, addr, true, pipeline);
 	test.run();

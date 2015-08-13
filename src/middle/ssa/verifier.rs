@@ -87,9 +87,9 @@ impl Verify for SSAStorage {
 			}
 		}
 
-		if edges.len() >= 2 {
+		if edges.len() > 2 {
 			assert!(self.selector_of(block).is_none());
-		} else {
+		} else if edges.len() > 1{
 			assert!(self.selector_of(block).is_some());
 		}
 

@@ -485,6 +485,10 @@ impl<'a> Parser<'a> {
 			dst.size = 1;
 		}
 
+		if op == MOpcode::OpGt || op == MOpcode::OpLt {
+			dst.size = 1;
+		}
+
 		let addr = MAddr::new(self.addr);
 		let mut inst = op.to_inst(dst.clone(), op2, op1, Some(addr));
 		inst.update_flags = update_flags;
@@ -571,8 +575,9 @@ impl<'a> Parser<'a> {
 			's' => {
 				// !!((esil->cur & (0x1<<(esil->lastsz-1)))>>(esil->lastsz-1));
 				tmp_p.stack.push(MVal::esilcur());
+				tmp_p.stack.push(self.constant_value(1));
 				tmp_p.stack.push(MVal::esillastsz());
-				let mut s = "1,-".to_string();
+				let mut s = "-".to_string();
 				try!(tmp_p.parse_str(&*s));
 				let v = tmp_p.stack.last().unwrap().clone();
 				let mut s = "1,<<,&";

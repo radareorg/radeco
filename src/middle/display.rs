@@ -1,6 +1,6 @@
 //! Module to implement the display traits for the IR.
 
-use super::ir::{MInst, MOpcode, MVal};
+use super::ir::{MInst, MOpcode, MVal, MValType};
 use std::fmt;
 
 impl fmt::Display for MOpcode {
@@ -13,7 +13,10 @@ impl fmt::Display for MVal {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let s: String = match self.val_type {
 			//MValType::Temporary => format!(...)
-			_                  => {
+			MValType::EsilCur => { format!("esilcur") },
+			MValType::EsilOld => { format!("esilold") },
+			MValType::Lastsz => { format!("lastsz") },
+			_ => {
 				if let Some(v) = self.as_literal {
 					format!("{}[:{}]", v, self.size)
 				} else {
