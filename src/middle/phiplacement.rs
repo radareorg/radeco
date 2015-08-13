@@ -36,6 +36,10 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 
 	pub fn write_variable(&mut self, block: T::ActionRef, variable: VarId, value: T::ValueRef) {
 		assert!(!self.sealed_blocks.contains(&block));
+		self.write_variable_internal(block, variable, value)
+	}
+
+	fn write_variable_internal(&mut self, block: T::ActionRef, variable: VarId, value: T::ValueRef) {
 		self.current_def[variable].insert(block, value);
 	}
 
@@ -82,15 +86,22 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 				val = self.read_variable(pred[0], variable.clone())
 			} else {
 				// Break potential cycles with operandless phi
-				// TODO: bring back comments
-				// val = self.ssa.add_phi_comment(block, &variable);
+
 				val = self.ssa.add_phi(block);
-				// TODO: only mark (see paper)
-				self.write_variable(block, variable.clone(), val);
+				//  = self.ssa.add_phi_comment(block, &variable);
+
+				// dkreuter:
+				// The paper suggests marking nodes instead of creating phi nodes.
+				// However this turned out to be almost as expensive
+				// and added unneccesary complexity to the code.
+				// Also, I can't see any marking implemented in libfirms implementation
+				// of this algorithm.
+
+				self.write_variable_internal(block, variable.clone(), val);
 				val = self.add_phi_operands(block, variable.clone(), val)
 			}
 		}
-		self.write_variable(block, variable, val);
+		self.write_variable_internal(block, variable, val);
 		return val
 	}
 
