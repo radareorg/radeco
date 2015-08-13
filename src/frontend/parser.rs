@@ -560,8 +560,10 @@ impl<'a> Parser<'a> {
 				tmp_p.stack.push(MVal::esilcur());
 				try!(tmp_p.parse_str(&*s));
 				for i in (1..8) {
-					s = format!("{},1,<<,&,^", i);
+					tmp_p.stack.push(self.constant_value(1));
+					tmp_p.stack.push(self.constant_value(i));
 					tmp_p.stack.push(MVal::esilcur());
+					s = format!(">>,&,^");
 					try!(tmp_p.parse_str(&*s));
 				}
 			},
@@ -570,7 +572,24 @@ impl<'a> Parser<'a> {
 				return Ok(self.constant_value(def));
 			},
 			'o' => {
-				return Ok(mv.clone());
+				//(esil_internal_carry_check (esil, esil->lastsz-1) ^ 
+				// esil_internal_carry_check (esil, esil->lastsz-2));
+				for i in (1..3) {
+					tmp_p.stack.push(MVal::esilcur());
+					tmp_p.stack.push(self.constant_value(1));
+					tmp_p.stack.push(self.constant_value(i));
+					tmp_p.stack.push(MVal::esillastsz());
+					let s = format!("-,0x3f,&,2,<<,-");
+					try!(tmp_p.parse_str(&*s));
+					let tmp_mval = tmp_p.stack.last().unwrap().clone();
+					try!(tmp_p.parse_str("&"));
+					tmp_p.stack.push(tmp_mval);
+					tmp_p.stack.push(MVal::esilold());
+					let s = "&,<";
+					try!(tmp_p.parse_str(s));
+				}
+				let s = "^";
+				try!(tmp_p.parse_str(s));
 			},
 			's' => {
 				// !!((esil->cur & (0x1<<(esil->lastsz-1)))>>(esil->lastsz-1));
@@ -580,13 +599,13 @@ impl<'a> Parser<'a> {
 				let mut s = "-".to_string();
 				try!(tmp_p.parse_str(&*s));
 				let v = tmp_p.stack.last().unwrap().clone();
-				let mut s = "1,<<,&";
-				try!(tmp_p.parse_str(&*s));
+				let s = "1,<<,&";
+				try!(tmp_p.parse_str(s));
 				tmp_p.stack.insert(0, v.clone());
-				let mut s = ">>";
-				try!(tmp_p.parse_str(&*s));
-				s = "0,==,!";
-				try!(tmp_p.parse_str(&*s));
+				let s = ">>";
+				try!(tmp_p.parse_str(s));
+				let s = "0,==,!";
+				try!(tmp_p.parse_str(s));
 			},
 			_ => panic!("Invalid internal variable!"),
 		}

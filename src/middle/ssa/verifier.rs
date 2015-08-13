@@ -127,10 +127,11 @@ impl Verify for SSAStorage {
 			}
 		}
 
-		if edges.len() > 2 {
-			check!(ri, self.selector_of(block).is_none());
-		} else if edges.len() > 1{
+
+		if edges.len() == 2 {
 			check!(ri, self.selector_of(block).is_some());
+		} else {
+			check!(ri, self.selector_of(block).is_none());
 		}
 
 		// Make sure that this block is reachable.
