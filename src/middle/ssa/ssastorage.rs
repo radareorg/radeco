@@ -10,9 +10,9 @@ use super::cfg_traits::{CFG, CFGMod};
 #[derive(Clone, Debug)]
 pub enum NodeData {
 	Op(ir::MOpcode, ValueType),
-	Phi(String),
-	Comment(String),
-	Undefined,
+	Phi(ValueType, String),
+	Comment(ValueType, String),
+	Undefined(ValueType),
 	Removed,
 	Unreachable,
 	BasicBlock(ssa_traits::BBInfo),
@@ -487,18 +487,18 @@ impl SSA for SSAStorage {
 	fn get_node_data(&self, i: &NodeIndex) -> TNodeData {
 		let ic = self.refresh(i.clone());
 		if ic == NodeIndex::end() {
-			return TNodeData::Invalid
+			return None
 		}
 		match self.g[ic] {
-			NodeData::Op(opc, vt)   => TNodeData::Op(opc, vt),
-			NodeData::Phi(_)        => TNodeData::Phi,
-			NodeData::Comment(_)    => TNodeData::Undefined,
-			NodeData::Undefined     => TNodeData::Undefined,
-			NodeData::Removed       => TNodeData::Invalid,
-			NodeData::Unreachable   => TNodeData::Invalid,
-			NodeData::BasicBlock(_) => TNodeData::Invalid,
-			NodeData::DynamicAction => TNodeData::Invalid,
-			NodeData::RegisterState => TNodeData::Invalid,
+			NodeData::Op(opc, vt)    => Some((vt, TNodeData::Op(opc))),
+			NodeData::Phi(vt, _)     => Some((vt, TNodeData::Phi)),
+			NodeData::Comment(vt, _) => Some((vt, TNodeData::Undefined)),
+			NodeData::Undefined(vt)  => Some((vt, TNodeData::Undefined)),
+			NodeData::Removed        => None,
+			NodeData::Unreachable    => None,
+			NodeData::BasicBlock(_)  => None,
+			NodeData::DynamicAction  => None,
+			NodeData::RegisterState  => None,
 		}
 	}
 
@@ -584,20 +584,20 @@ impl SSAMod for SSAStorage {
 		n
 	}
 
-	fn add_phi(&mut self, block: NodeIndex) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Phi("".to_string()));
+	fn add_phi(&mut self, block: NodeIndex, vt: ValueType) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Phi(vt, "".to_string()));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
 
-	fn add_undefined(&mut self, block: NodeIndex) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Undefined);
+	fn add_undefined(&mut self, block: NodeIndex, vt: ValueType) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Undefined(vt));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}
 
-	fn add_comment(&mut self, block: NodeIndex, msg: String) -> NodeIndex {
-		let n = self.g.add_node(NodeData::Comment(msg));
+	fn add_comment(&mut self, block: NodeIndex, vt: ValueType, msg: String) -> NodeIndex {
+		let n = self.g.add_node(NodeData::Comment(vt, msg));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
 	}

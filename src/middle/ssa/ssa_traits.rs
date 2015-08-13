@@ -17,12 +17,13 @@ pub struct BBInfo {
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeData {
-	Op(ir::MOpcode, ValueType),
+pub enum NodeEnum {
+	Op(ir::MOpcode),
 	Phi,
 	Undefined,
-	Invalid,
 }
+
+pub type NodeData = Option<(ValueType, NodeEnum)>;
 
 /// Trait for the SSA Form implementation.
 // This trait ensures that any other ssa form will be compatible with our implementations provided
@@ -137,13 +138,13 @@ pub trait SSAMod: SSA + CFGMod {
 	fn add_const(&mut self, block: Self::ActionRef, value: u64) -> Self::ValueRef;
 
 	/// Add a new phi node.
-	fn add_phi(&mut self, block: Self::ActionRef) -> Self::ValueRef;
+	fn add_phi(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
 
 	/// Add a new undefined node
-	fn add_undefined(&mut self, block: Self::ActionRef) -> Self::ValueRef;
+	fn add_undefined(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
 
 	/// Add a new comment node
-	fn add_comment(&mut self, block: Self::ActionRef, msg: String) -> Self::ValueRef;
+	fn add_comment(&mut self, block: Self::ActionRef, vt: ValueType, msg: String) -> Self::ValueRef;
 
 	/// Mark the node as selector for the control edges away from the specified basic block
 	fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
