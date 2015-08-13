@@ -2,7 +2,7 @@
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
 use std::collections::{HashSet, HashMap};
-use super::ssa::{BBInfo, SSA, SSAMod, NodeData, ValueType};
+use super::ssa::{BBInfo, SSA, SSAMod, ValueType};
 use super::ssa::ssa_traits::NodeType;
 
 pub type VarId = usize;

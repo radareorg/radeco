@@ -8,6 +8,7 @@ pub mod ssa_traits;
 pub mod ssastorage;
 pub mod ssadot;
 pub mod verifier;
+pub mod error;
 
 pub use self::ssa_traits::{SSA, SSAMod, NodeData, ValueType, BBInfo};
 pub use self::ssastorage::{SSAStorage};

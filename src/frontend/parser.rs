@@ -596,7 +596,7 @@ impl<'a> Parser<'a> {
 				tmp_p.stack.push(MVal::esilcur());
 				tmp_p.stack.push(self.constant_value(1));
 				tmp_p.stack.push(MVal::esillastsz());
-				let mut s = "-".to_string();
+				let s = "-".to_string();
 				try!(tmp_p.parse_str(&*s));
 				let v = tmp_p.stack.last().unwrap().clone();
 				let s = "1,<<,&";

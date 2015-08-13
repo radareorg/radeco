@@ -13,11 +13,12 @@ use middle::ir::{MVal, MInst, MOpcode, MValType};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
 use middle::dce;
+use std::fmt::Debug;
 
 pub type VarId = usize;
 
 pub struct SSAConstruction<'a, T> where
-	T: Clone + Verify + SSAMod<BBInfo=BBInfo> + 'a
+	T: Debug + Clone + Verify + SSAMod<BBInfo=BBInfo> + 'a
 {
 	pub phiplacer: PhiPlacer<'a, T>,
 	pub regfile:   SubRegisterFile,
@@ -25,7 +26,7 @@ pub struct SSAConstruction<'a, T> where
 }
 
 impl<'a, T> SSAConstruction<'a, T> where
-	T: 'a + Clone + Verify +
+	T: 'a + Clone + Verify + Debug +
        SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
 	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {

@@ -59,8 +59,8 @@ fn test_analysis2() {
 	let pipeline = vec![
 		Pipeline::ReadFromR2,
 		Pipeline::ParseEsil,
-		Pipeline::CFG
-		//Pipeline::SSA,
+		Pipeline::CFG,
+		Pipeline::SSA
 		//Pipeline::Verify
 		//Pipeline::DCE,
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),

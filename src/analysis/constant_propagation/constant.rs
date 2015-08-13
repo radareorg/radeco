@@ -6,7 +6,7 @@
 //!
 
 use std::collections::{HashMap};
-use ::middle::ssa::{SSA, SSAMod, NodeData};
+use ::middle::ssa::{SSA, SSAMod};
 use ::middle::ssa::ssa_traits::NodeType;
 use ::middle::ir::{MOpcode, MArity};
 

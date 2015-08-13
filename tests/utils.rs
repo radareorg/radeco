@@ -249,7 +249,7 @@ impl<'a> Test<'a> {
 	fn verify(&mut self) {
 		out!("[*] Verifying the Integrity of SSA.", self.verbose);
 		let pipein = self.state.pipeout.clone().unwrap();
-		let mut ssa = if let Pipeout::SSA { ssa } = pipein {
+		let ssa = if let Pipeout::SSA { ssa } = pipein {
 			ssa
 		} else {
 			panic!("Incompatible type found in the pipeline!");
