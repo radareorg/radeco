@@ -19,7 +19,6 @@ pub struct BBInfo {
 #[derive(Clone, Debug)]
 pub enum NodeData {
 	Op(ir::MOpcode, ValueType),
-	Comment(String),
 	Phi,
 	Undefined,
 	Invalid,

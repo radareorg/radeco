@@ -27,6 +27,7 @@ pub trait VerifiedAdd: SSAMod {
 
 impl<T: Verify + SSAMod> VerifiedAdd for T {
 	fn verified_add_op(&mut self, block: Self::ActionRef, opc: MOpcode, vt: ValueType, args: &[Self::ValueRef]) -> Self::ValueRef {
+		assert!(opc.allowed_in_ssa());
 		let op = self.add_op(block, opc, vt);
 		for (i, arg) in args.iter().enumerate() {
 			self.op_use(op, i as u8, *arg);
@@ -158,7 +159,7 @@ impl Verify for SSAStorage {
 						             .unwrap();
 						assert!(w0 < w);
 					},
-					MOpcode::OpCmp => {
+					MOpcode::OpCmp | MOpcode::OpGt | MOpcode::OpLt | MOpcode::OpLteq | MOpcode::OpGteq => {
 						let panic_str = format!("Expected width to be 1, found: {}", w);
 						assert!(w == 1, panic_str);
 					},
