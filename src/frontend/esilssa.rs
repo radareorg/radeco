@@ -154,9 +154,19 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 		};
 
 		if inst.update_flags {
+			let mut nn64 = nn;
+
+			if inst.dst.size != 64 {
+				let ref mut ssa = self.phiplacer.ssa;
+				nn64 = ssa.add_op(block,
+					MOpcode::OpWiden(64),
+					ValueType::Integer{width: 64});
+				ssa.op_use(nn64, 0, nn);
+			}
+
 			let old = self.phiplacer.read_variable(block, 0);
 			self.phiplacer.write_variable(block, 1, old);
-			self.phiplacer.write_variable(block, 0, nn);
+			self.phiplacer.write_variable(block, 0, nn64);
 		}
 
 		return nn
