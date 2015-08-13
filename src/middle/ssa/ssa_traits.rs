@@ -17,11 +17,16 @@ pub struct BBInfo {
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeData {
-	Op(ir::MOpcode, ValueType),
+pub enum NodeType {
+	Op(ir::MOpcode),
 	Phi,
 	Undefined,
-	Invalid,
+}
+
+#[derive(Clone, Debug)]
+pub struct NodeData {
+	pub vt: ValueType,
+	pub nt: NodeType,
 }
 
 /// Trait for the SSA Form implementation.
@@ -66,16 +71,7 @@ pub trait SSA: CFG {
 	}
 
 	/// Get the actual NodeData.
-	// TODO: Merge the below two functions. get_node_data should always return an Option and not
-	// panic.
-	fn get_node_data(&self, i: &Self::ValueRef) -> NodeData;
-	fn safe_get_node_data(&self, i: &Self::ValueRef) -> Option<NodeData> {
-		if *i != self.invalid_value() {
-			Some(self.get_node_data(i))
-		} else {
-			None
-		}
-	}
+	fn get_node_data(&self, i: &Self::ValueRef) -> Result<NodeData, Box<Debug>>;
 
 	/// Returns true if the expression acts as a `Selector` for control flow.
 	fn is_selector(&self, i:&Self::ValueRef) -> bool;
@@ -137,13 +133,13 @@ pub trait SSAMod: SSA + CFGMod {
 	fn add_const(&mut self, block: Self::ActionRef, value: u64) -> Self::ValueRef;
 
 	/// Add a new phi node.
-	fn add_phi(&mut self, block: Self::ActionRef) -> Self::ValueRef;
+	fn add_phi(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
 
 	/// Add a new undefined node
-	fn add_undefined(&mut self, block: Self::ActionRef) -> Self::ValueRef;
+	fn add_undefined(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
 
 	/// Add a new comment node
-	fn add_comment(&mut self, block: Self::ActionRef, msg: String) -> Self::ValueRef;
+	fn add_comment(&mut self, block: Self::ActionRef, vt: ValueType, msg: String) -> Self::ValueRef;
 
 	/// Mark the node as selector for the control edges away from the specified basic block
 	fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);

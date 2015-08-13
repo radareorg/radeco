@@ -3,6 +3,7 @@
 
 use std::collections::{HashSet, HashMap};
 use super::ssa::{BBInfo, SSA, SSAMod, NodeData, ValueType};
+use super::ssa::ssa_traits::NodeType;
 
 pub type VarId = usize;
 
@@ -70,13 +71,14 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 	}
 
 	fn read_variable_recursive(&mut self, variable: VarId, block: T::ActionRef) -> T::ValueRef {
+		let valtype = self.variable_types[variable];
 		let mut val;
 
 		if !self.sealed_blocks.contains(&block) {
 			// Incomplete CFG
 			// TODO: bring back comments
 			// val = self.ssa.add_phi_comment(block, &variable);
-			val = self.ssa.add_phi(block);
+			val = self.ssa.add_phi(block, valtype);
 			let oldval = self.incomplete_phis.get_mut(&block).unwrap().insert(variable.clone(), val);
 			assert!(oldval.is_none());
 		} else {
@@ -87,7 +89,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 			} else {
 				// Break potential cycles with operandless phi
 
-				val = self.ssa.add_phi(block);
+				val = self.ssa.add_phi(block, valtype);
 				//  = self.ssa.add_phi_comment(block, &variable);
 
 				// dkreuter:
@@ -130,7 +132,8 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 
 		if same == undef {
 			let block = self.ssa.block_of(&phi);
-			same = self.ssa.add_undefined(block);
+			let valtype = self.ssa.get_node_data(&phi).unwrap().vt;
+			same = self.ssa.add_undefined(block, valtype);
 		}
 
 		let users = self.ssa.uses_of(phi);
@@ -139,7 +142,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 		// Try to recursively remove all phi users, which might have become trivial
 		for use_ in users {
 			if use_ == phi { continue; }
-			if let NodeData::Phi = self.ssa.get_node_data(&use_) {
+			if let NodeType::Phi = self.ssa.get_node_data(&use_).unwrap().nt {
 				//println!("After replacing {:?} by {:?}, proceeding to simplify user {:?}",
 				//	self.ssa.g[phi],
 				//	self.ssa.g[same],

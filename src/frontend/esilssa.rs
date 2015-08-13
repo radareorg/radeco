@@ -61,8 +61,8 @@ impl<'a, T> SSAConstruction<'a, T> where
 			self.phiplacer.write_variable(block, 1, zero); // old = 0
 
 			for (i, name) in self.regfile.whole_names.iter().enumerate() {
-				let argnode = self.phiplacer.ssa.add_comment(block, name.clone());
-				self.phiplacer.write_variable(block, i+1, argnode);
+				let argnode = self.phiplacer.ssa.add_comment(block, self.regfile.whole_registers[i], name.clone());
+				self.phiplacer.write_variable(block, i+2, argnode);
 			}
 
 			blocks[cfg.entry.index()] = block;

@@ -3,6 +3,7 @@
 use std::collections::VecDeque;
 use petgraph::graph::NodeIndex;
 use middle::ssa::{NodeData, SSAMod, SSA};
+use middle::ssa::ssa_traits::NodeType;
 
 /// Removes SSA nodes that are not used by any other node.
 /// The algorithm will not consider whether the uses keeping a node alive
@@ -21,11 +22,10 @@ pub fn collect<'a, T>(ssa: &mut T) where T:
 	let mut reachable = Vec::with_capacity(maxindex);
 	let mut queue: VecDeque<NodeIndex> = VecDeque::new();
 	for i in 0..maxindex {
-		reachable.push(match ssa.get_node_data(&NodeIndex::new(i)) {
-			NodeData::Op(op, _) => op.has_sideeffects(),
-			NodeData::Invalid   => true,
-			_                   => false,
-		});
+		reachable.push(ssa.get_node_data(&NodeIndex::new(i)).map(|nd| match nd.nt {
+			NodeType::Op(op) => op.has_sideeffects(),
+			_                => false,
+		}).unwrap_or(true /* If it's not a value, don't delete it. */));
 	}
 	reachable[roots.index()] = false;
 	queue.extend(&[roots]);
