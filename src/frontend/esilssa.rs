@@ -108,23 +108,14 @@ impl<'a, T> SSAConstruction<'a, T> where
 		//self.phiplacer.ssa.cleanup();
 	}
 
-	fn process_in_flag(&mut self, block: T::ActionRef, _mval: &MVal) -> T::ValueRef {
-		// this would be neccesary if parser didn't use EsilCur/EsilOld
-		let _cur = self.phiplacer.read_variable(block, 0);
-		let _old = self.phiplacer.read_variable(block, 1);
-		let _lastsz = self.phiplacer.read_variable(block, 2);
-		//unimplemented!();
-		self.phiplacer.ssa.invalid_value()
-	}
-
 	fn process_in(&mut self, block: T::ActionRef, mval: &MVal) -> T::ValueRef {
 		match mval.val_type {
 			MValType::Register  => self.regfile.read_register(&mut self.phiplacer, 2, block, &mval.name),
 			MValType::Temporary => self.temps[&mval.name],
-			MValType::Internal  => self.process_in_flag(block, mval),
+			MValType::Internal  => panic!("This value type should be eliminated during parsing"),
 			MValType::EsilCur   => self.phiplacer.read_variable(block, 0),
 			MValType::EsilOld   => self.phiplacer.read_variable(block, 1),
-			MValType::Lastsz   => self.phiplacer.read_variable(block, 2),
+			MValType::Lastsz    => self.phiplacer.read_variable(block, 2),
 			MValType::Unknown   => self.phiplacer.ssa.invalid_value(),
 			                       //self.phiplacer.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
 			MValType::Null      => self.phiplacer.ssa.invalid_value(),
