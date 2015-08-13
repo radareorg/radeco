@@ -8,7 +8,7 @@ use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use std::collections::HashSet;
 
 use super::cfg_traits::{CFG, CFGMod};
-use super::ssa_traits::{SSA, ValueType};
+use super::ssa_traits::{SSA, SSAMod, ValueType};
 use super::ssastorage::{EdgeData};
 use super::ssastorage::NodeData;
 use super::ssa_traits::NodeData as TNodeData;
@@ -19,6 +19,21 @@ use middle::ir::{MArity, MOpcode};
 pub trait Verify: SSA {
 	fn verify_block(&self, i: &Self::ActionRef);
 	fn verify_expr(&self, i: &Self::ValueRef);
+}
+
+pub trait VerifiedAdd: SSAMod {
+	fn verified_add_op(&mut self, block: Self::ActionRef, opc: MOpcode, vt: ValueType, args: &[Self::ValueRef]) -> Self::ValueRef;
+}
+
+impl<T: Verify + SSAMod> VerifiedAdd for T {
+	fn verified_add_op(&mut self, block: Self::ActionRef, opc: MOpcode, vt: ValueType, args: &[Self::ValueRef]) -> Self::ValueRef {
+		let op = self.add_op(block, opc, vt);
+		for (i, arg) in args.iter().enumerate() {
+			self.op_use(op, i as u8, *arg);
+		}
+		self.verify_expr(&op);
+		op
+	}
 }
 
 impl Verify for SSAStorage {
@@ -151,7 +166,7 @@ impl Verify for SSAStorage {
 						let w0 = self.safe_get_node_data(&operands[0])
 						             .map(&extract)
 						             .unwrap();
-						assert!(w0 == w);
+						assert!(w0 == w, format!("{:?} == {:?}; {:?}", w0, w, opcode));
 						for op in operands.iter() {
 							let w1 = self.safe_get_node_data(op)
 							             .map(&extract)

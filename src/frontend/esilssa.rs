@@ -7,6 +7,8 @@ use middle::cfg::NodeData as CFGNodeData;
 use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
 use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
+use middle::ssa::verifier::Verify;
+use middle::ssa::verifier::VerifiedAdd;
 use middle::ir::{MVal, MInst, MOpcode, MValType};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
@@ -14,16 +16,18 @@ use middle::dce;
 
 pub type VarId = usize;
 
-pub struct SSAConstruction<'a, T> 
-where T: Clone + SSAMod<BBInfo=BBInfo> + 'a {
+pub struct SSAConstruction<'a, T> where
+	T: Clone + Verify + SSAMod<BBInfo=BBInfo> + 'a
+{
 	pub phiplacer: PhiPlacer<'a, T>,
 	pub regfile:   SubRegisterFile,
 	pub temps:     HashMap<String, T::ValueRef>,
 }
 
-impl<'a, T> SSAConstruction<'a, T> 
-where T: 'a + Clone +
-SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
+impl<'a, T> SSAConstruction<'a, T> where
+	T: 'a + Clone + Verify +
+       SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex>
+{
 	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
 		let mut sc = SSAConstruction {
 			phiplacer: PhiPlacer::new(ssa),
@@ -147,11 +151,12 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 		};
 
 		let nn = {
-			let ref mut ssa = self.phiplacer.ssa;
-			let nn = ssa.add_op(block, inst.opcode, dsttype);
-			ssa.op_use(nn, 0, n0);
-			ssa.op_use(nn, 1, n1);
-			nn
+			// let ref mut ssa = self.phiplacer.ssa;
+			// let nn = ssa.add_op(block, inst.opcode, dsttype);
+			// ssa.op_use(nn, 0, n0);
+			// ssa.op_use(nn, 1, n1);
+			// nn
+			(*self.phiplacer.ssa).verified_add_op(block, inst.opcode, dsttype, &[n0, n1])
 		};
 
 		if inst.update_flags {
