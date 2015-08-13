@@ -93,6 +93,7 @@ SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex> {
 		for &block in &blocks {
 			self.phiplacer.seal_block(block);
 		}
+
 		//self.phiplacer.ssa.stable_indexing = false;
 		//self.phiplacer.ssa.cleanup();
 
