@@ -140,7 +140,6 @@ impl MOpcode {
 		match *self {
 			MOpcode::OpJmp     => false,
 			MOpcode::OpCJmp    => false,
-			MOpcode::OpCall    => false,
 			MOpcode::OpNop     => false,
 			MOpcode::OpInvalid => false,
 			MOpcode::OpInc     => false,

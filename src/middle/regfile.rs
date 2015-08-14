@@ -43,7 +43,7 @@ impl SubRegisterFile {
 		let mut events: Vec<(usize, usize, usize)> = Vec::new();
 		for (i, reg) in reg_info.reg_info.iter().enumerate() {
 			// println!("{:?}", reg);
-			if reg.type_str != "gpr" { continue; } // st7 from "fpu" overlaps with zf from "gpr" (r2 bug?)
+			if reg.type_str == "fpu" { continue; } // st7 from "fpu" overlaps with zf from "gpr" (r2 bug?)
 			if reg.name.ends_with("flags") { continue; } // HARDCODED x86
 			events.push((i, reg.offset, reg.offset + reg.size));
 		}
