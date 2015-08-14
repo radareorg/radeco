@@ -1,12 +1,15 @@
 extern crate r2pipe;
+extern crate radeco_lib;
 
 use std::io;
 use std::io::prelude::*;
 use self::r2pipe::R2Pipe;
+use self::radeco_lib::frontend::r2::R2;
 
 pub struct Radeco {
     filename: String,
     r2p: Option<R2Pipe>,
+    r2p2: Option<R2>,
 }
 
 impl Radeco {
@@ -39,7 +42,7 @@ impl Radeco {
     }
     
     pub fn file(filename: String) -> Result<Radeco,&'static str> {
-        let mut r = Radeco{filename: filename.to_owned(), r2p: None};
+        let mut r = Radeco{filename: filename.to_owned(), r2p: None, r2p2: None};
 	let r2p = R2Pipe::spawn (&*filename).unwrap();
 	r.r2p = Some(r2p);
         // Err("[r2pipe] initialization error")
@@ -47,7 +50,7 @@ impl Radeco {
     }
 
     pub fn pipe() -> Result<Radeco,&'static str> {
-        let mut r = Radeco{filename: "".to_owned(), r2p: None};
+        let mut r = Radeco{filename: "".to_owned(), r2p: None, r2p2: None};
 	let r2p = R2Pipe::open ().unwrap();
 	r.r2p = Some(r2p);
         // Err("[r2pipe] initialization error")
