@@ -69,21 +69,23 @@ fn test_analysis2() {
 	test.dump();
 }
 
-//#[test]
-//fn tachikoma() {
-	//let test_name = "tachikoma".to_string();
-	//let bin_name = Some("./tachikoma".to_string());
-	//let addr = Some("fcn.0002b401".to_string());
-	//let pipeline = vec![
-		//Pipeline::ReadFromR2,
-		//Pipeline::ParseEsil,
-		//Pipeline::CFG,
-		//Pipeline::SSA,
-		//Pipeline::DCE,
+#[test]
+fn tachikoma() {
+	let test_name = "tachikoma".to_string();
+	let bin_name = Some("./ex-bins/tachikoma".to_string());
+	let addr = Some("fcn.0002b401".to_string());
+	let pipeline = vec![
+		Pipeline::ReadFromR2,
+		Pipeline::ParseEsil,
+		Pipeline::CFG,
+		Pipeline::SSA,
+		Pipeline::Verify,
+		Pipeline::DCE,
+		Pipeline::Verify
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
-	//];
-	//let mut test = Runner::new(test_name, bin_name, addr, true, pipeline);
-	//test.run();
-	//test.dump();
-//}
+	];
+	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline);
+	test.run();
+	test.dump();
+}
