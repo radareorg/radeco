@@ -76,6 +76,10 @@ impl R2 {
 		R2 { pipe: pipe, readin: String::new() }
 	}
 
+	pub fn from(r2p: R2Pipe) -> R2 {
+		R2 { pipe: r2p, readin: String::new() }
+	}
+
 	// Does some basic configurations (sane defaults).
 	pub fn init(&mut self) {
 		self.send("e asm.esil = true");
