@@ -3,7 +3,7 @@
 
 use std::collections::{HashSet, HashMap};
 use super::ssa::{BBInfo, SSA, SSAMod, ValueType};
-use super::ssa::ssa_traits::NodeType;
+use super::ssa::ssa_traits::{NodeType, NodeData};
 
 pub type VarId = usize;
 
@@ -142,7 +142,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 		// Try to recursively remove all phi users, which might have become trivial
 		for use_ in users {
 			if use_ == phi { continue; }
-			if let NodeType::Phi = self.ssa.get_node_data(&use_).unwrap().nt {
+			if let Ok( NodeData {nt: NodeType::Phi, ..} ) = self.ssa.get_node_data(&use_) {
 				//println!("After replacing {:?} by {:?}, proceeding to simplify user {:?}",
 				//	self.ssa.g[phi],
 				//	self.ssa.g[same],

@@ -246,8 +246,8 @@ impl<'a> Parser<'a> {
 			// Deal with memaccess 'composite' instructions.
 			let re = Regex::new(r"^(.|..)?(=)?\[([1248]?)\]$").unwrap();
 			let tokens = re.captures(&*token).unwrap();
-			let eq = tokens.at(2).unwrap_or("");
-			let has_op = tokens.at(1).unwrap_or("");
+			let has_op      = tokens.at(1).unwrap_or("");
+			let eq          = tokens.at(2).unwrap_or("");
 			let access_size = tokens.at(3).unwrap_or("");
 			let access_size = match access_size {
 				"" => self.default_size,
@@ -280,8 +280,8 @@ impl<'a> Parser<'a> {
 			};
 			try!(self.add_inst(o));
 			// Reassignment.
-			self.stack.push(tmp_dst1); // TODO: If dst is a temporary this might break their SSA nature
-			try!(self.add_inst(MOpcode::OpEq));
+			self.stack.push(tmp_dst1); // hope above add_inst doesn't invalidate dst1
+			try!(self.add_inst(MOpcode::OpStore));
 		}
 		Ok(())
 	}
@@ -485,7 +485,7 @@ impl<'a> Parser<'a> {
 			dst.size = 1;
 		}
 
-		if op == MOpcode::OpGt || op == MOpcode::OpLt {
+		if op == MOpcode::OpGt || op == MOpcode::OpLt || op == MOpcode::OpGteq || op == MOpcode::OpLteq {
 			dst.size = 1;
 		}
 
