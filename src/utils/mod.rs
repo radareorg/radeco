@@ -89,7 +89,7 @@ impl<'a> State<'a> {
 	}
 }
 
-pub struct Test<'a> {
+pub struct Runner<'a> {
 	name: String,
 	bin_name: Option<String>,
 	addr: Option<String>,
@@ -99,12 +99,12 @@ pub struct Test<'a> {
 	pub state: State<'a>,
 }
 
-impl<'a> Test<'a> {
+impl<'a> Runner<'a> {
 
 	pub fn new(name: String, bin_name: Option<String>,
 			   addr: Option<String>, verbose: bool,
-			   pipeline: Vec<Pipeline>) -> Test<'a> {
-		Test {
+			   pipeline: Vec<Pipeline>) -> Runner<'a> {
+		Runner {
 			name: name,
 			bin_name: bin_name,
 			addr: addr,
