@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use middle::ir;
 use super::cfg_traits::{CFG, CFGMod};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueType {
 	Integer {width: ir::WidthSpec},
 	//MachineState,

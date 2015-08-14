@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use frontend::structs::LRegInfo;
 use middle::ssa::{BBInfo, SSAMod, ValueType};
+use middle::ssa::verifier::VerifiedAdd;
 use middle::ir::{MOpcode, WidthSpec};
 use middle::phiplacement::PhiPlacer;
 
@@ -96,7 +97,7 @@ impl SubRegisterFile {
 	/// * `value`     - An SSA node whose value shall be assigned to the register.
 	///                 As with most APIs in radeco, we will not check if the value is reachable
 	///                 from the position where the caller is trying to insert these operations.
-	pub fn write_register<'a, T: SSAMod<BBInfo=BBInfo> + 'a>(
+	pub fn write_register<'a, T: SSAMod<BBInfo=BBInfo> + VerifiedAdd + 'a>(
 		&self, phiplacer: &mut PhiPlacer<'a, T>, base: usize,
 		block: T::ActionRef,
 		var: &String, // change to str?
@@ -106,19 +107,16 @@ impl SubRegisterFile {
 		let id = info.base + base;
 		match phiplacer.variable_types[id] {
 			ValueType::Integer{width} if info.width < (width as usize) => {
-				//println!("Assigning to {:?}: {:?}", var, info);
+				//println!("Assigning to {:?}: sub={:?} base_width={}", var, info, width);
 				let vt = ValueType::Integer{width: width as WidthSpec};
 
-				let mut new_value = phiplacer.ssa.add_op(block, MOpcode::OpWiden(width as WidthSpec), vt);
-				phiplacer.ssa.op_use(new_value, 0, value);
+				let mut new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpWiden(width as WidthSpec), vt, &[value]);
 				value = new_value;
 
 				if info.shift > 0 {
 					//println!("Shifting by {:?}", info.shift);
 					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
-					new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsl, vt);
-					phiplacer.ssa.op_use(new_value, 0, value);
-					phiplacer.ssa.op_use(new_value, 1, shift_amount_node);
+					new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpLsl, vt, &[value, shift_amount_node]);
 					value = new_value;
 				}
 
@@ -130,14 +128,10 @@ impl SubRegisterFile {
 					let mut ov = phiplacer.read_variable(block, id);
 					let maskvalue_node = phiplacer.ssa.add_const(block, maskvalue);
 
-					new_value = phiplacer.ssa.add_op(block, MOpcode::OpAnd, vt);
-					phiplacer.ssa.op_use(new_value, 0, ov);
-					phiplacer.ssa.op_use(new_value, 1, maskvalue_node);
+					new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpAnd, vt, &[ov, maskvalue_node]);
 					ov = new_value;
 
-					new_value = phiplacer.ssa.add_op(block, MOpcode::OpOr, vt);
-					phiplacer.ssa.op_use(new_value, 0, value);
-					phiplacer.ssa.op_use(new_value, 1, ov);
+					new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpOr, vt, &[value, ov]);
 					value = new_value;
 				}
 			},
@@ -161,12 +155,12 @@ impl SubRegisterFile {
 	/// Unless prior basic blocks are marked as sealed in the PhiPlacer this will always return
 	/// a reference to a Phi node.
 	/// Either way, once nodes are sealed redundant Phi nodes are eliminated by PhiPlacer.
-	pub fn read_register<'a, T: SSAMod<BBInfo=BBInfo> + 'a>(
+	pub fn read_register<'a, T: SSAMod<BBInfo=BBInfo> + VerifiedAdd + 'a>(
 		&self, phiplacer: &mut PhiPlacer<'a, T>,
 		base: usize,
 		block: T::ActionRef,
 		var: &String
-		) ->
+	) ->
 		T::ValueRef
 	{
 		let info = &self.named_registers[var];
@@ -176,14 +170,13 @@ impl SubRegisterFile {
 			ValueType::Integer{width} => {
 				if info.shift > 0 {
 					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
-					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpLsr, ValueType::Integer{width: width as WidthSpec});
-					phiplacer.ssa.op_use(new_value, 0, value);
-					phiplacer.ssa.op_use(new_value, 1, shift_amount_node);
+					let new_value = phiplacer.ssa.verified_add_op(
+						block, MOpcode::OpLsr, ValueType::Integer{width: width as WidthSpec}, &[value, shift_amount_node]);
 					value = new_value;
 				}
-				if (width as usize) < info.width {
-					let new_value = phiplacer.ssa.add_op(block, MOpcode::OpNarrow(info.width as WidthSpec), ValueType::Integer{width: info.width as WidthSpec});
-					phiplacer.ssa.op_use(new_value, 0, value);
+				if info.width < (width as usize) {
+					let new_value = phiplacer.ssa.verified_add_op(
+						block, MOpcode::OpNarrow(info.width as WidthSpec), ValueType::Integer{width: info.width as WidthSpec}, &[value]);
 					value = new_value;
 				}
 				value
