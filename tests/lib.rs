@@ -1,8 +1,6 @@
 extern crate radeco_lib;
 
-pub mod utils;
-
-use utils::{Pipeline, Test, Pipeout, Analysis};
+use radeco_lib::utils::{Pipeline, Test, Pipeout, Analysis};
 use radeco_lib::frontend::r2::R2;
 
 #[test]
@@ -60,8 +58,8 @@ fn test_analysis2() {
 		Pipeline::ReadFromR2,
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
-		Pipeline::SSA
-		//Pipeline::Verify
+		Pipeline::SSA,
+		Pipeline::Verify
 		//Pipeline::DCE,
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
