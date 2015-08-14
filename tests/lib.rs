@@ -1,8 +1,6 @@
 extern crate radeco_lib;
 
-pub mod utils;
-
-use utils::{Pipeline, Test, Pipeout, Analysis};
+use radeco_lib::utils::{Pipeline, Runner, Pipeout, Analysis};
 use radeco_lib::frontend::r2::R2;
 
 #[test]
@@ -13,7 +11,7 @@ fn test1() {
 	let test_name = "test1".to_string();
 	let bin_name = Some("./ex-bins/simple2".to_string());
 	let addr = Some("sym.main".to_string());
-	let mut test = Test::new(test_name, bin_name, addr, false, pipeline);
+	let mut test = Runner::new(test_name, bin_name, addr, false, pipeline);
 	test.run();
 	test.dump();
 }
@@ -44,7 +42,7 @@ fn test_analysis1() {
 		Pipeline::Verify
 	];
 
-	let mut test = Test::new(test_name, None, None, true, pipeline);
+	let mut test = Runner::new(test_name, None, None, true, pipeline);
 	test.state.pipeout = Some(Pipeout::Esil(esil));
 	test.state.reg_info = Some(r.clone());
 	test.run();
@@ -60,13 +58,13 @@ fn test_analysis2() {
 		Pipeline::ReadFromR2,
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
-		Pipeline::SSA
-		//Pipeline::Verify
+		Pipeline::SSA,
+		Pipeline::Verify
 		//Pipeline::DCE,
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
 	];
-	let mut test = Test::new(test_name, bin_name, addr, true, pipeline);
+	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline);
 	test.run();
 	test.dump();
 }
@@ -85,7 +83,7 @@ fn test_analysis2() {
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
 	//];
-	//let mut test = Test::new(test_name, bin_name, addr, true, pipeline);
+	//let mut test = Runner::new(test_name, bin_name, addr, true, pipeline);
 	//test.run();
 	//test.dump();
 //}

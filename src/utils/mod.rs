@@ -1,24 +1,16 @@
-#![cfg(test)]
-/// The utils module is used by other tests to make writing tests easier.
-///
-/// The idea is to provide tests with a neat interface that allows tests to define a pipeline of
-/// transformations on the input.
-/// The test is then returned with a result struct that contains information about all the
-/// intermediate stages to assert! for correctness.
+/// Provides Pipeline and Runner structs to make radeco-lib easier to use.
 
-extern crate radeco_lib;
-
-use radeco_lib::frontend::parser::{Parser};
-use radeco_lib::frontend::structs::{LOpInfo, LRegInfo};
-use radeco_lib::frontend::r2::R2;
-use radeco_lib::frontend::esilssa::SSAConstruction;
-use radeco_lib::middle::ir::{MInst};
-use radeco_lib::middle::cfg::CFG;
-use radeco_lib::middle::dot;
-use radeco_lib::middle::dce;
-use radeco_lib::middle::ssa::SSAStorage;
-use radeco_lib::analysis::constant_propagation::constant;
-use radeco_lib::middle::ssa::verifier;
+use ::frontend::parser::{Parser};
+use ::frontend::structs::{LOpInfo, LRegInfo};
+use ::frontend::r2::R2;
+use ::frontend::esilssa::SSAConstruction;
+use ::middle::ir::{MInst};
+use ::middle::cfg::CFG;
+use ::middle::dot;
+use ::middle::dce;
+use ::middle::ssa::SSAStorage;
+use ::analysis::constant_propagation::constant;
+use ::middle::ssa::verifier;
 
 use std::io::prelude::*;
 use std::fs;
@@ -28,8 +20,6 @@ use std::path::{PathBuf};
 macro_rules! out {
 	($str: expr, $m: expr) => { if $m { println!($str) } }
 }
-
-
 
 #[derive(Clone, Copy, Debug)]
 pub enum Analysis {
@@ -99,7 +89,7 @@ impl<'a> State<'a> {
 	}
 }
 
-pub struct Test<'a> {
+pub struct Runner<'a> {
 	name: String,
 	bin_name: Option<String>,
 	addr: Option<String>,
@@ -109,12 +99,12 @@ pub struct Test<'a> {
 	pub state: State<'a>,
 }
 
-impl<'a> Test<'a> {
+impl<'a> Runner<'a> {
 
 	pub fn new(name: String, bin_name: Option<String>,
 			   addr: Option<String>, verbose: bool,
-			   pipeline: Vec<Pipeline>) -> Test<'a> {
-		Test {
+			   pipeline: Vec<Pipeline>) -> Runner<'a> {
+		Runner {
 			name: name,
 			bin_name: bin_name,
 			addr: addr,
@@ -256,7 +246,7 @@ impl<'a> Test<'a> {
 		};
 
 		{
-			verifier::verify(&ssa);
+			verifier::verify(&ssa).unwrap();
 		}
 	}
 
