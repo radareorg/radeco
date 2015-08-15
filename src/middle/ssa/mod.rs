@@ -1,3 +1,5 @@
+//! Holds traits and structs for the ssa form
+
 // TODO: 
 //       - Decide the structs and traits to expose through ssa:: namespace,
 //         i.e. Decide what we want to re export for convienence.

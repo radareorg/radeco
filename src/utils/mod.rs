@@ -1,4 +1,4 @@
-/// Provides Pipeline and Runner structs to make radeco-lib easier to use.
+//! Module implements Pipeline and Runner structs to make radeco-lib easier to use.
 
 use ::frontend::parser::{Parser};
 use ::frontend::structs::{LOpInfo, LRegInfo};
