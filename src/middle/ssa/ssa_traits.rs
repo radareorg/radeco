@@ -8,7 +8,40 @@ use super::cfg_traits::{CFG, CFGMod};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueType {
 	Integer {width: ir::WidthSpec},
-	//MachineState,
+}
+
+impl<'a> From<&'a str> for ValueType {
+	fn from(v: &'a str) -> ValueType {
+		let t = v.to_owned()
+                 .chars()
+                 .nth(0)
+                 .unwrap();
+
+		let w = match t {
+			'i' => v[1..].parse::<u16>().unwrap(),
+			_ => unimplemented!(),
+		};
+
+		ValueType::Integer { width: w }
+	}
+}
+
+impl From<String> for ValueType {
+	fn from(v: String) -> ValueType {
+		From::from(&*v)
+	}
+}
+
+impl From<u16> for ValueType {
+	fn from(v: u16) -> ValueType {
+		ValueType::Integer { width: v as ir::WidthSpec }
+	}
+}
+
+impl From<usize> for ValueType {
+	fn from(v: usize) -> ValueType {
+		ValueType::Integer { width: v as ir::WidthSpec }
+	}
 }
 
 #[derive(Clone, Debug)]

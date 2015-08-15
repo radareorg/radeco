@@ -8,11 +8,11 @@ use super::ssa::ssa_traits::{NodeType, NodeData};
 pub type VarId = usize;
 
 pub struct PhiPlacer<'a, T: SSAMod<BBInfo=BBInfo> + 'a> {
-	pub ssa:          &'a mut T,
-	pub variable_types:   Vec<ValueType>,
-	sealed_blocks:    HashSet<T::ActionRef>, // replace with bitfield
-	current_def:      Vec<HashMap<T::ActionRef, T::ValueRef>>,
-	incomplete_phis:  HashMap<T::ActionRef, HashMap<VarId, T::ValueRef>>,
+	pub ssa:            &'a mut T,
+	pub variable_types: Vec<ValueType>,
+	sealed_blocks:      HashSet<T::ActionRef>,
+	current_def:        Vec<HashMap<T::ActionRef, T::ValueRef>>,
+	incomplete_phis:    HashMap<T::ActionRef, HashMap<VarId, T::ValueRef>>,
 }
 
 impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
@@ -26,13 +26,11 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 		}
 	}
 
-	pub fn add_variables(&mut self, variable_types: Vec<ValueType>) -> usize {
-		let base = self.variable_types.len();
-		self.variable_types.extend(variable_types);
-		for _ in base..self.variable_types.len() {
+	pub fn add_variables(&mut self, variable_types: Vec<ValueType>) {
+		for _ in &variable_types {
 			self.current_def.push(HashMap::new());
 		}
-		return base
+		self.variable_types.extend(variable_types);
 	}
 
 	pub fn write_variable(&mut self, block: T::ActionRef, variable: VarId, value: T::ValueRef) {

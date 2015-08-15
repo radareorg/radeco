@@ -2,32 +2,37 @@
 
 use std::collections::HashMap;
 use petgraph::graph::NodeIndex;
+use std::fmt::Debug;
+use std::convert::From;
+
 use frontend::structs::LRegInfo;
 use middle::cfg::NodeData as CFGNodeData;
 use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{CFG, BasicBlock};
-use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
-use middle::ssa::verifier::Verify;
-use middle::ssa::verifier::VerifiedAdd;
+use middle::dce;
 use middle::ir::{MVal, MInst, MOpcode, MValType};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
-use middle::dce;
-use std::fmt::Debug;
+use middle::ssa::{BBInfo, SSA, SSAMod};
+use middle::ssa::verifier::{Verify, VerifiedAdd};
 
 pub type VarId = usize;
 
-pub struct SSAConstruction<'a, T> where
-	T: Debug + Clone + Verify + SSAMod<BBInfo=BBInfo> + 'a
+const ESIL_CUR: usize = 0;
+const ESIL_OLD: usize = 1;
+const LASTSZ:  usize = 2;
+
+pub struct SSAConstruction<'a, T>
+where T: 'a + Clone + Debug + Clone + SSAMod<BBInfo=BBInfo>
 {
 	pub phiplacer: PhiPlacer<'a, T>,
 	pub regfile:   SubRegisterFile,
 	pub temps:     HashMap<String, T::ValueRef>,
 }
 
-impl<'a, T> SSAConstruction<'a, T> where
-	T: 'a + Clone + Verify + Debug +
-       SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex>
+impl<'a, T> SSAConstruction<'a, T>
+where T: 'a + Clone + Debug + Verify +
+         SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
 	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
 		let mut sc = SSAConstruction {
@@ -35,21 +40,22 @@ impl<'a, T> SSAConstruction<'a, T> where
 			regfile:   SubRegisterFile::new(reg_info),
 			temps:     HashMap::new(),
 		};
-		sc.phiplacer.add_variables(vec![
-								   ValueType::Integer{width: 64}, // cur
-								   ValueType::Integer{width: 64}, // old
-								   ValueType::Integer{width: 64}  // lastsz
-		]);
-		// make the following a method of regfile?
+		sc.phiplacer.add_variables(
+			vec![
+			From::from(64 as u16),
+			From::from(64 as u16),
+			From::from(64 as u16),
+			]);
+
 		sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
 		sc
 	}
 
 	pub fn run(&mut self, cfg: &CFG) {
-		let mut blocks = Vec::<T::ActionRef>::with_capacity(cfg.g.node_count());
-		let bb_iter = cfg.bbs.iter();
+		let node_count = cfg.g.node_count();
+		let mut blocks = Vec::<T::ActionRef>::with_capacity(node_count);
 
-		for _ in 0..cfg.g.node_count() {
+		for _ in 0..node_count {
 			blocks.push(self.phiplacer.ssa.invalid_action());
 		}
 
@@ -63,25 +69,25 @@ impl<'a, T> SSAConstruction<'a, T> where
 			self.phiplacer.write_variable(block, 2, zero); // lastsz = 0
 
 			for (i, name) in self.regfile.whole_names.iter().enumerate() {
-				let argnode = self.phiplacer.ssa.add_comment(block, self.regfile.whole_registers[i], name.clone());
-				self.phiplacer.write_variable(block, i+3, argnode);
+				let reg = self.regfile.whole_registers[i];
+				let argnode =
+					self.phiplacer.ssa.add_comment(block, reg, name.clone());
+				self.phiplacer.write_variable(block, i + 3, argnode);
 			}
 
 			blocks[cfg.entry.index()] = block;
-
 			let block = self.phiplacer.add_dynamic();
 			self.phiplacer.ssa.mark_exit_node(&block);
 			blocks[cfg.exit.index()] = block;
 		}
 
-		for (addr, i) in bb_iter {
+		for (addr, i) in &cfg.bbs {
 			let block = self.phiplacer.add_block(BBInfo { addr: *addr });
 			blocks[i.index()] = block;
-			match cfg.g[*i] {
-				CFGNodeData::Block(ref srcbb) => {
-					self.process_block(block, srcbb);
-				}
-				_ => unreachable!(),
+			if let CFGNodeData::Block(ref srcbb) = cfg.g[*i] {
+				self.process_block(block, srcbb);
+			} else {
+				unreachable!();
 			}
 		}
 
@@ -91,75 +97,73 @@ impl<'a, T> SSAConstruction<'a, T> where
 				CFGEdgeType::True => 1,
 				CFGEdgeType::Unconditional => 2,
 			};
+
 			self.phiplacer.ssa.add_control_edge(
 				blocks[edge.source().index()],
 				blocks[edge.target().index()],
 				i);
 		}
+
 		for &block in &blocks {
 			self.phiplacer.seal_block(block);
 		}
 
-		//self.phiplacer.ssa.stable_indexing = false;
-		//self.phiplacer.ssa.cleanup();
-
-		{
-			dce::collect(self.phiplacer.ssa);
-		}
-		//dce::collect(self.phiplacer.ssa, &[exit_regstate]);
-		//self.phiplacer.ssa.cleanup();
+		dce::collect(self.phiplacer.ssa);
 	}
 
 	fn process_in(&mut self, block: T::ActionRef, mval: &MVal) -> T::ValueRef {
 		match mval.val_type {
-			MValType::Register  => self.regfile.read_register(&mut self.phiplacer, 3, block, &mval.name),
+			MValType::Register  => {
+				let phip = &mut self.phiplacer;
+				self.regfile.read_register(phip, 3, block, &mval.name)
+			},
 			MValType::Temporary => self.temps[&mval.name],
 			MValType::Internal  => panic!("This value type should be eliminated during parsing"),
-			MValType::EsilCur   => self.phiplacer.read_variable(block, 0),
-			MValType::EsilOld   => self.phiplacer.read_variable(block, 1),
-			MValType::Lastsz    => self.phiplacer.read_variable(block, 2),
+			MValType::EsilCur   => self.phiplacer.read_variable(block, ESIL_CUR),
+			MValType::EsilOld   => self.phiplacer.read_variable(block, ESIL_OLD),
+			MValType::Lastsz    => self.phiplacer.read_variable(block, LASTSZ),
 			MValType::Unknown   => self.phiplacer.ssa.invalid_value(),
-			                       //self.phiplacer.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
 			MValType::Null      => self.phiplacer.ssa.invalid_value(),
 		}
 	}
 
 	fn process_out(&mut self, block: T::ActionRef, mval: &MVal, value: T::ValueRef) {
 		match mval.val_type { 
-			MValType::Register  => self.regfile.write_register(&mut self.phiplacer, 3, block, &mval.name, value),
-			MValType::Temporary => {self.temps.insert(mval.name.clone(), value);},
+			MValType::Register  => {
+				self.regfile.write_register(&mut self.phiplacer, 3,
+                                            block, &mval.name, value);
+			},
+			MValType::Temporary => {
+				self.temps.insert(mval.name.clone(), value);
+			},
 			MValType::Null      => {},
 			_                   => panic!(),
 		}
 	}
 
-	fn process_op(&mut self, block: T::ActionRef, inst: &MInst, n0: T::ValueRef, n1: T::ValueRef) -> T::ValueRef {
+	fn process_op(&mut self, block: T::ActionRef,inst: &MInst,
+                  n0: T::ValueRef, n1: T::ValueRef) -> T::ValueRef
+	{
 		if inst.opcode == MOpcode::OpEq {
 			return n0
 		}
 
 		let dsttype = match inst.dst.val_type {
-			MValType::Null => ValueType::Integer{width: 0}, // there is no ValueType::None?
-			_              => ValueType::Integer{width: inst.dst.size},
+			MValType::Null => From::from(0 as u16), // there is no ValueType::None?
+			_              => From::from(inst.dst.size.to_string()),
 		};
 
 		let nn = {
-			// let ref mut ssa = self.phiplacer.ssa;
-			// let nn = ssa.add_op(block, inst.opcode, dsttype);
-			// ssa.op_use(nn, 0, n0);
-			// ssa.op_use(nn, 1, n1);
-			// nn
 			(*self.phiplacer.ssa).verified_add_op(block, inst.opcode, dsttype, &[n0, n1])
 		};
 
 		if inst.update_flags {
 			let mut nn64 = nn;
 
+			// Add a widen instruction if the width is not 64.
 			if inst.dst.size != 64 {
 				let ref mut ssa = self.phiplacer.ssa;
-				nn64 = ssa.add_op(block,
-					MOpcode::OpWiden(64),
-					ValueType::Integer{width: 64});
+				nn64 = ssa.add_op(block, MOpcode::OpWiden(64), From::from(64 as u16));
 				ssa.op_use(nn64, 0, nn);
 			}
 
@@ -177,11 +181,6 @@ impl<'a, T> SSAConstruction<'a, T> where
 			let n0 = self.process_in(block, &instruction.operand_1);
 			let n1 = self.process_in(block, &instruction.operand_2);
 
-			if let MOpcode::OpNarrow(i) = instruction.opcode {
-				println!("Found narrow. Narrow to : {}, n0: {:?}, n1: {:?},
-				op1: {}, op2: {}", i, n0, n1, instruction.operand_1, instruction.operand_2);
-			}
-
 			if instruction.opcode == MOpcode::OpJmp {
 				// TODO: In case of static jumps, this is trivial and does not need a selector.
 				// In case of dynamic jump, the jump targets have to be determined.
@@ -190,16 +189,15 @@ impl<'a, T> SSAConstruction<'a, T> where
 			}
 
 			if instruction.opcode == MOpcode::OpCJmp {
-				println!("Identified a selector: {:?} for block {:?}", n0, block);
 				self.phiplacer.ssa.mark_selector(n0, block);
 				continue;
 			}
 
 			let nn = self.process_op(block, instruction, n0, n1);
-
 			if instruction.opcode == MOpcode::OpLoad {
 				self.phiplacer.ssa.op_use(nn, 3, machinestate);
 			}
+
 			if instruction.opcode == MOpcode::OpStore {
 				self.phiplacer.ssa.op_use(nn, 3, machinestate);
 				machinestate = nn;

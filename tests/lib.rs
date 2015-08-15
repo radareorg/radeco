@@ -79,9 +79,9 @@ fn tachikoma() {
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
 		Pipeline::SSA,
-		Pipeline::Verify,
-		Pipeline::DCE,
 		Pipeline::Verify
+		//Pipeline::DCE,
+		//Pipeline::Verify
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
 	];

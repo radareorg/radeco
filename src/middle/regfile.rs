@@ -8,13 +8,22 @@ use middle::ssa::{BBInfo, SSAMod, ValueType};
 use middle::ssa::verifier::VerifiedAdd;
 use middle::ir::{MOpcode, WidthSpec};
 use middle::phiplacement::PhiPlacer;
-
-#[derive(Debug)]
+use std::convert::From;
+#[derive(Clone, Copy, Debug)]
 struct SubRegister {
-	// usize or WidthSpec
 	pub base:  usize,
 	pub shift: usize,
 	pub width: usize
+}
+
+impl SubRegister {
+	fn new(base: usize, shift: usize, width: usize) -> SubRegister {
+		SubRegister {
+			base:  base,
+			shift: shift,
+			width:  width,
+		}
+	}
 }
 
 /// A structure containing information about whole and partial registers of a platform.
@@ -32,55 +41,55 @@ pub struct SubRegisterFile {
 	pub whole_registers: Vec<ValueType>,
 	/// Contains the respective names for the registers described in `whole_registers`
 	pub whole_names:     Vec<String>,
-
-	named_registers: HashMap<String, SubRegister>,
+	named_registers:     HashMap<String, SubRegister>,
 }
 
 impl SubRegisterFile {
 	/// Creates a new SubRegisterFile based on a provided register profile.
 	pub fn new(reg_info: &LRegInfo) -> SubRegisterFile {
 		let mut slices = HashMap::new();
-		let mut events: Vec<(usize, usize, usize)> = Vec::new();
+		let mut events: Vec<SubRegister> = Vec::new();
 		for (i, reg) in reg_info.reg_info.iter().enumerate() {
-			// println!("{:?}", reg);
 			if reg.type_str == "fpu" { continue; } // st7 from "fpu" overlaps with zf from "gpr" (r2 bug?)
 			if reg.name.ends_with("flags") { continue; } // HARDCODED x86
-			events.push((i, reg.offset, reg.offset + reg.size));
+			events.push(SubRegister::new(i, reg.offset, reg.size));
 		}
 
 		events.sort_by(|a, b| {
-			let o = a.1.cmp(&b.1);
-			match o {
-				Ordering::Equal => b.2.cmp(&a.2),
-				_ => o
+			let o = a.shift.cmp(&b.shift);
+			if let Ordering::Equal = o {
+				(b.width + b.shift).cmp(&(a.width + a.shift))
+			} else {
+				o
 			}
 		});
 
-		let mut current: (usize, usize, usize) = (0, 0, 0);
+		let mut current = SubRegister::new(0, 0, 0);
 		let mut whole: Vec<ValueType> = Vec::new();
 		let mut names: Vec<String> = Vec::new();
 		for &ev in &events {
-			let name = &reg_info.reg_info[ev.0].name;
-			if ev.1 >= current.2 {
+			let name = &reg_info.reg_info[ev.base].name;
+			let cur_until = current.shift + current.width;
+			if ev.shift >= cur_until {
 				current = ev;
-				whole.push(ValueType::Integer { width: (current.2 - current.1) as WidthSpec });
+				whole.push(From::from(current.width));
 				names.push(name.clone());
 			} else {
-				assert!(ev.2 <= current.2);
+				let ev_until = ev.width + ev.shift;
+				assert!(ev_until <= cur_until);
 			}
-			slices.insert(name.clone(), SubRegister {
-				base: whole.len()-1,
-				shift: ev.1 - current.1,
-				width: ev.2 - ev.1
-			});
+
+			let subreg = SubRegister::new(whole.len() - 1,
+			                              ev.shift - current.shift,
+			                              ev.width);
+
+			slices.insert(name.clone(), subreg);
 		}
-		/*for (ref name, ref sr) in &slices {
-		  println!("{} = (u{})(r{}>>{})", name, sr.width, sr.base, sr.shift);
-		  }*/
+
 		SubRegisterFile {
 			whole_registers: whole,
 			named_registers: slices,
-			whole_names:     names,
+			whole_names: names,
 		}
 	}
 
@@ -97,48 +106,52 @@ impl SubRegisterFile {
 	/// * `value`     - An SSA node whose value shall be assigned to the register.
 	///                 As with most APIs in radeco, we will not check if the value is reachable
 	///                 from the position where the caller is trying to insert these operations.
-	pub fn write_register<'a, T: SSAMod<BBInfo=BBInfo> + VerifiedAdd + 'a>(
-		&self, phiplacer: &mut PhiPlacer<'a, T>, base: usize,
-		block: T::ActionRef,
-		var: &String, // change to str?
-		mut value: T::ValueRef
-	) {
+
+	pub fn write_register<'a, T>(&self, phip: &mut PhiPlacer<'a, T>,
+	                             base: usize, block: T::ActionRef,
+	                             var: &String, mut value: T::ValueRef)
+	where T: 'a + SSAMod<BBInfo=BBInfo> + VerifiedAdd
+	{
 		let info = &self.named_registers[var];
 		let id = info.base + base;
-		match phiplacer.variable_types[id] {
-			ValueType::Integer{width} if info.width < (width as usize) => {
-				//println!("Assigning to {:?}: sub={:?} base_width={}", var, info, width);
-				let vt = ValueType::Integer{width: width as WidthSpec};
 
-				let mut new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpWiden(width as WidthSpec), vt, &[value]);
-				value = new_value;
+		let width = match phip.variable_types[id] {
+			ValueType::Integer { width } => width,
+		};
 
-				if info.shift > 0 {
-					//println!("Shifting by {:?}", info.shift);
-					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
-					new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpLsl, vt, &[value, shift_amount_node]);
-					value = new_value;
-				}
-
-				let fullvalue: u64 = !((!1u64) << (width-1));
-				let maskvalue: u64 = ((!((!1u64) << (info.width-1))) << info.shift) ^ fullvalue;
-
-				if maskvalue != 0 {
-					//println!("Masking with {:?}", maskvalue);
-					let mut ov = phiplacer.read_variable(block, id);
-					let maskvalue_node = phiplacer.ssa.add_const(block, maskvalue);
-
-					new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpAnd, vt, &[ov, maskvalue_node]);
-					ov = new_value;
-
-					new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpOr, vt, &[value, ov]);
-					value = new_value;
-				}
-			},
-			ValueType::Integer{..} => (),
-			//_ => unimplemented!()
+		if info.width > width as usize {
+			phip.write_variable(block, id, value);
+			return;
 		}
-		phiplacer.write_variable(block, id, value);
+
+		// Need to add a cast.
+		let vt = From::from(width);
+		let opcode = MOpcode::OpWiden(width as WidthSpec);
+		let mut new_value = phip.ssa.verified_add_op(block, opcode, vt, &[value]);
+		value = new_value;
+		if info.shift > 0 {
+			let shift_amount_node = phip.ssa.add_const(block, info.shift as u64);
+			new_value = phip.ssa.verified_add_op(block, MOpcode::OpLsl,
+		                                         vt, &[value, shift_amount_node]);
+			value = new_value;
+		}
+
+		let fullval: u64 = !((!1u64) << (width - 1));
+		let maskval: u64 =((!((!1u64) << (info.width-1))) << info.shift) ^ fullval;
+
+		if maskval == 0 {
+			phip.write_variable(block, id, value);
+			return;
+		}
+
+		let mut ov = phip.read_variable(block, id);
+		let maskvalue_node = phip.ssa.add_const(block, maskval);
+		new_value = phip.ssa.verified_add_op(block, MOpcode::OpAnd, vt, &[ov, maskvalue_node]);
+
+		ov = new_value;
+		new_value = phip.ssa.verified_add_op(block, MOpcode::OpOr, vt, &[value, ov]);
+		value = new_value;
+		phip.write_variable(block, id, value);
 	}
 
 	/// Emit code for reading the current value of the specified register.
@@ -155,33 +168,36 @@ impl SubRegisterFile {
 	/// Unless prior basic blocks are marked as sealed in the PhiPlacer this will always return
 	/// a reference to a Phi node.
 	/// Either way, once nodes are sealed redundant Phi nodes are eliminated by PhiPlacer.
-	pub fn read_register<'a, T: SSAMod<BBInfo=BBInfo> + VerifiedAdd + 'a>(
-		&self, phiplacer: &mut PhiPlacer<'a, T>,
-		base: usize,
-		block: T::ActionRef,
-		var: &String
-	) ->
-		T::ValueRef
+
+	pub fn read_register<'a, T>(&self, phiplacer: &mut PhiPlacer<'a, T>,
+	                            base: usize, block: T::ActionRef,
+	                            var: &String) -> T::ValueRef
+	where T: SSAMod<BBInfo=BBInfo> + VerifiedAdd + 'a
 	{
 		let info = &self.named_registers[var];
 		let id = info.base + base;
 		let mut value = phiplacer.read_variable(block, id);
-		match phiplacer.variable_types[id] {
-			ValueType::Integer{width} => {
-				if info.shift > 0 {
-					let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
-					let new_value = phiplacer.ssa.verified_add_op(
-						block, MOpcode::OpLsr, ValueType::Integer{width: width as WidthSpec}, &[value, shift_amount_node]);
-					value = new_value;
-				}
-				if info.width < (width as usize) {
-					let new_value = phiplacer.ssa.verified_add_op(
-						block, MOpcode::OpNarrow(info.width as WidthSpec), ValueType::Integer{width: info.width as WidthSpec}, &[value]);
-					value = new_value;
-				}
-				value
-			},
-			//_ => unimplemented!()
+
+		let width = match phiplacer.variable_types[id] {
+			ValueType::Integer { width } => width,
+		};
+
+		if info.shift > 0 {
+			let shift_amount_node = phiplacer.ssa.add_const(block, info.shift as u64);
+			let opcode = MOpcode::OpLsr;
+			let vtype = From::from(width);
+			let new_value = phiplacer.ssa.verified_add_op(
+				block, opcode, vtype, &[value, shift_amount_node]);
+			value = new_value;
 		}
+
+		if info.width < (width as usize) {
+			let opcode = MOpcode::OpNarrow(info.width as WidthSpec);
+			let vtype = From::from(info.width);
+			let new_value =
+				phiplacer.ssa.verified_add_op(block, opcode, vtype, &[value]);
+			value = new_value;
+		}
+		value
 	}
 }
