@@ -60,11 +60,8 @@ pub enum MOpcode {
 	OpNarrow(WidthSpec),
 	OpWiden(WidthSpec),
 	OpConst(u64),
-	OpNop,
-	OpInvalid,
 	OpInc,
 	OpDec,
-	OpCl,    // '}'
 }
 
 #[derive(Debug, Clone, Default)]
@@ -140,12 +137,10 @@ impl MOpcode {
 		match *self {
 			MOpcode::OpJmp     => false,
 			MOpcode::OpCJmp    => false,
-			MOpcode::OpCall    => false,
-			MOpcode::OpNop     => false,
-			MOpcode::OpInvalid => false,
+			MOpcode::OpEq      => false,
+			//MOpcode::OpCall    => false,
 			MOpcode::OpInc     => false,
 			MOpcode::OpDec     => false,
-			MOpcode::OpCl      => false,
 			_ => true,
 		}
 	}
@@ -161,7 +156,7 @@ impl MOpcode {
 			MOpcode::OpOr         => ("|", MArity::Binary),
 			MOpcode::OpXor        => ("^", MArity::Binary),
 			MOpcode::OpNot        => ("!", MArity::Unary),
-			MOpcode::OpEq         => ("=", MArity::Binary),
+			MOpcode::OpEq         => ("=", MArity::Unary),
 			MOpcode::OpCmp        => ("==", MArity::Binary),
 			MOpcode::OpGt         => (">", MArity::Binary),
 			MOpcode::OpLt         => ("<", MArity::Binary),
@@ -178,11 +173,8 @@ impl MOpcode {
 			MOpcode::OpCJmp       => ("jmp if", MArity::Binary),
 			MOpcode::OpCall       => ("call", MArity::Unary),
 			MOpcode::OpConst(_)   => ("const", MArity::Zero),
-			MOpcode::OpNop        => ("nop", MArity::Zero),
-			MOpcode::OpInvalid    => ("invalid", MArity::Zero),
 			MOpcode::OpInc        => ("++", MArity::Unary),
 			MOpcode::OpDec        => ("--", MArity::Unary),
-			MOpcode::OpCl         => ("}", MArity::Zero),
 		};
 		(String::from(op), arity)
 	}

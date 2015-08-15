@@ -44,6 +44,7 @@ pub struct Parser<'a> {
 	stack:        Vec<MVal>,
 	insts:        Vec<MInst>,
 	opset:        HashMap<&'a str, MOpcode>,
+	opset2:       HashMap<String, EsilOperation>,
 	regset:       HashMap<String, LRegProfile>,
 	alias_info:   HashMap<String, LAliasInfo>,
 	flags:        HashMap<u64, LFlagInfo>,
@@ -97,6 +98,7 @@ impl<'a> Parser<'a> {
 			stack:        Vec::new(),
 			insts:        Vec::new(),
 			opset:        init_opset(),
+			opset2:       map_esil_to_opset_2(),
 			regset:       regset,
 			default_size: default_size,
 			arch:         arch,
@@ -158,66 +160,157 @@ impl<'a> Parser<'a> {
 		self.parse_str(&*esil)
 	}
 
+	fn load_operands(&mut self, signature: Arity) -> Result<(MVal, MVal, WidthSpec), ParseError> {
+		match signature {
+			Arity::Unary => {
+				let op = try!(self.get_param());
+				let width = op.size;
+				assert!(op.val_type != MValType::Null);
+				Ok((op, MVal::null(), width))
+			},
+			Arity::Binary | Arity::BinaryBool => {
+				let mut op1 = try!(self.get_param());
+				let mut op2 = try!(self.get_param());
+				assert!(op1.val_type != MValType::Null);
+				assert!(op2.val_type != MValType::Null);
+				let dst_size = cmp::max(op1.size, op2.size);
+				self.add_widen_inst(&mut op2, dst_size);
+				self.add_widen_inst(&mut op1, dst_size);
+				Ok((op1, op2,  if signature == Arity::Binary { dst_size } else { 1 }))
+			},
+			Arity::BinaryAsym => {
+				let op1 = try!(self.get_param());
+				let op2 = try!(self.get_param());
+				assert!(op1.val_type != MValType::Null);
+				assert!(op2.val_type != MValType::Null);
+				Ok((op1, op2, 0))
+			},
+		}
+	}
+
+	pub fn add_d_inst(&mut self, op: MOpcode, dst: MVal, op1: MVal, op2: MVal, update_flags: bool) {
+		let addr = Some(MAddr::new(self.addr));
+		let mut inst = op.to_inst(dst, op1, op2, addr);
+		self.insts.push(inst)
+	}
+
 	pub fn parse_str(&mut self, esil: &str) -> Result<(), ParseError> {
+		let addr = Some(MAddr::new(self.addr));
+
 		if esil.len() == 0 {
 			return Err(ParseError::InvalidEsil);
 		}
 
 		let esil: Vec<String> = esil.split(',')
-			                        .map(|x| x.to_string())
-									.collect();
+			.map(|x| x.to_string())
+			.collect();
+
 		for token in esil {
-			let op = match self.opset.get(&*token) {
-				Some(op) => op.clone(),
-				None     => MOpcode::OpInvalid,
+
+			let description = match self.opset2.get(&*token) {
+				Some(description) => description.clone(),
+				None => {
+					let mut val_type = MValType::Unknown;
+					let mut val: Option<u64> = None;
+					let mut size: WidthSpec = self.default_size;
+					let mut reg_info: Option<MRegInfo> = None;
+					if let Some(r) = self.regset.get(&*token) {
+						val_type = MValType::Register;
+						let mut reg_info_ = self.new_mreg_info(r.clone());
+						let alias = self.alias_info.get(&reg_info_.reg)
+							.map(|x| x.role_str.clone())
+							.unwrap_or_default();
+						reg_info_.alias = alias;
+						reg_info = Some(reg_info_.clone());
+						size = r.size as WidthSpec;
+
+						// return Err(ParseError::InvalidMOperator)
+					} /* else if let Ok::<i64, _>(v) = hex_to_i!(token) { // <u64>? will it be able to deal with negative numbers?
+						// TODO
+						val = Some(v as u64);
+					}*/ else if let Ok(num) = token.parse::<i64>() { // <u64>? will it be able to deal with negative numbers?
+						val = Some(num as u64);
+					} else if let Some('%') = token.chars().nth(0) {
+						val_type = MValType::Internal
+					} else {
+						// TODO
+						panic!("Proper error handling here");
+					}
+
+					if let Some(cv) = val {
+						EsilOperation::PushNumber(cv)
+					} else {
+						let v = MVal::new(token, size, val_type, 0, reg_info);
+						self.stack.push(v);
+						continue;
+					}
+				},
 			};
 
-			if op != MOpcode::OpInvalid {
-				try!(self.add_inst(op));
-				continue;
+			match description {
+				EsilOperation::Plain(op, arity) => {
+					let update_flags = op == MOpcode::OpCmp; // TODO: correct this
+
+					let (op1, op2, dst_size) = try!(self.load_operands(arity));
+					let dst = self.get_tmp_register(dst_size);
+					let inst = self.add_d_inst(op, dst.clone(), op1, op2, update_flags);
+
+					self.stack.push(dst);
+				},
+
+				EsilOperation::Assign(op, arity) => {
+					let (op1, op2, dst_size) = try!(self.load_operands(arity));
+					assert!(op1.val_type == MValType::Register);
+					assert!(dst_size == op1.size);
+					let mut inst = self.add_d_inst(op, op1.clone(), op1, op2, /*update_flags=*/ true);
+				},
+
+				EsilOperation::Memory(op, arity, byte) => {
+					let update_flags = op == MOpcode::OpCmp; // TODO: correct this
+
+					let (op1, op2, dst_size) = try!(self.load_operands(arity));
+
+					let op1d = self.get_tmp_register(op2.size);
+					let dst = self.get_tmp_register(dst_size);
+
+					self.add_d_inst(MOpcode::OpLoad,  op1d.clone(), op1.clone(),  MVal::null(), false);
+					self.add_d_inst(op,               dst.clone(),  op1d.clone(), op2,          update_flags);
+					self.add_d_inst(MOpcode::OpStore, MVal::null(), op1.clone(),  dst.clone(),  false);
+				},
+
+				EsilOperation::FlowControl(flowop) => match flowop {
+					EsilFlowOperation::CSkipOn => {
+						//let inst = op.to_inst(MVal::null(), MVal::null(), MVal::null(), addr);
+						//self.insts.push(inst);
+						unimplemented!();
+					},
+					EsilFlowOperation::SkipToggle => unimplemented!(),
+					EsilFlowOperation::SkipOff    => unimplemented!(),
+					EsilFlowOperation::Goto       => unimplemented!(),
+					EsilFlowOperation::Break      => unimplemented!(),
+				},
+
+				EsilOperation::StackControl(stackop) => match stackop {
+					EsilStackOperation::Pop           => {self.stack.pop();},
+					EsilStackOperation::Clear         => self.stack.clear(),
+					EsilStackOperation::Dup           => unimplemented!(),
+					EsilStackOperation::LoadMultiple  => unimplemented!(),
+					EsilStackOperation::StoreMultiple => unimplemented!(),
+				},
+
+				EsilOperation::PushNumber(n) => {
+					let v = self.constant_value(n);
+					self.stack.push(v);
+				},
+
+				EsilOperation::Interrupt => unimplemented!(),
+				EsilOperation::Todo      => unimplemented!(),
+				EsilOperation::Trap      => unimplemented!(),
+				EsilOperation::Ignore    => {},
 			}
 
-			// If it contains atleast one alpha, it cannot be an operator.
-			let re = Regex::new("[a-zA-Z]").unwrap();
-			if re.is_match(&*token) {
-				let mut val_type = MValType::Unknown;
-				let mut val: Option<u64> = None;
-				let mut size: WidthSpec = self.default_size;
-				let mut reg_info: Option<MRegInfo> = None;
-				if let Some(r) = self.regset.get(&*token) {
-					val_type = MValType::Register;
-					let mut reg_info_ = self.new_mreg_info(r.clone());
-					let alias = self.alias_info.get(&reg_info_.reg)
-						.map(|x| x.role_str.clone())
-						.unwrap_or_default();
-					reg_info_.alias = alias;
-					reg_info = Some(reg_info_.clone());
-					size = r.size as WidthSpec;
-				} else if let Ok::<i64, _>(v) = hex_to_i!(token) { // <u64>? will it be able to deal with negative numbers?
-					val = Some(v as u64);
-				} else if let Some('%') = token.chars().nth(0) {
-					val_type = MValType::Internal
-				} else {
-					// TODO
-					panic!("Proper error handling here");
-				}
-				
-				let v = if let Some(cv) = val {
-					self.constant_value(cv)
-				} else {
-					MVal::new(token, size, val_type, 0, reg_info)
-				};
-
-				self.stack.push(v);
-				continue;
-			}
-
-			// Handle constants.
-			if let Ok(num) = token.parse::<i64>() { // <u64>? will it be able to deal with negative numbers?
-				let v = self.constant_value(num as u64);
-				self.stack.push(v);
-				continue;
-			}
+			break;
+/*
 
 			// Deal with normal 'composite' instructions.
 			if token.char_indices().last().unwrap().1 != ']' {
@@ -259,29 +352,7 @@ impl<'a> Parser<'a> {
 			let mut x = self.stack.pop().unwrap();
 			self.add_narrow_inst(&mut x, access_size);
 			let tmp_dst1 = x.clone();
-			self.stack.push(x);
-
-			// Simple 'peek' ([n])
-			if eq.is_empty() {
-				continue;
-			}
-
-			// Simple 'poke' (=[n])
-			if has_op.is_empty() {
-				try!(self.add_inst(MOpcode::OpStore));
-				continue;
-			}
-
-			// 'poke' with another operation. (<op>=[n])
-			let o = match self.opset.get(has_op) {
-				Some(x) => x.clone(),
-				// Return with error
-				None => return Err(ParseError::InvalidMOperator),
-			};
-			try!(self.add_inst(o));
-			// Reassignment.
-			self.stack.push(tmp_dst1); // hope above add_inst doesn't invalidate dst1
-			try!(self.add_inst(MOpcode::OpStore));
+			self.stack.push(x);*/
 		}
 		Ok(())
 	}
@@ -321,9 +392,10 @@ impl<'a> Parser<'a> {
 
 				let mut jmp_inst = None;
 				while let Some(_inst) = insts_iter.next() {
-					if _inst.opcode == MOpcode::OpCl {
-						break;
-					}
+					// TODO
+					// if _inst.opcode == MOpcode::OpCl {
+					// 	break;
+					// }
 					if _inst.opcode != MOpcode::OpJmp {
 						res.push(_inst.clone());
 						continue;
@@ -378,7 +450,7 @@ impl<'a> Parser<'a> {
 		*op = dst;
 	}
 
-	fn add_assign_inst(&mut self, op: MOpcode) -> Result<(), ParseError> {
+	/*fn add_assign_inst(&mut self, op: MOpcode) -> Result<(), ParseError> {
 		let     dst = try!(self.stack.pop().ok_or(ParseError::InsufficientOperands));
 		let mut op1 = try!(self.get_param());
 
@@ -405,7 +477,7 @@ impl<'a> Parser<'a> {
 		if dst.size == op1.size {
 			let addr = MAddr::new(self.addr);
 			let mut inst = op.to_inst(dst.clone(), op1, MVal::null(), Some(addr));
-			inst.update_flags = update_flags;
+			inst.update_flags ||= update_flags;
 			self.insts.push(inst.clone());
 			return Ok(());
 		}
@@ -425,13 +497,15 @@ impl<'a> Parser<'a> {
 	fn add_inst(&mut self, op: MOpcode) -> Result<(), ParseError> {
 		// Handle all the special cases.
 		match op {
+			// TODO
+			/*
 			MOpcode::OpCl => {
 				let null = MVal::null();
 				let addr = MAddr::new(self.addr);
 				let inst = op.to_inst(null.clone(), null.clone(), null.clone(), Some(addr));
 				self.insts.push(inst.clone());
 				return Ok(());
-			},
+			},*/
 			MOpcode::OpInc |
 				MOpcode::OpDec => {
 					let _op = match op {
@@ -458,13 +532,6 @@ impl<'a> Parser<'a> {
 		} else {
 			MVal::null()
 		};
-
-		if op == MOpcode::OpIf {
-			let addr = MAddr::new(self.addr);
-			let inst = op.to_inst(MVal::null(), op2, op1, Some(addr));
-			self.insts.push(inst);
-			return Ok(());
-		}
 
 		let dst_size = cmp::max(op1.size, op2.size);
 
@@ -496,7 +563,7 @@ impl<'a> Parser<'a> {
 		self.stack.push(dst);
 
 		Ok(())
-	}
+	}*/
 
 	fn set_parser_index(&mut self, i: u64) {
 		self.tmp_index = i;
@@ -637,9 +704,9 @@ impl<'a> Parser<'a> {
 		};
 
 		let const_v = self.constants.entry(num)
-			                        .or_insert(tmp)
-								    .clone();
-		
+			.or_insert(tmp)
+			.clone();
+
 		// Assert that we actually have a constant.
 		assert!(const_v.as_literal != None);
 		return const_v;
@@ -650,27 +717,123 @@ fn map_esil_to_opset() -> HashMap<&'static str, MOpcode> {
 	// Make a map from esil string to struct MOperator.
 	// (operator: &str, op: MOperator).
 	// Possible Optimization:  Move to compile-time generation ?
-	hash![
-		("==" , MOpcode::OpCmp),
-		("<"  , MOpcode::OpLt),
-		(">"  , MOpcode::OpGt),
-		("<=" , MOpcode::OpGteq),
-		(">=" , MOpcode::OpLteq),
-		("<<" , MOpcode::OpLsl),
-		(">>" , MOpcode::OpLsr),
-		("&"  , MOpcode::OpAnd),
-		("|"  , MOpcode::OpOr),
-		("="  , MOpcode::OpEq),
-		("*"  , MOpcode::OpMul),
-		("^"  , MOpcode::OpXor),
-		("+"  , MOpcode::OpAdd),
-		("-"  , MOpcode::OpSub),
-		("/"  , MOpcode::OpDiv),
-		("%"  , MOpcode::OpMod),
-		("?{" , MOpcode::OpIf),
-		("!"  , MOpcode::OpNot),
-		("--" , MOpcode::OpDec),
-		("++" , MOpcode::OpInc),
-		("}"  , MOpcode::OpCl)
-			]
+	hash![]
 }
+
+
+#[derive(Clone)]
+enum EsilFlowOperation {
+	CSkipOn,
+	SkipToggle,
+	SkipOff,
+	Goto,
+	Break
+}
+
+#[derive(Clone)]
+enum EsilStackOperation {
+	Pop,
+	Clear,
+	Dup,
+	LoadMultiple,
+	StoreMultiple,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Arity {
+	Unary,
+	Binary,
+	BinaryBool,
+	BinaryAsym,
+}
+
+#[derive(Clone)]
+enum EsilOperation {
+	Plain(MOpcode, Arity),
+	Assign(MOpcode, Arity),
+	Memory(MOpcode, Arity, u8),
+	FlowControl(EsilFlowOperation),
+	StackControl(EsilStackOperation),
+	PushNumber(u64),
+	Interrupt,
+	Todo,
+	Trap,
+	Ignore,
+}
+
+fn add_variants(
+	map: &mut HashMap<String, EsilOperation>,
+	base_str: &str,
+	opc: MOpcode,
+	arity: Arity,
+	mem_variants: bool)
+{
+	let base = base_str.to_owned();
+	map.insert(base.clone(),        EsilOperation::Plain(opc, arity));
+	map.insert(base.clone()+"=",    EsilOperation::Assign(opc, arity));
+
+	if mem_variants { add_mem_variants(map, &(base+"="), opc, arity); }
+}
+
+fn add_mem_variants(
+	map: &mut HashMap<String, EsilOperation>,
+	base_str: &str,
+	opc: MOpcode,
+	arity: Arity)
+{
+	let base = base_str.to_owned();
+	map.insert(base.clone()+"[]",  EsilOperation::Memory(opc, arity, 0));
+	map.insert(base.clone()+"[1]", EsilOperation::Memory(opc, arity, 1));
+	map.insert(base.clone()+"[2]", EsilOperation::Memory(opc, arity, 2));
+	map.insert(base.clone()+"[4]", EsilOperation::Memory(opc, arity, 4));
+	map.insert(base.clone()+"[8]", EsilOperation::Memory(opc, arity, 8));
+}
+
+fn map_esil_to_opset_2() -> HashMap<String, EsilOperation> {
+	// Make a map from esil string to struct EsilOperator.
+
+	let mut map: HashMap<String, EsilOperation> = HashMap::new();
+
+	map.insert("$".to_owned(),  EsilOperation::Trap);
+	map.insert("$$".to_owned(), EsilOperation::Interrupt);
+	map.insert("==".to_owned(), EsilOperation::Plain(MOpcode::OpCmp,  Arity::BinaryBool));
+	map.insert("<".to_owned(),  EsilOperation::Plain(MOpcode::OpLt,   Arity::BinaryBool));
+	map.insert(">".to_owned(),  EsilOperation::Plain(MOpcode::OpGt,   Arity::BinaryBool));
+	map.insert("<=".to_owned(), EsilOperation::Plain(MOpcode::OpLteq, Arity::BinaryBool));
+	map.insert(">=".to_owned(), EsilOperation::Plain(MOpcode::OpGteq, Arity::BinaryBool));
+
+	// TODO!
+	// map.insert("=".to_owned(),  EsilOperation::Assign(MOpcode::OpMov, Arity::VoidBinary));
+	// add_mem_variants(&mut map, "=", MOpcode::OpMov, Arity::VoidBinary);
+	// add_mem_variants(&mut map, "",  MOpcode::OpLoad, Arity::Unary);
+
+	add_variants(&mut map, "<<", MOpcode::OpLsl, Arity::BinaryAsym, false);
+	add_variants(&mut map, ">>", MOpcode::OpLsr, Arity::BinaryAsym, false);
+	add_variants(&mut map, "&",  MOpcode::OpAnd, Arity::Binary, true);
+	add_variants(&mut map, "|",  MOpcode::OpOr,  Arity::Binary, true);
+	add_variants(&mut map, "*",  MOpcode::OpMul, Arity::Binary, true);
+	add_variants(&mut map, "^",  MOpcode::OpXor, Arity::Binary, true);
+	add_variants(&mut map, "+",  MOpcode::OpAdd, Arity::Binary, true);
+	add_variants(&mut map, "-",  MOpcode::OpSub, Arity::Binary, true);
+	add_variants(&mut map, "/",  MOpcode::OpDiv, Arity::Binary, true);
+	add_variants(&mut map, "%",  MOpcode::OpMod, Arity::Binary, true);
+	add_variants(&mut map, "!",  MOpcode::OpNot, Arity::Unary, false);
+	add_variants(&mut map, "--", MOpcode::OpDec, Arity::Unary, true);
+	add_variants(&mut map, "++", MOpcode::OpInc, Arity::Unary, true);
+
+	map.insert("?{".to_owned(),    EsilOperation::FlowControl(EsilFlowOperation::CSkipOn));
+	map.insert("}{".to_owned(),    EsilOperation::FlowControl(EsilFlowOperation::SkipToggle));
+	map.insert("}".to_owned(),     EsilOperation::FlowControl(EsilFlowOperation::SkipOff));
+	map.insert("GOTO".to_owned(),  EsilOperation::FlowControl(EsilFlowOperation::Goto));
+	map.insert("BREAK".to_owned(), EsilOperation::FlowControl(EsilFlowOperation::Break));
+	map.insert("STACK".to_owned(), EsilOperation::Ignore);
+	map.insert("TODO".to_owned(),  EsilOperation::Todo);
+	map.insert("POP".to_owned(),   EsilOperation::StackControl(EsilStackOperation::Pop));
+	map.insert("CLEAR".to_owned(), EsilOperation::StackControl(EsilStackOperation::Clear));
+	map.insert("DUP".to_owned(),   EsilOperation::StackControl(EsilStackOperation::Dup));
+	map.insert("[*]".to_owned(),   EsilOperation::StackControl(EsilStackOperation::LoadMultiple));
+	map.insert("=[*]".to_owned(),  EsilOperation::StackControl(EsilStackOperation::StoreMultiple));
+
+	return map
+}
+
