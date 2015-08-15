@@ -234,6 +234,15 @@
 <span id="192">192</span>
 <span id="193">193</span>
 <span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! Contains the struct `SubRegisterFile` which extends `PhiPlacer`s</span>
 <span class='doccomment'>//! functionality by reads and writes to partial registers.</span>
@@ -242,15 +251,25 @@
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>collections</span>::<span class='ident'>HashMap</span>;
 <span class='kw'>use</span> <span class='ident'>frontend</span>::<span class='ident'>structs</span>::<span class='ident'>LRegInfo</span>;
 <span class='kw'>use</span> <span class='ident'>middle</span>::<span class='ident'>ssa</span>::{<span class='ident'>BBInfo</span>, <span class='ident'>SSAMod</span>, <span class='ident'>ValueType</span>};
+<span class='kw'>use</span> <span class='ident'>middle</span>::<span class='ident'>ssa</span>::<span class='ident'>verifier</span>::<span class='ident'>VerifiedAdd</span>;
 <span class='kw'>use</span> <span class='ident'>middle</span>::<span class='ident'>ir</span>::{<span class='ident'>MOpcode</span>, <span class='ident'>WidthSpec</span>};
 <span class='kw'>use</span> <span class='ident'>middle</span>::<span class='ident'>phiplacement</span>::<span class='ident'>PhiPlacer</span>;
-
-<span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Debug</span>)]</span>
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>convert</span>::<span class='ident'>From</span>;
+<span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Clone</span>, <span class='ident'>Copy</span>, <span class='ident'>Debug</span>)]</span>
 <span class='kw'>struct</span> <span class='ident'>SubRegister</span> {
-	<span class='comment'>// usize or WidthSpec</span>
 	<span class='kw'>pub</span> <span class='ident'>base</span>:  <span class='ident'>usize</span>,
 	<span class='kw'>pub</span> <span class='ident'>shift</span>: <span class='ident'>usize</span>,
 	<span class='kw'>pub</span> <span class='ident'>width</span>: <span class='ident'>usize</span>
+}
+
+<span class='kw'>impl</span> <span class='ident'>SubRegister</span> {
+	<span class='kw'>fn</span> <span class='ident'>new</span>(<span class='ident'>base</span>: <span class='ident'>usize</span>, <span class='ident'>shift</span>: <span class='ident'>usize</span>, <span class='ident'>width</span>: <span class='ident'>usize</span>) <span class='op'>-&gt;</span> <span class='ident'>SubRegister</span> {
+		<span class='ident'>SubRegister</span> {
+			<span class='ident'>base</span>:  <span class='ident'>base</span>,
+			<span class='ident'>shift</span>: <span class='ident'>shift</span>,
+			<span class='ident'>width</span>:  <span class='ident'>width</span>,
+		}
+	}
 }
 
 <span class='doccomment'>/// A structure containing information about whole and partial registers of a platform.</span>
@@ -268,55 +287,55 @@
 	<span class='kw'>pub</span> <span class='ident'>whole_registers</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>ValueType</span><span class='op'>&gt;</span>,
 	<span class='doccomment'>/// Contains the respective names for the registers described in `whole_registers`</span>
 	<span class='kw'>pub</span> <span class='ident'>whole_names</span>:     <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span>,
-
-	<span class='ident'>named_registers</span>: <span class='ident'>HashMap</span><span class='op'>&lt;</span><span class='ident'>String</span>, <span class='ident'>SubRegister</span><span class='op'>&gt;</span>,
+	<span class='ident'>named_registers</span>:     <span class='ident'>HashMap</span><span class='op'>&lt;</span><span class='ident'>String</span>, <span class='ident'>SubRegister</span><span class='op'>&gt;</span>,
 }
 
 <span class='kw'>impl</span> <span class='ident'>SubRegisterFile</span> {
 	<span class='doccomment'>/// Creates a new SubRegisterFile based on a provided register profile.</span>
 	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>new</span>(<span class='ident'>reg_info</span>: <span class='kw-2'>&amp;</span><span class='ident'>LRegInfo</span>) <span class='op'>-&gt;</span> <span class='ident'>SubRegisterFile</span> {
 		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>slices</span> <span class='op'>=</span> <span class='ident'>HashMap</span>::<span class='ident'>new</span>();
-		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>events</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span>(<span class='ident'>usize</span>, <span class='ident'>usize</span>, <span class='ident'>usize</span>)<span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
+		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>events</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>SubRegister</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
 		<span class='kw'>for</span> (<span class='ident'>i</span>, <span class='ident'>reg</span>) <span class='kw'>in</span> <span class='ident'>reg_info</span>.<span class='ident'>reg_info</span>.<span class='ident'>iter</span>().<span class='ident'>enumerate</span>() {
-			<span class='comment'>// println!(&quot;{:?}&quot;, reg);</span>
-			<span class='kw'>if</span> <span class='ident'>reg</span>.<span class='ident'>type_str</span> <span class='op'>!=</span> <span class='string'>&quot;gpr&quot;</span> { <span class='kw'>continue</span>; } <span class='comment'>// st7 from &quot;fpu&quot; overlaps with zf from &quot;gpr&quot; (r2 bug?)</span>
+			<span class='kw'>if</span> <span class='ident'>reg</span>.<span class='ident'>type_str</span> <span class='op'>==</span> <span class='string'>&quot;fpu&quot;</span> { <span class='kw'>continue</span>; } <span class='comment'>// st7 from &quot;fpu&quot; overlaps with zf from &quot;gpr&quot; (r2 bug?)</span>
 			<span class='kw'>if</span> <span class='ident'>reg</span>.<span class='ident'>name</span>.<span class='ident'>ends_with</span>(<span class='string'>&quot;flags&quot;</span>) { <span class='kw'>continue</span>; } <span class='comment'>// HARDCODED x86</span>
-			<span class='ident'>events</span>.<span class='ident'>push</span>((<span class='ident'>i</span>, <span class='ident'>reg</span>.<span class='ident'>offset</span>, <span class='ident'>reg</span>.<span class='ident'>offset</span> <span class='op'>+</span> <span class='ident'>reg</span>.<span class='ident'>size</span>));
+			<span class='ident'>events</span>.<span class='ident'>push</span>(<span class='ident'>SubRegister</span>::<span class='ident'>new</span>(<span class='ident'>i</span>, <span class='ident'>reg</span>.<span class='ident'>offset</span>, <span class='ident'>reg</span>.<span class='ident'>size</span>));
 		}
 
 		<span class='ident'>events</span>.<span class='ident'>sort_by</span>(<span class='op'>|</span><span class='ident'>a</span>, <span class='ident'>b</span><span class='op'>|</span> {
-			<span class='kw'>let</span> <span class='ident'>o</span> <span class='op'>=</span> <span class='ident'>a</span>.<span class='number'>1</span>.<span class='ident'>cmp</span>(<span class='kw-2'>&amp;</span><span class='ident'>b</span>.<span class='number'>1</span>);
-			<span class='kw'>match</span> <span class='ident'>o</span> {
-				<span class='ident'>Ordering</span>::<span class='ident'>Equal</span> <span class='op'>=&gt;</span> <span class='ident'>b</span>.<span class='number'>2</span>.<span class='ident'>cmp</span>(<span class='kw-2'>&amp;</span><span class='ident'>a</span>.<span class='number'>2</span>),
-				_ <span class='op'>=&gt;</span> <span class='ident'>o</span>
+			<span class='kw'>let</span> <span class='ident'>o</span> <span class='op'>=</span> <span class='ident'>a</span>.<span class='ident'>shift</span>.<span class='ident'>cmp</span>(<span class='kw-2'>&amp;</span><span class='ident'>b</span>.<span class='ident'>shift</span>);
+			<span class='kw'>if</span> <span class='kw'>let</span> <span class='ident'>Ordering</span>::<span class='ident'>Equal</span> <span class='op'>=</span> <span class='ident'>o</span> {
+				(<span class='ident'>b</span>.<span class='ident'>width</span> <span class='op'>+</span> <span class='ident'>b</span>.<span class='ident'>shift</span>).<span class='ident'>cmp</span>(<span class='kw-2'>&amp;</span>(<span class='ident'>a</span>.<span class='ident'>width</span> <span class='op'>+</span> <span class='ident'>a</span>.<span class='ident'>shift</span>))
+			} <span class='kw'>else</span> {
+				<span class='ident'>o</span>
 			}
 		});
 
-		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>current</span>: (<span class='ident'>usize</span>, <span class='ident'>usize</span>, <span class='ident'>usize</span>) <span class='op'>=</span> (<span class='number'>0</span>, <span class='number'>0</span>, <span class='number'>0</span>);
+		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>current</span> <span class='op'>=</span> <span class='ident'>SubRegister</span>::<span class='ident'>new</span>(<span class='number'>0</span>, <span class='number'>0</span>, <span class='number'>0</span>);
 		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>whole</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>ValueType</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
 		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>names</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
 		<span class='kw'>for</span> <span class='kw-2'>&amp;</span><span class='ident'>ev</span> <span class='kw'>in</span> <span class='kw-2'>&amp;</span><span class='ident'>events</span> {
-			<span class='kw'>let</span> <span class='ident'>name</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='ident'>reg_info</span>.<span class='ident'>reg_info</span>[<span class='ident'>ev</span>.<span class='number'>0</span>].<span class='ident'>name</span>;
-			<span class='kw'>if</span> <span class='ident'>ev</span>.<span class='number'>1</span> <span class='op'>&gt;=</span> <span class='ident'>current</span>.<span class='number'>2</span> {
+			<span class='kw'>let</span> <span class='ident'>name</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='ident'>reg_info</span>.<span class='ident'>reg_info</span>[<span class='ident'>ev</span>.<span class='ident'>base</span>].<span class='ident'>name</span>;
+			<span class='kw'>let</span> <span class='ident'>cur_until</span> <span class='op'>=</span> <span class='ident'>current</span>.<span class='ident'>shift</span> <span class='op'>+</span> <span class='ident'>current</span>.<span class='ident'>width</span>;
+			<span class='kw'>if</span> <span class='ident'>ev</span>.<span class='ident'>shift</span> <span class='op'>&gt;=</span> <span class='ident'>cur_until</span> {
 				<span class='ident'>current</span> <span class='op'>=</span> <span class='ident'>ev</span>;
-				<span class='ident'>whole</span>.<span class='ident'>push</span>(<span class='ident'>ValueType</span>::<span class='ident'>Integer</span> { <span class='ident'>width</span>: (<span class='ident'>current</span>.<span class='number'>2</span> <span class='op'>-</span> <span class='ident'>current</span>.<span class='number'>1</span>) <span class='kw'>as</span> <span class='ident'>WidthSpec</span> });
+				<span class='ident'>whole</span>.<span class='ident'>push</span>(<span class='ident'>From</span>::<span class='ident'>from</span>(<span class='ident'>current</span>.<span class='ident'>width</span>));
 				<span class='ident'>names</span>.<span class='ident'>push</span>(<span class='ident'>name</span>.<span class='ident'>clone</span>());
 			} <span class='kw'>else</span> {
-				<span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>ev</span>.<span class='number'>2</span> <span class='op'>&lt;=</span> <span class='ident'>current</span>.<span class='number'>2</span>);
+				<span class='kw'>let</span> <span class='ident'>ev_until</span> <span class='op'>=</span> <span class='ident'>ev</span>.<span class='ident'>width</span> <span class='op'>+</span> <span class='ident'>ev</span>.<span class='ident'>shift</span>;
+				<span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>ev_until</span> <span class='op'>&lt;=</span> <span class='ident'>cur_until</span>);
 			}
-			<span class='ident'>slices</span>.<span class='ident'>insert</span>(<span class='ident'>name</span>.<span class='ident'>clone</span>(), <span class='ident'>SubRegister</span> {
-				<span class='ident'>base</span>: <span class='ident'>whole</span>.<span class='ident'>len</span>()<span class='op'>-</span><span class='number'>1</span>,
-				<span class='ident'>shift</span>: <span class='ident'>ev</span>.<span class='number'>1</span> <span class='op'>-</span> <span class='ident'>current</span>.<span class='number'>1</span>,
-				<span class='ident'>width</span>: <span class='ident'>ev</span>.<span class='number'>2</span> <span class='op'>-</span> <span class='ident'>ev</span>.<span class='number'>1</span>
-			});
+
+			<span class='kw'>let</span> <span class='ident'>subreg</span> <span class='op'>=</span> <span class='ident'>SubRegister</span>::<span class='ident'>new</span>(<span class='ident'>whole</span>.<span class='ident'>len</span>() <span class='op'>-</span> <span class='number'>1</span>,
+			                              <span class='ident'>ev</span>.<span class='ident'>shift</span> <span class='op'>-</span> <span class='ident'>current</span>.<span class='ident'>shift</span>,
+			                              <span class='ident'>ev</span>.<span class='ident'>width</span>);
+
+			<span class='ident'>slices</span>.<span class='ident'>insert</span>(<span class='ident'>name</span>.<span class='ident'>clone</span>(), <span class='ident'>subreg</span>);
 		}
-		<span class='comment'>/*for (ref name, ref sr) in &amp;slices {
-		  println!(&quot;{} = (u{})(r{}&gt;&gt;{})&quot;, name, sr.width, sr.base, sr.shift);
-		  }*/</span>
+
 		<span class='ident'>SubRegisterFile</span> {
 			<span class='ident'>whole_registers</span>: <span class='ident'>whole</span>,
 			<span class='ident'>named_registers</span>: <span class='ident'>slices</span>,
-			<span class='ident'>whole_names</span>:     <span class='ident'>names</span>,
+			<span class='ident'>whole_names</span>: <span class='ident'>names</span>,
 		}
 	}
 
@@ -333,55 +352,52 @@
 	<span class='doccomment'>/// * `value`     - An SSA node whose value shall be assigned to the register.</span>
 	<span class='doccomment'>///                 As with most APIs in radeco, we will not check if the value is reachable</span>
 	<span class='doccomment'>///                 from the position where the caller is trying to insert these operations.</span>
-	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>write_register</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span>: <span class='ident'>SSAMod</span><span class='op'>&lt;</span><span class='ident'>BBInfo</span><span class='op'>=</span><span class='ident'>BBInfo</span><span class='op'>&gt;</span> <span class='op'>+</span> <span class='lifetime'>&#39;a</span><span class='op'>&gt;</span>(
-		<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>phiplacer</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PhiPlacer</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span><span class='op'>&gt;</span>, <span class='ident'>base</span>: <span class='ident'>usize</span>,
-		<span class='ident'>block</span>: <span class='ident'>T</span>::<span class='ident'>ActionRef</span>,
-		<span class='ident'>var</span>: <span class='kw-2'>&amp;</span><span class='ident'>String</span>, <span class='comment'>// change to str?</span>
-		<span class='kw-2'>mut</span> <span class='ident'>value</span>: <span class='ident'>T</span>::<span class='ident'>ValueRef</span>
-	) {
+
+	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>write_register</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>phip</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PhiPlacer</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span><span class='op'>&gt;</span>,
+	                             <span class='ident'>base</span>: <span class='ident'>usize</span>, <span class='ident'>block</span>: <span class='ident'>T</span>::<span class='ident'>ActionRef</span>,
+	                             <span class='ident'>var</span>: <span class='kw-2'>&amp;</span><span class='ident'>String</span>, <span class='kw-2'>mut</span> <span class='ident'>value</span>: <span class='ident'>T</span>::<span class='ident'>ValueRef</span>)
+	<span class='kw'>where</span> <span class='ident'>T</span>: <span class='lifetime'>&#39;a</span> <span class='op'>+</span> <span class='ident'>SSAMod</span><span class='op'>&lt;</span><span class='ident'>BBInfo</span><span class='op'>=</span><span class='ident'>BBInfo</span><span class='op'>&gt;</span> <span class='op'>+</span> <span class='ident'>VerifiedAdd</span>
+	{
 		<span class='kw'>let</span> <span class='ident'>info</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>named_registers</span>[<span class='ident'>var</span>];
 		<span class='kw'>let</span> <span class='ident'>id</span> <span class='op'>=</span> <span class='ident'>info</span>.<span class='ident'>base</span> <span class='op'>+</span> <span class='ident'>base</span>;
-		<span class='kw'>match</span> <span class='ident'>phiplacer</span>.<span class='ident'>variable_types</span>[<span class='ident'>id</span>] {
-			<span class='ident'>ValueType</span>::<span class='ident'>Integer</span>{<span class='ident'>width</span>} <span class='kw'>if</span> <span class='ident'>info</span>.<span class='ident'>width</span> <span class='op'>&lt;</span> (<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span>) <span class='op'>=&gt;</span> {
-				<span class='comment'>//println!(&quot;Assigning to {:?}: {:?}&quot;, var, info);</span>
-				<span class='kw'>let</span> <span class='ident'>vt</span> <span class='op'>=</span> <span class='ident'>ValueType</span>::<span class='ident'>Integer</span>{<span class='ident'>width</span>: <span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>WidthSpec</span>};
 
-				<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpWiden</span>(<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>WidthSpec</span>), <span class='ident'>vt</span>);
-				<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>0</span>, <span class='ident'>value</span>);
-				<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
+		<span class='kw'>let</span> <span class='ident'>width</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>phip</span>.<span class='ident'>variable_types</span>[<span class='ident'>id</span>] {
+			<span class='ident'>ValueType</span>::<span class='ident'>Integer</span> { <span class='ident'>width</span> } <span class='op'>=&gt;</span> <span class='ident'>width</span>,
+		};
 
-				<span class='kw'>if</span> <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='op'>&gt;</span> <span class='number'>0</span> {
-					<span class='comment'>//println!(&quot;Shifting by {:?}&quot;, info.shift);</span>
-					<span class='kw'>let</span> <span class='ident'>shift_amount_node</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_const</span>(<span class='ident'>block</span>, <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='kw'>as</span> <span class='ident'>u64</span>);
-					<span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpLsl</span>, <span class='ident'>vt</span>);
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>0</span>, <span class='ident'>value</span>);
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>1</span>, <span class='ident'>shift_amount_node</span>);
-					<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
-				}
-
-				<span class='kw'>let</span> <span class='ident'>fullvalue</span>: <span class='ident'>u64</span> <span class='op'>=</span> <span class='op'>!</span>((<span class='op'>!</span><span class='number'>1u64</span>) <span class='op'>&lt;&lt;</span> (<span class='ident'>width</span><span class='op'>-</span><span class='number'>1</span>));
-				<span class='kw'>let</span> <span class='ident'>maskvalue</span>: <span class='ident'>u64</span> <span class='op'>=</span> ((<span class='op'>!</span>((<span class='op'>!</span><span class='number'>1u64</span>) <span class='op'>&lt;&lt;</span> (<span class='ident'>info</span>.<span class='ident'>width</span><span class='op'>-</span><span class='number'>1</span>))) <span class='op'>&lt;&lt;</span> <span class='ident'>info</span>.<span class='ident'>shift</span>) <span class='op'>^</span> <span class='ident'>fullvalue</span>;
-
-				<span class='kw'>if</span> <span class='ident'>maskvalue</span> <span class='op'>!=</span> <span class='number'>0</span> {
-					<span class='comment'>//println!(&quot;Masking with {:?}&quot;, maskvalue);</span>
-					<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ov</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>read_variable</span>(<span class='ident'>block</span>, <span class='ident'>id</span>);
-					<span class='kw'>let</span> <span class='ident'>maskvalue_node</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_const</span>(<span class='ident'>block</span>, <span class='ident'>maskvalue</span>);
-
-					<span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpAnd</span>, <span class='ident'>vt</span>);
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>0</span>, <span class='ident'>ov</span>);
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>1</span>, <span class='ident'>maskvalue_node</span>);
-					<span class='ident'>ov</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
-
-					<span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpOr</span>, <span class='ident'>vt</span>);
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>0</span>, <span class='ident'>value</span>);
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>1</span>, <span class='ident'>ov</span>);
-					<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
-				}
-			},
-			<span class='ident'>ValueType</span>::<span class='ident'>Integer</span>{..} <span class='op'>=&gt;</span> (),
-			<span class='comment'>//_ =&gt; unimplemented!()</span>
+		<span class='kw'>if</span> <span class='ident'>info</span>.<span class='ident'>width</span> <span class='op'>&gt;</span> <span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> {
+			<span class='ident'>phip</span>.<span class='ident'>write_variable</span>(<span class='ident'>block</span>, <span class='ident'>id</span>, <span class='ident'>value</span>);
+			<span class='kw'>return</span>;
 		}
-		<span class='ident'>phiplacer</span>.<span class='ident'>write_variable</span>(<span class='ident'>block</span>, <span class='ident'>id</span>, <span class='ident'>value</span>);
+
+		<span class='comment'>// Need to add a cast.</span>
+		<span class='kw'>let</span> <span class='ident'>vt</span> <span class='op'>=</span> <span class='ident'>From</span>::<span class='ident'>from</span>(<span class='ident'>width</span>);
+		<span class='kw'>let</span> <span class='ident'>opcode</span> <span class='op'>=</span> <span class='ident'>MOpcode</span>::<span class='ident'>OpWiden</span>(<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>WidthSpec</span>);
+		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phip</span>.<span class='ident'>ssa</span>.<span class='ident'>verified_add_op</span>(<span class='ident'>block</span>, <span class='ident'>opcode</span>, <span class='ident'>vt</span>, <span class='kw-2'>&amp;</span>[<span class='ident'>value</span>]);
+		<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
+		<span class='kw'>if</span> <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='op'>&gt;</span> <span class='number'>0</span> {
+			<span class='kw'>let</span> <span class='ident'>shift_amount_node</span> <span class='op'>=</span> <span class='ident'>phip</span>.<span class='ident'>ssa</span>.<span class='ident'>add_const</span>(<span class='ident'>block</span>, <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='kw'>as</span> <span class='ident'>u64</span>);
+			<span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phip</span>.<span class='ident'>ssa</span>.<span class='ident'>verified_add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpLsl</span>,
+		                                         <span class='ident'>vt</span>, <span class='kw-2'>&amp;</span>[<span class='ident'>value</span>, <span class='ident'>shift_amount_node</span>]);
+			<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
+		}
+
+		<span class='kw'>let</span> <span class='ident'>fullval</span>: <span class='ident'>u64</span> <span class='op'>=</span> <span class='op'>!</span>((<span class='op'>!</span><span class='number'>1u64</span>) <span class='op'>&lt;&lt;</span> (<span class='ident'>width</span> <span class='op'>-</span> <span class='number'>1</span>));
+		<span class='kw'>let</span> <span class='ident'>maskval</span>: <span class='ident'>u64</span> <span class='op'>=</span>((<span class='op'>!</span>((<span class='op'>!</span><span class='number'>1u64</span>) <span class='op'>&lt;&lt;</span> (<span class='ident'>info</span>.<span class='ident'>width</span><span class='op'>-</span><span class='number'>1</span>))) <span class='op'>&lt;&lt;</span> <span class='ident'>info</span>.<span class='ident'>shift</span>) <span class='op'>^</span> <span class='ident'>fullval</span>;
+
+		<span class='kw'>if</span> <span class='ident'>maskval</span> <span class='op'>==</span> <span class='number'>0</span> {
+			<span class='ident'>phip</span>.<span class='ident'>write_variable</span>(<span class='ident'>block</span>, <span class='ident'>id</span>, <span class='ident'>value</span>);
+			<span class='kw'>return</span>;
+		}
+
+		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ov</span> <span class='op'>=</span> <span class='ident'>phip</span>.<span class='ident'>read_variable</span>(<span class='ident'>block</span>, <span class='ident'>id</span>);
+		<span class='kw'>let</span> <span class='ident'>maskvalue_node</span> <span class='op'>=</span> <span class='ident'>phip</span>.<span class='ident'>ssa</span>.<span class='ident'>add_const</span>(<span class='ident'>block</span>, <span class='ident'>maskval</span>);
+		<span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phip</span>.<span class='ident'>ssa</span>.<span class='ident'>verified_add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpAnd</span>, <span class='ident'>vt</span>, <span class='kw-2'>&amp;</span>[<span class='ident'>ov</span>, <span class='ident'>maskvalue_node</span>]);
+
+		<span class='ident'>ov</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
+		<span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phip</span>.<span class='ident'>ssa</span>.<span class='ident'>verified_add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpOr</span>, <span class='ident'>vt</span>, <span class='kw-2'>&amp;</span>[<span class='ident'>value</span>, <span class='ident'>ov</span>]);
+		<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
+		<span class='ident'>phip</span>.<span class='ident'>write_variable</span>(<span class='ident'>block</span>, <span class='ident'>id</span>, <span class='ident'>value</span>);
 	}
 
 	<span class='doccomment'>/// Emit code for reading the current value of the specified register.</span>
@@ -398,35 +414,37 @@
 	<span class='doccomment'>/// Unless prior basic blocks are marked as sealed in the PhiPlacer this will always return</span>
 	<span class='doccomment'>/// a reference to a Phi node.</span>
 	<span class='doccomment'>/// Either way, once nodes are sealed redundant Phi nodes are eliminated by PhiPlacer.</span>
-	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_register</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span>: <span class='ident'>SSAMod</span><span class='op'>&lt;</span><span class='ident'>BBInfo</span><span class='op'>=</span><span class='ident'>BBInfo</span><span class='op'>&gt;</span> <span class='op'>+</span> <span class='lifetime'>&#39;a</span><span class='op'>&gt;</span>(
-		<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>phiplacer</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PhiPlacer</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span><span class='op'>&gt;</span>,
-		<span class='ident'>base</span>: <span class='ident'>usize</span>,
-		<span class='ident'>block</span>: <span class='ident'>T</span>::<span class='ident'>ActionRef</span>,
-		<span class='ident'>var</span>: <span class='kw-2'>&amp;</span><span class='ident'>String</span>
-		) <span class='op'>-&gt;</span>
-		<span class='ident'>T</span>::<span class='ident'>ValueRef</span>
+
+	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_register</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>phiplacer</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PhiPlacer</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span>, <span class='ident'>T</span><span class='op'>&gt;</span>,
+	                            <span class='ident'>base</span>: <span class='ident'>usize</span>, <span class='ident'>block</span>: <span class='ident'>T</span>::<span class='ident'>ActionRef</span>,
+	                            <span class='ident'>var</span>: <span class='kw-2'>&amp;</span><span class='ident'>String</span>) <span class='op'>-&gt;</span> <span class='ident'>T</span>::<span class='ident'>ValueRef</span>
+	<span class='kw'>where</span> <span class='ident'>T</span>: <span class='ident'>SSAMod</span><span class='op'>&lt;</span><span class='ident'>BBInfo</span><span class='op'>=</span><span class='ident'>BBInfo</span><span class='op'>&gt;</span> <span class='op'>+</span> <span class='ident'>VerifiedAdd</span> <span class='op'>+</span> <span class='lifetime'>&#39;a</span>
 	{
 		<span class='kw'>let</span> <span class='ident'>info</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>named_registers</span>[<span class='ident'>var</span>];
 		<span class='kw'>let</span> <span class='ident'>id</span> <span class='op'>=</span> <span class='ident'>info</span>.<span class='ident'>base</span> <span class='op'>+</span> <span class='ident'>base</span>;
 		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>read_variable</span>(<span class='ident'>block</span>, <span class='ident'>id</span>);
-		<span class='kw'>match</span> <span class='ident'>phiplacer</span>.<span class='ident'>variable_types</span>[<span class='ident'>id</span>] {
-			<span class='ident'>ValueType</span>::<span class='ident'>Integer</span>{<span class='ident'>width</span>} <span class='op'>=&gt;</span> {
-				<span class='kw'>if</span> <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='op'>&gt;</span> <span class='number'>0</span> {
-					<span class='kw'>let</span> <span class='ident'>shift_amount_node</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_const</span>(<span class='ident'>block</span>, <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='kw'>as</span> <span class='ident'>u64</span>);
-					<span class='kw'>let</span> <span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpLsr</span>, <span class='ident'>ValueType</span>::<span class='ident'>Integer</span>{<span class='ident'>width</span>: <span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>WidthSpec</span>});
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>0</span>, <span class='ident'>value</span>);
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>1</span>, <span class='ident'>shift_amount_node</span>);
-					<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
-				}
-				<span class='kw'>if</span> (<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span>) <span class='op'>&lt;</span> <span class='ident'>info</span>.<span class='ident'>width</span> {
-					<span class='kw'>let</span> <span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_op</span>(<span class='ident'>block</span>, <span class='ident'>MOpcode</span>::<span class='ident'>OpNarrow</span>(<span class='ident'>info</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>WidthSpec</span>), <span class='ident'>ValueType</span>::<span class='ident'>Integer</span>{<span class='ident'>width</span>: <span class='ident'>info</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>WidthSpec</span>});
-					<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>new_value</span>, <span class='number'>0</span>, <span class='ident'>value</span>);
-					<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
-				}
-				<span class='ident'>value</span>
-			},
-			<span class='comment'>//_ =&gt; unimplemented!()</span>
+
+		<span class='kw'>let</span> <span class='ident'>width</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>phiplacer</span>.<span class='ident'>variable_types</span>[<span class='ident'>id</span>] {
+			<span class='ident'>ValueType</span>::<span class='ident'>Integer</span> { <span class='ident'>width</span> } <span class='op'>=&gt;</span> <span class='ident'>width</span>,
+		};
+
+		<span class='kw'>if</span> <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='op'>&gt;</span> <span class='number'>0</span> {
+			<span class='kw'>let</span> <span class='ident'>shift_amount_node</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>add_const</span>(<span class='ident'>block</span>, <span class='ident'>info</span>.<span class='ident'>shift</span> <span class='kw'>as</span> <span class='ident'>u64</span>);
+			<span class='kw'>let</span> <span class='ident'>opcode</span> <span class='op'>=</span> <span class='ident'>MOpcode</span>::<span class='ident'>OpLsr</span>;
+			<span class='kw'>let</span> <span class='ident'>vtype</span> <span class='op'>=</span> <span class='ident'>From</span>::<span class='ident'>from</span>(<span class='ident'>width</span>);
+			<span class='kw'>let</span> <span class='ident'>new_value</span> <span class='op'>=</span> <span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>verified_add_op</span>(
+				<span class='ident'>block</span>, <span class='ident'>opcode</span>, <span class='ident'>vtype</span>, <span class='kw-2'>&amp;</span>[<span class='ident'>value</span>, <span class='ident'>shift_amount_node</span>]);
+			<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
 		}
+
+		<span class='kw'>if</span> <span class='ident'>info</span>.<span class='ident'>width</span> <span class='op'>&lt;</span> (<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span>) {
+			<span class='kw'>let</span> <span class='ident'>opcode</span> <span class='op'>=</span> <span class='ident'>MOpcode</span>::<span class='ident'>OpNarrow</span>(<span class='ident'>info</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>WidthSpec</span>);
+			<span class='kw'>let</span> <span class='ident'>vtype</span> <span class='op'>=</span> <span class='ident'>From</span>::<span class='ident'>from</span>(<span class='ident'>info</span>.<span class='ident'>width</span>);
+			<span class='kw'>let</span> <span class='ident'>new_value</span> <span class='op'>=</span>
+				<span class='ident'>phiplacer</span>.<span class='ident'>ssa</span>.<span class='ident'>verified_add_op</span>(<span class='ident'>block</span>, <span class='ident'>opcode</span>, <span class='ident'>vtype</span>, <span class='kw-2'>&amp;</span>[<span class='ident'>value</span>]);
+			<span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>new_value</span>;
+		}
+		<span class='ident'>value</span>
 	}
 }
 </pre>

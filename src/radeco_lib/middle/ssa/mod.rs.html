@@ -57,7 +57,12 @@
 <span id="15">15</span>
 <span id="16">16</span>
 <span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
 </pre><pre class='rust '>
+<span class='doccomment'>//! Holds traits and structs for the ssa form</span>
+
 <span class='comment'>// TODO: </span>
 <span class='comment'>//       - Decide the structs and traits to expose through ssa:: namespace,</span>
 <span class='comment'>//         i.e. Decide what we want to re export for convienence.</span>
@@ -68,6 +73,7 @@
 <span class='kw'>pub</span> <span class='kw'>mod</span> <span class='ident'>ssastorage</span>;
 <span class='kw'>pub</span> <span class='kw'>mod</span> <span class='ident'>ssadot</span>;
 <span class='kw'>pub</span> <span class='kw'>mod</span> <span class='ident'>verifier</span>;
+<span class='kw'>pub</span> <span class='kw'>mod</span> <span class='ident'>error</span>;
 
 <span class='kw'>pub</span> <span class='kw'>use</span> <span class='self'>self</span>::<span class='ident'>ssa_traits</span>::{<span class='ident'>SSA</span>, <span class='ident'>SSAMod</span>, <span class='ident'>NodeData</span>, <span class='ident'>ValueType</span>, <span class='ident'>BBInfo</span>};
 <span class='kw'>pub</span> <span class='kw'>use</span> <span class='self'>self</span>::<span class='ident'>ssastorage</span>::{<span class='ident'>SSAStorage</span>};

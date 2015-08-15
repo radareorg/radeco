@@ -284,6 +284,10 @@
 <span id="242">242</span>
 <span id="243">243</span>
 <span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! Enumerations and structs to represent instructions.</span>
 <span class='doccomment'>//! Shared by the SSA representation and the intermediate representation of the ESIL parser.</span>
@@ -314,6 +318,7 @@
 	<span class='ident'>Internal</span>,
 	<span class='ident'>EsilCur</span>,
 	<span class='ident'>EsilOld</span>,
+	<span class='ident'>Lastsz</span>,
 	<span class='ident'>Unknown</span>,
 	<span class='ident'>Null</span>,
 }
@@ -426,7 +431,6 @@
 		<span class='kw'>match</span> <span class='op'>*</span><span class='self'>self</span> {
 			<span class='ident'>MOpcode</span>::<span class='ident'>OpJmp</span>     <span class='op'>=&gt;</span> <span class='boolval'>false</span>,
 			<span class='ident'>MOpcode</span>::<span class='ident'>OpCJmp</span>    <span class='op'>=&gt;</span> <span class='boolval'>false</span>,
-			<span class='ident'>MOpcode</span>::<span class='ident'>OpCall</span>    <span class='op'>=&gt;</span> <span class='boolval'>false</span>,
 			<span class='ident'>MOpcode</span>::<span class='ident'>OpNop</span>     <span class='op'>=&gt;</span> <span class='boolval'>false</span>,
 			<span class='ident'>MOpcode</span>::<span class='ident'>OpInvalid</span> <span class='op'>=&gt;</span> <span class='boolval'>false</span>,
 			<span class='ident'>MOpcode</span>::<span class='ident'>OpInc</span>     <span class='op'>=&gt;</span> <span class='boolval'>false</span>,
@@ -507,6 +511,10 @@
 
 	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>esilold</span>() <span class='op'>-&gt;</span> <span class='ident'>MVal</span> {
 		<span class='ident'>MVal</span>::<span class='ident'>new</span>(<span class='string'>&quot;&quot;</span>.<span class='ident'>to_string</span>(), <span class='number'>64</span>, <span class='ident'>MValType</span>::<span class='ident'>EsilOld</span>, <span class='number'>0</span>, <span class='prelude-val'>None</span>)
+	}
+
+	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>esillastsz</span>() <span class='op'>-&gt;</span> <span class='ident'>MVal</span> {
+		<span class='ident'>MVal</span>::<span class='ident'>new</span>(<span class='string'>&quot;&quot;</span>.<span class='ident'>to_string</span>(), <span class='number'>64</span>, <span class='ident'>MValType</span>::<span class='ident'>Lastsz</span>, <span class='number'>0</span>, <span class='prelude-val'>None</span>)
 	}
 }
 

@@ -45,8 +45,8 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-3134' class='srclink' href='../../../src/radeco_lib/middle/dce.rs.html#11-48' title='goto source code'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn collect&lt;'a, T&gt;(ssa: &amp;mut T) <span class='where'>where T: <a class='trait' href='../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a>&lt;ValueRef=NodeIndex, ActionRef=NodeIndex&gt; + <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a></span></pre><div class='docblock'><p>Removes SSA nodes that are not used by any other node.
+        </span><a id='src-3134' class='srclink' href='../../../src/radeco_lib/middle/dce.rs.html#13-55' title='goto source code'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn collect&lt;'a, T&gt;(ssa: &amp;mut T) <span class='where'>where T: <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='../../../radeco_lib/middle/ssa/ssa_traits/trait.SSAMod.html' title='radeco_lib::middle::ssa::ssa_traits::SSAMod'>SSAMod</a>&lt;ValueRef=NodeIndex, ActionRef=NodeIndex&gt;</span></pre><div class='docblock'><p>Removes SSA nodes that are not used by any other node.
 The algorithm will not consider whether the uses keeping a node alive
 are in code that is actually executed or not. For a better analysis
 look at <code>analysis::constant_propagation</code>.</p>

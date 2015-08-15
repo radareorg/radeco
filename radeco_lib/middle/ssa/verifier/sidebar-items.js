@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["verify",""]],"trait":[["Verify",""]]});
+initSidebarItems({"fn":[["verify",""]],"trait":[["VerifiedAdd",""],["Verify",""]],"type":[["VResult",""]]});

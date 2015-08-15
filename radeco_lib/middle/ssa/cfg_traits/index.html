@@ -45,14 +45,46 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-9166' class='srclink' href='../../../../src/radeco_lib/middle/ssa/cfg_traits.rs.html#1-85' title='goto source code'>[src]</a></span></h1>
-<h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+        </span><a id='src-9460' class='srclink' href='../../../../src/radeco_lib/middle/ssa/cfg_traits.rs.html#1-118' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Defines the traits to be implemented by the Control Flow Graph (CFG).</p>
+
+<p>These traits act as a way to abstract the actual storage 
+mechanism of the CFG (and SSA).
+Any struct that implement these traits can be used with other methods.</p>
+
+<h1 id="design" class='section-header'><a
+                           href="#design">Design</a></h1>
+<ul>
+<li><p><code>CFG</code> - This acts as the base trait upon which the
+whole SSA form is build. The <code>CFG</code> trait provides <strong>accessors</strong> to the Basic
+Blocks of the program as well as the Control Flow edges that 
+connect these blocks.</p></li>
+<li><p><code>CFGMod</code> - This trait provides methods to <strong>manipulate</strong> the Control Flow Graph.</p>
+
+<p>The above traits are generic over indexes that are used to refer to edges
+and nodes in a CFG. <code>CFG::ActionRef</code> represents the type that is used
+to reference the Basic Blocks in the Control Flow Graph.
+Similarly, <code>CFG::CFEdgeRef</code> represents the type that is used to reference
+edges in the graph.</p>
+
+<p>It is important to note that the trait <code>SSA</code> requires <code>CFG</code> to be implemented.
+The underlying CFG trait continues to provide access to the control flow structure
+of the program even in the SSA form. In essence, the SSA graph can be thought of
+as a composition (or superposition) of the SSA graph and the CFG graph.</p>
+
+<p>Individual traits and their methods are explained in their respective docs.</p>
+
+<p>Note: Reference in the docs refers to any type that is used to index nodes and edges
+in the graph and not necessarily <strong>pointers</strong>.</p></li>
+</ul>
+</div><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
 <table>
                     <tr class=' module-item'>
                         <td><a class='trait' href='trait.CFG.html'
                                title='radeco_lib::middle::ssa::cfg_traits::CFG'>CFG</a></td>
                         <td class='docblock short'>
-                             
+                             <p>Provides <strong>accessors</strong> to the underlying storage</p>
+
                         </td>
                     </tr>
                 
@@ -60,7 +92,8 @@
                         <td><a class='trait' href='trait.CFGMod.html'
                                title='radeco_lib::middle::ssa::cfg_traits::CFGMod'>CFGMod</a></td>
                         <td class='docblock short'>
-                             
+                             <p>Provides <strong>mutators</strong> to the underlying storage</p>
+
                         </td>
                     </tr>
                 </table></section>

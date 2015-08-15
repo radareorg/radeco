@@ -281,7 +281,7 @@
 				(<span class='string'>&quot;shape&quot;</span>.<span class='ident'>to_string</span>(), <span class='string'>&quot;box&quot;</span>.<span class='ident'>to_string</span>()),
 				(<span class='string'>&quot;color&quot;</span>.<span class='ident'>to_string</span>(), <span class='string'>&quot;\&quot;grey\&quot;&quot;</span>.<span class='ident'>to_string</span>())]
 			},
-			<span class='ident'>NodeData</span>::<span class='ident'>Comment</span>(<span class='kw-2'>ref</span> <span class='ident'>msg</span>) <span class='op'>=&gt;</span> {
+			<span class='ident'>NodeData</span>::<span class='ident'>Comment</span>(_, <span class='kw-2'>ref</span> <span class='ident'>msg</span>) <span class='op'>=&gt;</span> {
 				<span class='macro'>vec</span><span class='macro'>!</span>[(<span class='string'>&quot;label&quot;</span>.<span class='ident'>to_string</span>(), <span class='macro'>format</span><span class='macro'>!</span>(<span class='string'>&quot;\&quot;{}\&quot;&quot;</span>, <span class='ident'>msg</span>.<span class='ident'>replace</span>(<span class='string'>&quot;\&quot;&quot;</span>, <span class='string'>&quot;\\\&quot;&quot;</span>)))]
 			},
 			_ <span class='op'>=&gt;</span> {

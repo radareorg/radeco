@@ -45,12 +45,12 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-10173' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssastorage.rs.html#11-21' title='goto source code'>[src]</a></span></h1>
+        </span><a id='src-10684' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssastorage.rs.html#14-24' title='goto source code'>[src]</a></span></h1>
 <pre class='rust enum'>pub enum NodeData {
     Op(<a class='enum' href='../../../../radeco_lib/middle/ir/enum.MOpcode.html' title='radeco_lib::middle::ir::MOpcode'>MOpcode</a>, <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>),
-    Phi(<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>),
-    Comment(<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>),
-    Undefined,
+    Phi(<a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>),
+    Comment(<a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>),
+    Undefined(<a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>),
     Removed,
     Unreachable,
     BasicBlock(<a class='struct' href='../../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a>),
