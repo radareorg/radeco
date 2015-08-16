@@ -1,7 +1,10 @@
+//! Implements the `GraphDot` trait for SSAStorage
+
 use petgraph::graph::{Edge, NodeIndex};
+
 use middle::dot::{GraphDot, DotAttrBlock};
-use super::ssa_traits::{SSA, SSAMod, ValueType, BBInfo};
 use super::ssastorage::{NodeData, EdgeData, SSAStorage};
+use super::ssa_traits::{SSA, SSAMod, ValueType, BBInfo};
 
 ///////////////////////////////////////////////////////////////////////////////
 //// Implementation of GraphDot to emit Dot for SSAStorage.
@@ -12,7 +15,7 @@ impl GraphDot for SSAStorage {
 	type EdgeType = Edge<EdgeData>;
 
 	fn configure(&self) -> String {
-		format!("digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" compound=true];\nrankdir=TB;\n")
+		format!("digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" compound=true rankdir=TB;]\n")
 	}
 
 	fn nodes(&self) -> Vec<Self::NodeType> {

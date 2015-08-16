@@ -150,7 +150,7 @@ where T: 'a + Clone + Debug + Verify +
 
 		let dsttype = match inst.dst.val_type {
 			MValType::Null => From::from(0 as u16), // there is no ValueType::None?
-			_              => From::from(inst.dst.size.to_string()),
+			_              => From::from(inst.dst.size),
 		};
 
 		let nn = {

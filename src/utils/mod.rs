@@ -102,8 +102,9 @@ pub struct Runner<'a> {
 impl<'a> Runner<'a> {
 
 	pub fn new(name: String, bin_name: Option<String>,
-			   addr: Option<String>, verbose: bool,
-			   pipeline: Vec<Pipeline>) -> Runner<'a> {
+               addr: Option<String>, verbose: bool,
+               pipeline: Vec<Pipeline>) -> Runner<'a> 
+	{
 		Runner {
 			name: name,
 			bin_name: bin_name,
@@ -313,7 +314,6 @@ impl<'a> Runner<'a> {
 
 			// Format of output file name:
 			// test_name-type-phase_num.ext
-
 			let mut p = PathBuf::from("./outputs/");
 			p.push(self.name.clone());
 			let pstr = format!("{}-res_{}-phase{}", self.name, res.to_string(), phase_num.to_string());
@@ -321,7 +321,6 @@ impl<'a> Runner<'a> {
 			p.push(pstr);
 			p.set_extension(ext);
 			self.write_file(p, write_out);
-
 			phase_num += 1;
 		}
 	}

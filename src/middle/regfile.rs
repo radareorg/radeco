@@ -119,7 +119,7 @@ impl SubRegisterFile {
 			ValueType::Integer { width } => width,
 		};
 
-		if info.width > width as usize {
+		if info.width >= width as usize {
 			phip.write_variable(block, id, value);
 			return;
 		}
