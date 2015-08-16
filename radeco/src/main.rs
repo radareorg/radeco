@@ -53,27 +53,20 @@ Options:
                          run radeco rather than dumping it to a file.
 ";
 
-//fn radeco_file(args:&Args) -> i32 {
-    //let mut r = Radeco::file("/bin/ls".to_owned()).unwrap();
-    //if args.flag_shell {
-        //r.shell();
-    //} else {
-        //println!("Batch stuff here");
-    //}
-    //r.close();
-    //0
-//}
+fn spawn_shell(bname: String) -> i32 {
+	radeco::spawn_shell(bname)
+}
 
 //fn radeco_pipe(args:&Args) -> i32 {
-    //let mut r = Radeco::pipe().unwrap();
-    //if args.flag_shell {
-        //r.shell();
-    //} else {
-        //println!("Running radeco via pipe");
+	//let mut r = Radeco::pipe().unwrap();
+	//if args.flag_shell {
+		//r.shell();
+	//} else {
+		//println!("Running radeco via pipe");
 		//// TODO get offset, function, bin info, ..
-    //}
-    //r.close();
-    //0
+	//}
+	//r.close();
+	//0
 //}
 
 fn write_file(fname: String, res: String) {
@@ -133,9 +126,18 @@ fn main() {
 			println!("{}", USAGE);
 		}
 
-		let inp = read_json(args.arg_file.unwrap());
+		let inp = read_json(args.arg_file.clone().unwrap());
 		let mut runner = inp.validate().unwrap();
 		runner.run();
 		runner.dump();
+	}
+
+	if args.flag_shell {
+		if args.arg_file.is_none() {
+			println!("{}", USAGE);
+			exit(0);
+		}
+		let status = spawn_shell(args.arg_file.clone().unwrap());
+		exit(status);
 	}
 }
