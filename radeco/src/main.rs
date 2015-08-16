@@ -91,6 +91,7 @@ fn json_builder(run: bool) {
 		write_file(name, raw_json);
 	} else {
 		runner.run();
+		runner.dump();
 	}
 }
 
@@ -128,5 +129,6 @@ fn main() {
 		let inp = read_json(args.arg_file.unwrap());
 		let mut runner = inp.validate().unwrap();
 		runner.run();
+		runner.dump();
 	}
 }
