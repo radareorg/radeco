@@ -110,8 +110,13 @@ impl SubRegisterFile {
 				//println!("Assigning to {:?}: sub={:?} base_width={}", var, info, width);
 				let vt = ValueType::Integer{width: width as WidthSpec};
 
-				let mut new_value = phiplacer.ssa.verified_add_op(block, MOpcode::OpWiden(width as WidthSpec), vt, &[value]);
-				value = new_value;
+				if phiplacer.ssa.get_node_data(&value).ok().map_or(0, |nd| match nd.vt {
+					ValueType::Integer{width} => width
+				}) < width {
+					value = phiplacer.ssa.verified_add_op(block, MOpcode::OpWiden(width as WidthSpec), vt, &[value]);
+				}
+
+				let mut new_value;
 
 				if info.shift > 0 {
 					//println!("Shifting by {:?}", info.shift);

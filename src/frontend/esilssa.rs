@@ -111,7 +111,7 @@ impl<'a, T> SSAConstruction<'a, T> where
 	}
 
 	fn process_in(&mut self, block: T::ActionRef, mval: &MVal) -> T::ValueRef {
-		match mval.val_type {
+		let valref = match mval.val_type {
 			MValType::Register  => self.regfile.read_register(&mut self.phiplacer, 3, block, &mval.name),
 			MValType::Temporary => self.temps[&mval.name],
 			MValType::Internal  => panic!("This value type should be eliminated during parsing"),
@@ -121,7 +121,13 @@ impl<'a, T> SSAConstruction<'a, T> where
 			MValType::Unknown   => self.phiplacer.ssa.invalid_value(),
 			                       //self.phiplacer.ssa.add_comment(block, &"Unknown".to_string()), // unimplemented!()
 			MValType::Null      => self.phiplacer.ssa.invalid_value(),
+		};
+		if let Ok(nd) = self.phiplacer.ssa.get_node_data(&valref) {
+			match nd.vt {
+				ValueType::Integer{width} => {assert_eq!(width, mval.size);}
+			}
 		}
+		return valref
 	}
 
 	fn process_out(&mut self, block: T::ActionRef, mval: &MVal, value: T::ValueRef) {
@@ -157,10 +163,10 @@ impl<'a, T> SSAConstruction<'a, T> where
 
 			if inst.dst.size != 64 {
 				let ref mut ssa = self.phiplacer.ssa;
-				nn64 = ssa.add_op(block,
+				nn64 = ssa.verified_add_op(block,
 					MOpcode::OpWiden(64),
-					ValueType::Integer{width: 64});
-				ssa.op_use(nn64, 0, nn);
+					ValueType::Integer{width: 64},
+					&[nn]);
 			}
 
 			let old = self.phiplacer.read_variable(block, 0);
@@ -181,6 +187,8 @@ impl<'a, T> SSAConstruction<'a, T> where
 				println!("Found narrow. Narrow to : {}, n0: {:?}, n1: {:?},
 				op1: {}, op2: {}", i, n0, n1, instruction.operand_1, instruction.operand_2);
 			}
+
+			println!("{:?}", instruction);
 
 			if instruction.opcode == MOpcode::OpJmp {
 				// TODO: In case of static jumps, this is trivial and does not need a selector.

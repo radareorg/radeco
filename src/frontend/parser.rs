@@ -162,31 +162,34 @@ impl<'a> Parser<'a> {
 		self.parse_str(&*esil)
 	}
 
-	fn load_operands(&mut self, signature: Arity) -> Result<(MVal, MVal, WidthSpec), ParseError> {
+	fn load_operands(&mut self, signature: Arity) -> Result<(MVal, MVal, MVal, WidthSpec), ParseError> {
 		match signature {
 			Arity::Unary => {
 				let op = try!(self.get_param());
+				let bc = op.clone();
 				let width = op.size;
 				assert!(op.val_type != MValType::Null);
-				Ok((op, MVal::null(), width))
+				Ok((op.clone(), op, MVal::null(), width))
 			},
 			Arity::Binary | Arity::BinaryBool => {
-				let mut op1 = try!(self.get_param());
-				let mut op2 = try!(self.get_param());
+				let op1 = try!(self.get_param());
+				let op2 = try!(self.get_param());
+				let bc1 = op1.clone();
 				assert!(op1.val_type != MValType::Null);
 				assert!(op2.val_type != MValType::Null);
 				let dst_size = cmp::max(op1.size, op2.size);
-				self.add_widen_inst(&mut op2, dst_size);
-				self.add_widen_inst(&mut op1, dst_size);
-				Ok((op1, op2,  if signature == Arity::Binary { dst_size } else { 1 }))
+				let wop1 = self.add_widen_inst(op1, dst_size);
+				let wop2 = self.add_widen_inst(op2, dst_size);
+				Ok((bc1, wop1, wop2,  if signature == Arity::Binary { dst_size } else { 1 }))
 			},
 			Arity::BinaryAsym => {
 				let op1 = try!(self.get_param());
 				let op2 = try!(self.get_param());
+				let bc1 = op1.clone();
 				assert!(op1.val_type != MValType::Null);
 				assert!(op2.val_type != MValType::Null);
 				let dst_size = op1.size;
-				Ok((op1, op2, dst_size))
+				Ok((bc1, op1, op2, dst_size))
 			},
 		}
 	}
@@ -305,7 +308,7 @@ impl<'a> Parser<'a> {
 				EsilOperation::Plain(op, arity) => {
 					let update_flags = op == MOpcode::OpCmp; // TODO: correct this
 
-					let (op1, op2, dst_size) = try!(self.load_operands(arity));
+					let (_, op1, op2, dst_size) = try!(self.load_operands(arity));
 					let dst = self.get_tmp_register(dst_size);
 					try!(self.add_d_inst(op, dst.clone(), op1, op2, update_flags));
 
@@ -313,18 +316,23 @@ impl<'a> Parser<'a> {
 				},
 
 				EsilOperation::Inplace(op, arity) => {
-					let (op1, op2, dst_size) = try!(self.load_operands(arity));
+					let (mut dp, op1, op2, dst_size) = try!(self.load_operands(arity));
 					println!("  op1={:?} op2={:?}", op1, op2);
-					assert!(op1.val_type == MValType::Register);
-					assert!(dst_size == op1.size);
-					try!(self.add_d_inst(op, op1.clone(), op1, op2, /*update_flags=*/ true));
+					assert!(dp.val_type == MValType::Register);
+					if (dst_size == dp.size) {
+						try!(self.add_d_inst(op, dp, op1, op2, /*update_flags=*/ true));
+					} else {
+						let dst = self.get_tmp_register(dst_size);
+						try!(self.add_d_inst(op, dst.clone(), op1, op2, /*update_flags=*/ true));
+						try!(self.add_d_inst(MOpcode::OpNarrow(dp.size), dp, dst, MVal::null(), /*update_flags=*/ false));
+					}
 				},
 
 				EsilOperation::Memory(op, arity, mut width) => {
 					let update_flags = op == MOpcode::OpCmp; // TODO: correct this
 					if width == 0 { width = self.default_size; }
 
-					let (op1, op2, dst_size) = try!(self.load_operands(arity));
+					let (dp, op1, op2, dst_size) = try!(self.load_operands(arity));
 
 					assert!(width == op1.size);
 					let op1d = self.get_tmp_register(width);
@@ -378,7 +386,9 @@ impl<'a> Parser<'a> {
 				EsilOperation::WriteMemory(mut width) => {
 					if width == 0 { width = self.default_size; }
 					let addr = try!(self.get_param());
-					let value = try!(self.get_param());
+					let /*mut*/ value = try!(self.get_param());
+					// TODO: Test before uncommenting
+					// value = self.add_widen_inst(value, width);
 					try!(self.add_d_inst(MOpcode::OpStore, MVal::null(), addr, value, false));
 				},
 
@@ -441,7 +451,6 @@ impl<'a> Parser<'a> {
 
 	fn get_tmp_register(&mut self, mut size: WidthSpec) -> MVal {
 		self.tmp_index += 1;
-		if (self.tmp_index == 5) { panic!(); }
 		if size == 0 {
 			size = self.default_size;
 		}
