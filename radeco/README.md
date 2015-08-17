@@ -79,7 +79,9 @@ Example of json used to power radeco:
 
 Explanation of the above fields:
 * `bin_name`: Relative path to the binary to be analysed
-* `esil`: radeco allows users to load raw esil [WIP]
+* `esil`: radeco allows users to load raw esil. The raw esil is treated just
+  as it would be if it was fed in through r2. This is an array in which each
+  element is an esil string (corresponding to one instruction).
 * `addr`: Address from where the instructions to be analysed must be loaded.
   This field can take an address such as `0xbadcode` or any symbols identified
   by r2 such as `sym.main`
