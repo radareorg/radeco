@@ -36,12 +36,6 @@ impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
 		}
 		let q = self.verify_expr(&op);
 		if let Err(ref e) = q {
-			println!("{:?} {:?}", opc, vt);
-			for arg in args {
-				if let Ok(TNodeData {vt: avt, nt: ant}) = self.get_node_data(arg) {
-					println!("  {:?} {:?}", ant, avt);
-				}
-			}
 			panic!(format!("{:?}", e));
 		}
 		op

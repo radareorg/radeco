@@ -706,9 +706,7 @@ impl SSAMod for SSAStorage {
 		}
 		// Removing a true/false edge.
 		let selector = self.selector_of(&src_node);
-		if selector.is_none() {
-			println!("No selector found. This may have already been replaced by a constant.");
-		} else {
+		if selector.is_some() {
 			self.remove(selector.unwrap());
 		}
 

@@ -61,12 +61,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		}
 	}
 
-	pub fn dump(&self) {
-		for (h, v) in self.expr_val.iter() {
-			println!("{:?}: {:?}", h, v);
-		}
-	}
-
 	fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
 		let operands = self.g.get_operands(i);
 		let mut phi_val = self.get_value(i);
@@ -200,7 +194,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		// Hence evaluate the control flow to add edges to the cfgwl.
 		// TODO: Handle the case where the selector of a block may belong to a different block.
 		if self.g.is_selector(i) {
-			println!("{:?} is a selector", i);
 			self.evaluate_control_flow(i);
 		}
 
@@ -240,7 +233,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 				}
 
 				for expr in self.g.exprs_in(&block) {
-					println!("Evaluating {:?} in cfgwl", expr);
 					let val = self.visit_expression(&expr);
 					self.set_value(&expr, val);
 					for _use in self.g.get_uses(&expr) {
@@ -250,7 +242,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 			}
 			while let Some(e) = self.ssa_worklist.pop() {
 				// self.get the operation/expression to which this operand belongs to.
-				println!("Evaluating {:?} in ssawl", e);
 				let t = self.visit_expression(&e);
 				if t !=  self.get_value(&e) {
 					self.set_value(&e, t);

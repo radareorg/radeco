@@ -142,12 +142,10 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 		for use_ in users {
 			if use_ == phi { continue; }
 			if let Ok( NodeData {nt: NodeType::Phi, ..} ) = self.ssa.get_node_data(&use_) {
-				//println!("After replacing {:?} by {:?}, proceeding to simplify user {:?}",
 				//	self.ssa.g[phi],
 				//	self.ssa.g[same],
 				//	self.ssa.g[use_]);
 				self.try_remove_trivial_phi(use_);
-				//println!("done");
 			}
 		}
 		return same
