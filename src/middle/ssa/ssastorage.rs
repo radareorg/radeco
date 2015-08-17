@@ -426,8 +426,7 @@ impl SSA for SSAStorage {
 				true_branch = othernode.clone();
 			}
 		}
-
-		return (false_branch, true_branch);
+		(false_branch, true_branch)
 	}
 
 	fn get_true_branch(&self, i: &NodeIndex) -> NodeIndex {
@@ -446,7 +445,7 @@ impl SSA for SSAStorage {
 				return othernode
 			}
 		}
-		return NodeIndex::end()
+		NodeIndex::end()
 	}
 
 	fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex> {

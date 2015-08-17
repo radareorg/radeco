@@ -96,6 +96,7 @@ pub struct Runner<'a> {
 	verbose: bool,
 	pipeline: Vec<Pipeline>,
 	results: Vec<Pipeout>,
+	outpath: String,
 	pub state: State<'a>,
 }
 
@@ -103,7 +104,7 @@ impl<'a> Runner<'a> {
 
 	pub fn new(name: String, bin_name: Option<String>,
                addr: Option<String>, verbose: bool,
-               pipeline: Vec<Pipeline>) -> Runner<'a> 
+               pipeline: Vec<Pipeline>, outpath: Option<String>) -> Runner<'a>
 	{
 		Runner {
 			name: name,
@@ -113,6 +114,7 @@ impl<'a> Runner<'a> {
 			pipeline: pipeline,
 			results: Vec::new(),
 			state: State::new(),
+			outpath: outpath.unwrap_or("./outputs".to_owned()),
 		}
 	}
 
@@ -314,7 +316,7 @@ impl<'a> Runner<'a> {
 
 			// Format of output file name:
 			// test_name-type-phase_num.ext
-			let mut p = PathBuf::from("./outputs/");
+			let mut p = PathBuf::from(&self.outpath);
 			p.push(self.name.clone());
 			let pstr = format!("{}-res_{}-phase{}", self.name, res.to_string(), phase_num.to_string());
 			fs::create_dir_all(&p).ok();

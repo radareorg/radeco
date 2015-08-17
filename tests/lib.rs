@@ -8,24 +8,24 @@ fn test1() {
 	let pipeline = vec![Pipeline::ReadFromR2, Pipeline::ParseEsil,
 	                    Pipeline::CFG, Pipeline::SSA];
 	
-	let test_name = "test1".to_string();
-	let bin_name = Some("./ex-bins/simple2".to_string());
-	let addr = Some("sym.main".to_string());
-	let mut test = Runner::new(test_name, bin_name, addr, false, pipeline);
+	let test_name = "test1".to_owned();
+	let bin_name = Some("./ex-bins/simple2".to_owned());
+	let addr = Some("sym.main".to_owned());
+	let mut test = Runner::new(test_name, bin_name, addr, false, pipeline, None);
 	test.run();
 	test.dump();
 }
 
 #[test]
 fn test_analysis1() {
-	let esil = vec!["4,5,+".to_string(), "6,*".to_string(),
-	                "100,>,zf,=".to_string(),
-					"5,rax,=".to_string(),
-					"6,rbx,=".to_string(),
-					"7,rbx,=".to_string()
+	let esil = vec!["4,5,+".to_owned(), "6,*".to_owned(),
+	                "100,>,zf,=".to_owned(),
+					"5,rax,=".to_owned(),
+					"6,rbx,=".to_owned(),
+					"7,rbx,=".to_owned()
 	               ];
-	let test_name = "test2".to_string();
-    
+
+	let test_name = "test2".to_owned();
 	// Get a new r2 instance.
     let mut r2 = R2::new("./ex-bins/simple2");
     // Initialize with sane defaults.
@@ -42,7 +42,7 @@ fn test_analysis1() {
 		Pipeline::Verify
 	];
 
-	let mut test = Runner::new(test_name, None, None, true, pipeline);
+	let mut test = Runner::new(test_name, None, None, true, pipeline, None);
 	test.state.pipeout = Some(Pipeout::Esil(esil));
 	test.state.reg_info = Some(r.clone());
 	test.run();
@@ -64,7 +64,7 @@ fn test_analysis2() {
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
 	];
-	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline);
+	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline, None);
 	test.run();
 	test.dump();
 }
@@ -85,7 +85,7 @@ fn tachikoma() {
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
 	];
-	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline);
+	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline, None);
 	test.run();
 	test.dump();
 }
