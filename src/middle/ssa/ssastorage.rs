@@ -450,29 +450,15 @@ impl SSA for SSAStorage {
 	}
 
 	fn get_operands(&self, i: &NodeIndex) -> Vec<NodeIndex> {
-		let ordered = if let NodeData::Phi(_, _) = self.g[*i] { false } else { true };
 		let mut args = Vec::new();
-		if ordered {
-			args.push(NodeIndex::end());
-			args.push(NodeIndex::end());
-		}
-
 		let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Data(index) = self.g[edge] {
-				if ordered {
-					args[index as usize] = othernode;
-				} else {
-					args.push(othernode);
-				}
+				args.push((index, othernode));
 			}
 		}
-		let mut i = args.len();
-		while i > 0 && args[i-1] == NodeIndex::end() {
-			i -= 1;
-		}
-		args.truncate(i);
-		return args;
+		args.sort_by(|a, b| a.0.cmp(&b.0));
+		args.iter().map(|a| a.1).collect()
 	}
 
 	fn get_sparse_operands(&self, i: &NodeIndex) -> Vec<(u8, NodeIndex)> {
