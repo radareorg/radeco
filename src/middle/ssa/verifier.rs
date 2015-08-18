@@ -176,7 +176,7 @@ impl Verify for SSAStorage {
 					MOpcode::OpCmp | MOpcode::OpGt | MOpcode::OpLt | MOpcode::OpLteq | MOpcode::OpGteq => {
 						check!(w == 1, SSAErr::IncompatibleWidth(*i, 1, w));
 					},
-					MOpcode::OpCall => { },
+					MOpcode::OpCall | MOpcode::OpStore => { },
 					_ => {
 						let w0 = self.get_node_data(&operands[0])
 						             .map(&extract)

@@ -39,7 +39,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 	}
 
 	fn write_variable_internal(&mut self, block: T::ActionRef, variable: VarId, value: T::ValueRef) {
-		assert!(self.ssa.get_node_data(&value).unwrap().vt == self.variable_types[variable]);
+		assert_eq!(self.ssa.get_node_data(&value).unwrap().vt, self.variable_types[variable]);
 		self.current_def[variable].insert(block, value);
 	}
 

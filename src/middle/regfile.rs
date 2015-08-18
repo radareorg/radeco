@@ -21,7 +21,7 @@ impl SubRegister {
 		SubRegister {
 			base:  base,
 			shift: shift,
-			width:  width,
+			width: width,
 		}
 	}
 }
@@ -127,8 +127,15 @@ impl SubRegisterFile {
 		// Need to add a cast.
 		let vt = From::from(width);
 		let opcode = MOpcode::OpWiden(width as WidthSpec);
-		let mut new_value = phip.ssa.verified_add_op(block, opcode, vt, &[value]);
-		value = new_value;
+
+		if phip.ssa.get_node_data(&value).ok().map_or(0, |nd| match nd.vt {
+			ValueType::Integer{width} => width
+		}) < width {
+			value = phip.ssa.verified_add_op(block, opcode, vt, &[value]);
+		}
+
+		let mut new_value;
+
 		if info.shift > 0 {
 			let shift_amount_node = phip.ssa.add_const(block, info.shift as u64);
 			new_value = phip.ssa.verified_add_op(block, MOpcode::OpLsl,
