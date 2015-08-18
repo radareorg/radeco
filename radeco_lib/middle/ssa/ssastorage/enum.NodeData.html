@@ -45,7 +45,7 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-10684' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssastorage.rs.html#14-24' title='goto source code'>[src]</a></span></h1>
+        </span><a id='src-10766' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssastorage.rs.html#23-42' title='goto source code'>[src]</a></span></h1>
 <pre class='rust enum'>pub enum NodeData {
     Op(<a class='enum' href='../../../../radeco_lib/middle/ir/enum.MOpcode.html' title='radeco_lib::middle::ir::MOpcode'>MOpcode</a>, <a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>),
     Phi(<a class='enum' href='../../../../radeco_lib/middle/ssa/ssa_traits/enum.ValueType.html' title='radeco_lib::middle::ssa::ssa_traits::ValueType'>ValueType</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>),
@@ -56,8 +56,24 @@
     BasicBlock(<a class='struct' href='../../../../radeco_lib/middle/ssa/ssa_traits/struct.BBInfo.html' title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a>),
     DynamicAction,
     RegisterState,
-}</pre><h2 class='variants'>Variants</h2>
-<table><tr><td id='variant.Op'><code>Op</code></td><td></td></tr><tr><td id='variant.Phi'><code>Phi</code></td><td></td></tr><tr><td id='variant.Comment'><code>Comment</code></td><td></td></tr><tr><td id='variant.Undefined'><code>Undefined</code></td><td></td></tr><tr><td id='variant.Removed'><code>Removed</code></td><td></td></tr><tr><td id='variant.Unreachable'><code>Unreachable</code></td><td></td></tr><tr><td id='variant.BasicBlock'><code>BasicBlock</code></td><td></td></tr><tr><td id='variant.DynamicAction'><code>DynamicAction</code></td><td></td></tr><tr><td id='variant.RegisterState'><code>RegisterState</code></td><td></td></tr></table><h2 id='implementations'>Trait Implementations</h2><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#method.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+}</pre><div class='docblock'><p>Node type for the SSAStorage-internal petgraph.
+Both actions and values are represented using this same enum.</p>
+
+<p>Value nodes are <code>Op</code>, <code>Phi</code>, <code>Comment</code>, <code>Undefined</code> and <code>Removed</code>.
+Action nodes are <code>Unreachable</code>, <code>BasicBlock</code>, <code>DynamicAction</code>
+<code>RegisterState</code> is neither.
+Value nodes have a <code>ValueType</code> that can be extracted with <code>SSA::get_node_data</code></p>
+</div><h2 class='variants'>Variants</h2>
+<table><tr><td id='variant.Op'><code>Op</code></td><td><div class='docblock'><p>Represents on operation.</p>
+</div></td></tr><tr><td id='variant.Phi'><code>Phi</code></td><td><div class='docblock'><p>Represents a phi node.</p>
+</div></td></tr><tr><td id='variant.Comment'><code>Comment</code></td><td><div class='docblock'><p>Represents an undefined node with a comment.</p>
+</div></td></tr><tr><td id='variant.Undefined'><code>Undefined</code></td><td><div class='docblock'><p>Represents an undefined node without comment.</p>
+</div></td></tr><tr><td id='variant.Removed'><code>Removed</code></td><td><div class='docblock'><p>Placeholder for value nodes.</p>
+</div></td></tr><tr><td id='variant.Unreachable'><code>Unreachable</code></td><td><div class='docblock'><p>Placeholder for action nodes.</p>
+</div></td></tr><tr><td id='variant.BasicBlock'><code>BasicBlock</code></td><td><div class='docblock'><p>Represents a basic block.</p>
+</div></td></tr><tr><td id='variant.DynamicAction'><code>DynamicAction</code></td><td><div class='docblock'><p>Represents an action that doesn&#39;t contain any value nodes, described by its associated RegisterState (which includes the instruction pointer).</p>
+</div></td></tr><tr><td id='variant.RegisterState'><code>RegisterState</code></td><td><div class='docblock'><p>Represents the state of the register file at the moment of entry into the associated action node.</p>
+</div></td></tr></table><h2 id='implementations'>Trait Implementations</h2><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#method.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
 </div><h3 class='impl'><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a></code></h3><div class='impl-items'><h4 id='method.clone' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a></code></h4>
 <h4 id='method.clone_from' class='method'><code>fn <a href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code></h4>
 </div></section>

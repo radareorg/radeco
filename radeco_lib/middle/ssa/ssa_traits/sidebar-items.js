@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["NodeType",""],["ValueType",""]],"struct":[["BBInfo",""],["NodeData",""]],"trait":[["SSA","Trait for the SSA Form implementation."],["SSAMod","Trait for modifying SSA data"]]});
+initSidebarItems({"enum":[["NodeType","Value node without operands"],["ValueType",""]],"struct":[["BBInfo","Data associated with a basic block. Use is optional."],["NodeData","Value node without operands with `ValueType`"]],"trait":[["SSA","Trait for the SSA Form implementation."],["SSAMod","Trait for modifying SSA data"]]});

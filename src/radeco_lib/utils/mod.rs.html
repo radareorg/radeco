@@ -368,6 +368,7 @@
 <span id="326">326</span>
 <span id="327">327</span>
 <span id="328">328</span>
+<span id="329">329</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! Module implements Pipeline and Runner structs to make radeco-lib easier to use.</span>
 
@@ -467,14 +468,16 @@
 	<span class='ident'>verbose</span>: <span class='ident'>bool</span>,
 	<span class='ident'>pipeline</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>Pipeline</span><span class='op'>&gt;</span>,
 	<span class='ident'>results</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>Pipeout</span><span class='op'>&gt;</span>,
+	<span class='ident'>outpath</span>: <span class='ident'>String</span>,
 	<span class='kw'>pub</span> <span class='ident'>state</span>: <span class='ident'>State</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span><span class='op'>&gt;</span>,
 }
 
 <span class='kw'>impl</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span><span class='op'>&gt;</span> <span class='ident'>Runner</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span><span class='op'>&gt;</span> {
 
 	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>new</span>(<span class='ident'>name</span>: <span class='ident'>String</span>, <span class='ident'>bin_name</span>: <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span>,
-			   <span class='ident'>addr</span>: <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span>, <span class='ident'>verbose</span>: <span class='ident'>bool</span>,
-			   <span class='ident'>pipeline</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>Pipeline</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>Runner</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span><span class='op'>&gt;</span> {
+               <span class='ident'>addr</span>: <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span>, <span class='ident'>verbose</span>: <span class='ident'>bool</span>,
+               <span class='ident'>pipeline</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>Pipeline</span><span class='op'>&gt;</span>, <span class='ident'>outpath</span>: <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>Runner</span><span class='op'>&lt;</span><span class='lifetime'>&#39;a</span><span class='op'>&gt;</span>
+	{
 		<span class='ident'>Runner</span> {
 			<span class='ident'>name</span>: <span class='ident'>name</span>,
 			<span class='ident'>bin_name</span>: <span class='ident'>bin_name</span>,
@@ -483,6 +486,7 @@
 			<span class='ident'>pipeline</span>: <span class='ident'>pipeline</span>,
 			<span class='ident'>results</span>: <span class='ident'>Vec</span>::<span class='ident'>new</span>(),
 			<span class='ident'>state</span>: <span class='ident'>State</span>::<span class='ident'>new</span>(),
+			<span class='ident'>outpath</span>: <span class='ident'>outpath</span>.<span class='ident'>unwrap_or</span>(<span class='string'>&quot;./outputs&quot;</span>.<span class='ident'>to_owned</span>()),
 		}
 	}
 
@@ -684,15 +688,13 @@
 
 			<span class='comment'>// Format of output file name:</span>
 			<span class='comment'>// test_name-type-phase_num.ext</span>
-
-			<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>p</span> <span class='op'>=</span> <span class='ident'>PathBuf</span>::<span class='ident'>from</span>(<span class='string'>&quot;./outputs/&quot;</span>);
+			<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>p</span> <span class='op'>=</span> <span class='ident'>PathBuf</span>::<span class='ident'>from</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>outpath</span>);
 			<span class='ident'>p</span>.<span class='ident'>push</span>(<span class='self'>self</span>.<span class='ident'>name</span>.<span class='ident'>clone</span>());
 			<span class='kw'>let</span> <span class='ident'>pstr</span> <span class='op'>=</span> <span class='macro'>format</span><span class='macro'>!</span>(<span class='string'>&quot;{}-res_{}-phase{}&quot;</span>, <span class='self'>self</span>.<span class='ident'>name</span>, <span class='ident'>res</span>.<span class='ident'>to_string</span>(), <span class='ident'>phase_num</span>.<span class='ident'>to_string</span>());
 			<span class='ident'>fs</span>::<span class='ident'>create_dir_all</span>(<span class='kw-2'>&amp;</span><span class='ident'>p</span>).<span class='ident'>ok</span>();
 			<span class='ident'>p</span>.<span class='ident'>push</span>(<span class='ident'>pstr</span>);
 			<span class='ident'>p</span>.<span class='ident'>set_extension</span>(<span class='ident'>ext</span>);
 			<span class='self'>self</span>.<span class='ident'>write_file</span>(<span class='ident'>p</span>, <span class='ident'>write_out</span>);
-
 			<span class='ident'>phase_num</span> <span class='op'>+=</span> <span class='number'>1</span>;
 		}
 	}

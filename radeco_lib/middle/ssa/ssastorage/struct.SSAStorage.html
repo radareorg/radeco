@@ -45,14 +45,15 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-11114' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssastorage.rs.html#39-45' title='goto source code'>[src]</a></span></h1>
+        </span><a id='src-11196' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssastorage.rs.html#65-71' title='goto source code'>[src]</a></span></h1>
 <pre class='rust struct'>pub struct SSAStorage {
     pub g: Graph&lt;<a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.NodeData.html' title='radeco_lib::middle::ssa::ssastorage::NodeData'>NodeData</a>, <a class='enum' href='../../../../radeco_lib/middle/ssa/ssastorage/enum.EdgeData.html' title='radeco_lib::middle::ssa::ssastorage::EdgeData'>EdgeData</a>&gt;,
     pub start_node: NodeIndex,
     pub exit_node: NodeIndex,
     pub stable_indexing: <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>,
     // some fields omitted
-}</pre><h2 class='fields'>Fields</h2>
+}</pre><div class='docblock'><p>A petgraph based SSA storage.</p>
+</div><h2 class='fields'>Fields</h2>
 <table><tr class='stab '>
                                   <td id='structfield.g'><code>g</code></td><td></td></tr><tr class='stab '>
                                   <td id='structfield.start_node'><code>start_node</code></td><td></td></tr><tr class='stab '>
@@ -100,7 +101,7 @@
 <h4 id='method.get_branches' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_branches' class='fnname'>get_branches</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(NodeIndex, NodeIndex)</a></code></h4>
 <h4 id='method.get_true_branch' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_true_branch' class='fnname'>get_true_branch</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
 <h4 id='method.get_false_branch' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_false_branch' class='fnname'>get_false_branch</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
-<h4 id='method.registers_at' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.registers_at' class='fnname'>registers_at</a>(&amp;self, i: NodeIndex) -&gt; NodeIndex</code></h4>
+<h4 id='method.registers_at' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.registers_at' class='fnname'>registers_at</a>(&amp;self, i: &amp;NodeIndex) -&gt; NodeIndex</code></h4>
 <h4 id='method.get_operands' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_operands' class='fnname'>get_operands</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;NodeIndex&gt;</code></h4>
 <h4 id='method.get_sparse_operands' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_sparse_operands' class='fnname'>get_sparse_operands</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>, NodeIndex)</a>&gt;</code></h4>
 <h4 id='method.get_node_data' class='method'><code>fn <a href='../../../../radeco_lib/middle/ssa/ssa_traits/trait.SSA.html#method.get_node_data' class='fnname'>get_node_data</a>(&amp;self, i: &amp;NodeIndex) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='struct' href='../../../../radeco_lib/middle/ssa/ssa_traits/struct.NodeData.html' title='radeco_lib::middle::ssa::ssa_traits::NodeData'>TNodeData</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;<a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>&gt;&gt;</code></h4>

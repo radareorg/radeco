@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["EdgeData",""],["NodeData",""]],"struct":[["SSAStorage",""]]});
+initSidebarItems({"enum":[["EdgeData","Edge type for the SSAStorage-internal petgraph."],["NodeData","Node type for the SSAStorage-internal petgraph. Both actions and values are represented using this same enum."]],"struct":[["SSAStorage","A petgraph based SSA storage."]]});

@@ -45,15 +45,33 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-9706' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssa_traits.rs.html#1-200' title='goto source code'>[src]</a></span></h1>
-<div class='docblock'><p>Module that holds the struct and trait implementations for the ssa form.</p>
+        </span><a id='src-9787' class='srclink' href='../../../../src/radeco_lib/middle/ssa/ssa_traits.rs.html#1-222' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Defines the traits to be implemented by SSA data structures.</p>
+
+<p>These traits extend upon the ones provided in cfg_traits.</p>
+
+<h1 id="design" class='section-header'><a
+                           href="#design">Design</a></h1>
+<ul>
+<li><p><code>SSA</code> - Analogous to <code>CFG</code> this trait provides <strong>accessors</strong> to
+the data: Methods to enumerate operations, discovered connected operations,
+determine which operation a basic block is in. etc.</p></li>
+<li><p><code>SSAMod</code> - This trait provides methods to <strong>manipulate</strong> operation nodes.</p>
+
+<p>The associated type <code>SSA::ValueRef</code> is used by the methods to refer to nodes.
+ValueRefs are invalidated by removal or replacement of the target node.
+You can revalidate a ValueRef by calling <code>SSA::refresh</code> on it.
+Currently <code>SSAStorage</code> automatically uses <code>refresh</code> on arguments of its
+<code>*_use</code>, <code>get_node_data</code> and <code>replace</code> methods.</p></li>
+</ul>
 </div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
 <table>
                     <tr class=' module-item'>
                         <td><a class='struct' href='struct.BBInfo.html'
                                title='radeco_lib::middle::ssa::ssa_traits::BBInfo'>BBInfo</a></td>
                         <td class='docblock short'>
-                             
+                             <p>Data associated with a basic block. Use is optional.</p>
+
                         </td>
                     </tr>
                 
@@ -61,7 +79,8 @@
                         <td><a class='struct' href='struct.NodeData.html'
                                title='radeco_lib::middle::ssa::ssa_traits::NodeData'>NodeData</a></td>
                         <td class='docblock short'>
-                             
+                             <p>Value node without operands with <code>ValueType</code></p>
+
                         </td>
                     </tr>
                 </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
@@ -70,7 +89,8 @@
                         <td><a class='enum' href='enum.NodeType.html'
                                title='radeco_lib::middle::ssa::ssa_traits::NodeType'>NodeType</a></td>
                         <td class='docblock short'>
-                             
+                             <p>Value node without operands</p>
+
                         </td>
                     </tr>
                 

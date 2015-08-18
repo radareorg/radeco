@@ -165,11 +165,17 @@
 <span id="123">123</span>
 <span id="124">124</span>
 <span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
 </pre><pre class='rust '>
+<span class='doccomment'>//! Implements the `GraphDot` trait for SSAStorage</span>
+
 <span class='kw'>use</span> <span class='ident'>petgraph</span>::<span class='ident'>graph</span>::{<span class='ident'>Edge</span>, <span class='ident'>NodeIndex</span>};
+
 <span class='kw'>use</span> <span class='ident'>middle</span>::<span class='ident'>dot</span>::{<span class='ident'>GraphDot</span>, <span class='ident'>DotAttrBlock</span>};
-<span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>ssa_traits</span>::{<span class='ident'>SSA</span>, <span class='ident'>SSAMod</span>, <span class='ident'>ValueType</span>, <span class='ident'>BBInfo</span>};
 <span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>ssastorage</span>::{<span class='ident'>NodeData</span>, <span class='ident'>EdgeData</span>, <span class='ident'>SSAStorage</span>};
+<span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>ssa_traits</span>::{<span class='ident'>SSA</span>, <span class='ident'>SSAMod</span>, <span class='ident'>ValueType</span>, <span class='ident'>BBInfo</span>};
 
 <span class='comment'>///////////////////////////////////////////////////////////////////////////////</span>
 <span class='comment'>//// Implementation of GraphDot to emit Dot for SSAStorage.</span>
@@ -180,7 +186,7 @@
 	<span class='kw'>type</span> <span class='ident'>EdgeType</span> <span class='op'>=</span> <span class='ident'>Edge</span><span class='op'>&lt;</span><span class='ident'>EdgeData</span><span class='op'>&gt;</span>;
 
 	<span class='kw'>fn</span> <span class='ident'>configure</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>String</span> {
-		<span class='macro'>format</span><span class='macro'>!</span>(<span class='string'>&quot;digraph cfg {{\nsplines=\&quot;true\&quot;;\ngraph [fontsize=12 fontname=\&quot;Verdana\&quot; compound=true];\nrankdir=TB;\n&quot;</span>)
+		<span class='macro'>format</span><span class='macro'>!</span>(<span class='string'>&quot;digraph cfg {{\nsplines=\&quot;true\&quot;;\ngraph [fontsize=12 fontname=\&quot;Verdana\&quot; compound=true rankdir=TB;]\n&quot;</span>)
 	}
 
 	<span class='kw'>fn</span> <span class='ident'>nodes</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>Self</span>::<span class='ident'>NodeType</span><span class='op'>&gt;</span> {

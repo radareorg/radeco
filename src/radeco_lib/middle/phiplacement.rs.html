@@ -241,8 +241,6 @@
 <span id="199">199</span>
 <span id="200">200</span>
 <span id="201">201</span>
-<span id="202">202</span>
-<span id="203">203</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! Implements the SSA construction algorithm described in</span>
 <span class='doccomment'>//! &quot;Simple and Efficient Construction of Static Single Assignment Form&quot;</span>
@@ -285,7 +283,7 @@
 	}
 
 	<span class='kw'>fn</span> <span class='ident'>write_variable_internal</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>block</span>: <span class='ident'>T</span>::<span class='ident'>ActionRef</span>, <span class='ident'>variable</span>: <span class='ident'>VarId</span>, <span class='ident'>value</span>: <span class='ident'>T</span>::<span class='ident'>ValueRef</span>) {
-		<span class='macro'>assert</span><span class='macro'>!</span>(<span class='self'>self</span>.<span class='ident'>ssa</span>.<span class='ident'>get_node_data</span>(<span class='kw-2'>&amp;</span><span class='ident'>value</span>).<span class='ident'>unwrap</span>().<span class='ident'>vt</span> <span class='op'>==</span> <span class='self'>self</span>.<span class='ident'>variable_types</span>[<span class='ident'>variable</span>]);
+		<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='self'>self</span>.<span class='ident'>ssa</span>.<span class='ident'>get_node_data</span>(<span class='kw-2'>&amp;</span><span class='ident'>value</span>).<span class='ident'>unwrap</span>().<span class='ident'>vt</span>, <span class='self'>self</span>.<span class='ident'>variable_types</span>[<span class='ident'>variable</span>]);
 		<span class='self'>self</span>.<span class='ident'>current_def</span>[<span class='ident'>variable</span>].<span class='ident'>insert</span>(<span class='ident'>block</span>, <span class='ident'>value</span>);
 	}
 
@@ -388,12 +386,10 @@
 		<span class='kw'>for</span> <span class='ident'>use_</span> <span class='kw'>in</span> <span class='ident'>users</span> {
 			<span class='kw'>if</span> <span class='ident'>use_</span> <span class='op'>==</span> <span class='ident'>phi</span> { <span class='kw'>continue</span>; }
 			<span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Ok</span>( <span class='ident'>NodeData</span> {<span class='ident'>nt</span>: <span class='ident'>NodeType</span>::<span class='ident'>Phi</span>, ..} ) <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>ssa</span>.<span class='ident'>get_node_data</span>(<span class='kw-2'>&amp;</span><span class='ident'>use_</span>) {
-				<span class='comment'>//println!(&quot;After replacing {:?} by {:?}, proceeding to simplify user {:?}&quot;,</span>
 				<span class='comment'>//	self.ssa.g[phi],</span>
 				<span class='comment'>//	self.ssa.g[same],</span>
 				<span class='comment'>//	self.ssa.g[use_]);</span>
 				<span class='self'>self</span>.<span class='ident'>try_remove_trivial_phi</span>(<span class='ident'>use_</span>);
-				<span class='comment'>//println!(&quot;done&quot;);</span>
 			}
 		}
 		<span class='kw'>return</span> <span class='ident'>same</span>
@@ -407,7 +403,7 @@
 	}
 
 	<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>sync_register_state</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>block</span>: <span class='ident'>T</span>::<span class='ident'>ActionRef</span>) {
-		<span class='kw'>let</span> <span class='ident'>rs</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>ssa</span>.<span class='ident'>registers_at</span>(<span class='ident'>block</span>);
+		<span class='kw'>let</span> <span class='ident'>rs</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>ssa</span>.<span class='ident'>registers_at</span>(<span class='kw-2'>&amp;</span><span class='ident'>block</span>);
 		<span class='kw'>for</span> <span class='ident'>var</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='self'>self</span>.<span class='ident'>variable_types</span>.<span class='ident'>len</span>() {
 			<span class='kw'>let</span> <span class='ident'>val</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>read_variable</span>(<span class='ident'>block</span>, <span class='ident'>var</span>);
 			<span class='self'>self</span>.<span class='ident'>ssa</span>.<span class='ident'>op_use</span>(<span class='ident'>rs</span>, <span class='ident'>var</span> <span class='kw'>as</span> <span class='ident'>u8</span>, <span class='ident'>val</span>);

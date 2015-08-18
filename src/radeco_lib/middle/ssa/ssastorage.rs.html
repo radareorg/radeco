@@ -768,7 +768,18 @@
 <span id="726">726</span>
 <span id="727">727</span>
 <span id="728">728</span>
+<span id="729">729</span>
+<span id="730">730</span>
+<span id="731">731</span>
+<span id="732">732</span>
+<span id="733">733</span>
+<span id="734">734</span>
+<span id="735">735</span>
+<span id="736">736</span>
+<span id="737">737</span>
 </pre><pre class='rust '>
+<span class='doccomment'>//! Module that holds the struct and trait implementations for the ssa form.</span>
+
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>fmt</span>::<span class='ident'>Debug</span>;
 
 <span class='kw'>use</span> <span class='ident'>petgraph</span>::<span class='ident'>EdgeDirection</span>;
@@ -781,31 +792,55 @@
 <span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>ssa_traits</span>::{<span class='ident'>SSA</span>, <span class='ident'>SSAMod</span>, <span class='ident'>ValueType</span>};
 <span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>cfg_traits</span>::{<span class='ident'>CFG</span>, <span class='ident'>CFGMod</span>};
 
+<span class='doccomment'>/// Node type for the SSAStorage-internal petgraph.</span>
+<span class='doccomment'>/// Both actions and values are represented using this same enum.</span>
+<span class='doccomment'>///</span>
+<span class='doccomment'>/// Value nodes are `Op`, `Phi`, `Comment`, `Undefined` and `Removed`.</span>
+<span class='doccomment'>/// Action nodes are `Unreachable`, `BasicBlock`, `DynamicAction`</span>
+<span class='doccomment'>/// `RegisterState` is neither.</span>
+<span class='doccomment'>/// Value nodes have a `ValueType` that can be extracted with `SSA::get_node_data`</span>
 <span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Clone</span>, <span class='ident'>Debug</span>)]</span>
 <span class='kw'>pub</span> <span class='kw'>enum</span> <span class='ident'>NodeData</span> {
+	<span class='doccomment'>/// Represents on operation.</span>
 	<span class='ident'>Op</span>(<span class='ident'>ir</span>::<span class='ident'>MOpcode</span>, <span class='ident'>ValueType</span>),
+	<span class='doccomment'>/// Represents a phi node.</span>
 	<span class='ident'>Phi</span>(<span class='ident'>ValueType</span>, <span class='ident'>String</span>),
+	<span class='doccomment'>/// Represents an undefined node with a comment.</span>
 	<span class='ident'>Comment</span>(<span class='ident'>ValueType</span>, <span class='ident'>String</span>),
+	<span class='doccomment'>/// Represents an undefined node without comment.</span>
 	<span class='ident'>Undefined</span>(<span class='ident'>ValueType</span>),
+	<span class='doccomment'>/// Placeholder for value nodes.</span>
 	<span class='ident'>Removed</span>,
+	<span class='doccomment'>/// Placeholder for action nodes.</span>
 	<span class='ident'>Unreachable</span>,
+	<span class='doccomment'>/// Represents a basic block.</span>
 	<span class='ident'>BasicBlock</span>(<span class='ident'>ssa_traits</span>::<span class='ident'>BBInfo</span>),
+	<span class='doccomment'>/// Represents an action that doesn&#39;t contain any value nodes, described by its associated RegisterState (which includes the instruction pointer).</span>
 	<span class='ident'>DynamicAction</span>,
+	<span class='doccomment'>/// Represents the state of the register file at the moment of entry into the associated action node.</span>
 	<span class='ident'>RegisterState</span>,
 }
 
+<span class='doccomment'>/// Edge type for the SSAStorage-internal petgraph.</span>
 <span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Clone</span>, <span class='ident'>Copy</span>, <span class='ident'>Debug</span>)]</span>
 <span class='kw'>pub</span> <span class='kw'>enum</span> <span class='ident'>EdgeData</span> {
+	<span class='doccomment'>/// Edge from action to action. Represents control flow. The number is used to distinguish true branch, false branch, etc.</span>
 	<span class='ident'>Control</span>(<span class='ident'>u8</span>),
+	<span class='doccomment'>/// Edge from value or RegisterState to value. Represents data flow. The number describes the howmanyeth argument of the edge source is encoded by this edge.</span>
 	<span class='ident'>Data</span>(<span class='ident'>u8</span>),
+	<span class='doccomment'>/// Edge from value to BasicBlock.</span>
 	<span class='ident'>ContainedInBB</span>,
+	<span class='doccomment'>/// Edge from BasicBlock to value. Points from a basic block with multiple successors to a value that decides which branch will be taken.</span>
 	<span class='ident'>Selector</span>,
+	<span class='doccomment'>/// Edge from action to RegisterState. Represents the values of all registers at entry to the action.</span>
 	<span class='ident'>RegisterState</span>,
+	<span class='doccomment'>/// Edge from Removed to value or from Unreachable to action. Created when calling replace() in stable indices mode.</span>
 	<span class='ident'>ReplacedBy</span>,
 }
 
 <span class='kw'>const</span> <span class='ident'>CONTEDGE</span>: <span class='ident'>EdgeData</span> <span class='op'>=</span> <span class='ident'>EdgeData</span>::<span class='ident'>ContainedInBB</span>;
 
+<span class='doccomment'>/// A petgraph based SSA storage.</span>
 <span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Debug</span>, <span class='ident'>Clone</span>)]</span>
 <span class='kw'>pub</span> <span class='kw'>struct</span> <span class='ident'>SSAStorage</span> {
 	<span class='kw'>pub</span> <span class='ident'>g</span>: <span class='ident'>Graph</span><span class='op'>&lt;</span><span class='ident'>NodeData</span>, <span class='ident'>EdgeData</span><span class='op'>&gt;</span>,
@@ -1068,7 +1103,7 @@
 		<span class='macro'>assert</span><span class='macro'>!</span>(<span class='self'>self</span>.<span class='ident'>is_block</span>(<span class='ident'>node</span>));
 		<span class='macro'>assert</span><span class='macro'>!</span>(<span class='self'>self</span>.<span class='ident'>stable_indexing</span>);
 
-		<span class='kw'>let</span> <span class='ident'>regstate</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>registers_at</span>(<span class='ident'>node</span>);
+		<span class='kw'>let</span> <span class='ident'>regstate</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>registers_at</span>(<span class='kw-2'>&amp;</span><span class='ident'>node</span>);
 		<span class='self'>self</span>.<span class='ident'>remove</span>(<span class='ident'>regstate</span>);
 
 		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>expressions</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='op'>&lt;</span><span class='ident'>NodeIndex</span><span class='op'>&gt;</span>::<span class='ident'>new</span>();
@@ -1197,8 +1232,7 @@
 				<span class='ident'>true_branch</span> <span class='op'>=</span> <span class='ident'>othernode</span>.<span class='ident'>clone</span>();
 			}
 		}
-
-		<span class='kw'>return</span> (<span class='ident'>false_branch</span>, <span class='ident'>true_branch</span>);
+		(<span class='ident'>false_branch</span>, <span class='ident'>true_branch</span>)
 	}
 
 	<span class='kw'>fn</span> <span class='ident'>get_true_branch</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>i</span>: <span class='kw-2'>&amp;</span><span class='ident'>NodeIndex</span>) <span class='op'>-&gt;</span> <span class='ident'>NodeIndex</span> {
@@ -1209,41 +1243,27 @@
 		<span class='self'>self</span>.<span class='ident'>get_branches</span>(<span class='ident'>i</span>).<span class='number'>0</span>
 	}
 
-	<span class='kw'>fn</span> <span class='ident'>registers_at</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>i</span>: <span class='ident'>NodeIndex</span>) <span class='op'>-&gt;</span> <span class='ident'>NodeIndex</span> {
-		<span class='macro'>assert</span><span class='macro'>!</span>(<span class='self'>self</span>.<span class='ident'>is_action</span>(<span class='ident'>i</span>));
-		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>walk</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>g</span>.<span class='ident'>walk_edges_directed</span>(<span class='ident'>i</span>, <span class='ident'>EdgeDirection</span>::<span class='ident'>Outgoing</span>);
+	<span class='kw'>fn</span> <span class='ident'>registers_at</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>i</span>: <span class='kw-2'>&amp;</span><span class='ident'>NodeIndex</span>) <span class='op'>-&gt;</span> <span class='ident'>NodeIndex</span> {
+		<span class='macro'>assert</span><span class='macro'>!</span>(<span class='self'>self</span>.<span class='ident'>is_action</span>(<span class='op'>*</span><span class='ident'>i</span>));
+		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>walk</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>g</span>.<span class='ident'>walk_edges_directed</span>(<span class='op'>*</span> <span class='ident'>i</span>, <span class='ident'>EdgeDirection</span>::<span class='ident'>Outgoing</span>);
 		<span class='kw'>while</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>((<span class='ident'>edge</span>, <span class='ident'>othernode</span>)) <span class='op'>=</span> <span class='ident'>walk</span>.<span class='ident'>next_neighbor</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>g</span>) {
 			<span class='kw'>if</span> <span class='kw'>let</span> <span class='ident'>EdgeData</span>::<span class='ident'>RegisterState</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>g</span>[<span class='ident'>edge</span>] {
 				<span class='kw'>return</span> <span class='ident'>othernode</span>
 			}
 		}
-		<span class='kw'>return</span> <span class='ident'>NodeIndex</span>::<span class='ident'>end</span>()
+		<span class='ident'>NodeIndex</span>::<span class='ident'>end</span>()
 	}
 
 	<span class='kw'>fn</span> <span class='ident'>get_operands</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>i</span>: <span class='kw-2'>&amp;</span><span class='ident'>NodeIndex</span>) <span class='op'>-&gt;</span> <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>NodeIndex</span><span class='op'>&gt;</span> {
-		<span class='kw'>let</span> <span class='ident'>ordered</span> <span class='op'>=</span> <span class='kw'>if</span> <span class='kw'>let</span> <span class='ident'>NodeData</span>::<span class='ident'>Phi</span>(_, _) <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>g</span>[<span class='op'>*</span><span class='ident'>i</span>] { <span class='boolval'>false</span> } <span class='kw'>else</span> { <span class='boolval'>true</span> };
 		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>args</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
-		<span class='kw'>if</span> <span class='ident'>ordered</span> {
-			<span class='ident'>args</span>.<span class='ident'>push</span>(<span class='ident'>NodeIndex</span>::<span class='ident'>end</span>());
-			<span class='ident'>args</span>.<span class='ident'>push</span>(<span class='ident'>NodeIndex</span>::<span class='ident'>end</span>());
-		}
-
 		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>walk</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>g</span>.<span class='ident'>walk_edges_directed</span>(<span class='op'>*</span><span class='ident'>i</span>, <span class='ident'>EdgeDirection</span>::<span class='ident'>Outgoing</span>);
 		<span class='kw'>while</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>((<span class='ident'>edge</span>, <span class='ident'>othernode</span>)) <span class='op'>=</span> <span class='ident'>walk</span>.<span class='ident'>next_neighbor</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>g</span>) {
 			<span class='kw'>if</span> <span class='kw'>let</span> <span class='ident'>EdgeData</span>::<span class='ident'>Data</span>(<span class='ident'>index</span>) <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>g</span>[<span class='ident'>edge</span>] {
-				<span class='kw'>if</span> <span class='ident'>ordered</span> {
-					<span class='ident'>args</span>[<span class='ident'>index</span> <span class='kw'>as</span> <span class='ident'>usize</span>] <span class='op'>=</span> <span class='ident'>othernode</span>;
-				} <span class='kw'>else</span> {
-					<span class='ident'>args</span>.<span class='ident'>push</span>(<span class='ident'>othernode</span>);
-				}
+				<span class='ident'>args</span>.<span class='ident'>push</span>((<span class='ident'>index</span>, <span class='ident'>othernode</span>));
 			}
 		}
-		<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>i</span> <span class='op'>=</span> <span class='ident'>args</span>.<span class='ident'>len</span>();
-		<span class='kw'>while</span> <span class='ident'>i</span> <span class='op'>&gt;</span> <span class='number'>0</span> <span class='op'>&amp;&amp;</span> <span class='ident'>args</span>[<span class='ident'>i</span><span class='op'>-</span><span class='number'>1</span>] <span class='op'>==</span> <span class='ident'>NodeIndex</span>::<span class='ident'>end</span>() {
-			<span class='ident'>i</span> <span class='op'>-=</span> <span class='number'>1</span>;
-		}
-		<span class='ident'>args</span>.<span class='ident'>truncate</span>(<span class='ident'>i</span>);
-		<span class='kw'>return</span> <span class='ident'>args</span>;
+		<span class='ident'>args</span>.<span class='ident'>sort_by</span>(<span class='op'>|</span><span class='ident'>a</span>, <span class='ident'>b</span><span class='op'>|</span> <span class='ident'>a</span>.<span class='number'>0</span>.<span class='ident'>cmp</span>(<span class='kw-2'>&amp;</span><span class='ident'>b</span>.<span class='number'>0</span>));
+		<span class='ident'>args</span>.<span class='ident'>iter</span>().<span class='ident'>map</span>(<span class='op'>|</span><span class='ident'>a</span><span class='op'>|</span> <span class='ident'>a</span>.<span class='number'>1</span>).<span class='ident'>collect</span>()
 	}
 
 	<span class='kw'>fn</span> <span class='ident'>get_sparse_operands</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>i</span>: <span class='kw-2'>&amp;</span><span class='ident'>NodeIndex</span>) <span class='op'>-&gt;</span> <span class='ident'>Vec</span><span class='op'>&lt;</span>(<span class='ident'>u8</span>, <span class='ident'>NodeIndex</span>)<span class='op'>&gt;</span> {
@@ -1477,9 +1497,7 @@
 		}
 		<span class='comment'>// Removing a true/false edge.</span>
 		<span class='kw'>let</span> <span class='ident'>selector</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>selector_of</span>(<span class='kw-2'>&amp;</span><span class='ident'>src_node</span>);
-		<span class='kw'>if</span> <span class='ident'>selector</span>.<span class='ident'>is_none</span>() {
-			<span class='macro'>println</span><span class='macro'>!</span>(<span class='string'>&quot;No selector found. This may have already been replaced by a constant.&quot;</span>);
-		} <span class='kw'>else</span> {
+		<span class='kw'>if</span> <span class='ident'>selector</span>.<span class='ident'>is_some</span>() {
 			<span class='self'>self</span>.<span class='ident'>remove</span>(<span class='ident'>selector</span>.<span class='ident'>unwrap</span>());
 		}
 
