@@ -323,7 +323,7 @@ impl CFGMod for SSAStorage {
 		assert!(self.is_block(node));
 		assert!(self.stable_indexing);
 
-		let regstate = self.registers_at(node);
+		let regstate = self.registers_at(&node);
 		self.remove(regstate);
 
 		let mut expressions = Vec::<NodeIndex>::new();
@@ -463,9 +463,9 @@ impl SSA for SSAStorage {
 		self.get_branches(i).0
 	}
 
-	fn registers_at(&self, i: NodeIndex) -> NodeIndex {
-		assert!(self.is_action(i));
-		let mut walk = self.g.walk_edges_directed(i, EdgeDirection::Outgoing);
+	fn registers_at(&self, i: &NodeIndex) -> NodeIndex {
+		assert!(self.is_action(*i));
+		let mut walk = self.g.walk_edges_directed(* i, EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::RegisterState = self.g[edge] {
 				return othernode

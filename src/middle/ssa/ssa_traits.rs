@@ -162,7 +162,7 @@ pub trait SSA: CFG {
 	fn block_of(&self, i: &Self::ValueRef) -> Self::ActionRef { self.get_block(i) }
 
 	/// Get a node that has all register values at the beginning of the specified basic block as args
-	fn registers_at(&self, Self::ActionRef) -> Self::ValueRef;
+	fn registers_at(&self, i: &Self::ActionRef) -> Self::ValueRef;
 
 	/// Updates a node reference to the latest version in case of replacement
 	// TODO: Hide this implementation detail

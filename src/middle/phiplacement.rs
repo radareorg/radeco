@@ -159,7 +159,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 	}
 
 	pub fn sync_register_state(&mut self, block: T::ActionRef) {
-		let rs = self.ssa.registers_at(block);
+		let rs = self.ssa.registers_at(&block);
 		for var in 0..self.variable_types.len() {
 			let val = self.read_variable(block, var);
 			self.ssa.op_use(rs, var as u8, val);

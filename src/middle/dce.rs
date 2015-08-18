@@ -15,7 +15,7 @@ where T: Clone +
          SSAMod<ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
 	let exit_node = ssa.exit_node();
-	let roots = ssa.registers_at(exit_node);
+	let roots = ssa.registers_at(&exit_node);
 	if exit_node == ssa.invalid_value() { panic!(); }
 	if roots == ssa.invalid_value() { panic!(); }
 

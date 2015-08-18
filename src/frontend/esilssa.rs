@@ -20,7 +20,7 @@ pub type VarId = usize;
 
 const ESIL_CUR: usize = 0;
 const ESIL_OLD: usize = 1;
-const LASTSZ:  usize = 2;
+const LASTSZ:   usize = 2;
 
 pub struct SSAConstruction<'a, T>
 where T: 'a + Clone + Debug + Clone + SSAMod<BBInfo=BBInfo>
@@ -74,6 +74,8 @@ where T: 'a + Clone + Debug + Verify +
 					self.phiplacer.ssa.add_comment(block, reg, name.clone());
 				self.phiplacer.write_variable(block, i + 3, argnode);
 			}
+
+			self.phiplacer.sync_register_state(block);
 
 			blocks[cfg.entry.index()] = block;
 			let block = self.phiplacer.add_dynamic();

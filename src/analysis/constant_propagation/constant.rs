@@ -61,6 +61,10 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		}
 	}
 
+	pub fn dump(&self) {
+		println!("{:?}", self.expr_val);
+	}
+
 	fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
 		let operands = self.g.get_operands(i);
 		let mut phi_val = self.get_value(i);
@@ -203,12 +207,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	pub fn analyze(&mut self) {
 		
 		{
-			// Initializations
 			let start_node = self.g.start_node();
-			//self.mark_executable(&start_node);
-			//let exit_node = self.g.exit_node();
-			//self.mark_executable(&exit_node);
-
 			let edges = self.g.edges_of(&start_node);
 			for next in edges.iter() {
 				self.mark_executable(next);
@@ -241,7 +240,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 				}
 			}
 			while let Some(e) = self.ssa_worklist.pop() {
-				// self.get the operation/expression to which this operand belongs to.
 				let t = self.visit_expression(&e);
 				if t !=  self.get_value(&e) {
 					self.set_value(&e, t);
@@ -298,8 +296,24 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		*n = true;
 	}
 
+	// Determines the Initial value
+	fn init_val(&self, i: &T::ValueRef) -> ExprVal {
+		let node_data = self.g.get_node_data(i).unwrap();
+		match node_data.nt {
+			NodeType::Op(MOpcode::OpConst(v)) => ExprVal::Const(v),
+			NodeType::Undefined               => ExprVal::Bottom,
+			_                                 => ExprVal::Top,
+		}
+	}
+
 	fn get_value(&mut self, i: &T::ValueRef) -> ExprVal {
-		*(self.expr_val.entry(*i).or_insert(ExprVal::Top))
+		if self.expr_val.contains_key(i) {
+			return self.expr_val[i];
+		}
+
+		let v = self.init_val(i);
+		self.expr_val.insert(*i, v);
+		v
 	}
 
 	fn set_value(&mut self, i: &T::ValueRef, v: ExprVal) {
