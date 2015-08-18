@@ -1,3 +1,5 @@
+//! Module that holds the struct and trait implementations for the ssa form.
+
 use std::fmt::Debug;
 
 use petgraph::EdgeDirection;
@@ -10,31 +12,55 @@ use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAMod, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 
+/// Node type for the SSAStorage-internal petgraph.
+/// Both actions and values are represented using this same enum.
+///
+/// Value nodes are `Op`, `Phi`, `Comment`, `Undefined` and `Removed`.
+/// Action nodes are `Unreachable`, `BasicBlock`, `DynamicAction`
+/// `RegisterState` is neither.
+/// Value nodes have a `ValueType` that can be extracted with `SSA::get_node_data`
 #[derive(Clone, Debug)]
 pub enum NodeData {
+	/// Represents on operation.
 	Op(ir::MOpcode, ValueType),
+	/// Represents a phi node.
 	Phi(ValueType, String),
+	/// Represents an undefined node with a comment.
 	Comment(ValueType, String),
+	/// Represents an undefined node without comment.
 	Undefined(ValueType),
+	/// Placeholder for value nodes.
 	Removed,
+	/// Placeholder for action nodes.
 	Unreachable,
+	/// Represents a basic block.
 	BasicBlock(ssa_traits::BBInfo),
+	/// Represents an action that doesn't contain any value nodes, described by its associated RegisterState (which includes the instruction pointer).
 	DynamicAction,
+	/// Represents the state of the register file at the moment of entry into the associated action node.
 	RegisterState,
 }
 
+/// Edge type for the SSAStorage-internal petgraph.
 #[derive(Clone, Copy, Debug)]
 pub enum EdgeData {
+	/// Edge from action to action. Represents control flow. The number is used to distinguish true branch, false branch, etc.
 	Control(u8),
+	/// Edge from value or RegisterState to value. Represents data flow. The number describes the howmanyeth argument of the edge source is encoded by this edge.
 	Data(u8),
+	/// Edge from value to BasicBlock.
 	ContainedInBB,
+	/// Edge from BasicBlock to value. Points from a basic block with multiple successors to a value that decides which branch will be taken.
 	Selector,
+	/// Edge from action to RegisterState. Represents the values of all registers at entry to the action.
 	RegisterState,
+	/// Edge from Removed to value or from Unreachable to action. Created when calling replace() in stable indices mode.
 	ReplacedBy,
 }
 
 const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
 
+/// A petgraph based SSA storage.
 #[derive(Debug, Clone)]
 pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>,

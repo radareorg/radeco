@@ -1,4 +1,20 @@
-//! Module that holds the struct and trait implementations for the ssa form.
+//! Defines the traits to be implemented by SSA data structures.
+//!
+//! These traits extend upon the ones provided in cfg_traits.
+//!
+//! # Design
+//!
+//!  * `SSA` - Analogous to `CFG` this trait provides __accessors__ to
+//!  the data: Methods to enumerate operations, discovered connected operations,
+//!  determine which operation a basic block is in. etc.
+//!
+//!  * `SSAMod` - This trait provides methods to __manipulate__ operation nodes.
+//!
+//!  The associated type `SSA::ValueRef` is used by the methods to refer to nodes.
+//!  ValueRefs are invalidated by removal or replacement of the target node.
+//!  You can revalidate a ValueRef by calling `SSA::refresh` on it.
+//!  Currently `SSAStorage` automatically uses `refresh` on arguments of its
+//!  `*_use`, `get_node_data` and `replace` methods.
 
 use std::hash::Hash;
 use std::fmt::Debug;
@@ -44,18 +60,24 @@ impl From<usize> for ValueType {
 	}
 }
 
+/// Data associated with a basic block. Use is optional.
 #[derive(Clone, Debug)]
 pub struct BBInfo {
 	pub addr: u64
 }
 
+/// Value node without operands
 #[derive(Clone, Debug)]
 pub enum NodeType {
+	/// An operation node with the specified opcode.
 	Op(ir::MOpcode),
+	/// A phi node.
 	Phi,
+	/// A node with unknown value.
 	Undefined,
 }
 
+/// Value node without operands with `ValueType`
 #[derive(Clone, Debug)]
 pub struct NodeData {
 	pub vt: ValueType,
