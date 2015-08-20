@@ -26,7 +26,7 @@ struct Args {
 	flag_help: bool,
 	arg_file: Option<String>,
 	flag_from_json: bool,
-	flag_json_builder: bool,
+	flag_build_json: bool,
 	cmd_run: bool,
 }
 
@@ -50,7 +50,7 @@ Options:
   --output=<mode>        Select output mode.
   --from-json            Run radeco based on config and information
                          from input json file. Needs an input file.
-  --json-builder         Interactive wizard to build the JSON config
+  --build-json           Interactive wizard to build the JSON config
                          file needed for radeco. When used with run, the 
                          config generated is automatically used to
                          run radeco rather than dumping it to a file.
@@ -77,7 +77,7 @@ fn write_file(fname: String, res: String) {
 	file.write_all(res.as_bytes()).unwrap();
 }
 
-fn json_builder(run: bool) {
+fn build_json(run: bool) {
 	let inp = structs::input_builder();
 	let mut runner = inp.validate().unwrap();
 	if !run {
@@ -121,8 +121,8 @@ fn main() {
 		//}
 	//}
 	
-	if args.flag_json_builder {
-		json_builder(args.cmd_run);
+	if args.flag_build_json {
+		build_json(args.cmd_run);
 	}
 
 	if args.flag_from_json {

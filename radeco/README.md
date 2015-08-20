@@ -31,7 +31,7 @@ Options:
   --output=<mode>        Select output mode.
   --from-json            Run radeco based on config and information
                          from input json file. Needs an input file.
-  --json-builder         Interactive shell used to build the config
+  --build-json           Interactive shell used to build the config
                          json for radeco. When used with run, the
                          config generated is automatically used to
                          run radeco rather than dumping it to a file.
