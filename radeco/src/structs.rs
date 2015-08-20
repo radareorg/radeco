@@ -18,7 +18,6 @@ pub struct Input {
 }
 
 impl Input {
-
 	fn new(bin_name: Option<String>, esil: Option<Vec<String>>,
 		   addr: Option<String>, name: Option<String>,
 		   outpath: Option<String>, stages: Vec<usize>,
@@ -175,7 +174,8 @@ pub fn input_builder() -> Input {
 		if !pipe.is_empty() { break; }
 		println!("Pipeline cannot be empty!");
 	}
-	
+
+	// TODO: honor Args.flag_verbose
 	let verbose = {
 		println!("Verbose (y/N):");
 		let _v = read!();
