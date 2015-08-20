@@ -24,6 +24,8 @@ pub enum BinaryOperator {
 	Mod,
 }
 
+pub struct AssignmentOperator(BinaryOperator);
+
 pub type TranslationUnit = Vec<ExternalDecl>;
 
 pub type Exp = Box<Exp_>;
@@ -178,15 +180,15 @@ pub enum Exp_ {
 	ConditionalExp(Exp, Exp, Exp),
 	BinaryExp(BinaryOperator, Exp, Exp),
 	Cast(TypeRef, Exp),
-	UnaryExp(UnaryOperator),
+	UnaryExp(UnaryOperator, Exp),
+	IncDecExp(IncDec, Exp),
 	SizeofExp(Exp),
 	SizeofTy(TypeRef),
 	IndexExp(Exp, Exp),
 	CallExp(Exp, Vec<Exp>),
 	DotExp(Exp, Id),
 	ArrowExp(Exp, Id),
-	PostIncrement(Exp),
-	PostDecrement(Exp),
+	PostIncDec(IncDec, Exp),
 	PrimaryExp(PrimaryExp),
 }
 
@@ -197,6 +199,9 @@ pub enum UnaryOperator {
 	Minus,
 	Not,
 	LogicalNot,
+}
+
+pub enum IncDec {
 	Increment,
 	Decrement,
 }
