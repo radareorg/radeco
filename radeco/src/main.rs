@@ -19,11 +19,12 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, RustcDecodable)]
 struct Args {
-    flag_output: String,
-    flag_version: bool,
-    flag_shell: bool,
+	flag_output: String,
+	flag_version: bool,
+	flag_verbose: bool,
+	flag_shell: bool,
 	flag_help: bool,
-    arg_file: Option<String>,
+	arg_file: Option<String>,
 	flag_from_json: bool,
 	flag_json_builder: bool,
 	cmd_run: bool,
@@ -34,21 +35,23 @@ radeco. The radare2 decompiler.
 
 Usage:
   radeco <file>
-  radeco [options]
+  radeco [options] [<file>]
   radeco run [options] [<file>]
   radeco --shell <file>
   radeco --output=<output> <file>
   radeco --version
+  radeco --verbose
 
 Options:
   --help                 Show this screen.
   --version              Show version.
+  --verbose              Display verbose output.
   --shell                Run interactive prompt.
   --output=<mode>        Select output mode.
   --from-json            Run radeco based on config and information
                          from input json file. Needs an input file.
-  --json-builder         Interactive shell used to build the config
-                         json for radeco. When used with run, the 
+  --json-builder         Interactive wizard to build the JSON config
+                         file needed for radeco. When used with run, the 
                          config generated is automatically used to
                          run radeco rather than dumping it to a file.
 ";
@@ -99,23 +102,24 @@ fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
-    if args.flag_version {
-        println!("Version: {:?}", VERSION);
-        exit(0);
-    }
+
+	if args.flag_version {
+		println!("Version: {:?}", VERSION);
+		exit(0);
+	}
 
 	if args.flag_help {
 		println!("{}", USAGE);
 		exit(0);
 	}
 
-    //if args.arg_file != "" {
-        //if args.arg_file == "-" {
-            //exit(radeco_pipe(&args));
-        //} else {
-            //exit(radeco_file(&args));
-        //}
-    //}
+	//if args.arg_file != "" {
+		//if args.arg_file == "-" {
+			//exit(radeco_pipe(&args));
+		//} else {
+			//exit(radeco_file(&args));
+		//}
+	//}
 	
 	if args.flag_json_builder {
 		json_builder(args.cmd_run);
@@ -125,7 +129,6 @@ fn main() {
 		if args.arg_file.is_none() {
 			println!("{}", USAGE);
 		}
-
 		let inp = read_json(args.arg_file.clone().unwrap());
 		let mut runner = inp.validate().unwrap();
 		runner.run();
