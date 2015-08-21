@@ -67,6 +67,7 @@ fn operator_precedence(expr: &Exp_) -> PrecedenceLevel {
 		}
 		Exp_::Cast(_, _)              => PrecedenceLevel::Cast,
 		Exp_::UnaryExp(_, _)          => PrecedenceLevel::Unary,
+		Exp_::IncDecExp(_, _)         => PrecedenceLevel::Unary,
 		Exp_::SizeofExp(_)            => PrecedenceLevel::Unary,
 		Exp_::SizeofTy(_)             => PrecedenceLevel::Unary,
 		Exp_::IndexExp(_, _)          => PrecedenceLevel::Postfix,
@@ -141,8 +142,8 @@ fn unary_string(op: UnaryOperator) -> &'static str {
 fn incdec_string(incdec: IncDec) -> &'static str {
 	use super::ast::IncDec::*;
 	match incdec {
-		Inc => "inc",
-		Dec => "dec",
+		Increment => "++",
+		Decrement => "--",
 	}	
 }
 
@@ -168,17 +169,18 @@ impl<'a> PLP<'a> {
 		self.0.push_str(string);
 	}
 
-	fn write_typeref(&mut self, tr: TypeRef) {
+	fn write_typeref(&mut self, _: &TypeRef) {
 		self.0.push_str("/* TODO: write_typeref */")
 	}
 
-	fn write_comma_list<T>(&mut self, rep: &Vec<T>, func: &Fn(&T) -> ()) {
+	fn write_comma_list<T>(&mut self, rep: &Vec<T>, func: &Fn(&mut Self, &T) -> ()) {
 		let mut first = true;
 		for item in rep {
 			if !first {
 				self.0.push_str(", ");
 			}
-			func(&item);
+			func(self, &item);
+			first = false;
 		}
 	}
 }
@@ -189,91 +191,91 @@ impl CWriteable for Exp_ {
 
 		let pl: PrecedenceLevel = operator_precedence(self);
 
-		let plp = PLP(w, pl);
+		let mut plp = PLP(w, pl);
 
 		match *self {
-			Exp_::CommaExp(lhs, rhs) => {
-				plp.write_expr(Comma, lhs);
+			Exp_::CommaExp(ref lhs, ref rhs) => {
+				plp.write_expr(Comma, &*lhs);
 				plp.write_str(", ");
-				plp.write_expr(Assignment, rhs);
+				plp.write_expr(Assignment, &*rhs);
 			},
-			Exp_::AssignmentExp(op, lhs, rhs) => {
-				plp.write_expr(Unary, lhs);
-				plp.write_str(aop_string(op));
-				plp.write_expr(Assignment, rhs);
+			Exp_::AssignmentExp(ref op, ref lhs, ref rhs) => {
+				plp.write_expr(Unary, &*lhs);
+				plp.write_str(aop_string(*op));
+				plp.write_expr(Assignment, &*rhs);
 			},
-			Exp_::ConditionalExp(cond, true_exp, false_exp) => {
-				plp.write_expr(LogicalOr, cond);
+			Exp_::ConditionalExp(ref cond, ref true_exp, ref false_exp) => {
+				plp.write_expr(LogicalOr, &*cond);
 				plp.write_str(" ? ");
-				plp.write_expr(Comma, true_exp);
+				plp.write_expr(Comma, &*true_exp);
 				plp.write_str(" : ");
-				plp.write_expr(Conditional, false_exp);
+				plp.write_expr(Conditional, &*false_exp);
 			},
-			Exp_::BinaryExp(op, lhs, rhs) => {
+			Exp_::BinaryExp(ref op, ref lhs, ref rhs) => {
 				let lhs_pl = pl;
 				let rhs_pl = pl.step();
-				plp.write_expr(lhs_pl, lhs);
-				plp.write_str(op_string(op));
-				plp.write_expr(rhs_pl, rhs);
+				plp.write_expr(lhs_pl, &*lhs);
+				plp.write_str(op_string(*op));
+				plp.write_expr(rhs_pl, &*rhs);
 			},
-			Exp_::Cast(tr, exp) => {
+			Exp_::Cast(ref tr, ref exp) => {
 				plp.write_str("(");
 				plp.write_typeref(tr);
 				plp.write_str(")");
-				plp.write_expr(Cast, exp);
+				plp.write_expr(Cast, &*exp);
 			},
-			Exp_::UnaryExp(op, exp) => {
-				plp.write_str(unary_string(op));
-				plp.write_expr(Cast, exp);
+			Exp_::UnaryExp(ref op, ref exp) => {
+				plp.write_str(unary_string(*op));
+				plp.write_expr(Cast, &*exp);
 			},
-			Exp_::IncDecExp(op, exp) => {
-				plp.write_str(incdec_string(op));
-				plp.write_expr(Unary, exp);
+			Exp_::IncDecExp(ref op, ref exp) => {
+				plp.write_str(incdec_string(*op));
+				plp.write_expr(Unary, &*exp);
 			},
-			Exp_::SizeofExp(exp) => {
+			Exp_::SizeofExp(ref exp) => {
 				plp.write_str("sizeof ");
-				plp.write_expr(Unary, exp)
+				plp.write_expr(Unary, &*exp)
 			},
-			Exp_::SizeofTy(tr) => {
+			Exp_::SizeofTy(ref tr) => {
 				plp.write_str("sizeof (");
 				plp.write_typeref(tr);
 				plp.write_str(")");
 			},
-			Exp_::IndexExp(base, index) => {
-				plp.write_expr(Postfix, base);
+			Exp_::IndexExp(ref base, ref index) => {
+				plp.write_expr(Postfix, &*base);
 				plp.write_str("[");
-				plp.write_expr(Comma, index);
+				plp.write_expr(Comma, &*index);
 				plp.write_str("]");
 			},
-			Exp_::CallExp(exp, args) => {
-				plp.write_expr(Postfix, exp);
+			Exp_::CallExp(ref exp, ref args) => {
+				plp.write_expr(Postfix, &*exp);
 				plp.write_str("(");
-				plp.write_comma_list(args, |arg| plp.write_expr(Assignment, arg));
+				plp.write_comma_list(&args, &|plp, arg| plp.write_expr(Assignment, &*arg));
 				plp.write_str(")");
 			},
-			Exp_::DotExp(exp, id) => {
-				plp.write_expr(Postfix, exp);
+			Exp_::DotExp(ref exp, ref id) => {
+				plp.write_expr(Postfix, &*exp);
 				plp.write_str(".");
 				plp.write_str(&*id);
 			},
-			Exp_::ArrowExp(exp, id) => {
-				plp.write_expr(Postfix, exp);
+			Exp_::ArrowExp(ref exp, ref id) => {
+				plp.write_expr(Postfix, &*exp);
 				plp.write_str("->");
 				plp.write_str(&*id);
 			},
-			Exp_::PostIncDec(incdec, exp) => {
-				plp.write_expr(Postfix, exp);
-				plp.write_str(incdec_string(incdec));
+			Exp_::PostIncDec(ref incdec, ref exp) => {
+				plp.write_expr(Postfix, &*exp);
+				plp.write_str(incdec_string(*incdec));
 			},
 			Exp_::PrimaryExp(ref pexp) => { match *pexp {
-				PrimaryExp::Id(id) => plp.write_str(id),
-				PrimaryExp::Const(ref value) => { match *value {
-					Const::UInt(value)             => plp.write_str(value.to_string()),
-					Const::Int(value)              => plp.write_str(value.to_string()),
-					Const::Float(value)            => plp.write_str(value.to_string()),
-					Const::EnumerationConst(value) => plp.write_str(value),
+				PrimaryExp::Id(ref id) => plp.write_str(&*id),
+				PrimaryExp::Const(ref value) => { match value.clone() {
+					Const::UInt(value)             => plp.write_str(&value.to_string()),
+					Const::Int(value)              => plp.write_str(&value.to_string()),
+					Const::Float(value)            => plp.write_str(&value.to_string()),
+					Const::EnumerationConst(value) => plp.write_str(&*value),
 				}},
-				PrimaryExp::String(value) => plp.write_str(format!("{:?}", value)),
+				PrimaryExp::String(ref value) => plp.write_str(&format!("{:?}", value)),
 			}},
 		}
 	}

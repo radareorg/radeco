@@ -3,6 +3,7 @@
 use std::rc::Rc;
 use std::marker::PhantomData;
 
+#[derive(Clone, Copy)]
 pub enum BinaryOperator {
 	LogicalOr,
 	LogicalAnd,
@@ -192,6 +193,7 @@ pub enum Exp_ {
 	PrimaryExp(PrimaryExp),
 }
 
+#[derive(Clone, Copy)]
 pub enum UnaryOperator {
 	AddrOf,
 	Deref,
@@ -201,6 +203,7 @@ pub enum UnaryOperator {
 	LogicalNot,
 }
 
+#[derive(Clone, Copy)]
 pub enum IncDec {
 	Increment,
 	Decrement,
@@ -212,6 +215,7 @@ pub enum PrimaryExp {
 	String(String),
 }
 
+#[derive(Clone)]
 pub enum Const {
 	UInt(u64),
 	Int(i64),
