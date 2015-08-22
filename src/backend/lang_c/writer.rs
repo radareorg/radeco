@@ -1,7 +1,7 @@
 use std::string::ToString;
 use super::ast::*;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 enum PrecedenceLevel {
 	Comma,
 	Assignment,
@@ -37,12 +37,26 @@ impl PrecedenceLevel {
 	}}
 }
 
-trait CWriteable {
+pub trait CWriteable {
 	fn write(&self, &mut CWriter);
 }
 
-trait CWriter {
-	fn push_str(&mut self, &str);
+pub struct CWriter {
+	buffer: String
+}
+
+impl CWriter {
+	pub fn new() -> CWriter {
+		CWriter { buffer: String::new() }
+	}
+
+	pub fn push_str(&mut self, more: &str) {
+		self.buffer.push_str(more)
+	}
+
+	pub fn get(&self) -> String {
+		self.buffer.clone()
+	}
 }
 
 fn operator_precedence(expr: &Exp_) -> PrecedenceLevel {
@@ -156,13 +170,14 @@ fn incdec_string(incdec: IncDec) -> &'static str {
 	}
 }*/
 
-struct PLP<'a> (&'a mut CWriter, PrecedenceLevel);
+struct PLP<'a> (&'a mut CWriter);
 
 impl<'a> PLP<'a> {
 	fn write_expr(&mut self, pl: PrecedenceLevel, exp: &Exp_) {
-		if pl < self.1 { self.0.push_str("(") }
+		let opl = operator_precedence(exp);
+		if opl < pl { self.0.push_str("(") }
 		exp.write(self.0);
-		if pl < self.1 { self.0.push_str(")") }
+		if opl < pl { self.0.push_str(")") }
 	}
 
 	fn write_str(&mut self, string: &str) {
@@ -191,7 +206,7 @@ impl CWriteable for Exp_ {
 
 		let pl: PrecedenceLevel = operator_precedence(self);
 
-		let mut plp = PLP(w, pl);
+		let mut plp = PLP(w);
 
 		match *self {
 			Exp_::CommaExp(ref lhs, ref rhs) => {
