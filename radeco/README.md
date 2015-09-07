@@ -141,5 +141,5 @@ expand radeco's arsenal.
    please file a bug report on this repository.
 
 ## License
-
-(TODO)
+Licensed under The BSD 3-Clause License. Please check [COPYING](https://github.com/radare/radeco/blob/master/COPYING) file for
+complete license.
