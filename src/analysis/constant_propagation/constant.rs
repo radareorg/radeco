@@ -1,3 +1,10 @@
+// Copyright (c) 2015, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! Module that implements constant propagation on the SSA IR.
 //!
 //! This module implements 'Sparse Conditional Constant' algorithm to
@@ -59,6 +66,10 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 			expr_val: HashMap::new(),
 			g: g.clone(),
 		}
+	}
+
+	pub fn dump(&self) {
+		println!("{:?}", self.expr_val);
 	}
 
 	fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
@@ -203,12 +214,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 	pub fn analyze(&mut self) {
 		
 		{
-			// Initializations
 			let start_node = self.g.start_node();
-			//self.mark_executable(&start_node);
-			//let exit_node = self.g.exit_node();
-			//self.mark_executable(&exit_node);
-
 			let edges = self.g.edges_of(&start_node);
 			for next in edges.iter() {
 				self.mark_executable(next);
@@ -241,7 +247,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 				}
 			}
 			while let Some(e) = self.ssa_worklist.pop() {
-				// self.get the operation/expression to which this operand belongs to.
 				let t = self.visit_expression(&e);
 				if t !=  self.get_value(&e) {
 					self.set_value(&e, t);
@@ -298,8 +303,24 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 		*n = true;
 	}
 
+	// Determines the Initial value
+	fn init_val(&self, i: &T::ValueRef) -> ExprVal {
+		let node_data = self.g.get_node_data(i).unwrap();
+		match node_data.nt {
+			NodeType::Op(MOpcode::OpConst(v)) => ExprVal::Const(v),
+			NodeType::Undefined               => ExprVal::Bottom,
+			_                                 => ExprVal::Top,
+		}
+	}
+
 	fn get_value(&mut self, i: &T::ValueRef) -> ExprVal {
-		*(self.expr_val.entry(*i).or_insert(ExprVal::Top))
+		if self.expr_val.contains_key(i) {
+			return self.expr_val[i];
+		}
+
+		let v = self.init_val(i);
+		self.expr_val.insert(*i, v);
+		v
 	}
 
 	fn set_value(&mut self, i: &T::ValueRef, v: ExprVal) {

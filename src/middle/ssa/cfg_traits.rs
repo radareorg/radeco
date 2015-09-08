@@ -1,3 +1,10 @@
+// Copyright (c) 2015, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! Defines the traits to be implemented by the Control Flow Graph (CFG).
 //!
 //! These traits act as a way to abstract the actual storage 

@@ -1,3 +1,10 @@
+// Copyright (c) 2015, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! Dead code elimination
 
 use petgraph::graph::NodeIndex;
@@ -15,7 +22,7 @@ where T: Clone +
          SSAMod<ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
 	let exit_node = ssa.exit_node();
-	let roots = ssa.registers_at(exit_node);
+	let roots = ssa.registers_at(&exit_node);
 	if exit_node == ssa.invalid_value() { panic!(); }
 	if roots == ssa.invalid_value() { panic!(); }
 

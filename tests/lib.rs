@@ -1,3 +1,10 @@
+// Copyright (c) 2015, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 extern crate radeco_lib;
 
 use radeco_lib::utils::{Pipeline, Runner, Pipeout, Analysis};
@@ -69,23 +76,23 @@ fn test_analysis2() {
 	test.dump();
 }
 
-#[test]
-fn tachikoma() {
-	let test_name = "tachikoma".to_string();
-	let bin_name = Some("./ex-bins/tachikoma".to_string());
-	let addr = Some("fcn.0002b401".to_string());
-	let pipeline = vec![
-		Pipeline::ReadFromR2,
-		Pipeline::ParseEsil,
-		Pipeline::CFG,
-		Pipeline::SSA,
-		Pipeline::Verify
-		//Pipeline::DCE,
+//#[test]
+//fn tachikoma() {
+	//let test_name = "tachikoma".to_string();
+	//let bin_name = Some("./ex-bins/tachikoma".to_string());
+	//let addr = Some("fcn.0002b401".to_string());
+	//let pipeline = vec![
+		//Pipeline::ReadFromR2,
+		//Pipeline::ParseEsil,
+		//Pipeline::CFG,
+		//Pipeline::SSA,
 		//Pipeline::Verify
-		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
-		//Pipeline::DCE
-	];
-	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline, None);
-	test.run();
-	test.dump();
-}
+		////Pipeline::DCE,
+		////Pipeline::Verify
+		////Pipeline::AnalyzeSSA(Analysis::ConstProp),
+		////Pipeline::DCE
+	//];
+	//let mut test = Runner::new(test_name, bin_name, addr, true, pipeline, None);
+	//test.run();
+	//test.dump();
+//}

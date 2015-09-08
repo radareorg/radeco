@@ -1,3 +1,10 @@
+// Copyright (c) 2015, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! Defines the traits to be implemented by SSA data structures.
 //!
 //! These traits extend upon the ones provided in cfg_traits.
@@ -162,7 +169,7 @@ pub trait SSA: CFG {
 	fn block_of(&self, i: &Self::ValueRef) -> Self::ActionRef { self.get_block(i) }
 
 	/// Get a node that has all register values at the beginning of the specified basic block as args
-	fn registers_at(&self, Self::ActionRef) -> Self::ValueRef;
+	fn registers_at(&self, i: &Self::ActionRef) -> Self::ValueRef;
 
 	/// Updates a node reference to the latest version in case of replacement
 	// TODO: Hide this implementation detail

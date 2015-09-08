@@ -1,3 +1,10 @@
+// Copyright (c) 2015, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! Implements the SSA construction algorithm described in
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
@@ -159,7 +166,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 	}
 
 	pub fn sync_register_state(&mut self, block: T::ActionRef) {
-		let rs = self.ssa.registers_at(block);
+		let rs = self.ssa.registers_at(&block);
 		for var in 0..self.variable_types.len() {
 			let val = self.read_variable(block, var);
 			self.ssa.op_use(rs, var as u8, val);
