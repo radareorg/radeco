@@ -4,10 +4,10 @@ extern crate r2pipe;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate radeco_lib;
-//extern crate core;
 
 mod radeco;
 mod structs;
+mod errors;
 
 use rustc_serialize::json;
 use docopt::Docopt;
@@ -92,10 +92,11 @@ fn build_json(run: bool) {
 	}
 }
 
-fn read_json(fname: String) -> structs::Input {
-	let mut raw_json = String::new();
-	let _ = File::open(fname).unwrap().read_to_string(&mut raw_json);
-	json::decode(&*raw_json).unwrap()
+fn read_json(fname: String) -> Result<structs::Input, errors::ReadErr> {
+    let mut fh = try!(File::open(fname));
+    let mut raw_json = String::new();
+    try!(fh.read_to_string(&mut raw_json));
+    json::decode(&*raw_json).map_err(|x| errors::ReadErr::DecodeErr(x))
 }
 
 fn main() {
@@ -129,10 +130,14 @@ fn main() {
 		if args.arg_file.is_none() {
 			println!("{}", USAGE);
 		}
-		let inp = read_json(args.arg_file.clone().unwrap());
-		let mut runner = inp.validate().unwrap();
-		runner.run();
-		runner.dump();
+		let r = read_json(args.arg_file.clone().unwrap());
+		if let Ok(inp) =  r {
+			let mut runner = inp.validate().unwrap();
+			runner.run();
+			runner.dump();
+		} else {
+			println!("[x] {}", r.err().unwrap())
+		}
 	}
 
 	if args.flag_shell {
