@@ -9,6 +9,8 @@ mod radeco;
 mod structs;
 mod errors;
 
+//use self::radeco::Radeco;
+use self::r2pipe::R2Pipe;
 use rustc_serialize::json;
 use docopt::Docopt;
 use std::process::exit;
@@ -19,15 +21,16 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, RustcDecodable)]
 struct Args {
-	flag_output: String,
-	flag_version: bool,
-	flag_verbose: bool,
-	flag_shell: bool,
-	flag_help: bool,
-	arg_file: Option<String>,
-	flag_from_json: bool,
-	flag_build_json: bool,
-	cmd_run: bool,
+    flag_output: Option<String>,
+    flag_version: bool,
+    flag_address: String,
+    flag_verbose: bool,
+    flag_shell: bool,
+    flag_help: bool,
+    arg_file: Option<String>,
+    flag_config: bool,
+    flag_make_config: bool,
+    cmd_run: bool,
 }
 
 static USAGE: &'static str = "
@@ -43,56 +46,54 @@ Usage:
   radeco --verbose
 
 Options:
-  --help                 Show this screen.
-  --version              Show version.
+  --config <file>        Run decompilation using json rules file.
+  --make-config <file>   Wizard to make the JSON config.
+  -a --address=<addr>    Address of function to decompile.
+  -e --esil=<expr>       Evaluate given esil expression.
+  -o --output=<mode>     Output mode (c, ssa, json, r2, r2g, dot).
   --verbose              Display verbose output.
   --shell                Run interactive prompt.
-  --output=<mode>        Select output mode.
-  --from-json            Run radeco based on config and information
-                         from input json file. Needs an input file.
-  --build-json           Interactive wizard to build the JSON config
-                         file needed for radeco. When used with run, the 
-                         config generated is automatically used to
-                         run radeco rather than dumping it to a file.
+  --version              Show version.
+  --help                 Show this screen.
 ";
 
 fn spawn_shell(bname: String) -> i32 {
-	radeco::spawn_shell(bname)
+    radeco::spawn_shell(bname)
 }
 
 //fn radeco_pipe(args:&Args) -> i32 {
-	//let mut r = Radeco::pipe().unwrap();
-	//if args.flag_shell {
-		//r.shell();
-	//} else {
-		//println!("Running radeco via pipe");
-		//// TODO get offset, function, bin info, ..
-	//}
-	//r.close();
-	//0
+//let mut r = Radeco::pipe().unwrap();
+//if args.flag_shell {
+//r.shell();
+//} else {
+//println!("Running radeco via pipe");
+//// TODO get offset, function, bin info, ..
+//}
+//r.close();
+//0
 //}
 
 fn write_file(fname: String, res: String) {
-	let mut file = File::create(fname).unwrap();
-	file.write_all(res.as_bytes()).unwrap();
+    let mut file = File::create(fname).unwrap();
+    file.write_all(res.as_bytes()).unwrap();
 }
 
-fn build_json(run: bool) {
-	let inp = structs::input_builder();
-	let mut runner = inp.validate().unwrap();
-	if !run {
-		let mut name = inp.name.clone().unwrap();
-		let json = json::as_pretty_json(&inp);
-		let raw_json = format!("{}", json);
-		name.push_str(".json");
-		write_file(name, raw_json);
-	} else {
-		runner.run();
-		runner.dump();
-	}
+fn make_config(run: bool) {
+    let inp = structs::input_builder();
+    let mut runner = inp.validate().unwrap();
+    if !run {
+        let mut name = inp.name.clone().unwrap();
+        let json = json::as_pretty_json(&inp);
+        let raw_json = format!("{}", json);
+        name.push_str(".json");
+        write_file(name, raw_json);
+    } else {
+        runner.run();
+        runner.dump();
+    }
 }
 
-fn read_json(fname: String) -> Result<structs::Input, errors::ReadErr> {
+fn json_slurp(fname: String) -> Result<structs::Input, errors::ReadErr> {
     let mut fh = try!(File::open(fname));
     let mut raw_json = String::new();
     try!(fh.read_to_string(&mut raw_json));
@@ -104,48 +105,104 @@ fn main() {
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-	if args.flag_version {
-		println!("Version: {:?}", VERSION);
-		exit(0);
-	}
+    if args.flag_version {
+        println!("Version: {:?}", VERSION);
+        exit(0);
+    }
 
-	if args.flag_help {
-		println!("{}", USAGE);
-		exit(0);
-	}
+    if args.flag_help {
+        println!("{}", USAGE);
+        exit(0);
+    }
 
-	//if args.arg_file != "" {
-		//if args.arg_file == "-" {
-			//exit(radeco_pipe(&args));
-		//} else {
-			//exit(radeco_file(&args));
-		//}
-	//}
-	
-	if args.flag_build_json {
-		build_json(args.cmd_run);
-	}
+    let mut outmode: String = "c".to_string();
+    let mut address: String = "entry0".to_string();
 
-	if args.flag_from_json {
-		if args.arg_file.is_none() {
-			println!("{}", USAGE);
-		}
-		let r = read_json(args.arg_file.clone().unwrap());
-		if let Ok(inp) =  r {
-			let mut runner = inp.validate().unwrap();
-			runner.run();
-			runner.dump();
-		} else {
-			println!("[x] {}", r.err().unwrap())
-		}
-	}
+    if args.flag_output.is_some() {
+        let flag_output = args.flag_output.clone().unwrap();
+        if match &*flag_output {
+            "c"|"C"|"r2"|"dot"|"r2g"|"json"|"ssa" => true,
+            _ => false,
+        } {
+            println!("--> output mode is ok");
+            outmode = flag_output;
+        } else {
+            println!("Invalid mode for --output=<mode>");
+            exit(1);
+        }
+    }
 
-	if args.flag_shell {
-		if args.arg_file.is_none() {
-			println!("{}", USAGE);
-			exit(0);
-		}
-		let status = spawn_shell(args.arg_file.clone().unwrap());
-		exit(status);
-	}
+    if args.flag_address != "" {
+        address = args.flag_address;
+    }
+
+    if args.flag_make_config {
+        make_config(args.cmd_run);
+        exit(0);
+    }
+
+    if args.flag_config {
+        if args.arg_file.is_none() {
+            println!("{}", USAGE);
+        }
+        let filename = args.arg_file.clone().unwrap();
+        let r = json_slurp(filename);
+        if let Ok(inp) =  r {
+            let mut runner = inp.validate().unwrap();
+            runner.run();
+            runner.dump();
+        } else {
+            println!("[x] {}", r.err().unwrap())
+        }
+        exit(0);
+    }
+
+    if args.flag_shell {
+        if args.arg_file.is_none() {
+            println!("{}", USAGE);
+            exit(0);
+        }
+        let file = args.arg_file.clone().unwrap();
+        exit(spawn_shell(file));
+    }
+
+    /* perform batch decompilation */
+    if let Some (file) = args.arg_file.clone() {
+        if let Ok(r2p) = R2Pipe::spawn(&*file) {
+            println!("OK");
+        } else {
+            // XXX: r2pipe doesnt returns fail if the target file doesnt exist or r2 fails to run
+            println!("Cannot find file");
+        }
+    } else {
+        if let Ok(mut r2p) = R2Pipe::open() {
+            println!("Running from r2");
+            println!("--> address {}", address);
+            println!("--> output {}", outmode);
+            r2p.cmd (&*format!("s {}", address));
+            //r2p.cmd ("af");
+            let res = r2p.cmd("pd");
+            println!("--> {}", res);
+
+            //let mut r = Radeco::pipe().unwrap();
+            //r.close();
+            /* perform decompilation of function at current offset */
+            //if args.arg_file != "" {
+            //  if args.arg_file == "-" {
+            //      exit(
+            //  } else {
+            //      exit(radeco_file(&args));
+            //  }
+            //}
+            // XXX it hangs here, r2pipe looks buggy
+            r2p.close();
+        } else {
+            if args.flag_output.is_some() {
+                println!("Missing file");
+            } else {
+                println!("{}", USAGE);
+            }
+            exit(1);
+        }
+    }
 }
