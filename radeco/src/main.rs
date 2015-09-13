@@ -22,6 +22,7 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 #[derive(Debug, RustcDecodable)]
 struct Args {
     flag_output: Option<String>,
+    arg_esil: Option<String>,
     flag_version: bool,
     flag_address: String,
     flag_verbose: bool,
@@ -78,8 +79,8 @@ fn write_file(fname: String, res: String) {
     file.write_all(res.as_bytes()).unwrap();
 }
 
-fn make_config(run: bool) {
-    let inp = structs::input_builder();
+fn make_config(bin_name:String, esil_opt:Option<String>, addr:String, run: bool) {
+    let inp = structs::input_builder(bin_name, esil_opt, addr);
     let mut runner = inp.validate().unwrap();
     if !run {
         let mut name = inp.name.clone().unwrap();
@@ -137,7 +138,13 @@ fn main() {
     }
 
     if args.flag_make_config {
-        make_config(args.cmd_run);
+        let filename = args.arg_file.clone().unwrap();
+        let mut esil: Option<String> = None;
+        if let Some(esilstr) = args.arg_esil.clone() {
+            esil = Some(esilstr);
+        }
+        println!("MAKE CONFIG");
+        make_config(filename, esil, address, true); //args.cmd_run);
         exit(0);
     }
 
