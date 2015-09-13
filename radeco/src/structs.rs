@@ -93,7 +93,8 @@ impl Input {
 		let mut runner = Runner::new(name, bin, addr, verbose, pipeline, Some(outpath));
 		// Handle the case where the input is raw esil.
 		if esil.is_some() {
-			let mut r2 = r2::R2::new("/bin/ls");
+            let filepath = &*self.bin_name.clone().unwrap();
+			let mut r2 = r2::R2::new(filepath);
 			r2.init();
 			let r = r2.get_reg_info().ok();
 			runner.state.pipeout = Some(Pipeout::Esil(esil.unwrap()));
@@ -124,32 +125,61 @@ macro_rules! read {
 	}
 }
 
-pub fn input_builder() -> Input {
-	println!("Radeco Input Builder.");
-	println!("Binary name (if esil, skip this): ");
-	let bin_name = read!();
-	println!("Raw esil (skip if binary name was specified): ");
-	let esil: Option<Vec<String>> = {
-		let mut _tmpv = Vec::new();
-		loop {
-			let _esil = read!();
-			if _esil.is_none() {
-				break;
-			}
-			_tmpv.push(_esil.unwrap());
-		}
-		if _tmpv.is_empty() {
-			None
-		} else {
-			Some(_tmpv)
-		}
-	};
-	println!("Address to read instruction from (skip if raw esil): ");
-	let addr = read!();
-	println!("Name of this run: ");
-	let name = read!();
+pub fn input_builder(bin_name:String, esil_opt:Option<String>, address:String) -> Input {
+    let mut esil: Option<Vec<String>> = None;
+	println!("Radeco Config File Maker:");
+	println!("=========================");
+    if let Some(e) = esil_opt {
+	    println!("input-type: esil");
+        println!("input-data: {}", e);
+        if e == "-" {
+            println!("[radeco] Raw esil (skip if binary name was specified):");
+            esil = {
+                let mut _tmpv = Vec::new();
+                loop {
+                    let _esil = read!();
+                    if _esil.is_none() {
+                        break;
+                    }
+                    _tmpv.push(_esil.unwrap());
+                }
+                if _tmpv.is_empty() {
+                    None
+                } else {
+                    Some(_tmpv)
+                }
+            };
+        } else {
+            esil = {
+                let mut _t = Vec::new();
+                _t.push(e);
+                if _t.is_empty() {
+                    None
+                } else {
+                    Some(_t)
+                }
+            };
+        }
+    } else {
+	    println!("input-type: file");
+        println!("input-data: {}", bin_name);
+        esil = None;
+    }
+
+    let mut addr: String = "entry0".to_string();
+
+    if address == "" || address == "-" {
+        println!("Address to read instruction from (skip if raw esil): ");
+        //addr = read!();
+    }
+
+	//let name = read!();
+    let name = bin_name.clone() + ".run";
+	println!("run-name: {}",name);
+
 	println!("Output directory: ");
-	let out_dir = read!();
+	// let out_dir = read!();
+    let out_dir = format!("{}.output", bin_name);
 
 	let mut pipe = Vec::<usize>::new();
 	loop {
@@ -186,5 +216,5 @@ pub fn input_builder() -> Input {
 		}).unwrap()
 	};
 
-	Input::new(bin_name, esil, addr, name, out_dir, pipe, verbose)
+	Input::new(Some(bin_name), esil, Some(address), Some(name), Some(out_dir), pipe, verbose)
 }
