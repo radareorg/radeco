@@ -3,28 +3,30 @@ use std::fmt;
 use rustc_serialize::json;
 
 #[derive(Debug)]
-pub enum ReadErr {
-	DecodeErr(json::DecoderError),
-	IoErr(io::Error),
+pub enum ArgError {
+	DecodeError(json::DecoderError),
+	InvalidArgument(String),
+	IoError(io::Error),
 }
 
-impl fmt::Display for ReadErr {
+impl fmt::Display for ArgError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
-			ReadErr::IoErr(ref err) => write!(f, "{}", err),
-			ReadErr::DecodeErr(ref err) => write!(f, "{}", err),
+			ArgError::IoError(ref err) => write!(f, "{}", err),
+			ArgError::DecodeError(ref err) => write!(f, "{}", err),
+			ArgError::InvalidArgument(ref err) => write!(f, "{}", err),
 		}
 	}
 }
 
-impl From<io::Error> for ReadErr {
-	fn from(e: io::Error) -> ReadErr {
-		ReadErr::IoErr(e)
+impl From<io::Error> for ArgError {
+	fn from(e: io::Error) -> ArgError {
+		ArgError::IoError(e)
 	}
 }
 
-impl From<json::DecoderError> for ReadErr {
-	fn from(e: json::DecoderError) -> ReadErr {
-		ReadErr::DecodeErr(e)
+impl From<json::DecoderError> for ArgError {
+	fn from(e: json::DecoderError) -> ArgError {
+		ArgError::DecodeError(e)
 	}
 }
