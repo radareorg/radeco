@@ -21,7 +21,7 @@ use std::process::exit;
 //}
 
 fn main() {
-	let radeco = args::init();
+	let mut radeco = args::Radeco::init();
 	if radeco.is_none() {
 		exit(0);
 	}
@@ -32,9 +32,9 @@ fn main() {
 		exit(2);
 	}
 
-	let radeco = radeco.unwrap();
+	let mut radeco = radeco.unwrap();
 
-	let result = radeco.run();
+	let mut result = radeco.run();
 
 	match result {
 		Ok(ref r) => { // Do something

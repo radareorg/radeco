@@ -5,23 +5,32 @@ use std::fs;
 use std::path::{Path};
 use radeco_lib::utils::{Pipeline, Runner, Analysis, Pipeout};
 use radeco_lib::frontend::r2;
+use errors::ArgError;
+
 
 #[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
+pub enum Outmode {
+	Pseudo,
+	Dot,
+}
+	
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
 pub struct Input {
-	bin_name: Option<String>,
-	esil: Option<Vec<String>>,
-	addr: Option<String>,
+	pub bin_name: Option<String>,
+	pub esil: Option<Vec<String>>,
+	pub addr: Option<String>,
 	pub name: Option<String>,
-	outpath: Option<String>,
-	stages: Vec<usize>,
-	verbose: Option<bool>,
+	pub outpath: Option<String>,
+	pub stages: Vec<usize>,
+	pub verbose: Option<bool>,
+	pub outmodes: Option<Vec<Outmode>>,
 }
 
 impl Input {
 	fn new(bin_name: Option<String>, esil: Option<Vec<String>>,
 		   addr: Option<String>, name: Option<String>,
 		   outpath: Option<String>, stages: Vec<usize>,
-		   verbose: bool) -> Input
+		   outmodes: Option<Vec<Outmode>>, verbose: bool) -> Input
 	{
 		Input {
 			bin_name: bin_name,
@@ -31,12 +40,14 @@ impl Input {
 			outpath: outpath,
 			stages: stages.clone(),
 			verbose: Some(verbose),
+			outmodes: outmodes,
 		}
 	}
 
-	pub fn validate(&self) -> Result<Runner, &str> {
+	// TODO: Convert to Error type
+	pub fn validate(&self) -> Result<Runner, ArgError> {
 		if self.bin_name.is_none() && self.esil.is_none() {
-			return Err("No Source!");
+			return Err(ArgError::NoSource);
 		}
 
 		let bin = if self.bin_name.is_some() {
@@ -53,8 +64,7 @@ impl Input {
 
 		let esil = if self.esil.is_some() {
 			if bin.is_some() {
-				return Err("Multiple sources detected. Please ensure that one
-				of bin_name or esil is not set!");
+				return Err(ArgError::MultipleSources);
 			}
 			self.esil.clone()
 		} else {
@@ -63,12 +73,12 @@ impl Input {
 
 		let addr = if self.addr.is_some() {
 			if bin.is_none() {
-				return Err("Address field filled in without a binary to load");
+				return Err(ArgError::InvalidArgument("Address provided without source binary".to_owned()));
 			}
 			self.addr.clone()
 		} else {
 			if bin.is_some() {
-				return Err("No Address specified for the loaded binary");
+				return Err(ArgError::MissingArgument("Address".to_owned()));
 			}
 			None
 		};
@@ -93,8 +103,8 @@ impl Input {
 		let mut runner = Runner::new(name, bin, addr, verbose, pipeline, Some(outpath));
 		// Handle the case where the input is raw esil.
 		if esil.is_some() {
-			let filepath = &*self.bin_name.clone().unwrap();
-			let mut r2 = r2::R2::new(filepath);
+			let filepath = self.bin_name.clone();
+			let mut r2 = r2::R2::new(filepath).unwrap();
 			r2.init();
 			let r = r2.get_reg_info().ok();
 			runner.state.pipeout = Some(Pipeout::Esil(esil.unwrap()));
@@ -125,61 +135,32 @@ macro_rules! read {
 	}
 }
 
-pub fn input_builder(bin_name:String, esil_opt:Option<String>, address:String) -> Input {
-	let mut esil: Option<Vec<String>> = None;
-	println!("Radeco Config File Maker:");
-	println!("=========================");
-	if let Some(e) = esil_opt {
-		println!("input-type: esil");
-		println!("input-data: {}", e);
-		if e == "-" {
-			println!("[radeco] Raw esil (skip if binary name was specified):");
-			esil = {
-				let mut _tmpv = Vec::new();
-				loop {
-					let _esil = read!();
-					if _esil.is_none() {
-						break;
-					}
-					_tmpv.push(_esil.unwrap());
-				}
-				if _tmpv.is_empty() {
-					None
-				} else {
-					Some(_tmpv)
-				}
-			};
-		} else {
-			esil = {
-				let mut _t = Vec::new();
-				_t.push(e);
-				if _t.is_empty() {
-					None
-				} else {
-					Some(_t)
-				}
-			};
+pub fn input_builder() -> Input {
+	println!("Radeco Input Builder.");
+	println!("Binary name (if esil, skip this): ");
+	let bin_name = read!();
+	println!("Raw esil (skip if binary name was specified): ");
+	let esil: Option<Vec<String>> = {
+		let mut _tmpv = Vec::new();
+		loop {
+			let _esil = read!();
+			if _esil.is_none() {
+				break;
+			}
+			_tmpv.push(_esil.unwrap());
 		}
-	} else {
-		println!("input-type: file");
-		println!("input-data: {}", bin_name);
-		esil = None;
-	}
-
-	let mut addr: String = "entry0".to_string();
-
-	if address == "" || address == "-" {
-		println!("Address to read instruction from (skip if raw esil): ");
-		//addr = read!();
-	}
-
-	//let name = read!();
-	let name = bin_name.clone() + ".run";
-	println!("run-name: {}",name);
-
+		if _tmpv.is_empty() {
+			None
+		} else {
+			Some(_tmpv)
+		}
+	};
+	println!("Address to read instruction from (skip if raw esil): ");
+	let addr = read!();
+	println!("Name of this run: ");
+	let name = read!();
 	println!("Output directory: ");
-	// let out_dir = read!();
-	let out_dir = format!("{}.output", bin_name);
+	let out_dir = read!();
 
 	let mut pipe = Vec::<usize>::new();
 	loop {
@@ -216,5 +197,9 @@ pub fn input_builder(bin_name:String, esil_opt:Option<String>, address:String) -
 		}).unwrap()
 	};
 
-	Input::new(Some(bin_name), esil, Some(address), Some(name), Some(out_dir), pipe, verbose)
+	let outmodes = Some(vec![Outmode::Dot]);
+
+	Input::new(bin_name, esil, addr, name, out_dir, pipe, outmodes, verbose)
 }
+
+
