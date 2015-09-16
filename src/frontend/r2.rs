@@ -73,14 +73,27 @@ impl Search for Json {
 	}
 }
 
-// fn send and recv allow users to send their own commands, i.e. The ones that are not currently
-// abstracted by the R2 API.
+// fn send and recv allow users to send their own commands,
+// i.e. The ones that are not currently abstracted by the R2 API.
 // Ideally, all commonly used commands must be supported for easier use.
-
 impl R2 {
-	pub fn new(path: &str) -> R2 {
+	// TODO: Use an error type
+	pub fn new(path: Option<String>) -> Result<R2, String> {
+		if path.is_none() && !R2::in_session() {
+			let e = "No r2 session open. Please specify path!".to_owned();
+			return Err(e);
+		}
+
+		// This means that path is `Some` or we have an open session.
 		let pipe = open_pipe!(path).unwrap();
-		R2 { pipe: pipe, readin: String::new() }
+		Ok(R2 { pipe: pipe, readin: String::new() })
+	}
+
+	pub fn in_session() -> bool {
+		match R2Pipe::in_session() {
+			Some(_) => true,
+			None    => false,
+		}
 	}
 
 	pub fn from(r2p: R2Pipe) -> R2 {

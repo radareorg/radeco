@@ -63,7 +63,8 @@ pub struct Parser<'a> {
 	constants:	  HashMap<u64, MVal>,
 }
 
-// Struct used to configure the Parser. If `None` is passed to any of the fields, then the default
+// Struct used to configure the Parser.
+// If `None` is passed to any of the fields, then the default
 // values are set.
 pub struct ParserConfig<'a> {
 	arch:         Option<String>,
@@ -208,7 +209,7 @@ impl<'a> Parser<'a> {
 					// TODO
 					panic!("Proper error handling here");
 				}
-				
+
 				let v = if let Some(cv) = val {
 					self.constant_value(cv)
 				} else {
@@ -579,7 +580,7 @@ impl<'a> Parser<'a> {
 				return Ok(self.constant_value(def));
 			},
 			'o' => {
-				//(esil_internal_carry_check (esil, esil->lastsz-1) ^ 
+				//(esil_internal_carry_check (esil, esil->lastsz-1) ^
 				// esil_internal_carry_check (esil, esil->lastsz-2));
 				for i in (1..3) {
 					tmp_p.stack.push(MVal::esilcur());
@@ -636,7 +637,8 @@ impl<'a> Parser<'a> {
 			let size = self.default_size;
 			let mut next_tmp = self.get_tmp_register(size);
 			next_tmp.as_literal = Some(num);
-			let inst = op.to_inst(next_tmp.clone(), MVal::null(), MVal::null(), None);
+			let inst = op.to_inst(next_tmp.clone(), MVal::null(), MVal::null()
+			                                                    , None);
 			self.insts.push(inst);
 			next_tmp
 		} else {
@@ -644,9 +646,9 @@ impl<'a> Parser<'a> {
 		};
 
 		let const_v = self.constants.entry(num)
-			                        .or_insert(tmp)
-								    .clone();
-		
+		                            .or_insert(tmp)
+		                            .clone();
+
 		// Assert that we actually have a constant.
 		assert!(const_v.as_literal != None);
 		return const_v;

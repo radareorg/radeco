@@ -137,15 +137,27 @@ impl<'a> Runner<'a> {
 		assert!(!self.bin_name.is_none());
 		assert!(!self.addr.is_none());
 		out!("[*] Reading from R2", self.verbose);
-		let bin_name = self.bin_name.clone().unwrap();
-		let mut r2 = R2::new(&*bin_name);
-		r2.init();
-		let reg_info = r2.get_reg_info().unwrap();
+
+		if self.state.r2.is_none() {
+			let bin_name = self.bin_name.clone();
+			// TODO: Error Handling
+			let mut _r2 = R2::new(bin_name).unwrap();
+			_r2.init();
+			self.state.r2 = Some(_r2);
+		}
+		let func_info;
+		let reg_info;
+		match self.state.r2.as_mut() {
+			Some(r2) => {
+				reg_info = r2.get_reg_info().unwrap();
+				let addr = self.addr.clone().unwrap();
+				func_info = r2.get_function(&*addr).unwrap();
+			},
+			None => panic!("Unable to Initialize r2. Something is wrong!"),
+		}
+
 		self.set_reg_info(&reg_info);
-		let addr = self.addr.clone().unwrap();
-		let func_info = r2.get_function(&*addr).unwrap();
 		self.set_pipeout(&Pipeout::LOpInfo(func_info.ops.unwrap()));
-		self.state.r2 = Some(r2);
 	}
 
 	fn parse_esil(&mut self) {

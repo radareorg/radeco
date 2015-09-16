@@ -29,7 +29,7 @@ fn main() {
     let fname = if args.len() >= 2 { &*args[1] } else { "./ex-bins/simple2" };
 
     // Get a new r2 instance.
-    let mut r2 = r2::R2::new(fname);
+    let mut r2 = r2::R2::new(Some(fname.to_owned())).unwrap();
 
     // Initialize with sane defaults.
     r2.init();

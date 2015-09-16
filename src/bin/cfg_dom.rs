@@ -29,7 +29,7 @@ fn write_file(fname: &str, res: String) {
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
     // Get a new r2 instance.
-    let mut r2 = r2::R2::new("./ex-bins/key");
+    let mut r2 = r2::R2::new(Some("./ex-bins/key".to_owned())).unwrap();
     
     // Initialize with sane defaults.
     r2.init();
