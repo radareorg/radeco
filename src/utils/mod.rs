@@ -72,18 +72,18 @@ impl Pipeout {
 // States all the vars important to various stages of the pipeline together.
 // Also acts as the result struct.
 #[allow(dead_code)]
-pub struct State<'a> {
+pub struct State {
 	r2: Option<R2>,
 	esil: Option<Vec<String>>,
 	pub reg_info: Option<LRegInfo>,
-	p: Option<Parser<'a>>,
+	p: Option<Parser>,
 	cfg: Option<CFG>,
 	ssa: Option<SSAStorage>,
 	pub pipeout: Option<Pipeout>,
 }
 
-impl<'a> State<'a> {
-	fn new() -> State<'a> {
+impl State {
+	fn new() -> State {
 		State {
 			r2: None,
 			esil: None,
@@ -96,7 +96,7 @@ impl<'a> State<'a> {
 	}
 }
 
-pub struct Runner<'a> {
+pub struct Runner {
 	name: String,
 	bin_name: Option<String>,
 	addr: Option<String>,
@@ -104,14 +104,14 @@ pub struct Runner<'a> {
 	pipeline: Vec<Pipeline>,
 	results: Vec<Pipeout>,
 	outpath: String,
-	pub state: State<'a>,
+	pub state: State,
 }
 
-impl<'a> Runner<'a> {
+impl Runner {
 
 	pub fn new(name: String, bin_name: Option<String>,
                addr: Option<String>, verbose: bool,
-               pipeline: Vec<Pipeline>, outpath: Option<String>) -> Runner<'a>
+               pipeline: Vec<Pipeline>, outpath: Option<String>) -> Runner
 	{
 		Runner {
 			name: name,
@@ -272,6 +272,7 @@ impl<'a> Runner<'a> {
 		}
 	}
 
+	// TODO: Return Error. Never panic!()
 	pub fn run(&mut self) {
 		let pipe_iter = self.pipeline.clone();
 		for stage in pipe_iter.iter() {

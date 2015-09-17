@@ -47,10 +47,10 @@ pub enum ParseError {
 
 #[allow(dead_code)]
 #[derive(Clone)]
-pub struct Parser<'a> {
+pub struct Parser {
 	stack:        Vec<MVal>,
 	insts:        Vec<MInst>,
-	opset:        HashMap<&'a str, MOpcode>,
+	opset:        HashMap<String, MOpcode>,
 	regset:       HashMap<String, LRegProfile>,
 	alias_info:   HashMap<String, LAliasInfo>,
 	flags:        HashMap<u64, LFlagInfo>,
@@ -66,17 +66,17 @@ pub struct Parser<'a> {
 // Struct used to configure the Parser.
 // If `None` is passed to any of the fields, then the default
 // values are set.
-pub struct ParserConfig<'a> {
+pub struct ParserConfig {
 	arch:         Option<String>,
 	default_size: Option<WidthSpec>,
 	tmp_prefix:   Option<String>,
-	init_opset:   Option<fn() -> HashMap<&'a str, MOpcode>>,
+	init_opset:   Option<fn() -> HashMap<String, MOpcode>>,
 	regset:       Option<HashMap<String, LRegProfile>>,
 	alias_info:   Option<HashMap<String, LAliasInfo>>,
 	flags:        Option<HashMap<u64, LFlagInfo>>,
 }
 
-impl<'a> Default for ParserConfig<'a> {
+impl Default for ParserConfig {
 	fn default() -> Self {
 		ParserConfig {
 			arch:         Some("x86_64".to_string()),
@@ -90,8 +90,8 @@ impl<'a> Default for ParserConfig<'a> {
 	}
 }
 
-impl<'a> Parser<'a> {
-	pub fn new(config: Option<ParserConfig<'a>>) -> Parser<'a> {
+impl Parser {
+	pub fn new(config: Option<ParserConfig>) -> Parser {
 		let config = config.unwrap_or_default();
 		let arch = config.arch.unwrap_or("x86_64".to_string());
 		let default_size = config.default_size.unwrap_or(64);
@@ -655,31 +655,31 @@ impl<'a> Parser<'a> {
 	}
 }
 
-fn map_esil_to_opset() -> HashMap<&'static str, MOpcode> {
+fn map_esil_to_opset() -> HashMap<String, MOpcode> {
 	// Make a map from esil string to struct MOperator.
 	// (operator: &str, op: MOperator).
 	// Possible Optimization:  Move to compile-time generation ?
 	hash![
-		("==" , MOpcode::OpCmp),
-		("<"  , MOpcode::OpLt),
-		(">"  , MOpcode::OpGt),
-		("<=" , MOpcode::OpGteq),
-		(">=" , MOpcode::OpLteq),
-		("<<" , MOpcode::OpLsl),
-		(">>" , MOpcode::OpLsr),
-		("&"  , MOpcode::OpAnd),
-		("|"  , MOpcode::OpOr),
-		("="  , MOpcode::OpEq),
-		("*"  , MOpcode::OpMul),
-		("^"  , MOpcode::OpXor),
-		("+"  , MOpcode::OpAdd),
-		("-"  , MOpcode::OpSub),
-		("/"  , MOpcode::OpDiv),
-		("%"  , MOpcode::OpMod),
-		("?{" , MOpcode::OpIf),
-		("!"  , MOpcode::OpNot),
-		("--" , MOpcode::OpDec),
-		("++" , MOpcode::OpInc),
-		("}"  , MOpcode::OpCl)
+		("==".to_owned() , MOpcode::OpCmp),
+		("<" .to_owned() , MOpcode::OpLt),
+		(">" .to_owned() , MOpcode::OpGt),
+		("<=".to_owned() , MOpcode::OpGteq),
+		(">=".to_owned() , MOpcode::OpLteq),
+		("<<".to_owned() , MOpcode::OpLsl),
+		(">>".to_owned() , MOpcode::OpLsr),
+		("&" .to_owned() , MOpcode::OpAnd),
+		("|" .to_owned() , MOpcode::OpOr),
+		("=" .to_owned() , MOpcode::OpEq),
+		("*" .to_owned() , MOpcode::OpMul),
+		("^" .to_owned() , MOpcode::OpXor),
+		("+" .to_owned() , MOpcode::OpAdd),
+		("-" .to_owned() , MOpcode::OpSub),
+		("/" .to_owned() , MOpcode::OpDiv),
+		("%" .to_owned() , MOpcode::OpMod),
+		("?{".to_owned() , MOpcode::OpIf),
+		("!" .to_owned() , MOpcode::OpNot),
+		("--".to_owned() , MOpcode::OpDec),
+		("++".to_owned() , MOpcode::OpInc),
+		("}" .to_owned() , MOpcode::OpCl)
 			]
 }

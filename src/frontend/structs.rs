@@ -51,6 +51,23 @@ pub struct LFlagInfo {
 	pub size:   u64,
 }
 
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone, Default)]
+pub struct LBinInfo {
+	pub core: Option<LCoreInfo>,
+	pub bin: Option<LBin>,
+}
+
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone, Default)]
+pub struct LCoreInfo {
+	pub file: Option<String>,
+	pub size: Option<usize>,
+}
+
+#[derive(RustcDecodable, RustcEncodable, Debug, Clone, Default)]
+pub struct LBin {
+	pub arch: Option<String>,
+}
+
 impl Decodable for LOpInfo {
 	fn decode<D: Decoder>(d: &mut D) -> Result<LOpInfo, D::Error> {
 		d.read_struct("root", 0, |d_| {

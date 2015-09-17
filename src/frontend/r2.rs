@@ -169,6 +169,12 @@ impl R2 {
 		json::decode(&*raw_json)
 	}
 
+	pub fn get_bin_info(&mut self) -> DecodeResult<LBinInfo> {
+		self.send("ij");
+		let raw_json = self.recv();
+		json::decode(&*raw_json)
+	}
+
 	pub fn get_fn_list(&mut self) -> Json {
 		self.send("aflj");
 		self.recv_json()
