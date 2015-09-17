@@ -203,7 +203,7 @@ impl Parser {
 					size = r.size as WidthSpec;
 				} else if let Ok::<i64, _>(v) = hex_to_i!(token) { // <u64>? will it be able to deal with negative numbers?
 					val = Some(v as u64);
-				} else if let Some('%') = token.chars().nth(0) {
+				} else if let Some('$') = token.chars().nth(0) {
 					val_type = MValType::Internal
 				} else {
 					// TODO
@@ -530,7 +530,7 @@ impl Parser {
 		tmp_p.addr = self.addr;
 		tmp_p.constants = self.constants.clone();
 		match mv.name.chars().nth(1).unwrap_or('\0') {
-			'%' => {
+			'$' => {
 				let addr = self.addr;
 				return Ok(self.constant_value(addr))
 			},
