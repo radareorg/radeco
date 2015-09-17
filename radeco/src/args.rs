@@ -1,14 +1,11 @@
 use docopt::Docopt;
-use radeco;
 use radeco_lib;
-use radeco_lib::utils::Pipeline;
 use errors::ArgError;
-use r2pipe::R2Pipe;
 use rustc_serialize::json;
 use structs;
 use std::fs::{File};
 use std::io::{Write, Read};
-use std::env;
+use std::path::Path;
 
 static USAGE: &'static str = "
 radeco. The radare2 decompiler.
@@ -23,33 +20,32 @@ Usage:
   radeco --verbose
 
 Options:
-  --config <file>        Run decompilation using json rules file.
-  --make-config <file>   Wizard to make the JSON config.
-  -a --address=<addr>    Address of function to decompile.
-  -e --esil=<expr>       Evaluate given esil expression.
-  -o --output=<mode>     Output mode (c, ssa, json, r2, r2g, dot).
-  --verbose              Display verbose output.
-  --shell                Run interactive prompt.
-  --version              Show version.
-  --help                 Show this screen.
+  --config <file>               Run decompilation using json rules file.
+  --make-config <file>          Wizard to make the JSON config.
+  -a --address=<addr>           Address of function to decompile.
+  -e --esil=<esil_expr>         Evaluate given esil expression.
+  -o --output=<mode>            Output mode (c, ssa, json, r2, r2g, dot).
+  --verbose                     Display verbose output.
+  --shell                       Run interactive prompt.
+  --version                     Show version.
+  --help                        Show this screen.
 ";
 
 #[derive(Debug, RustcDecodable)]
 struct Args {
-	arg_esil: Option<String>,
+	arg_esil_expr: Option<Vec<String>>,
 	arg_file: Option<String>,
 	arg_output: Option<String>,
-	arg_address: Option<String>,
 	cmd_run: bool,
-	flag_address: bool,
+	flag_address: Option<String>,
 	flag_config: bool,
 	flag_help: bool,
 	flag_make_config: bool,
-	flag_output: bool,
+	flag_output: Option<Vec<String>>,
 	flag_shell: bool,
 	flag_verbose: bool,
 	flag_version: bool,
-	flag_esil: bool,
+	flag_esil: Option<Vec<String>>,
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -82,6 +78,7 @@ pub struct Radeco {
 	outpath: String,
 	stages: Vec<usize>,
 	verbose: bool,
+	runner: Option<radeco_lib::utils::Runner>,
 }
 
 enum Mode {
@@ -92,9 +89,7 @@ enum Mode {
 impl Radeco {
 
 	// Return the mode radeco is operating in:
-	// R2Pipe                 : 1
-	// R2PipeSpawn/Standalone : 2
-	fn get_mode() -> Mode {
+	fn mode() -> Mode {
 		if radeco_lib::frontend::r2::R2::in_session() {
 			Mode::R2Pipe
 		} else {
@@ -102,7 +97,6 @@ impl Radeco {
 		}
 	}
 
-	//
 	// Setup the defaults for the arguments:
 	// This depends on the mode radeco is operating in i.e:
 	//     - r2pipe, when called from within radare2
@@ -118,24 +112,44 @@ impl Radeco {
 	//     - stages: All vs All
 	//     - verbose: false vs false
 	fn defaults() -> structs::Input {
-		// Detect the mode
-		let mode = Radeco::get_mode(); // TODO
-
-		let mut bin_name;
-		let mut addr;
-		let mut name;
-		let mut outpath;
+		let bin_name;
+		let addr;
+		let name;
+		let outpath;
 		let outmodes = vec![structs::Outmode::Dot];
 		let stages = vec![0, 1, 2, 3, 4, 5, 6];
 
-		match mode {
-			Mode::R2Pipe => unreachable!(),
+		match Radeco::mode() {
+			Mode::R2Pipe => {
+				// Open the existing r2 session.
+				let mut r2 = radeco_lib::frontend::r2::R2::new(None).unwrap();
+				addr = {
+					r2.send("s");
+					r2.recv().trim().to_owned()
+				};
+				// TODO: Error Handling here.
+				let bin_info = r2.get_bin_info().unwrap();
+				let core = bin_info.core.unwrap();
+				let path = match core.file.as_ref() {
+					Some(ref f) => {
+						bin_name = Some(format!("{}", f));
+						Path::new(f.clone())
+					},
+					None => panic!("No file open in r2"),
+				};
+				let file = path.file_name()
+				               .unwrap()
+							   .to_str()
+							   .map(|s| s.to_owned());
+
+				outpath = format!("./{}_out", bin_name.as_ref().unwrap());
+				name = Some(format!("{}.run", bin_name.as_ref().unwrap()));
+			},
 			Mode::Standalone => {
 				bin_name = None;
 				addr = "entry0".to_owned();
 				name = None;
 				outpath = "./outputs".to_owned();
-
 			},
 		}
 
@@ -165,6 +179,7 @@ impl Radeco {
 			outpath: input.outpath.clone().unwrap(),
 			stages: input.stages.clone(),
 			verbose: input.verbose.clone().unwrap(),
+			runner: runner.ok(),
 		};
 
 		Some(Ok(radeco))
@@ -182,22 +197,13 @@ impl Radeco {
 			println!("{}", USAGE);
 			return None;
 		}
-
-		// TODO: Decide if defaults have to be a part of Input or Radeco.
-		let mut input = Radeco::defaults();
 		
 		// Make config file and run radeco with it
 		if args.flag_make_config {
-			let filename = args.arg_file.clone().unwrap();
-			let mut esil: Option<String> = None;
-			if args.flag_esil {
-				esil = args.arg_esil;
-			}
-
 			let input = make_config();
 			return Radeco::new(input);
 		}
-
+		
 		// Run from a predefined configuration file
 		if args.flag_config {
 			if args.arg_file.is_none() {
@@ -209,39 +215,46 @@ impl Radeco {
 			if input.is_err() {
 				return Some(Err(input.err().unwrap()))
 			}
-
 			return Radeco::new(input.unwrap());
 		}
+
+		println!("{:?}", args);
+		// TODO: Decide if defaults have to be a part of Input or Radeco.
+		let mut input = Radeco::defaults();
+
+		println!("Defaults set to: {:?}", input);
 
 		// Get binary name
 		input.bin_name = args.arg_file.clone();
 
 		// Address to begin decompilation/analysis
-		input.addr = if args.flag_address {
-			args.arg_address
-		} else {
-			input.addr
-		};
+		if args.flag_address.is_some() {
+			input.addr = args.flag_address
+		}
+
+		if args.flag_esil.is_some() {
+			input.esil = args.flag_esil
+		}
 
 		// Verbose configuration
 		input.verbose = Some(args.flag_verbose);
 
-		let mut outmode: String = "c".to_owned();
-		if args.flag_output {
-			let arg_output: String = args.arg_output.clone().unwrap();
-			let valid = ["c" ,"C" ,"r2" ,"dot" ,"r2g" ,"json" ,"ssa"];
-			if !valid.contains(&&*arg_output) {
-				let e = "Invalid mode for --output=<mode>";
-				return Some(Err(ArgError::InvalidArgument(e.to_owned())));
-			}
-			outmode = arg_output
+		if args.flag_output.is_some() {
+			let arg_output: Vec<String> = args.flag_output.unwrap();
+			// TODO: Expand outmodes. For now, we only output the dot.
+			// Which is already the default behaviour.
 		};
 
+		println!("Final input: {:?}", input);
 		Radeco::new(input)
 	}
 
 	pub fn run(&mut self) -> Result<(), String> {
 		println!("Running radeco!");
+		match self.runner.as_mut(){
+			Some(ref mut runner) => runner.run(),
+			None => panic!("Uninitialized instance of radeco!"),
+		}
 		Ok(())
 	}
 }
