@@ -113,7 +113,7 @@ impl R2 {
 	}
 
 	pub fn send(&mut self, cmd: &str) {
-		self.readin = self.pipe.cmd(cmd);
+		self.readin = self.pipe.cmd(cmd).unwrap();
 	}
 
 	pub fn recv(&mut self) -> String {
