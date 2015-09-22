@@ -20,7 +20,7 @@ fn test1() {
 	let addr = Some("sym.main".to_owned());
 	let mut test = Runner::new(test_name, bin_name, addr, false, pipeline, None);
 	test.run();
-	test.dump();
+	test.output(None);
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn test_analysis1() {
 
 	let test_name = "test2".to_owned();
 	// Get a new r2 instance.
-    let mut r2 = R2::new("./ex-bins/simple2");
+    let mut r2 = R2::new(Some("./ex-bins/simple2".to_owned())).unwrap();
     // Initialize with sane defaults.
     r2.init();
     let r = r2.get_reg_info().unwrap();
@@ -53,14 +53,14 @@ fn test_analysis1() {
 	test.state.pipeout = Some(Pipeout::Esil(esil));
 	test.state.reg_info = Some(r.clone());
 	test.run();
-	test.dump();
+	test.output(None);
 }
 
 #[test]
 fn test_analysis2() {
-	let test_name = "test_analysis".to_string();
-	let bin_name = Some("./ex-bins/constprop.o".to_string());
-	let addr = Some("section..text".to_string());
+	let test_name = "test_analysis".to_owned();
+	let bin_name = Some("./ex-bins/constprop.o".to_owned());
+	let addr = Some("entry0".to_owned());
 	let pipeline = vec![
 		Pipeline::ReadFromR2,
 		Pipeline::ParseEsil,
@@ -73,7 +73,7 @@ fn test_analysis2() {
 	];
 	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline, None);
 	test.run();
-	test.dump();
+	test.output(None);
 }
 
 //#[test]
