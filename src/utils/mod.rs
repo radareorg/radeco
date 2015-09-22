@@ -22,6 +22,7 @@ use ::middle::ssa::verifier;
 use std::io::prelude::*;
 use std::fs;
 use std::fs::{File};
+use std::fmt;
 use std::path::{PathBuf};
 
 macro_rules! out {
@@ -107,6 +108,37 @@ pub struct Runner {
 	pub state: State,
 }
 
+impl fmt::Display for Pipeline {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			Pipeline::ReadFromR2 => write!(f, "{}", "r2"),
+			Pipeline::ParseEsil => write!(f, "{}", "Parse ESIL"),
+			Pipeline::CFG => write!(f, "{}", "Control Flow Graph Construction"),
+			Pipeline::SSA => write!(f, "{}", "SSA Construction"),
+			Pipeline::AnalyzeSSA(_) => write!(f, "{}", "Constant Propagation"),
+			Pipeline::DCE => write!(f, "{}", "Dead Code Elimination"),
+			Pipeline::Verify => write!(f, "{}", "Verify SSA"),
+			Pipeline::CWriter => write!(f, "{}", "C Writer"),
+		}
+	}
+}
+
+impl fmt::Display for Runner {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		let mut res;
+		res = format!("Name: {}\n", self.name);
+		res = format!("{}Binary: {}\n", res, self.bin_name.as_ref().unwrap_or(&"-".to_owned()));
+		res = format!("{}Address: {}\n", res, self.addr.as_ref().unwrap_or(&"-".to_owned()));
+		res = format!("{}Pipeline:\n", res);
+		for p in &self.pipeline {
+			res = format!("{}    - {}\n", res, p);
+		}
+		res = format!("{}Output: {}", res, self.outpath);
+		write!(f, "{}", res)
+	}
+}
+
+
 impl Runner {
 
 	pub fn new(name: String, bin_name: Option<String>,
@@ -125,6 +157,10 @@ impl Runner {
 		}
 	}
 
+	pub fn is_verbose(&self) -> bool {
+		self.verbose
+	}
+
 	fn set_reg_info(&mut self, reg_info: &LRegInfo) {
 		self.state.reg_info = Some(reg_info.clone());
 	}
@@ -134,8 +170,8 @@ impl Runner {
 	}
 
 	fn read_from_r2(&mut self) {
-		assert!(!self.bin_name.is_none());
-		assert!(!self.addr.is_none());
+		//assert!(!self.bin_name.is_none());
+		//assert!(!self.addr.is_none());
 		out!("[*] Reading from R2", self.verbose);
 
 		if self.state.r2.is_none() {
@@ -295,9 +331,15 @@ impl Runner {
 		file.write_all(res.as_bytes()).ok().expect("Error. Cannot write file!\n");
 	}
 
-	pub fn dump(&self) {
+	pub fn output(&self, phases: Option<Vec<u16>>) {
 		let mut phase_num = 1;
+		let count = self.pipeline.len() - 1;
+		let phases = phases.unwrap_or((0..count as u16).collect::<Vec<_>>());
 		for res in self.results.iter() {
+			if !phases.contains(&phase_num) {
+				phase_num += 1;
+				continue;
+			}
 			let mut write_out = String::new();
 			let mut ext;
 			match *res {
