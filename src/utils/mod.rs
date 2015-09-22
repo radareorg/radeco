@@ -332,10 +332,11 @@ impl Runner {
 	}
 
 	pub fn output(&self, phases: Option<Vec<u16>>) {
-		let mut phase_num = 1;
+		let mut phase_num = 0;
 		let count = self.pipeline.len() - 1;
 		let phases = phases.unwrap_or((0..count as u16).collect::<Vec<_>>());
 		for res in self.results.iter() {
+
 			if !phases.contains(&phase_num) {
 				phase_num += 1;
 				continue;
@@ -380,10 +381,9 @@ impl Runner {
 			// test_name-type-phase_num.ext
 			let mut p = PathBuf::from(&self.outpath);
 			p.push(self.name.clone());
-			let pstr = format!("{}-res_{}-phase{}", self.name, res.to_string(), phase_num.to_string());
+			let pstr = format!("{}-res_{}-phase{}.{}", self.name, res.to_string(), phase_num.to_string(), ext);
 			fs::create_dir_all(&p).ok();
 			p.push(pstr);
-			p.set_extension(ext);
 			self.write_file(p, write_out);
 			phase_num += 1;
 		}

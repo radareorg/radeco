@@ -716,6 +716,11 @@ impl SSAMod for SSAStorage {
 	}
 
 	fn remove_edge(&mut self, i: &Self::CFEdgeRef) {
+		// TODO: Add assertion here
+		if i.index() >= self.g.edge_count() {
+			return;
+		}
+
 		let edge_data = self.g[*i];
 		let src_node = self.source_of(i);
 		if let EdgeData::Control(2) = edge_data {

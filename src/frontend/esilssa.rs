@@ -96,6 +96,7 @@ where T: 'a + Clone + Debug + Verify +
 			if let CFGNodeData::Block(ref srcbb) = cfg.g[*i] {
 				self.process_block(block, srcbb);
 			} else {
+				//println!("{:?}", cfg.g[*i]);
 				unreachable!();
 			}
 		}
