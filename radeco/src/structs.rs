@@ -7,7 +7,6 @@ use radeco_lib::utils::{Pipeline, Runner, Analysis, Pipeout};
 use radeco_lib::frontend::r2;
 use errors::ArgError;
 
-
 #[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
 pub enum Outmode {
 	Pseudo,
@@ -23,14 +22,29 @@ pub struct Input {
 	pub outpath: Option<String>,
 	pub stages: Vec<usize>,
 	pub verbose: Option<bool>,
-	pub outmodes: Option<Vec<Outmode>>,
+	pub outmodes: Option<Vec<u16>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Mode {
+	R2Pipe,
+	Standalone,
+}
+
+// Return the mode radeco is operating in:
+fn mode() -> Mode {
+	if r2::R2::in_session() {
+		Mode::R2Pipe
+	} else {
+		Mode::Standalone
+	}
 }
 
 impl Input {
 	fn new(bin_name: Option<String>, esil: Option<Vec<String>>,
 		   addr: Option<String>, name: Option<String>,
 		   outpath: Option<String>, stages: Vec<usize>,
-		   outmodes: Option<Vec<Outmode>>, verbose: bool) -> Input
+		   outmodes: Option<Vec<u16>>, verbose: bool) -> Input
 	{
 		Input {
 			bin_name: bin_name,
@@ -44,7 +58,72 @@ impl Input {
 		}
 	}
 
-	// TODO: Convert to Error type
+	// Setup the defaults for the arguments:
+	// This depends on the mode radeco is operating in i.e:
+	//     - r2pipe, when called from within radare2
+	//                    ( vs )
+	//     - standalone, when radeco spawns radare2
+	// 
+	// Below is the list of defaults that are set depending on the mode.
+	//     - bin_name: binary loaded in r2 vs None
+	//     - esil: None vs None
+	//     - addr: current address vs entry0
+	//     - name: bin_name vs None
+	//     - outpath: bin_name_out vs outputs
+	//     - stages: All vs All
+	//     - verbose: false vs false
+	pub fn defaults() -> Input {
+		let bin_name;
+		let addr;
+		let name;
+		let outpath;
+		let outmodes = vec![];
+		let stages = vec![0, 1, 2, 3, 4, 5];
+
+		match mode() {
+			Mode::R2Pipe => {
+				let mut r2 = r2::R2::new(None).unwrap();
+				addr = {
+					r2.send("s");
+					r2.recv().trim().to_owned()
+				};
+				// TODO: Error Handling here.
+				let bin_info = r2.get_bin_info().unwrap();
+				let core = bin_info.core.unwrap();
+				let path = match core.file.as_ref() {
+					Some(ref f) => {
+						bin_name = Some(format!("{}", f));
+						Path::new(f.clone())
+					},
+					None => panic!("No file open in r2"),
+				};
+				let file = path.file_name()
+					.unwrap()
+					.to_str()
+					.map(|s| s.to_owned());
+				outpath = format!("./{}_out", file.as_ref().unwrap());
+				name = Some(format!("{}.run", file.as_ref().unwrap()));
+			},
+			Mode::Standalone => {
+				bin_name = None;
+				addr = "entry0".to_owned();
+				name = None;
+				outpath = "./outputs".to_owned();
+			},
+		}
+
+		Input {
+			bin_name: bin_name,
+			esil: None,
+			addr: Some(addr),
+			name: name,
+			outpath: Some(outpath),
+			stages: stages,
+			outmodes: Some(outmodes),
+			verbose: Some(false),
+		}
+	}
+
 	pub fn validate(&self) -> Result<Runner, ArgError> {
 		if self.bin_name.is_none() && self.esil.is_none() {
 			return Err(ArgError::NoSource);
@@ -52,11 +131,13 @@ impl Input {
 
 		let bin = if self.bin_name.is_some() {
 			let _n = &self.bin_name.clone().unwrap();
-			let p = Path::new(_n);
-			// TODO: Check existence
-			//if !p.exists() {
-			//return Err("Binary not found");
-			//}
+			let metadata = fs::metadata(_n);
+			if metadata.is_err() {
+				return Err(ArgError::InvalidSource("File does not exist".to_owned()));
+			}
+			if !metadata.unwrap().is_file() {
+				return Err(ArgError::InvalidSource("File does not exist".to_owned()));
+			}
 			self.bin_name.clone()
 		} else {
 			None
@@ -95,7 +176,8 @@ impl Input {
 			Pipeline::SSA,
 			Pipeline::AnalyzeSSA(Analysis::ConstProp),
 			Pipeline::DCE,
-			Pipeline::Verify
+			Pipeline::Verify,
+			Pipeline::CWriter,
 		];
 
 		let pipeline = self.stages.iter().map(|s| possible[*s]).collect::<Vec<Pipeline>>();
@@ -197,9 +279,7 @@ pub fn input_builder() -> Input {
 		}).unwrap()
 	};
 
-	let outmodes = Some(vec![Outmode::Dot]);
+	let outmodes = Some((0..(pipe.len() - 1) as u16).collect::<Vec<_>>());
 
 	Input::new(bin_name, esil, addr, name, out_dir, pipe, outmodes, verbose)
 }
-
-
