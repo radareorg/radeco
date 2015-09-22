@@ -13,24 +13,21 @@ Usage:
   radeco <file>
   radeco [options] [<file>]
   radeco run [options] [<file>]
-  radeco --shell <file>
-  radeco --output=<output> <file>
-  radeco --version
-  radeco --verbose
 
 Options:
-  --config <json_file>          Run decompilation using json rules file.
-  --make-config <file>          Wizard to make the JSON config.
-  -a --address=<addr>           Address of function to decompile.
-  -e --esil=<esil_expr>         Evaluate given esil expression.
-  -p --pipeline=<pipe>          Stages in the pipeline. Comma separated values.
-								Prefix the string with '=' (such as =ssa) 
-								to obtain the output the stage.
-								Valid values: c,C,r2,ssa,cfg,const,dce,verify
-  --verbose                     Display verbose output.
-  --shell                       Run interactive prompt.
-  --version                     Show version.
-  --help                        Show this screen.
+  --config <json_file>     Run decompilation using json rules file.
+  --make-config <file>     Wizard to make the JSON config.
+  -a --address=<addr>      Address of function to decompile.
+  -e --esil=<esil_expr>    Evaluate given esil expression.
+  -o --output=<output>     Specify output directory.
+  -p --pipeline=<pipe>     Stages in the pipeline. Comma separated values.
+                           Prefix the string with '=' (such as =ssa)
+                           to obtain the output the stage.
+                           Valid values: c,C,r2,ssa,cfg,const,dce,verify
+  -q --quiet               Display silent output.
+  -s --shell               Run interactive prompt.
+  -v --version             Show version.
+  -h --help                Show this screen.
 ";
 
 #[derive(Debug, RustcDecodable)]
@@ -43,8 +40,9 @@ struct Args {
 	flag_help: bool,
 	flag_make_config: bool,
 	flag_shell: bool,
-	flag_verbose: bool,
+	flag_quiet: bool,
 	flag_version: bool,
+	flag_output: Option<String>,
 	flag_esil: Option<Vec<String>>,
 	flag_pipeline: Option<String>,
 }
@@ -77,7 +75,7 @@ pub struct Radeco {
 	name: Option<String>,
 	outpath: String,
 	stages: Vec<usize>,
-	verbose: bool,
+	quiet: bool,
 	runner: Option<radeco_lib::utils::Runner>,
 	outmodes: Option<Vec<u16>>,
 }
@@ -96,7 +94,7 @@ impl Radeco {
 			name: input.name.clone(),
 			outpath: input.outpath.clone().unwrap(),
 			stages: input.stages.clone(),
-			verbose: input.verbose.clone().unwrap(),
+			quiet: input.quiet.clone().unwrap(),
 			runner: runner.ok(),
 			outmodes: input.outmodes.clone(),
 		};
@@ -129,7 +127,7 @@ impl Radeco {
 			}
 			return Radeco::new(input);
 		}
-		
+
 		// Run from a predefined configuration file
 		if args.flag_config.is_some() {
 			let filename = args.flag_config.clone().unwrap();
@@ -145,14 +143,16 @@ impl Radeco {
 		if args.arg_file.is_some() {
 			input.bin_name = args.arg_file;
 		}
-
 		if args.flag_address.is_some() {
-			input.addr = args.flag_address
+			input.addr = args.flag_address;
 		}
 		if args.flag_esil.is_some() {
-			input.esil = args.flag_esil
+			input.esil = args.flag_esil;
 		}
-		input.verbose = Some(args.flag_verbose);
+		input.quiet = Some(!args.flag_quiet);
+		if args.flag_output.is_some() {
+			input.outpath = args.flag_output;
+		}
 
 		if args.flag_pipeline.is_some() {
 			let mut i = 0;
