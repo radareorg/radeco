@@ -21,7 +21,7 @@ pub struct Input {
 	pub name: Option<String>,
 	pub outpath: Option<String>,
 	pub stages: Vec<usize>,
-	pub verbose: Option<bool>,
+	pub quiet: Option<bool>,
 	pub outmodes: Option<Vec<u16>>,
 }
 
@@ -44,7 +44,7 @@ impl Input {
 	fn new(bin_name: Option<String>, esil: Option<Vec<String>>,
 		   addr: Option<String>, name: Option<String>,
 		   outpath: Option<String>, stages: Vec<usize>,
-		   outmodes: Option<Vec<u16>>, verbose: bool) -> Input
+		   outmodes: Option<Vec<u16>>, quiet: bool) -> Input
 	{
 		Input {
 			bin_name: bin_name,
@@ -53,7 +53,7 @@ impl Input {
 			name: name,
 			outpath: outpath,
 			stages: stages.clone(),
-			verbose: Some(verbose),
+			quiet: Some(quiet),
 			outmodes: outmodes,
 		}
 	}
@@ -71,7 +71,7 @@ impl Input {
 	//     - name: bin_name vs None
 	//     - outpath: bin_name_out vs outputs
 	//     - stages: All vs All
-	//     - verbose: false vs false
+	//     - quiet : false vs false
 	pub fn defaults() -> Input {
 		let bin_name;
 		let addr;
@@ -120,7 +120,7 @@ impl Input {
 			outpath: Some(outpath),
 			stages: stages,
 			outmodes: Some(outmodes),
-			verbose: Some(false),
+			quiet: Some(false),
 		}
 	}
 
@@ -181,8 +181,8 @@ impl Input {
 		];
 
 		let pipeline = self.stages.iter().map(|s| possible[*s]).collect::<Vec<Pipeline>>();
-		let verbose = self.verbose.unwrap_or(false);
-		let mut runner = Runner::new(name, bin, addr, verbose, pipeline, Some(outpath));
+		let quiet = self.quiet.unwrap_or(false);
+		let mut runner = Runner::new(name, bin, addr, quiet, pipeline, Some(outpath));
 		// Handle the case where the input is raw esil.
 		if esil.is_some() {
 			let filepath = self.bin_name.clone();
