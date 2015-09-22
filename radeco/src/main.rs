@@ -1,4 +1,3 @@
-#![allow(unused_variables, dead_code)]
 #[macro_use]
 extern crate docopt;
 extern crate rustc_serialize;
@@ -26,7 +25,8 @@ fn main() {
 	let result = radeco.run();
 
 	match result {
-		Ok(ref r) => { // Do something
+		Ok(_) => {
+			radeco.output();
 		},
 		Err(e) => {
 			println!("[X] Error: {}", e);
