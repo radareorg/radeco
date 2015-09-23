@@ -32,19 +32,19 @@ Options:
 
 #[derive(Debug, RustcDecodable)]
 struct Args {
-	arg_esil_expr: Option<Vec<String>>,
-	arg_file: Option<String>,
-	cmd_run: bool,
-	flag_address: Option<String>,
-	flag_config: Option<String>,
-	flag_help: bool,
+	arg_esil_expr:    Option<Vec<String>>,
+	arg_file:         Option<String>,
+	cmd_run:          bool,
+	flag_address:     Option<String>,
+	flag_config:      Option<String>,
+	flag_help:        bool,
 	flag_make_config: bool,
-	flag_shell: bool,
-	flag_quiet: bool,
-	flag_version: bool,
-	flag_output: Option<String>,
-	flag_esil: Option<Vec<String>>,
-	flag_pipeline: Option<String>,
+	flag_shell:       bool,
+	flag_quiet:       bool,
+	flag_version:     bool,
+	flag_output:      Option<String>,
+	flag_esil:        Option<Vec<String>>,
+	flag_pipeline:    Option<String>,
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -70,13 +70,13 @@ fn write_file(fname: String, res: String) {
 #[allow(dead_code)]
 pub struct Radeco {
 	bin_name: Option<String>,
-	esil: Option<Vec<String>>,
-	addr: String,
-	name: Option<String>,
-	outpath: String,
-	stages: Vec<usize>,
-	quiet: bool,
-	runner: Option<radeco_lib::utils::Runner>,
+	esil:     Option<Vec<String>>,
+	addr:     String,
+	name:     Option<String>,
+	outpath:  String,
+	stages:   Vec<usize>,
+	quiet:    bool,
+	runner:   Option<radeco_lib::utils::Runner>,
 	outmodes: Option<Vec<u16>>,
 }
 
@@ -155,34 +155,46 @@ impl Radeco {
 		}
 
 		if args.flag_pipeline.is_some() {
-			let mut i = 0;
 			let pipe = args.flag_pipeline.unwrap();
 			{
 				let mut _tmp_stages = Vec::<usize>::new();
-				let mut _tmp_out = Vec::<u16>::new();
-				for stage in pipe.split(',') {
-					let mut j = 0;
-					if stage.chars().nth(0).unwrap() == '=' {
-						_tmp_out.push(i);
-						j = 1;
-					}
+				let mut exclude = Vec::<u16>::new();
+				for (i, stage) in pipe.split(',').enumerate() {
+					let j = match stage.chars().nth(0).unwrap() {
+						'-' => {
+							exclude.push(i as u16);
+							1
+						},
+						'+' => 1,
+						_   => 0,
+					};
+
 					let n = match &stage[j..] {
-						"c" | "C" => 7,
-						"r2" => 0,
-						"esil" => 1,
-						"cfg" => 2,
-						"ssa" => 3,
-						"const" => 4,
-						"dce" => 5,
-						"verify" => 6,
+						"r2"      => 0,
+						"esil"    => 1,
+						"cfg"     => 2,
+						"ssa"     => 3,
+						"const"   => 4,
+						"dce"     => 5,
+						"verify"  => 6,
+						"c"       => 7,
 						_ => {
-							let e = format!("Invalid expression {} in stages", stage[1..].to_owned());
+							let e = format!("Invalid expression {} in stages",
+							                            stage[1..].to_owned());
 							panic!(e)
 						},
 					};
 					_tmp_stages.push(n);
-					i += 1;
 				}
+
+				let mut _tmp_out = Vec::<u16>::new();
+				for i in (0..(pipe.len()-1) as u16) {
+					if exclude.contains(&i) {
+						continue;
+					}
+					_tmp_out.push(i);
+				}
+
 				input.stages = _tmp_stages;
 				input.outmodes = Some(_tmp_out);
 			}
