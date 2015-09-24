@@ -6,6 +6,9 @@ use std::path::{Path};
 use radeco_lib::utils::{Pipeline, Runner, Analysis, Pipeout};
 use radeco_lib::frontend::r2;
 use errors::ArgError;
+use std::fs::{File};
+use rustc_serialize::json;
+use std::io::{Read, Write};
 
 #[derive(RustcDecodable, RustcEncodable, Debug, Clone)]
 pub enum Outmode {
@@ -31,13 +34,17 @@ enum Mode {
 	Standalone,
 }
 
-// Return the mode radeco is operating in:
 fn mode() -> Mode {
 	if r2::R2::in_session() {
 		Mode::R2Pipe
 	} else {
 		Mode::Standalone
 	}
+}
+
+fn write_file(fname: String, res: String) {
+	let mut file = File::create(fname).unwrap();
+	file.write_all(res.as_bytes()).unwrap();
 }
 
 impl Input {
@@ -56,6 +63,21 @@ impl Input {
 			quiet: Some(quiet),
 			outmodes: outmodes,
 		}
+	}
+
+	pub fn from_config(fname: String) -> Result<Input, ArgError> {
+		let mut fh = try!(File::open(fname));
+		let mut raw_json = String::new();
+		try!(fh.read_to_string(&mut raw_json));
+		json::decode(&*raw_json).map_err(|x| ArgError::DecodeError(x))
+	}
+
+	pub fn spew_json(&self) {
+		let mut name = self.name.as_ref().unwrap().clone();
+		let json = json::as_pretty_json(&self);
+		let raw_json = format!("{}", json);
+		name.push_str(".json");
+		write_file(name, raw_json);
 	}
 
 	// Setup the defaults for the arguments:
@@ -77,8 +99,8 @@ impl Input {
 		let addr;
 		let name;
 		let outpath;
-		let outmodes = vec![];
-		let stages = vec![0, 1, 2, 3, 4, 5];
+		let stages = (0..5).collect::<Vec<_>>();
+		let outmodes = (0..5).collect::<Vec<_>>();
 
 		match mode() {
 			Mode::R2Pipe => {
@@ -270,12 +292,12 @@ pub fn input_builder() -> Input {
 
 	// TODO: honor Args.flag_verbose
 	let verbose = {
-		println!("Verbose (y/N):");
+		println!("Quiet (y/N):");
 		let _v = read!();
 		_v.or(Some("n".to_owned())).map(|c| match &*c {
 			"y" => true,
 			"n" => false,
-			_ => false,
+			_   => false,
 		}).unwrap()
 	};
 

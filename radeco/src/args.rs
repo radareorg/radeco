@@ -1,14 +1,14 @@
+//! Module that parses arguments and initializes radeco
+use errors::ArgError;
+use std::io::{Read};
+use std::process::Command;
+
 use docopt::Docopt;
 use radeco_lib;
-use errors::ArgError;
-use rustc_serialize::json;
 use structs;
-use std::fs::{File};
-use std::io::{Write, Read};
 
 static USAGE: &'static str = "
 radeco. The radare2 decompiler.
-
 Usage:
   radeco <file>
   radeco [options] [<file>]
@@ -23,7 +23,7 @@ Options:
   -p --pipeline=<pipe>     Stages in the pipeline. Comma separated values.
                            Prefix the string with '=' (such as =ssa)
                            to obtain the output the stage.
-                           Valid values: c,C,r2,ssa,cfg,const,dce,verify
+                           Valid values: c,r2,ssa,cfg,const,dce,verify,svg,png
   -q --quiet               Display silent output.
   -s --shell               Run interactive prompt.
   -v --version             Show version.
@@ -51,37 +51,54 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub type ArgResult<T> = Option<Result<T, ArgError>>;
 
-fn json_slurp(fname: String) -> Result<structs::Input, ArgError> {
-	let mut fh = try!(File::open(fname));
-	let mut raw_json = String::new();
-	try!(fh.read_to_string(&mut raw_json));
-	json::decode(&*raw_json).map_err(|x| ArgError::DecodeError(x))
-}
-
 fn make_config() -> structs::Input {
 	structs::input_builder()
 }
 
-fn write_file(fname: String, res: String) {
-	let mut file = File::create(fname).unwrap();
-	file.write_all(res.as_bytes()).unwrap();
-}
-
 #[allow(dead_code)]
 pub struct Radeco {
-	bin_name: Option<String>,
-	esil:     Option<Vec<String>>,
-	addr:     String,
-	name:     Option<String>,
-	outpath:  String,
-	stages:   Vec<usize>,
-	quiet:    bool,
-	runner:   Option<radeco_lib::utils::Runner>,
-	outmodes: Option<Vec<u16>>,
+	bin_name:    Option<String>,
+	esil:        Option<Vec<String>>,
+	addr:        String,
+	name:        Option<String>,
+	outpath:     String,
+	stages:      Vec<usize>,
+	quiet:       bool,
+	runner:      Option<radeco_lib::utils::Runner>,
+	outmodes:    Option<Vec<u16>>,
+	post_runner: Option<Vec<PostRunner>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PostRunner {
+	Genpng,
+	Gensvg,
+}
+
+macro_rules! radeco_out {
+	($x: expr, $b: expr) => {
+		if $b {
+			println!("{}", $x);
+		}
+	}
+}
+
+macro_rules! radeco_debug {
+	($x: expr) => {
+		{
+			use std::env;
+			match env::var("RADECO_DEBUG") {
+				Ok(_) => println!("[DEBUG] {}", $x),
+				Err(_) => (),
+			}
+		}
+	}
 }
 
 impl Radeco {
-	pub fn new(input: structs::Input) -> ArgResult<Radeco> {
+	pub fn new(input: structs::Input, post: Option<Vec<PostRunner>>) ->
+		                                                      ArgResult<Radeco>
+	{
 		let runner = input.validate();
 		if runner.is_err() {
 			return Some(Err(runner.err().unwrap()));
@@ -97,6 +114,7 @@ impl Radeco {
 			quiet: input.quiet.clone().unwrap(),
 			runner: runner.ok(),
 			outmodes: input.outmodes.clone(),
+			post_runner: post,
 		};
 
 		Some(Ok(radeco))
@@ -114,28 +132,24 @@ impl Radeco {
 			println!("{}", USAGE);
 			return None;
 		}
-		
+
+		let mut post_runner = Vec::<PostRunner>::new();
 		// Make config file and run radeco with it
 		if args.flag_make_config {
 			let input = make_config();
-			{
-				let mut name = input.name.clone().unwrap();
-				let json = json::as_pretty_json(&input);
-				let raw_json = format!("{}", json);
-				name.push_str(".json");
-				write_file(name, raw_json);
-			}
-			return Radeco::new(input);
+			input.spew_json();
+			// TODO: populate post_runner
+			return Radeco::new(input, Some(post_runner));
 		}
 
 		// Run from a predefined configuration file
 		if args.flag_config.is_some() {
 			let filename = args.flag_config.clone().unwrap();
-			let input = json_slurp(filename);
+			let input = structs::Input::from_config(filename);
 			if input.is_err() {
 				return Some(Err(input.err().unwrap()))
 			}
-			return Radeco::new(input.unwrap());
+			return Radeco::new(input.unwrap(), Some(post_runner));
 		}
 
 		let mut input = structs::Input::defaults();
@@ -156,60 +170,69 @@ impl Radeco {
 
 		if args.flag_pipeline.is_some() {
 			let pipe = args.flag_pipeline.unwrap();
-			{
-				let mut _tmp_stages = Vec::<usize>::new();
-				let mut exclude = Vec::<u16>::new();
-				for (i, stage) in pipe.split(',').enumerate() {
-					let j = match stage.chars().nth(0).unwrap() {
-						'-' => {
-							exclude.push(i as u16);
-							1
-						},
-						'+' => 1,
-						_   => 0,
-					};
+			let mut _tmp_stages = Vec::<usize>::new();
+			let mut exclude = Vec::<u16>::new();
+			for (i, stage) in pipe.split(',').enumerate() {
+				let j = match stage.chars().nth(0).unwrap() {
+					'-' => {
+						exclude.push(i as u16);
+						1
+					},
+					'+' => 1,
+					_   => 0,
+				};
 
-					let n = match &stage[j..] {
-						"r2"      => 0,
-						"esil"    => 1,
-						"cfg"     => 2,
-						"ssa"     => 3,
-						"const"   => 4,
-						"dce"     => 5,
-						"verify"  => 6,
-						"c"       => 7,
-						_ => {
-							let e = format!("Invalid expression {} in stages",
-							                            stage[1..].to_owned());
-							panic!(e)
-						},
-					};
-					_tmp_stages.push(n);
-				}
-
-				let mut _tmp_out = Vec::<u16>::new();
-				for i in (0..(pipe.len()-1) as u16) {
-					if exclude.contains(&i) {
+				// Try and match with post runner stages
+				match &stage[j..] {
+					"png" =>{
+						post_runner.push(PostRunner::Genpng);
 						continue;
-					}
-					_tmp_out.push(i);
+					},
+					"svg" => {
+						post_runner.push(PostRunner::Gensvg);
+						continue;
+					},
+					_ => (),
 				}
 
-				input.stages = _tmp_stages;
-				input.outmodes = Some(_tmp_out);
+				let n = match &stage[j..] {
+					"r2"      => 0,
+					"esil"    => 1,
+					"cfg"     => 2,
+					"ssa"     => 3,
+					"const"   => 4,
+					"dce"     => 5,
+					"verify"  => 6,
+					"c"       => 7,
+					_ => {
+						let e =
+							ArgError::InvalidArgument(stage[j..].to_owned());
+						return Some(Err(e));
+					},
+				};
+				_tmp_stages.push(n);
 			}
+
+			let mut _tmp_out = Vec::<u16>::new();
+			for i in (0..(pipe.len() - 1) as u16) {
+				if exclude.contains(&i) {
+					continue;
+				}
+				_tmp_out.push(i);
+			}
+			input.stages = _tmp_stages;
+			input.outmodes = Some(_tmp_out);
 		}
 
-		Radeco::new(input)
+		Radeco::new(input, Some(post_runner))
 	}
 
 	pub fn run(&mut self) -> Result<(), String> {
-		match self.runner.as_mut(){
+		match self.runner.as_mut() {
 			Some(ref mut runner) => {
-				if runner.is_verbose() {
-					println!("[*] Starting radeco with config: ");
-					println!("{}", runner);
-				}
+				radeco_out!("[*] Starting radeco with config: ",
+							                runner.is_verbose());
+				radeco_out!(runner, runner.is_verbose());
 				runner.run()
 			},
 			None => panic!("Uninitialized instance of radeco!"),
@@ -223,6 +246,36 @@ impl Radeco {
 				runner.output(self.outmodes.clone());
 			},
 			None => panic!("Uninitialized instance of radeco!"),
+		}
+
+		// Post processing phases defined in radeco
+		// These can be generation of svg, png etc
+		for phase in self.post_runner.as_ref().unwrap() {
+			match *phase {
+				PostRunner::Genpng |
+				PostRunner::Gensvg => {
+					let format = if *phase == PostRunner::Genpng {
+						"png"
+					} else {
+						"svg"
+					};
+					radeco_out!("[*] Generating svg",
+								self.runner.as_ref().unwrap().is_verbose());
+					let mut cmd = String::new();
+					let mut target = self.outpath.clone();
+					target.push_str("/");
+					target.push_str(&self.name.as_ref().unwrap());
+					target.push_str("/*.dot");
+					cmd.push_str(&format!("dot -T{} -O ", format));
+					cmd.push_str(&target);
+
+					let _ = Command::new("sh")
+						.arg("-c")
+						.arg(cmd)
+					    .output()
+						.unwrap();
+				},
+			}
 		}
 	}
 }
