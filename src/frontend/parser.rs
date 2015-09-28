@@ -167,6 +167,7 @@ impl Parser {
 	}
 
 	pub fn parse_str(&mut self, esil: &str) -> Result<(), ParseError> {
+		println!("{}: {}", self.addr, esil);
 		if esil.len() == 0 {
 			return Err(ParseError::InvalidEsil);
 		}
@@ -175,6 +176,9 @@ impl Parser {
 			                        .map(|x| x.to_string())
 									.collect();
 		for token in esil {
+			if token.len() == 0 {
+				continue;
+			}
 			let op = match self.opset.get(&*token) {
 				Some(op) => op.clone(),
 				None     => MOpcode::OpInvalid,
