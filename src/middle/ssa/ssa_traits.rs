@@ -17,6 +17,8 @@
 //!
 //!  * `SSAMod` - This trait provides methods to __manipulate__ operation nodes.
 //!
+//!  * `SSAExtras` - TODO
+//!
 //!  The associated type `SSA::ValueRef` is used by the methods to refer to nodes.
 //!  ValueRefs are invalidated by removal or replacement of the target node.
 //!  You can revalidate a ValueRef by calling `SSA::refresh` on it.
@@ -226,4 +228,52 @@ pub trait SSAMod: SSA + CFGMod {
 
 	/// Remove  conrtol flow edge. This is a part of SSAMod as this potentially modifies the ssa.
 	fn remove_edge(&mut self, i: &Self::CFEdgeRef);
+}
+
+/// Extras. TODO
+///
+/// Design requirement - For a method to be a part of SSAExtras, it __has__ to have a default
+/// implementation that would work out of the box. Since these methods are only extras and do not
+/// add any major functionality, but rather just convinence or display glitter, the user must not
+/// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
+pub trait SSAExtra: SSA {
+	fn mark(&mut self, _: &Self::ValueRef) {
+		();
+	}
+
+	fn set_color(&mut self, _: &Self::ValueRef, _: u8) {
+		();
+	}
+
+	fn add_comment(&mut self, _: &Self::ValueRef, _: String) {
+		();
+	}
+
+	fn set_addr(&mut self, _: &Self::ValueRef, _: String) {
+		();
+	}
+
+	fn add_flag(&mut self, _: &Self::ValueRef, _: String) {
+		();
+	}
+
+	fn is_marked(&self, _: &Self::ValueRef) -> bool {
+		false
+	}
+
+	fn color(&self, _: &Self::ValueRef) -> Option<u8> {
+		None
+	}
+
+	fn comments(&self, _: &Self::ValueRef) -> Option<String> {
+		None
+	}
+
+	fn addr(&self, _: &Self::ValueRef) -> Option<String> {
+		None
+	}
+
+	fn flags(&self, _: &Self::ValueRef) -> Option<String> {
+		None
+	}
 }

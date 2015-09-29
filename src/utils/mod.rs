@@ -24,7 +24,6 @@ use std::fs;
 use std::fs::{File};
 use std::fmt;
 use std::path::{PathBuf};
-use std::collections::HashMap;
 
 macro_rules! out {
 	($str: expr, $m: expr) => { if $m { println!($str) } }
@@ -82,7 +81,6 @@ pub struct State {
 	cfg: Option<CFG>,
 	ssa: Option<SSAStorage>,
 	pub pipeout: Option<Pipeout>,
-	symbols: Option<HashMap<u64, String>>
 }
 
 impl State {
@@ -95,7 +93,6 @@ impl State {
 			cfg: None,
 			ssa: None,
 			pipeout: None,
-			symbols: None,
 		}
 	}
 }

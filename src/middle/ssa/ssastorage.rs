@@ -8,7 +8,7 @@
 //! Module that holds the struct and trait implementations for the ssa form.
 
 use std::fmt::Debug;
-
+use std::collections::HashMap;
 use petgraph::EdgeDirection;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use middle::ir;
@@ -16,8 +16,32 @@ use middle::ir;
 use super::ssa_traits;
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
-use super::ssa_traits::{SSA, SSAMod, ValueType};
+use super::ssa_traits::{SSA, SSAMod, SSAExtra, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
+
+#[derive(Clone, Debug, RustcEncodable)]
+/// Structure that represents data that maybe associated with an node in the SSA
+pub struct AdditionalData {
+	address:  Option<String>,
+	comments: Option<String>,
+	flag:     Option<String>,
+	mark:     bool,
+	color:    Option<u8>,
+}
+
+impl AdditionalData {
+	fn new() -> AdditionalData {
+		AdditionalData {
+			address: None,
+			comments: None,
+			flag: None,
+			mark: false,
+			color: None,
+		}
+	}
+}
+
+pub type AssociatedData = HashMap<NodeIndex, AdditionalData>;
 
 /// Node type for the SSAStorage-internal petgraph.
 /// Both actions and values are represented using this same enum.
@@ -74,6 +98,7 @@ pub struct SSAStorage {
 	pub start_node: NodeIndex,
 	pub exit_node: NodeIndex,
 	pub stable_indexing: bool,
+	assoc_data: AssociatedData,
 	needs_cleaning: bool,
 }
 
@@ -85,6 +110,7 @@ impl SSAStorage {
 			stable_indexing: true,
 			start_node: NodeIndex::end(),
 			exit_node: NodeIndex::end(),
+			assoc_data: HashMap::new(),
 		}
 	}
 
@@ -745,5 +771,58 @@ impl SSAMod for SSAStorage {
 		}
 
 		self.g.remove_edge(*i);
+	}
+}
+
+impl SSAExtra for SSAStorage {
+	fn mark(&mut self, i: &Self::ValueRef) {
+		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+		data.mark = true;
+	}
+
+	fn set_color(&mut self, i: &Self::ValueRef, color: u8) {
+		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+		data.color = Some(color);
+	}
+
+	fn add_comment(&mut self, i: &Self::ValueRef, comment: String) {
+		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+		data.comments = Some(comment);
+	}
+
+	fn set_addr(&mut self, i: &Self::ValueRef, addr: String) {
+		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+		data.address = Some(addr);
+	}
+
+	fn add_flag(&mut self, i: &Self::ValueRef, f: String) {
+		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+		data.flag = Some(f);
+	}
+
+	fn is_marked(&self, i: &Self::ValueRef) -> bool {
+		self.assoc_data.get(i).and_then(|data| Some(data.mark))
+							  .unwrap_or(AdditionalData::new().mark)
+	}
+
+	fn color(&self, i: &Self::ValueRef) -> Option<u8> {
+		self.assoc_data.get(i).and_then(|data| data.color)
+							  //.unwrap_or(AdditionalData::new().color)
+	}
+
+	fn comments(&self, i: &Self::ValueRef) -> Option<String> {
+		self.assoc_data.get(i).and_then(|data| data.comments.clone())
+							  //.unwrap_or(AdditionalData::new().comments)
+
+	}
+
+	fn addr(&self, i: &Self::ValueRef) -> Option<String> {
+		self.assoc_data.get(i).and_then(|data| data.address.clone())
+							  //.unwrap_or(AdditionalData::new().address)
+	}
+
+	fn flags(&self, i: &Self::ValueRef) -> Option<String> {
+		self.assoc_data.get(i).and_then(|data| data.flag.clone())
+							  //.unwrap_or(AdditionalData::new().flag)
 	}
 }
