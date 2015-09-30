@@ -785,7 +785,7 @@ impl SSAExtra for SSAStorage {
 		data.color = Some(color);
 	}
 
-	fn add_comment(&mut self, i: &Self::ValueRef, comment: String) {
+	fn set_comment(&mut self, i: &Self::ValueRef, comment: String) {
 		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
 		data.comments = Some(comment);
 	}
@@ -807,22 +807,17 @@ impl SSAExtra for SSAStorage {
 
 	fn color(&self, i: &Self::ValueRef) -> Option<u8> {
 		self.assoc_data.get(i).and_then(|data| data.color)
-							  //.unwrap_or(AdditionalData::new().color)
 	}
 
 	fn comments(&self, i: &Self::ValueRef) -> Option<String> {
 		self.assoc_data.get(i).and_then(|data| data.comments.clone())
-							  //.unwrap_or(AdditionalData::new().comments)
-
 	}
 
 	fn addr(&self, i: &Self::ValueRef) -> Option<String> {
 		self.assoc_data.get(i).and_then(|data| data.address.clone())
-							  //.unwrap_or(AdditionalData::new().address)
 	}
 
 	fn flags(&self, i: &Self::ValueRef) -> Option<String> {
 		self.assoc_data.get(i).and_then(|data| data.flag.clone())
-							  //.unwrap_or(AdditionalData::new().flag)
 	}
 }

@@ -11,7 +11,8 @@
 //! Control Flow Graphs (CFG) aid in the analysis and recovery of the program
 //! structure.
 
-use petgraph::graph::{Graph, NodeIndex, Edge};
+use petgraph::graph::{Graph, Edge};
+use petgraph::graph;
 use petgraph::{Dfs};
 use std::collections::BTreeMap;
 
@@ -68,9 +69,9 @@ pub struct EdgeData {
 #[derive(Clone)]
 pub struct CFG {
 	pub g:     Graph<NodeData, EdgeData>,
-	pub entry: NodeIndex,
-	pub exit:  NodeIndex,
-	pub bbs:   BTreeMap<Address, NodeIndex>,
+	pub entry: graph::NodeIndex,
+	pub exit:  graph::NodeIndex,
+	pub bbs:   BTreeMap<Address, graph::NodeIndex>,
 }
 
 impl BasicBlock {
@@ -221,7 +222,7 @@ impl CFG {
 		val.as_literal
 	}
 
-	fn build_edges(&mut self, current: NodeIndex, next: NodeIndex, inst: MInst, next_inst: MInst) {
+	fn build_edges(&mut self, current: graph::NodeIndex, next: graph::NodeIndex, inst: MInst, next_inst: MInst) {
 		let exit = self.exit.clone();
 		match inst.opcode {
 			MOpcode::OpJmp => {
@@ -288,7 +289,7 @@ impl CFG {
 		}
 	}
 
-	pub fn add_new_block(&mut self) -> NodeIndex {
+	pub fn add_new_block(&mut self) -> graph::NodeIndex {
 		let mut bb = BasicBlock::new();
 		// By default a block is always nameed as nX.
 		bb.name = format!("n{}", self.g.node_count());
@@ -299,52 +300,70 @@ impl CFG {
 		self.g.add_node(NodeData::Block(bb));
 	}
 
-	pub fn get_block(&mut self, n: NodeIndex) -> &mut NodeData {
+	pub fn get_block(&mut self, n: graph::NodeIndex) -> &mut NodeData {
 		self.g.node_weight_mut(n).unwrap()
 	}
 
-	pub fn add_edge(&mut self, src: NodeIndex, target: NodeIndex, edge_data: EdgeData) {
+	pub fn add_edge(&mut self, src: graph::NodeIndex, target: graph::NodeIndex, edge_data: EdgeData) {
 		self.g.add_edge(src, target, edge_data);
 	}
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 //// Trait implementations to emit dot for CFG
-/////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 
 impl GraphDot for CFG {
-	type NodeType = NodeData;
-	type EdgeType = Edge<EdgeData>;
+	type NodeIndex = graph::NodeIndex;
+	type EdgeIndex = graph::EdgeIndex;
 
 	fn configure(&self) -> String {
 		add_strings!("digraph cfg {\n", "splines=\"true\";\n")
 	}
 
-	fn nodes(&self) -> Vec<Self::NodeType> {
-		let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
-		res
+	fn node_count(&self) -> usize {
+		self.g.node_count()
+	}
+	
+	fn edge_count(&self) -> usize {
+		self.g.edge_count()
 	}
 
-	fn edges(&self) -> Vec<Self::EdgeType> {
-		let res = self.g.raw_edges().to_vec();
-		res
+	fn node_index_new(i: usize) -> Self::NodeIndex {
+		graph::NodeIndex::new(i)
 	}
 
-	fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
-		self.g.node_weight(NodeIndex::new(n))
+	fn edge_index_new(i: usize) -> Self::EdgeIndex {
+		graph::EdgeIndex::new(i)
 	}
 
-	fn edge_source(&self, edge: &Edge<EdgeData>) -> usize {
-		edge.source().index()
+	//fn nodes(&self) -> Vec<Self::NodeType> {
+		//let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
+		//res
+	//}
+
+	//fn edges(&self) -> Vec<Self::EdgeType> {
+		//let res = self.g.raw_edges().to_vec();
+		//res
+	//}
+
+	//fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
+		//self.g.node_weight(NodeIndex::new(n))
+	//}
+
+	fn edge_source(&self, edge: &Self::EdgeIndex) -> Self::NodeIndex {
+		self.g.raw_edges()[edge.index()].source()
 	}
 
-	fn edge_target(&self, edge: &Edge<EdgeData>) -> usize {
-		edge.target().index()
+	fn edge_target(&self, edge: &Self::EdgeIndex) -> Self::NodeIndex {
+		self.g.raw_edges()[edge.index()].target()
 	}
 
-	fn edge_attrs(&self, edge: &Edge<EdgeData>) -> DotAttrBlock {
+	fn edge_attrs(&self, edge: &Self::EdgeIndex) -> DotAttrBlock {
+		let edge = &self.g.raw_edges()[edge.index()];
 		let wt = &edge.weight;
 		let mut direction = "forward";
+		let prefix = format!("n{} -> n{}", edge.source().index(), edge.target().index());
 		let (color, label) = match wt.edge_type {
 			EdgeType::True          => ("green", "label=T "),
 			EdgeType::False         => ("red", "label=F "),
@@ -353,10 +372,11 @@ impl GraphDot for CFG {
 		if wt.direction == BACKWARD {
 			direction = "back";
 		}
-		DotAttrBlock::Raw(add_strings!("[", label, "color=", color, " dir=", direction, "]"))
+		DotAttrBlock::Raw(add_strings!(prefix, " [", label, "color=", color, " dir=", direction, "]"))
 	}
 
-	fn node_attrs(&self, node: &NodeData) -> DotAttrBlock {
+	fn node_attrs(&self, i: &Self::NodeIndex) -> DotAttrBlock {
+		let node = &self.g[*i];
 		let mut result = String::new();
 		let mut color = "black";
 		result = add_strings!(result, "<<table border=\"0\" cellborder=\"0\" cellpadding=\"1\">");
@@ -384,6 +404,7 @@ impl GraphDot for CFG {
 			NodeData::Exit  => "<tr><td>Exit</td></tr>".to_string(),
 		};
 		result = add_strings!(result, res, "</table>>");
-		DotAttrBlock::Raw(add_strings!("[style=rounded label=", result, " shape=box color=", color,"]"))
+		let prefix = format!("n{}", i.index());
+		DotAttrBlock::Raw(add_strings!(prefix, " [style=rounded label=", result, " shape=box color=", color,"]"))
 	}
 }

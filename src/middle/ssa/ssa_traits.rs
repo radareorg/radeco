@@ -245,7 +245,7 @@ pub trait SSAExtra: SSA {
 		();
 	}
 
-	fn add_comment(&mut self, _: &Self::ValueRef, _: String) {
+	fn set_comment(&mut self, _: &Self::ValueRef, _: String) {
 		();
 	}
 

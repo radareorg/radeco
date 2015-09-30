@@ -20,7 +20,7 @@ use middle::dce;
 use middle::ir::{MVal, MInst, MOpcode, MValType};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::{BBInfo, SSA, SSAMod};
+use middle::ssa::{BBInfo, SSA, SSAMod, SSAExtra};
 use middle::ssa::verifier::{Verify, VerifiedAdd};
 
 pub type VarId = usize;
@@ -38,7 +38,7 @@ where T: 'a + Clone + Debug + Clone + SSAMod<BBInfo=BBInfo>
 }
 
 impl<'a, T> SSAConstruction<'a, T>
-where T: 'a + Clone + Debug + Verify +
+where T: 'a + Clone + Debug + Verify + SSAExtra +
          SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
 	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
@@ -204,6 +204,8 @@ where T: 'a + Clone + Debug + Verify +
 			}
 
 			let nn = self.process_op(block, instruction, n0, n1);
+			self.phiplacer.ssa.set_addr(&nn, (instruction.addr.val).to_string());
+
 			if instruction.opcode == MOpcode::OpLoad {
 				self.phiplacer.ssa.op_use(nn, 3, machinestate);
 			}
