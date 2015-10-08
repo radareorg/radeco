@@ -108,26 +108,20 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
 	// Node configurations
 	{
 		let nodes = g.node_count();
-
-		let mut links: Vec<usize> = Vec::with_capacity(nodes);
-		let mut clustermap: HashMap<usize, (usize, usize)> = HashMap::new();
+		let mut clustermap = HashMap::<usize, Vec<usize>>::new();
 
 		for i in 0..nodes {
-			let cid = g.node_cluster(&T::node_index_new(i));
-			let entry = clustermap.entry(cid.unwrap());
-			let ec = entry.or_insert((i, i));
-			links.push(ec.1);
-			ec.1 = i;
+			let block = g.node_cluster(&T::node_index_new(i));
+			clustermap.entry(block.unwrap())
+			          .or_insert(Vec::new())
+					  .push(i);
 		}
 
-		for (&cid, &(first, last)) in clustermap.iter() {
-			result.push_str(&*format!("subgraph cluster_{} {{\n", cid));
+		for (k, v) in clustermap.iter() {
+			result.push_str(&*format!("subgraph cluster_{} {{\n", k));
 			result.push_str(&*format!("rankdir=TB;\n"));
-			let mut i = last;
-			loop {
-				result.push_str(&*g.node_attrs(&T::node_index_new(i)).bake());
-				if i == first { break }
-				i = links[i];
+			for node in v.iter() {
+				result.push_str(&*g.node_attrs(&T::node_index_new(*node)).bake());
 			}
 			result.push_str("}\n");
 		}
