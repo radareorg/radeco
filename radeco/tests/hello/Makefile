@@ -1,5 +1,5 @@
 RADECO=../../target/debug/radeco
-STAGES=r2,=esil,=cfg,=ssa,=const,=dce
+STAGES=r2,esil,cfg,ssa,const,dce
 
 all:
 	$(MAKE) clean

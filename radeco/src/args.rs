@@ -83,18 +83,6 @@ macro_rules! radeco_out {
 	}
 }
 
-macro_rules! radeco_debug {
-	($x: expr) => {
-		{
-			use std::env;
-			match env::var("RADECO_DEBUG") {
-				Ok(_) => println!("[DEBUG] {}", $x),
-				Err(_) => (),
-			}
-		}
-	}
-}
-
 impl Radeco {
 	pub fn new(input: structs::Input, post: Option<Vec<PostRunner>>) ->
 		                                                      ArgResult<Radeco>
