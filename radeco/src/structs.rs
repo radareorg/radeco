@@ -28,20 +28,6 @@ pub struct Input {
 	pub outmodes: Option<Vec<u16>>,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Mode {
-	R2Pipe,
-	Standalone,
-}
-
-fn mode() -> Mode {
-	if r2::R2::in_session() {
-		Mode::R2Pipe
-	} else {
-		Mode::Standalone
-	}
-}
-
 fn write_file(fname: String, res: String) {
 	let mut file = File::create(fname).unwrap();
 	file.write_all(res.as_bytes()).unwrap();
@@ -102,36 +88,33 @@ impl Input {
 		let stages = (0..5).collect::<Vec<_>>();
 		let outmodes = (0..5).collect::<Vec<_>>();
 
-		match mode() {
-			Mode::R2Pipe => {
-				let mut r2 = r2::R2::new(None).unwrap();
-				addr = {
-					r2.send("s");
-					r2.recv().trim().to_owned()
-				};
-				// TODO: Error Handling here.
-				let bin_info = r2.get_bin_info().unwrap();
-				let core = bin_info.core.unwrap();
-				let path = match core.file.as_ref() {
-					Some(ref f) => {
-						bin_name = Some(format!("{}", f));
-						Path::new(f.clone())
-					},
-					None => panic!("No file open in r2"),
-				};
-				let file = path.file_name()
-					.unwrap()
-					.to_str()
-					.map(|s| s.to_owned());
-				outpath = format!("./{}_out", file.as_ref().unwrap());
-				name = Some(format!("{}.run", file.as_ref().unwrap()));
-			},
-			Mode::Standalone => {
-				bin_name = None;
-				addr = "entry0".to_owned();
-				name = None;
-				outpath = "./outputs".to_owned();
-			},
+		if r2::R2::in_session() {
+			let mut r2 = r2::R2::new(None).unwrap();
+			addr = {
+				r2.send("s");
+				r2.recv().trim().to_owned()
+			};
+			// TODO: Error Handling here.
+			let bin_info = r2.get_bin_info().unwrap();
+			let core = bin_info.core.unwrap();
+			let path = match core.file.as_ref() {
+				Some(ref f) => {
+					bin_name = Some(format!("{}", f));
+					Path::new(f.clone())
+				},
+				None => panic!("No file open in r2"),
+			};
+			let file = path.file_name()
+				.unwrap()
+				.to_str()
+				.map(|s| s.to_owned());
+			outpath = format!("./{}_out", file.as_ref().unwrap());
+			name = Some(format!("{}.run", file.as_ref().unwrap()));
+		} else {
+			bin_name = None;
+			addr = "entry0".to_owned();
+			name = None;
+			outpath = "./outputs".to_owned();
 		}
 
 		Input {

@@ -3,7 +3,6 @@ extern crate docopt;
 extern crate rustc_serialize;
 extern crate radeco_lib;
 
-mod radeco;
 mod structs;
 mod errors;
 mod args;
