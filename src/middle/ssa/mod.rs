@@ -18,6 +18,7 @@ pub mod ssastorage;
 pub mod ssadot;
 pub mod verifier;
 pub mod error;
+mod bimap;
 
 pub use self::ssa_traits::{SSA, SSAMod, SSAExtra, NodeData, ValueType, BBInfo};
 pub use self::ssastorage::{SSAStorage};
