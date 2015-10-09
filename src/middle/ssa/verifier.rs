@@ -31,13 +31,13 @@ pub trait Verify: SSA {
 }
 
 pub trait VerifiedAdd: SSAMod {
-	fn verified_add_op(&mut self, block: Self::ActionRef, opc: MOpcode, vt: ValueType, args: &[Self::ValueRef]) -> Self::ValueRef;
+	fn verified_add_op(&mut self, block: Self::ActionRef, opc: MOpcode, vt: ValueType, args: &[Self::ValueRef], addr: Option<u64>) -> Self::ValueRef;
 }
 
 impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
-	fn verified_add_op(&mut self, block: Self::ActionRef, opc: MOpcode, vt: ValueType, args: &[Self::ValueRef]) -> Self::ValueRef {
+	fn verified_add_op(&mut self, block: Self::ActionRef, opc: MOpcode, vt: ValueType, args: &[Self::ValueRef], addr: Option<u64>) -> Self::ValueRef {
 		assert!(opc.allowed_in_ssa());
-		let op = self.add_op(block, opc, vt);
+		let op = self.add_op(block, opc, vt, addr);
 		for (i, arg) in args.iter().enumerate() {
 			self.op_use(op, i as u8, *arg);
 		}

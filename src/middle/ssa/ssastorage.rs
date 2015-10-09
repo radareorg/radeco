@@ -19,8 +19,10 @@ use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAMod, SSAExtra, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 
+
+/// Structure that represents data that maybe associated with an node in the
+/// SSA
 #[derive(Clone, Debug, RustcEncodable)]
-/// Structure that represents data that maybe associated with an node in the SSA
 pub struct AdditionalData {
 	address:  Option<String>,
 	comments: Option<String>,
@@ -49,7 +51,8 @@ pub type AssociatedData = HashMap<NodeIndex, AdditionalData>;
 /// Value nodes are `Op`, `Phi`, `Comment`, `Undefined` and `Removed`.
 /// Action nodes are `Unreachable`, `BasicBlock`, `DynamicAction`
 /// `RegisterState` is neither.
-/// Value nodes have a `ValueType` that can be extracted with `SSA::get_node_data`
+/// Value nodes have a `ValueType` that can be extracted with
+/// `SSA::get_node_data`
 #[derive(Clone, Debug)]
 pub enum NodeData {
 	/// Represents on operation.
@@ -66,26 +69,35 @@ pub enum NodeData {
 	Unreachable,
 	/// Represents a basic block.
 	BasicBlock(ssa_traits::BBInfo),
-	/// Represents an action that doesn't contain any value nodes, described by its associated RegisterState (which includes the instruction pointer).
+	/// Represents an action that doesn't contain any value nodes, described
+	/// by its associated RegisterState (which includes the instruction
+	/// pointer).
 	DynamicAction,
-	/// Represents the state of the register file at the moment of entry into the associated action node.
+	/// Represents the state of the register file at the moment of entry into
+	/// the associated action node.
 	RegisterState,
 }
 
 /// Edge type for the SSAStorage-internal petgraph.
 #[derive(Clone, Copy, Debug)]
 pub enum EdgeData {
-	/// Edge from action to action. Represents control flow. The number is used to distinguish true branch, false branch, etc.
+	/// Edge from action to action. Represents control flow. The number is
+	/// used to distinguish true branch, false branch, etc.
 	Control(u8),
-	/// Edge from value or RegisterState to value. Represents data flow. The number describes the howmanyeth argument of the edge source is encoded by this edge.
+	/// Edge from value or RegisterState to value. Represents data flow. The
+	/// number describes the howmanyeth argument of the edge source is encoded
+	/// by this edge.
 	Data(u8),
 	/// Edge from value to BasicBlock.
 	ContainedInBB,
-	/// Edge from BasicBlock to value. Points from a basic block with multiple successors to a value that decides which branch will be taken.
+	/// Edge from BasicBlock to value. Points from a basic block with multiple
+	/// successors to a value that decides which branch will be taken.
 	Selector,
-	/// Edge from action to RegisterState. Represents the values of all registers at entry to the action.
+	/// Edge from action to RegisterState. Represents the values of all
+	/// registers at entry to the action.
 	RegisterState,
-	/// Edge from Removed to value or from Unreachable to action. Created when calling replace() in stable indices mode.
+	/// Edge from Removed to value or from Unreachable to action. Created when
+	/// calling replace() in stable indices mode.
 	ReplacedBy,
 }
 
@@ -100,6 +112,7 @@ pub struct SSAStorage {
 	pub stable_indexing: bool,
 	assoc_data: AssociatedData,
 	needs_cleaning: bool,
+	stablemap: HashMap<usize, usize>,
 }
 
 impl SSAStorage {
@@ -111,10 +124,12 @@ impl SSAStorage {
 			start_node: NodeIndex::end(),
 			exit_node: NodeIndex::end(),
 			assoc_data: HashMap::new(),
+			stablemap: HashMap::new(),
 		}
 	}
 
-	/*pub fn add_phi_comment(&mut self, block: NodeIndex, comment: &String) -> NodeIndex {
+	/*pub fn add_phi_comment(&mut self, block: NodeIndex, comment: &String) ->
+	 * NodeIndex {
 		let n = self.g.add_node(NodeData::Phi(comment.clone()));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
@@ -128,7 +143,9 @@ impl SSAStorage {
 		}
 	}
 
-	fn gather_adjacent(&self, node: NodeIndex, direction: EdgeDirection, data: bool) -> Vec<NodeIndex> {
+	fn gather_adjacent(&self, node: NodeIndex, direction: EdgeDirection,
+					   data: bool) -> Vec<NodeIndex>
+	{
 		let mut adjacent = Vec::new();
 		let mut walk = self.g.walk_edges_directed(node, direction);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
@@ -146,14 +163,19 @@ impl SSAStorage {
 	}
 
 	pub fn args_of_ordered(&self, node: NodeIndex) -> Vec<NodeIndex> {
-		let ordered = if let NodeData::Phi(_, _) = self.g[node] { false } else { true };
+		let ordered = if let NodeData::Phi(_, _) = self.g[node] { 
+			false 
+		} else { 
+			true 
+		};
 		let mut args = Vec::new();
 		if ordered {
 			args.push(NodeIndex::end());
 			args.push(NodeIndex::end());
 		}
 
-		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
+		let mut walk = self.g.walk_edges_directed(node,
+												  EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Data(index) = self.g[edge] {
 				if ordered {
@@ -172,7 +194,8 @@ impl SSAStorage {
 	}
 
 	pub fn replaced_by(&self, node: NodeIndex) -> NodeIndex {
-		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Outgoing);
+		let mut walk = self.g.walk_edges_directed(node,
+												  EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::ReplacedBy = self.g[edge] {
 				return othernode
@@ -208,7 +231,9 @@ impl CFG for SSAStorage {
 	fn blocks(&self) -> Vec<NodeIndex> {
 		let len = self.g.node_count();
 		let mut blocks = Vec::<NodeIndex>::new();
-		for i in (0..len).map(|x| NodeIndex::new(x)).collect::<Vec<NodeIndex>>().iter() {
+		for i in (0..len).map(|x|
+							  NodeIndex::new(x)).collect::<Vec<NodeIndex>>().iter()
+		{
 			match self.g[*i] {
 				NodeData::BasicBlock(_) => blocks.push(i.clone()),
 				_ => continue,
@@ -348,7 +373,9 @@ impl CFGMod for SSAStorage {
 		a
 	}
 
-	fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
+	fn add_control_edge(&mut self, source: Self::ActionRef,
+						target: Self::ActionRef, index: u8)
+	{
 		self.g.add_edge(source, target, EdgeData::Control(index));
 	}
 
@@ -360,7 +387,8 @@ impl CFGMod for SSAStorage {
 		self.remove(regstate);
 
 		let mut expressions = Vec::<NodeIndex>::new();
-		let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
+		let mut walk = self.g.walk_edges_directed(node,
+												  EdgeDirection::Incoming);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::ContainedInBB = self.g[edge] {
 				expressions.push(othernode);
@@ -377,7 +405,8 @@ impl CFGMod for SSAStorage {
 		// block removal can make predecessors lose selectors
 		for pred in preds {
 			if self.succs_of(pred).len() == 1 {
-				let mut walk = self.g.walk_edges_directed(pred, EdgeDirection::Incoming);
+				let mut walk = self.g.walk_edges_directed(pred,
+														  EdgeDirection::Incoming);
 				let mut seledge = None;
 				while let Some((edge, _)) = walk.next_neighbor(&self.g) {
 					if let EdgeData::Selector = self.g[edge] {
@@ -477,7 +506,8 @@ impl SSA for SSAStorage {
 
 		let mut true_branch = NodeIndex::end();
 		let mut false_branch = NodeIndex::end();
-		let mut walk = self.g.walk_edges_directed(selects_for, EdgeDirection::Outgoing);
+		let mut walk = self.g.walk_edges_directed(selects_for,
+												  EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Control(0) = self.g[edge] {
 				false_branch = othernode.clone();
@@ -573,7 +603,8 @@ impl SSA for SSAStorage {
 
 	fn get_target(&self, i: &NodeIndex) -> NodeIndex {
 		let cur_block = self.get_block(i);
-		let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
+		let mut walk = self.g.walk_edges_directed(cur_block,
+												  EdgeDirection::Outgoing);
 		while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
 			if let EdgeData::Control(_) = self.g[edge] {
 				return othernode;
@@ -614,9 +645,12 @@ impl SSA for SSAStorage {
 
 impl SSAMod for SSAStorage {
 
-	fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode, vt: ValueType) -> NodeIndex {
+	fn add_op(&mut self, block: NodeIndex, opc: ir::MOpcode,
+			  vt: ValueType, addr: Option<u64>) -> NodeIndex
+	{
 		let n = self.g.add_node(NodeData::Op(opc, vt));
 		self.g.update_edge(n, block, CONTEDGE);
+		self.set_addr(&n, addr.as_ref().unwrap().to_string());
 		n
 	}
 
@@ -643,7 +677,9 @@ impl SSAMod for SSAStorage {
 		n
 	}
 
-	fn add_comment(&mut self, block: NodeIndex, vt: ValueType, msg: String) -> NodeIndex {
+	fn add_comment(&mut self, block: NodeIndex, vt: ValueType,
+				   msg: String) -> NodeIndex
+	{
 		let n = self.g.add_node(NodeData::Comment(vt, msg));
 		self.g.update_edge(n, block, CONTEDGE);
 		n
@@ -670,7 +706,9 @@ impl SSAMod for SSAStorage {
 		}
 	}
 
-	fn op_use(&mut self, mut node: NodeIndex, index: u8, mut argument: NodeIndex) {
+	fn op_use(&mut self, mut node: NodeIndex, index: u8,
+			  mut argument: NodeIndex)
+	{
 		node = self.refresh(node);
 		argument = self.refresh(argument);
 		if argument == NodeIndex::end() { return }
@@ -693,13 +731,16 @@ impl SSAMod for SSAStorage {
 			match self.g[edge] {
 				EdgeData::Data(i) => {
 					match self.g[othernode] {
-						NodeData::Op(_, _) | NodeData::RegisterState => self.op_use(othernode, i, replacement),
-						NodeData::Phi(_, _) => self.phi_use(othernode, replacement),
+						NodeData::Op(_, _) | NodeData::RegisterState =>
+							self.op_use(othernode, i, replacement),
+						NodeData::Phi(_, _) => self.phi_use(othernode,
+															replacement),
 						_ => panic!()
 					}
 				},
 				EdgeData::ReplacedBy => {
-					self.g.add_edge(othernode, replacement, EdgeData::ReplacedBy);
+					self.g.add_edge(othernode, replacement,
+									EdgeData::ReplacedBy);
 				},
 				_ => ()
 			}

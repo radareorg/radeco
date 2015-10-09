@@ -144,6 +144,8 @@ impl GraphDot for SSAStorage {
 		prefix.push_str(&format!("n{}", i.index()));
 		let attr = match *node {
 			NodeData::Op(opc, ValueType::Integer{width: w}) => {
+				// TODO
+				//self.extras_dump();
 				let addr = self.addr(i);
 				let mut r = String::new();
 				if addr.is_some() {

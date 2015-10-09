@@ -191,7 +191,7 @@ pub trait SSA: CFG {
 pub trait SSAMod: SSA + CFGMod {
 
 	/// Add a new operation node.
-	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType) -> Self::ValueRef;
+	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType, addr: Option<u64>) -> Self::ValueRef;
 
 	/// Add a new constant node.
 	fn add_const(&mut self, block: Self::ActionRef, value: u64) -> Self::ValueRef;

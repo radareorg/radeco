@@ -167,7 +167,6 @@ impl Parser {
 	}
 
 	pub fn parse_str(&mut self, esil: &str) -> Result<(), ParseError> {
-		println!("{}: {}", self.addr, esil);
 		if esil.len() == 0 {
 			return Err(ParseError::InvalidEsil);
 		}
@@ -635,27 +634,27 @@ impl Parser {
 		Ok(res)
 	}
 
+	// TODO
 	fn constant_value(&mut self, num: u64) -> MVal {
-		let tmp: MVal = if !self.constants.contains_key(&num) {
+		//let tmp: MVal = if !self.constants.contains_key(&num) {
 			let op = MOpcode::OpConst(num);
 			let size = self.default_size;
 			let mut next_tmp = self.get_tmp_register(size);
 			next_tmp.as_literal = Some(num);
 			let inst = op.to_inst(next_tmp.clone(), MVal::null(), MVal::null()
-			                                                    , None);
+			                                                    , Some(MAddr::new(self.addr)));
 			self.insts.push(inst);
-			next_tmp
-		} else {
-			MVal::null()
-		};
+		//} else {
+			//MVal::null()
+		//};
 
-		let const_v = self.constants.entry(num)
-		                            .or_insert(tmp)
-		                            .clone();
+		//let const_v = self.constants.entry(num)
+									//.or_insert(tmp)
+									//.clone();
 
 		// Assert that we actually have a constant.
-		assert!(const_v.as_literal != None);
-		return const_v;
+		//assert!(const_v.as_literal != None);
+		return next_tmp;
 	}
 }
 
