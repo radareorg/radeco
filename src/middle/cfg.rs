@@ -11,7 +11,7 @@
 //! Control Flow Graphs (CFG) aid in the analysis and recovery of the program
 //! structure.
 
-use petgraph::graph::{Graph, Edge};
+use petgraph::graph::{Graph};
 use petgraph::graph;
 use petgraph::{Dfs};
 use std::collections::BTreeMap;

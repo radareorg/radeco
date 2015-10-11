@@ -8,7 +8,7 @@
 //! Implements Dominance frontier and dominance tree computation.
 
 use std::collections::{HashMap, HashSet};
-use petgraph::graph::{Graph, Edge};
+use petgraph::graph::{Graph};
 use petgraph::graph;
 use petgraph::EdgeDirection;
 

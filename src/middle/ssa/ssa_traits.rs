@@ -153,10 +153,14 @@ pub trait SSA: CFG {
 	fn get_branches(&self, i: &Self::ValueRef) -> (Self::ActionRef, Self::ActionRef);
 
 	/// Helper method that gets only the true branch.
-	fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef {
+		self.get_branches(i).1
+	}
 
 	/// Helper method that gets only the false branch.
-	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef {
+		self.get_branches(i).0
+	}
 
 	/// Gets the data dependencies of a value node in any order.
 	/// (See get_operands for ordered return value)
@@ -175,7 +179,7 @@ pub trait SSA: CFG {
 
 	/// Updates a node reference to the latest version in case of replacement
 	// TODO: Hide this implementation detail
-	fn refresh(&self, node: Self::ValueRef) -> Self::ValueRef;
+	//fn refresh(&self, node: Self::ValueRef) -> Self::ValueRef&;
 
 	fn invalid_value(&self) -> Self::ValueRef;
 
@@ -226,7 +230,7 @@ pub trait SSAMod: SSA + CFGMod {
 	/// Perform a cleanup. (Will invalidate indices)
 	fn cleanup(&mut self);
 
-	/// Remove  conrtol flow edge. This is a part of SSAMod as this potentially modifies the ssa.
+	/// Remove control flow edge. This is a part of SSAMod as this potentially modifies the ssa.
 	fn remove_edge(&mut self, i: &Self::CFEdgeRef);
 }
 

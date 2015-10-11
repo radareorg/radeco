@@ -57,7 +57,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 			Option::Some(r) => r,
 			Option::None => self.read_variable_recursive(variable, block)
 		};
-		n = self.ssa.refresh(n);
+		//n = self.ssa.refresh(n);
 		return n
 	}
 
