@@ -99,7 +99,9 @@ impl NodeData {
 }
 
 impl EdgeData {
-	pub fn new(direction: Direction, edge_type: EdgeType, src_addr: Address, dst_addr: Address) -> EdgeData {
+	pub fn new(direction: Direction, edge_type: EdgeType, src_addr: Address,
+			   dst_addr: Address) -> EdgeData
+	{
 		EdgeData {
 			direction: direction,
 			edge_type: edge_type,

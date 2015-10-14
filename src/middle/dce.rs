@@ -58,6 +58,6 @@ where T: Clone +
 			ssa.remove(NodeIndex::new(i));
 		}
 	}
-	ssa.cleanup();
+	//ssa.cleanup();
 }
 

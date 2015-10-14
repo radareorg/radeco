@@ -125,8 +125,6 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
 		let nodes = g.nodes();
 		let mut clustermap = HashMap::<T::NodeIndex, Vec<T::NodeIndex>>::new();
 
-		println!("Nodes: {:?}", nodes);
-
 		for i in &nodes {
 			let block = g.node_cluster(i);
 			clustermap.entry(T::node_index_new(block.unwrap()))
