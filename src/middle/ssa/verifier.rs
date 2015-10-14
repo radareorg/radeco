@@ -39,6 +39,7 @@ impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
 		assert!(opc.allowed_in_ssa());
 		let op = self.add_op(block, opc, vt, addr);
 		for (i, arg) in args.iter().enumerate() {
+			println!("{:?} {:?} {:?}", opc, op, arg);
 			self.op_use(op, i as u8, *arg);
 		}
 		let q = self.verify_expr(&op);

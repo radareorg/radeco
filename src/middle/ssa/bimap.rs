@@ -19,8 +19,14 @@ use std::cmp::Eq;
 use std::hash::Hash;
 
 #[derive(Debug, Clone)]
+pub enum Record<T, Q> {
+	Primary(Q),
+	Alias(T),
+}
+
+#[derive(Debug, Clone)]
 pub struct BiMap<K: Hash + Eq + Clone, V: Hash + Eq + Clone> {
-	f: HashMap<K, V>,
+	f: HashMap<K, Record<K, V>>,
 	b: HashMap<V, K>,
 }
 
@@ -33,20 +39,37 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
 	}
 
 	pub fn insert(&mut self, k: K, v: V) {
-		if let Some(ref x) = self.f.insert(k.clone(), v.clone()) {
-			self.b.remove(x);
+		let _v = Record::Primary(v.clone());
+		if let Some(Record::Primary(x)) = self.f.insert(k.clone(), _v) {
+			self.b.remove(&x);
 		}
 		if let Some(_) = self.b.insert(v, k) {
 			panic!("Failed Assertion. BiMap is no longer one-to-one!");
 		}
 	}
 
-	pub fn remove_k(&mut self, k: &K) -> Option<V> {
-		match self.f.get(k) {
-			None => { return None; },
-			Some(v) => { self.b.remove(v); },
+	// Replace k with a new alias k_, i.e. Make a map from k -> _k,
+	// When queried for k, respond with _k.
+	// NOTE: Replace technically works as an alias by pointing one key to another.
+	// Hence such a key cannot and should not be a part of a backward map.
+	pub fn replace(&mut self, k: K, _k: K) {
+		if let Some(Record::Primary(v)) = self.f.insert(k, Record::Alias(_k)) {
+			self.b.remove(&v);
 		}
-		self.f.remove(k)
+	}
+
+	pub fn remove_k(&mut self, k: &K) -> Option<V> {
+		if let Some(&Record::Primary(ref v)) = self.f.get(k) {
+			self.b.remove(v);
+		} else {
+			return None;
+		}
+
+		if let Some(Record::Primary(v)) = self.f.remove(k) {
+			return Some(v);
+		} else {
+			return None;
+		}
 	}
 
 	pub fn remove_v(&mut self, v: &V) -> Option<K> {
@@ -57,12 +80,34 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
 		self.b.remove(v)
 	}
 
-	pub fn get(&self, k: &K) -> Option<&V> {
-		self.f.get(k)
+	pub fn get(&self, _k: &K) -> Option<&V> {
+		// If a node is replaced, we need to get the Node that it is replaced
+		// by.
+		let mut v: Option<_>;
+		let mut k = _k;
+		loop {
+			v = self.f.get(&k);
+			if let Some(&Record::Alias(ref x)) = v {
+				k = x;
+			} else {
+				break;
+			}
+		}
+
+		if v.is_none() { return None; }
+		if let Some(&Record::Primary(ref x)) = v {
+			return Some(x);
+		} else {
+			unreachable!();
+		}
 	}
 
 	pub fn get_inverse(&self, k: &V) -> Option<&K> {
 		self.b.get(k)
+	}
+
+	pub fn keys(&self) -> Vec<K> {
+		self.b.values().map(|n| n.clone()).collect()
 	}
 }
 
@@ -114,5 +159,18 @@ mod test {
 		h.insert(1, 5);
 		h.insert(2, 6);
 		h.insert(1, 6);
+	}
+
+	#[test]
+	fn bimap_alias() {
+		let mut h = BiMap::<usize, usize>::new();
+		h.insert(1, 5);
+		h.insert(2, 6);
+		h.replace(1, 2);
+
+		assert_eq!(h.get(&1), Some(&6));
+		assert_eq!(h.get(&2), Some(&6));
+		assert_eq!(h.get_inverse(&6), Some(&2));
+		assert_eq!(h.get_inverse(&5), None);
 	}
 }

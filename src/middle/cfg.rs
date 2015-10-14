@@ -337,10 +337,9 @@ impl GraphDot for CFG {
 		graph::EdgeIndex::new(i)
 	}
 
-	//fn nodes(&self) -> Vec<Self::NodeType> {
-		//let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
-		//res
-	//}
+	fn nodes(&self) -> Vec<Self::NodeIndex> {
+		(0..self.node_count()).map(|n| graph::NodeIndex::new(n)).collect()
+	}
 
 	//fn edges(&self) -> Vec<Self::EdgeType> {
 		//let res = self.g.raw_edges().to_vec();

@@ -39,6 +39,10 @@ impl GraphDot for SSAStorage {
 		//self.g.node_weight(NodeIndex::new(n))
 	//}
 	
+	fn nodes(&self) -> Vec<Self::NodeIndex> {
+		self.valid_nodes()
+	}
+	
 	fn node_count(&self) -> usize {
 		self.g.node_count()
 	}
@@ -55,28 +59,31 @@ impl GraphDot for SSAStorage {
 		graph::EdgeIndex::new(i)
 	}
 
-	fn node_cluster(&self, i: &Self::NodeIndex) -> Option<usize> {
+	fn node_cluster(&self, exi: &Self::NodeIndex) -> Option<usize> {
+		let i = &self.internal(exi);
 		match self.g.node_weight(*i) {
 			Some(&NodeData::BasicBlock(_)) => Some(i.index()),
 			Some(&NodeData::DynamicAction) => Some(i.index()),
-			_ => Some(self.get_block(i).index()),
+			_ => Some(self.get_block(exi).index()),
 		}
 	}
 
 	fn edge_source(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
 		let edge = &self.g.raw_edges()[i.index()];
-		match edge.weight {
+		let xi = match edge.weight {
 			EdgeData::Data(_) => edge.target(),
 			_                 => edge.source(),
-		}
+		};
+		self.external(&xi)
 	}
 
 	fn edge_target(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
 		let edge = &self.g.raw_edges()[i.index()];
-		match edge.weight {
+		let xi = match edge.weight {
 			EdgeData::Data(_) => edge.source(),
 			_                 => edge.target(),
-		}
+		};
+		self.external(&xi)
 	}
 
 	fn edge_skip(&self, i: &Self::EdgeIndex) -> bool {
@@ -138,7 +145,8 @@ impl GraphDot for SSAStorage {
 		DotAttrBlock::Hybrid(prefix, attr)
 	}
 
-	fn node_attrs(&self, i: &Self::NodeIndex) -> DotAttrBlock {
+	fn node_attrs(&self, exi: &Self::NodeIndex) -> DotAttrBlock {
+		let i = &self.internal(exi);
 		let node = &self.g[*i];
 		let mut prefix = String::new();
 		prefix.push_str(&format!("n{}", i.index()));

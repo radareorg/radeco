@@ -8,6 +8,11 @@
 //! Graph visualization traits and functions to emit dot code.
 
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::cmp::Eq;
+use std::fmt::Debug;
+
+use petgraph::graph::NodeIndex;
 
 macro_rules! add_strings {
 	( $( $x: expr ),* ) => {
@@ -72,10 +77,20 @@ impl DotAttrBlock {
 	}
 }
 
+pub trait Index {
+	fn to_index(&self) -> usize;
+}
+
+impl Index for NodeIndex { 
+	fn to_index(&self) -> usize {
+		self.index()
+	}
+}
+
 /// This trait enables graphs to be generated from implementors.
 pub trait GraphDot {
-	type NodeIndex;
-	type EdgeIndex;
+	type NodeIndex: Hash + Clone + Eq + Index + Debug;
+	type EdgeIndex: Hash + Clone + Eq;
 
 	fn node_index_new(usize) -> Self::NodeIndex;
 	fn edge_index_new(usize) -> Self::EdgeIndex;
@@ -83,7 +98,7 @@ pub trait GraphDot {
 	fn configure(&self) -> String;
 	fn node_count(&self) -> usize;
 	fn edge_count(&self) -> usize;
-	//fn nodes(&self) -> Vec<Self::NodeType>;
+	fn nodes(&self) -> Vec<Self::NodeIndex>;
 	//fn edges(&self) -> Vec<Self::EdgeType>;
 	//fn get_node(&self, n: usize) -> Option<&Self::NodeType>;
 
@@ -107,21 +122,23 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
 
 	// Node configurations
 	{
-		let nodes = g.node_count();
-		let mut clustermap = HashMap::<usize, Vec<usize>>::new();
+		let nodes = g.nodes();
+		let mut clustermap = HashMap::<T::NodeIndex, Vec<T::NodeIndex>>::new();
 
-		for i in 0..nodes {
-			let block = g.node_cluster(&T::node_index_new(i));
-			clustermap.entry(block.unwrap())
+		println!("Nodes: {:?}", nodes);
+
+		for i in &nodes {
+			let block = g.node_cluster(i);
+			clustermap.entry(T::node_index_new(block.unwrap()))
 			          .or_insert(Vec::new())
-					  .push(i);
+					  .push(i.clone());
 		}
 
 		for (k, v) in clustermap.iter() {
-			result.push_str(&*format!("subgraph cluster_{} {{\n", k));
+			result.push_str(&*format!("subgraph cluster_{} {{\n", k.to_index()));
 			result.push_str(&*format!("rankdir=TB;\n"));
 			for node in v.iter() {
-				result.push_str(&*g.node_attrs(&T::node_index_new(*node)).bake());
+				result.push_str(&*g.node_attrs(node).bake());
 			}
 			result.push_str("}\n");
 		}
