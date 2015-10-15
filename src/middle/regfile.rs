@@ -116,7 +116,8 @@ impl SubRegisterFile {
 
 	pub fn write_register<'a, T>(&self, phip: &mut PhiPlacer<'a, T>,
 	                             base: usize, block: T::ActionRef,
-	                             var: &String, mut value: T::ValueRef)
+	                             var: &String, mut value: T::ValueRef,
+								 addr: u64)
 	where T: 'a + SSAMod<BBInfo=BBInfo> + VerifiedAdd
 	{
 		let info = &self.named_registers[var];
@@ -138,7 +139,7 @@ impl SubRegisterFile {
 		if phip.ssa.get_node_data(&value).ok().map_or(0, |nd| match nd.vt {
 			ValueType::Integer{width} => width
 		}) < width {
-			value = phip.ssa.verified_add_op(block, opcode, vt, &[value]);
+			value = phip.ssa.verified_add_op(block, opcode, vt, &[value], Some(addr));
 		}
 
 		let mut new_value;
@@ -146,7 +147,8 @@ impl SubRegisterFile {
 		if info.shift > 0 {
 			let shift_amount_node = phip.ssa.add_const(block, info.shift as u64);
 			new_value = phip.ssa.verified_add_op(block, MOpcode::OpLsl,
-		                                         vt, &[value, shift_amount_node]);
+		                                         vt, &[value, shift_amount_node],
+												 Some(addr));
 			value = new_value;
 		}
 
@@ -160,10 +162,12 @@ impl SubRegisterFile {
 
 		let mut ov = phip.read_variable(block, id);
 		let maskvalue_node = phip.ssa.add_const(block, maskval);
-		new_value = phip.ssa.verified_add_op(block, MOpcode::OpAnd, vt, &[ov, maskvalue_node]);
+		new_value = phip.ssa.verified_add_op(block, MOpcode::OpAnd, vt, &[ov, maskvalue_node],
+											 Some(addr));
 
 		ov = new_value;
-		new_value = phip.ssa.verified_add_op(block, MOpcode::OpOr, vt, &[value, ov]);
+		new_value = phip.ssa.verified_add_op(block, MOpcode::OpOr, vt, &[value, ov],
+											 Some(addr));
 		value = new_value;
 		phip.write_variable(block, id, value);
 	}
@@ -185,7 +189,8 @@ impl SubRegisterFile {
 
 	pub fn read_register<'a, T>(&self, phiplacer: &mut PhiPlacer<'a, T>,
 	                            base: usize, block: T::ActionRef,
-	                            var: &String) -> T::ValueRef
+	                            var: &String,
+								addr: u64) -> T::ValueRef
 	where T: SSAMod<BBInfo=BBInfo> + VerifiedAdd + 'a
 	{
 		let info = &self.named_registers[var];
@@ -201,7 +206,8 @@ impl SubRegisterFile {
 			let opcode = MOpcode::OpLsr;
 			let vtype = From::from(width);
 			let new_value = phiplacer.ssa.verified_add_op(
-				block, opcode, vtype, &[value, shift_amount_node]);
+				block, opcode, vtype, &[value, shift_amount_node],
+				Some(addr));
 			value = new_value;
 		}
 
@@ -209,7 +215,8 @@ impl SubRegisterFile {
 			let opcode = MOpcode::OpNarrow(info.width as WidthSpec);
 			let vtype = From::from(info.width);
 			let new_value =
-				phiplacer.ssa.verified_add_op(block, opcode, vtype, &[value]);
+				phiplacer.ssa.verified_add_op(block, opcode, vtype, &[value],
+											  Some(addr));
 			value = new_value;
 		}
 		value

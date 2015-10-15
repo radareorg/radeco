@@ -17,6 +17,8 @@
 //!
 //!  * `SSAMod` - This trait provides methods to __manipulate__ operation nodes.
 //!
+//!  * `SSAExtras` - TODO
+//!
 //!  The associated type `SSA::ValueRef` is used by the methods to refer to nodes.
 //!  ValueRefs are invalidated by removal or replacement of the target node.
 //!  You can revalidate a ValueRef by calling `SSA::refresh` on it.
@@ -151,10 +153,14 @@ pub trait SSA: CFG {
 	fn get_branches(&self, i: &Self::ValueRef) -> (Self::ActionRef, Self::ActionRef);
 
 	/// Helper method that gets only the true branch.
-	fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef {
+		self.get_branches(i).1
+	}
 
 	/// Helper method that gets only the false branch.
-	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef;
+	fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef {
+		self.get_branches(i).0
+	}
 
 	/// Gets the data dependencies of a value node in any order.
 	/// (See get_operands for ordered return value)
@@ -171,10 +177,6 @@ pub trait SSA: CFG {
 	/// Get a node that has all register values at the beginning of the specified basic block as args
 	fn registers_at(&self, i: &Self::ActionRef) -> Self::ValueRef;
 
-	/// Updates a node reference to the latest version in case of replacement
-	// TODO: Hide this implementation detail
-	fn refresh(&self, node: Self::ValueRef) -> Self::ValueRef;
-
 	fn invalid_value(&self) -> Self::ValueRef;
 
 	fn to_value(&self, Self::ActionRef) -> Self::ValueRef;
@@ -182,14 +184,14 @@ pub trait SSA: CFG {
 
 	fn node_count(&self) -> usize;
 	fn edge_count(&self) -> usize;
-
+	fn nodes(&self) -> Vec<Self::ValueRef>;
 }
 
 /// Trait for modifying SSA data
 pub trait SSAMod: SSA + CFGMod {
 
 	/// Add a new operation node.
-	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType) -> Self::ValueRef;
+	fn add_op(&mut self, block: Self::ActionRef, opc: ir::MOpcode, vt: ValueType, addr: Option<u64>) -> Self::ValueRef;
 
 	/// Add a new constant node.
 	fn add_const(&mut self, block: Self::ActionRef, value: u64) -> Self::ValueRef;
@@ -221,9 +223,58 @@ pub trait SSAMod: SSA + CFGMod {
 	/// Remove a node without replacement
 	fn remove(&mut self, node: Self::ValueRef);
 
-	/// Perform a cleanup. (Will invalidate indices)
-	fn cleanup(&mut self);
-
-	/// Remove  conrtol flow edge. This is a part of SSAMod as this potentially modifies the ssa.
+	/// Remove control flow edge. This is a part of SSAMod as this potentially modifies the ssa.
 	fn remove_edge(&mut self, i: &Self::CFEdgeRef);
+}
+
+/// Extras. TODO
+///
+/// Design requirement - For a method to be a part of SSAExtras, it __has__ to have a default
+/// implementation that would work out of the box. Since these methods are only extras and do not
+/// add any major functionality, but rather just convinence or display glitter, the user must not
+/// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
+pub trait SSAExtra: SSA {
+	fn mark(&mut self, _: &Self::ValueRef) {
+		();
+	}
+
+	fn clear_mark(&mut self, &Self::ValueRef) {
+		();
+	}
+
+	fn set_color(&mut self, _: &Self::ValueRef, _: u8) {
+		();
+	}
+
+	fn set_comment(&mut self, _: &Self::ValueRef, _: String) {
+		();
+	}
+
+	fn set_addr(&mut self, _: &Self::ValueRef, _: String) {
+		();
+	}
+
+	fn add_flag(&mut self, _: &Self::ValueRef, _: String) {
+		();
+	}
+
+	fn is_marked(&self, _: &Self::ValueRef) -> bool {
+		false
+	}
+
+	fn color(&self, _: &Self::ValueRef) -> Option<u8> {
+		None
+	}
+
+	fn comments(&self, _: &Self::ValueRef) -> Option<String> {
+		None
+	}
+
+	fn addr(&self, _: &Self::ValueRef) -> Option<String> {
+		None
+	}
+
+	fn flags(&self, _: &Self::ValueRef) -> Option<String> {
+		None
+	}
 }

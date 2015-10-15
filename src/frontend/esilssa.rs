@@ -20,7 +20,7 @@ use middle::dce;
 use middle::ir::{MVal, MInst, MOpcode, MValType};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::{BBInfo, SSA, SSAMod};
+use middle::ssa::{BBInfo, SSA, SSAMod, SSAExtra};
 use middle::ssa::verifier::{Verify, VerifiedAdd};
 
 pub type VarId = usize;
@@ -38,7 +38,7 @@ where T: 'a + Clone + Debug + Clone + SSAMod<BBInfo=BBInfo>
 }
 
 impl<'a, T> SSAConstruction<'a, T>
-where T: 'a + Clone + Debug + Verify +
+where T: 'a + Clone + Debug + Verify + SSAExtra +
          SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
 	pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
@@ -96,15 +96,14 @@ where T: 'a + Clone + Debug + Verify +
 			if let CFGNodeData::Block(ref srcbb) = cfg.g[*i] {
 				self.process_block(block, srcbb);
 			} else {
-				//println!("{:?}", cfg.g[*i]);
 				unreachable!();
 			}
 		}
 
 		for edge in cfg.g.raw_edges() {
 			let i = match edge.weight.edge_type {
-				CFGEdgeType::False => 0,
-				CFGEdgeType::True => 1,
+				CFGEdgeType::False         => 0,
+				CFGEdgeType::True          => 1,
 				CFGEdgeType::Unconditional => 2,
 			};
 
@@ -121,11 +120,11 @@ where T: 'a + Clone + Debug + Verify +
 		dce::collect(self.phiplacer.ssa);
 	}
 
-	fn process_in(&mut self, block: T::ActionRef, mval: &MVal) -> T::ValueRef {
+	fn process_in(&mut self, block: T::ActionRef, mval: &MVal, addr: u64) -> T::ValueRef {
 		match mval.val_type {
 			MValType::Register  => {
 				let phip = &mut self.phiplacer;
-				self.regfile.read_register(phip, 3, block, &mval.name)
+				self.regfile.read_register(phip, 3, block, &mval.name, addr)
 			},
 			MValType::Temporary => self.temps[&mval.name],
 			MValType::Internal  => panic!("This value type should be eliminated during parsing"),
@@ -137,11 +136,13 @@ where T: 'a + Clone + Debug + Verify +
 		}
 	}
 
-	fn process_out(&mut self, block: T::ActionRef, mval: &MVal, value: T::ValueRef) {
+	fn process_out(&mut self, block: T::ActionRef, inst: &MInst, value: T::ValueRef) {
+		let mval = &inst.dst;
 		match mval.val_type { 
 			MValType::Register  => {
 				self.regfile.write_register(&mut self.phiplacer, 3,
-                                            block, &mval.name, value);
+                                            block, &mval.name, value,
+											inst.addr.val);
 			},
 			MValType::Temporary => {
 				self.temps.insert(mval.name.clone(), value);
@@ -164,7 +165,8 @@ where T: 'a + Clone + Debug + Verify +
 		};
 
 		let nn = {
-			(*self.phiplacer.ssa).verified_add_op(block, inst.opcode, dsttype, &[n0, n1])
+			(*self.phiplacer.ssa).verified_add_op(block, inst.opcode, dsttype, &[n0, n1],
+												  Some(inst.addr.val))
 		};
 
 		if inst.update_flags {
@@ -173,7 +175,8 @@ where T: 'a + Clone + Debug + Verify +
 			// Add a widen instruction if the width is not 64.
 			if inst.dst.size != 64 {
 				let ref mut ssa = self.phiplacer.ssa;
-				nn64 = ssa.add_op(block, MOpcode::OpWiden(64), From::from(64 as u16));
+				nn64 = ssa.add_op(block, MOpcode::OpWiden(64), From::from(64 as u16),
+				                  Some(inst.addr.val));
 				ssa.op_use(nn64, 0, nn);
 			}
 
@@ -188,8 +191,8 @@ where T: 'a + Clone + Debug + Verify +
 	fn process_block(&mut self, block: T::ActionRef, source: &BasicBlock) {
 		let mut machinestate = self.phiplacer.ssa.to_value(block);
 		for ref instruction in &source.instructions {
-			let n0 = self.process_in(block, &instruction.operand_1);
-			let n1 = self.process_in(block, &instruction.operand_2);
+			let n0 = self.process_in(block, &instruction.operand_1, instruction.addr.val);
+			let n1 = self.process_in(block, &instruction.operand_2, instruction.addr.val);
 
 			if instruction.opcode == MOpcode::OpJmp {
 				// TODO: In case of static jumps, this is trivial and does not need a selector.
@@ -204,6 +207,7 @@ where T: 'a + Clone + Debug + Verify +
 			}
 
 			let nn = self.process_op(block, instruction, n0, n1);
+
 			if instruction.opcode == MOpcode::OpLoad {
 				self.phiplacer.ssa.op_use(nn, 3, machinestate);
 			}
@@ -213,7 +217,7 @@ where T: 'a + Clone + Debug + Verify +
 				machinestate = nn;
 			}
 
-			self.process_out(block, &instruction.dst, nn);
+			self.process_out(block, &instruction, nn);
 		}
 	}
 }
