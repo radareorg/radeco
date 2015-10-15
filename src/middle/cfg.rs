@@ -343,15 +343,6 @@ impl GraphDot for CFG {
 		(0..self.node_count()).map(|n| graph::NodeIndex::new(n)).collect()
 	}
 
-	//fn edges(&self) -> Vec<Self::EdgeType> {
-		//let res = self.g.raw_edges().to_vec();
-		//res
-	//}
-
-	//fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
-		//self.g.node_weight(NodeIndex::new(n))
-	//}
-
 	fn edge_source(&self, edge: &Self::EdgeIndex) -> Self::NodeIndex {
 		self.g.raw_edges()[edge.index()].source()
 	}

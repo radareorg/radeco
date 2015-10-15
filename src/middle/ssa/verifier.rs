@@ -120,11 +120,12 @@ impl Verify for SSAStorage {
 					check!(edges.len() == 1, SSAErr::WrongNumEdges(*block, 1,
 																   edges.len()));
 
-					check!(target_block.index() < node_count,
-					SSAErr::InvalidTarget(*block, *edge, target_block));
-					check!(*block != target_block,
-						   SSAErr::InvalidTarget(*block, *edge,
-												 target_block));
+					// TODO: Re-enable validity check if needed.
+					//check!(target_block.index() < node_count,
+					//SSAErr::InvalidTarget(*block, *edge, target_block));
+					//check!(*block != target_block,
+						   //SSAErr::InvalidTarget(*block, *edge,
+												 //target_block));
 				},
 				_ => panic!("Found something other than a control edge!"),
 			}

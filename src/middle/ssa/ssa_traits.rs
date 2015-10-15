@@ -184,7 +184,7 @@ pub trait SSA: CFG {
 
 	fn node_count(&self) -> usize;
 	fn edge_count(&self) -> usize;
-
+	fn nodes(&self) -> Vec<Self::ValueRef>;
 }
 
 /// Trait for modifying SSA data
@@ -235,6 +235,10 @@ pub trait SSAMod: SSA + CFGMod {
 /// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
 pub trait SSAExtra: SSA {
 	fn mark(&mut self, _: &Self::ValueRef) {
+		();
+	}
+
+	fn clear_mark(&mut self, &Self::ValueRef) {
 		();
 	}
 

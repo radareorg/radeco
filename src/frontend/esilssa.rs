@@ -117,7 +117,7 @@ where T: 'a + Clone + Debug + Verify + SSAExtra +
 			self.phiplacer.seal_block(block);
 		}
 
-		//dce::collect(self.phiplacer.ssa);
+		dce::collect(self.phiplacer.ssa);
 	}
 
 	fn process_in(&mut self, block: T::ActionRef, mval: &MVal, addr: u64) -> T::ValueRef {

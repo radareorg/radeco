@@ -713,6 +713,10 @@ impl SSA for SSAStorage {
 	fn to_value(&self, n: NodeIndex) -> NodeIndex { n }
 	fn to_action(&self, n: NodeIndex) -> NodeIndex { n }
 
+	fn nodes(&self) -> Vec<NodeIndex> {
+		self.valid_nodes()
+	}
+
 	fn node_count(&self) -> usize {
 		self.g.node_count()
 	}
@@ -827,6 +831,12 @@ impl SSAExtra for SSAStorage {
 	fn mark(&mut self, i: &Self::ValueRef) {
 		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
 		data.mark = true;
+	}
+
+	fn clear_mark(&mut self, i: &Self::ValueRef) {
+		if let Some(ref mut data) = self.assoc_data.get_mut(i) {
+			data.mark = false;
+		}
 	}
 
 	fn set_color(&mut self, i: &Self::ValueRef, color: u8) {
