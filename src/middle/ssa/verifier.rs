@@ -9,12 +9,11 @@
 //! valid.
 //!
 //! This is only for verification and to catch potential mistakes.
-#![allow(unused_variables)]
-use petgraph::graph::{NodeIndex};
+use petgraph::graph::NodeIndex;
 
-use super::cfg_traits::{CFG};
+use super::cfg_traits::CFG;
 use super::ssa_traits::{SSA, SSAMod, ValueType};
-use super::ssastorage::{EdgeData};
+use super::ssastorage::EdgeData;
 use super::ssastorage::NodeData;
 use super::ssa_traits::NodeData as TNodeData;
 use super::error::SSAErr;
@@ -66,12 +65,12 @@ macro_rules! check {
 
 impl Verify for SSAStorage {
 	fn verify_block(&self, block: &NodeIndex) -> VResult<Self> {
-		let edge_count = self.edge_count();
 		let node_count = self.node_count();
-		// Make sure that we have a valid node first.
-		assert!(block.index() < node_count);
+
 		let edges = self.edges_of(block);
+
 		// Every BB can have a maximum of 2 Outgoing CFG Edges.
+		// TODO: Relax this assumption when we have support for switch.
 		check!(edges.len() < 3, SSAErr::WrongNumEdges(*block, 3, edges.len()));
 
 		let mut edgecases = [false; 256];
@@ -91,7 +90,6 @@ impl Verify for SSAStorage {
 		}
 
 		for edge in edges.iter() {
-			assert!(edge.index() < edge_count);
 			match self.g[*edge] {
 				EdgeData::Control(i) if i < 2 => {
 					// Things to lookout for:
@@ -119,16 +117,11 @@ impl Verify for SSAStorage {
 					//  * Make sure we have not introduced an unconditional jump
 					//    which self-loops.
 					let target_block = self.target_of(edge);
-					check!(edges.len() == 1, SSAErr::WrongNumEdges(*block, 1, edges.len()));
+					check!(edges.len() == 1, SSAErr::WrongNumEdges(*block, 1,
+																   edges.len()));
 
 					check!(target_block.index() < node_count,
 					SSAErr::InvalidTarget(*block, *edge, target_block));
-					let valid_block = if let NodeData::BasicBlock(_) = self.g[target_block] {
-						true
-					} else {
-						false
-					};
-					//check!(ri, valid_block);
 					check!(*block != target_block,
 						   SSAErr::InvalidTarget(*block, *edge,
 												 target_block));
@@ -147,33 +140,31 @@ impl Verify for SSAStorage {
 		}
 
 		// Make sure that this block is reachable.
-		let incoming = self.incoming_edges(block);
-		check!((incoming.len() > 0) || *block == self.start_node(),
-		                                     SSAErr::UnreachableBlock(*block));
+		// TODO: Re-enable this after DCE. Make this Non-Fatal.
+		//let incoming = self.incoming_edges(block);
+		//check!((incoming.len() > 0) || *block == self.start_node(),
+											 //SSAErr::UnreachableBlock(*block));
 		Ok(())
 	}
 
-	fn verify_expr(&self, i: &NodeIndex) -> VResult<Self> {
-		let node_count = self.node_count();
-		// Make sure we have a valid node first.
-		assert!(i.index() < node_count);
+	fn verify_expr(&self, exi: &NodeIndex) -> VResult<Self> {
+		let i = &self.internal(exi);
 		let node_data = &self.g[*i];
-
 		match *node_data {
 			NodeData::Op(opcode, ValueType::Integer { width: w }) => {
-				let operands = self.get_operands(i);
-				let op_len = operands.len();
 				let extract = |x: TNodeData| -> u16 {
 					match x.vt {
 						ValueType::Integer { width: w } => w,
 					}
 				};
 
+				let operands = self.get_operands(exi);
+				let op_len = operands.len();
 				let n = match opcode.arity() {
-					MArity::Zero => 0,
-					MArity::Unary => 1,
+					MArity::Zero   => 0,
+					MArity::Unary  => 1,
 					MArity::Binary => 2,
-					_ => unimplemented!(),
+					_ => unreachable!(),
 				};
 
 				{
@@ -184,16 +175,20 @@ impl Verify for SSAStorage {
 				if n == 0 { return Ok(()) }
 				match opcode {
 					MOpcode::OpNarrow(w0) => {
-						let w1 = self.get_node_data(&operands[0])
+						let opw = self.get_node_data(&operands[0])
 						             .map(&extract)
 						             .unwrap();
-						check!(w1 > w0, SSAErr::IncompatibleWidth(*i, w, w0));
+						check!(opw > w0, SSAErr::IncompatibleWidth(*i, opw,
+																   w0));
+						check!(w == w0, SSAErr::IncompatibleWidth(*i, w, w0));
 					},
 				    MOpcode::OpWiden(w0) =>  {
-						let w1 = self.get_node_data(&operands[0])
+						let opw = self.get_node_data(&operands[0])
 						             .map(&extract)
 						             .unwrap();
-						check!(w1 < w0, SSAErr::IncompatibleWidth(*i, w, w0));
+						check!(opw < w0, SSAErr::IncompatibleWidth(*i, opw,
+																   w0));
+						check!(w == w0, SSAErr::IncompatibleWidth(*i, w, w0));
 					},
 					MOpcode::OpCmp | MOpcode::OpGt | MOpcode::OpLt |
 					MOpcode::OpLteq | MOpcode::OpGteq => {
@@ -201,6 +196,7 @@ impl Verify for SSAStorage {
 					},
 					MOpcode::OpCall | MOpcode::OpStore => { },
 					_ => {
+						// All operands to an expr must have the same width.
 						let w0 = self.get_node_data(&operands[0])
 						             .map(&extract)
 						             .unwrap();
@@ -225,7 +221,7 @@ pub fn verify<T>(ssa: &T) -> VResult<T> where T: Verify + Debug {
 	let blocks = ssa.blocks();
 	for block in blocks.iter() {
 		// assert the qualities of the block first.
-		ssa.verify_block(block).ok().unwrap();
+		try!(ssa.verify_block(block));
 		// Iterate through each node in the block and assert their properties.
 		let exprs = ssa.exprs_in(block);
 		for expr in exprs.iter() {
