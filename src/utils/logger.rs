@@ -34,10 +34,15 @@ pub enum Event<'a, T: 'a + Debug> {
 	/// external, external
 	SSAInsertEdge(&'a T, &'a T),
 	SSARemoveEdge(&'a T, &'a T),
+	SSAUpdateEdge(&'a T, &'a T),
 	/// external
 	SSAMarkNode(&'a T),
 	/// external
 	SSAClearMark(&'a T),
+	/// external
+	SSAQueryExternal(&'a T),
+	/// internal
+	SSAQueryInternal(&'a T),
 }
 
 impl<'a, T: Debug> ToString for Event<'a, T> {
@@ -59,11 +64,20 @@ impl<'a, T: Debug> ToString for Event<'a, T> {
 			Event::SSARemoveEdge(ref i, ref j) => {
 				format!("{}|{:?}|{:?}", "ssa_remove_edge", i, j)
 			},
+			Event::SSAUpdateEdge(ref i, ref j) => {
+				format!("{}|{:?}|{:?}", "ssa_update_edge", i, j)
+			},
 			Event::SSAMarkNode(ref i) => {
 				format!("{}|{:?}", "ssa_mark_node", i)
 			},
 			Event::SSAClearMark(ref i) => {
 				format!("{}|{:?}", "ssa_clear_mark", i)
+			},
+			Event::SSAQueryExternal(ref i) => {
+				format!("{}|{:?}", "ssa_query_external", i)
+			},
+			Event::SSAQueryInternal(ref i) => {
+				format!("{}|{:?}", "ssa_query_internal", i)
 			},
 		};
 		//format!("{}|{}", timestamp, r)
