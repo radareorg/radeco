@@ -37,10 +37,14 @@ extern crate rustc_serialize;
 extern crate num;
 
 #[macro_use]
+extern crate log;
+
+#[macro_use]
 extern crate r2pipe;
 
+#[macro_use]
+pub mod utils;
 pub mod middle;
 pub mod analysis;
 pub mod frontend;
 pub mod backend;
-pub mod utils;

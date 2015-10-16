@@ -19,6 +19,7 @@ use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAMod, SSAExtra, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 use super::bimap::BiMap;
+use ::utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
 /// SSA
@@ -140,14 +141,14 @@ impl SSAStorage {
 	fn insert_node(&mut self, d: NodeData) -> NodeIndex {
 		let n = self.g.add_node(d);
 		let ret = NodeIndex::new(self.last_key);
-		//println!("Insert {:?} -> {:?}", ret, n);
 		self.stablemap.insert(ret, n);
 		self.last_key += 1;
+		radeco_trace!(logger::Event::SSAInsertNode(&ret, &n));
 		return ret;
 	}
 
 	fn remove_node(&mut self, exi: NodeIndex) {
-		//println!("Remove {:?}", exi);
+		radeco_trace!(logger::Event::SSARemoveNode(&exi));
 		// Remove the current association.
 		let v = self.stablemap.remove_k(&exi);
 		if v.is_none() { return; }
@@ -163,6 +164,7 @@ impl SSAStorage {
 	}
 
 	fn replace_node(&mut self, i: NodeIndex, j: NodeIndex) {
+		radeco_trace!(logger::Event::SSAReplaceNode(&i, &j));
 		// Before replace, we need to copy over the edges.
 		let internal_i = self.internal(&i);
 		let internal_j = self.internal(&j);
@@ -208,6 +210,7 @@ impl SSAStorage {
 	fn insert_edge(&mut self, i: NodeIndex, j: NodeIndex,
 				   e: EdgeData) -> EdgeIndex
 	{
+		radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
 		let _i = self.internal(&i);
 		let _j = self.internal(&j);
 		self.g.add_edge(_i, _j, e)
@@ -222,6 +225,7 @@ impl SSAStorage {
 	}
 
 	fn delete_edge(&mut self, i: NodeIndex, j: NodeIndex) {
+		radeco_trace!(logger::Event::SSARemoveEdge(&i, &j));
 		let _i = self.internal(&i);
 		let _j = self.internal(&j);
 		let e = self.g.find_edge(_i, _j);
@@ -829,11 +833,13 @@ impl SSAMod for SSAStorage {
 
 impl SSAExtra for SSAStorage {
 	fn mark(&mut self, i: &Self::ValueRef) {
+		radeco_trace!(logger::Event::SSAMarkNode(i));
 		let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
 		data.mark = true;
 	}
 
 	fn clear_mark(&mut self, i: &Self::ValueRef) {
+		radeco_trace!(logger::Event::SSAClearMark(i));
 		if let Some(ref mut data) = self.assoc_data.get_mut(i) {
 			data.mark = false;
 		}

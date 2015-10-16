@@ -6,11 +6,15 @@ authors = [
 	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
 ]
 
+[features]
+trace_log = []
+
 [dependencies]
 regex = "*"
 petgraph = "*"
 num = "*"
 rustc-serialize = "*"
+log = "*"
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"

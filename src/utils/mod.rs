@@ -7,6 +7,9 @@
 
 //! Module implements Pipeline and Runner structs to make radeco-lib easier to use.
 
+#[macro_use]
+pub mod logger;
+
 use ::frontend::parser::{Parser};
 use ::frontend::structs::{LOpInfo, LRegInfo};
 use ::frontend::r2::R2;
