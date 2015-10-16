@@ -231,6 +231,7 @@ impl Radeco {
 	pub fn output(&mut self) {
 		match self.runner.as_mut() {
 			Some(ref mut runner) => {
+				radeco_out!("[*] Writing output", runner.is_verbose());
 				runner.output(self.outmodes.clone());
 			},
 			None => panic!("Uninitialized instance of radeco!"),

@@ -2,13 +2,19 @@
 name = "radeco"
 version = "0.1.0"
 authors = [
-	"pancake <pancake@nopcode.org>"
+	"pancake <pancake@nopcode.org>",
+	"Sushant <sushant.dinesh94@gmail.com>"
 ]
+
+[features]
+default = []
+trace_log = ["radeco-lib/trace_log"]
 
 [dependencies]
 r2pipe = "*"
 docopt = "*"
 rustc-serialize = "*"
+log = "*"
 
 [dependencies.radeco-lib]
 git = "https://github.com/radare/radeco-lib"
