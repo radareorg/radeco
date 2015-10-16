@@ -194,10 +194,12 @@ impl SSAStorage {
 	}
 
 	pub fn internal(&self, e: &NodeIndex) -> NodeIndex {
+		radeco_trace!(logger::Event::SSAQueryInternal(&e));
 		*(self.stablemap.get(e).unwrap())
 	}
 
 	pub fn external(&self, i: &NodeIndex) -> NodeIndex {
+		radeco_trace!(logger::Event::SSAQueryExternal(&i));
 		*(self.stablemap.get_inverse(i).unwrap())
 	}
 
@@ -213,6 +215,7 @@ impl SSAStorage {
 	fn update_edge(&mut self, i: NodeIndex, j: NodeIndex,
 				   e: EdgeData) -> EdgeIndex
 	{
+		radeco_trace!(logger::Event::SSAUpdateEdge(&i, &j));
 		let _i = self.internal(&i);
 		let _j = self.internal(&j);
 		self.g.update_edge(_i, _j, e)
