@@ -7,9 +7,7 @@
 
 //! Dead code elimination
 
-use petgraph::graph::NodeIndex;
 use std::collections::VecDeque;
-
 use middle::ssa::{SSAMod, SSA, SSAExtra};
 use middle::ssa::ssa_traits::NodeType;
 

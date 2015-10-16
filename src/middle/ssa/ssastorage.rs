@@ -110,9 +110,7 @@ pub struct SSAStorage {
 	pub g: Graph<NodeData, EdgeData>,
 	pub start_node: NodeIndex,
 	pub exit_node: NodeIndex,
-	pub stable_indexing: bool,
 	assoc_data: AssociatedData,
-	needs_cleaning: bool,
 	stablemap: BiMap<NodeIndex, NodeIndex>,
 	last_key: usize,
 }
@@ -121,8 +119,6 @@ impl SSAStorage {
 	pub fn new() -> SSAStorage {
 		SSAStorage {
 			g:               Graph::new(),
-			needs_cleaning:  false,
-			stable_indexing: true,
 			start_node:      NodeIndex::end(),
 			exit_node:       NodeIndex::end(),
 			assoc_data:      HashMap::new(),
@@ -157,7 +153,6 @@ impl SSAStorage {
 		let n = self.g.node_count();
 		if n > 0 && v.unwrap().index() != n {
 			// Correct the map, i.e. Map the external index of n to v.
-			//let ext = self.external(&NodeIndex::new(n));
 			let ext = self.stablemap.remove_v(&NodeIndex::new(n));
 			self.stablemap.insert(ext.unwrap(), v.unwrap());
 		}
@@ -194,7 +189,6 @@ impl SSAStorage {
 			self.start_node = internal_j;
 		}
 
-		//println!("Replace {:?} by {:?}", i, j);
 		self.remove_node(i);
 		self.stablemap.replace(i, j);
 	}

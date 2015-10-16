@@ -65,7 +65,7 @@ macro_rules! check {
 
 impl Verify for SSAStorage {
 	fn verify_block(&self, block: &NodeIndex) -> VResult<Self> {
-		let node_count = self.node_count();
+		let _ = self.node_count();
 
 		let edges = self.edges_of(block);
 
@@ -116,7 +116,7 @@ impl Verify for SSAStorage {
 					//  * There can be no selector.
 					//  * Make sure we have not introduced an unconditional jump
 					//    which self-loops.
-					let target_block = self.target_of(edge);
+					let _ = self.target_of(edge);
 					check!(edges.len() == 1, SSAErr::WrongNumEdges(*block, 1,
 																   edges.len()));
 
