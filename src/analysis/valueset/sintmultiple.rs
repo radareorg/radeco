@@ -4,4 +4,3 @@
 // <http://opensource.org/licenses/BSD-3-Clause>
 // This file may not be copied, modified, or distributed
 // except according to those terms.
-

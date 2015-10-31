@@ -25,64 +25,64 @@ use std::fmt::Debug;
 // ]
 
 pub enum Event<'a, T: 'a + Debug> {
-	/// external -> internal
-	SSAInsertNode(&'a T, &'a T),
-	/// external
-	SSARemoveNode(&'a T),
-	/// external, external
-	SSAReplaceNode(&'a T,&'a  T),
-	/// external, external
-	SSAInsertEdge(&'a T, &'a T),
-	SSARemoveEdge(&'a T, &'a T),
-	SSAUpdateEdge(&'a T, &'a T),
-	/// external
-	SSAMarkNode(&'a T),
-	/// external
-	SSAClearMark(&'a T),
-	/// external
-	SSAQueryExternal(&'a T),
-	/// internal
-	SSAQueryInternal(&'a T),
+    /// external -> internal
+    SSAInsertNode(&'a T, &'a T),
+    /// external
+    SSARemoveNode(&'a T),
+    /// external, external
+    SSAReplaceNode(&'a T, &'a T),
+    /// external, external
+    SSAInsertEdge(&'a T, &'a T),
+    SSARemoveEdge(&'a T, &'a T),
+    SSAUpdateEdge(&'a T, &'a T),
+    /// external
+    SSAMarkNode(&'a T),
+    /// external
+    SSAClearMark(&'a T),
+    /// external
+    SSAQueryExternal(&'a T),
+    /// internal
+    SSAQueryInternal(&'a T),
 }
 
 impl<'a, T: Debug> ToString for Event<'a, T> {
-	fn to_string(&self) -> String {
-		//let timestamp = "";
-		let r = match *self {
-			Event::SSAInsertNode(ref i, ref j) => {
-				format!("{}|{:?}|{:?}", "ssa_insert_node", i, j)
-			},
-			Event::SSARemoveNode(ref i) => {
-				format!("{}|{:?}", "ssa_remove_node", i)
-			},
-			Event::SSAReplaceNode(ref i, ref j) => {
-				format!("{}|{:?}|{:?}", "ssa_replace", i, j)
-			},
-			Event::SSAInsertEdge(ref i, ref j) => {
-				format!("{}|{:?}|{:?}", "ssa_insert_edge", i, j)
-			},
-			Event::SSARemoveEdge(ref i, ref j) => {
-				format!("{}|{:?}|{:?}", "ssa_remove_edge", i, j)
-			},
-			Event::SSAUpdateEdge(ref i, ref j) => {
-				format!("{}|{:?}|{:?}", "ssa_update_edge", i, j)
-			},
-			Event::SSAMarkNode(ref i) => {
-				format!("{}|{:?}", "ssa_mark_node", i)
-			},
-			Event::SSAClearMark(ref i) => {
-				format!("{}|{:?}", "ssa_clear_mark", i)
-			},
-			Event::SSAQueryExternal(ref i) => {
-				format!("{}|{:?}", "ssa_query_external", i)
-			},
-			Event::SSAQueryInternal(ref i) => {
-				format!("{}|{:?}", "ssa_query_internal", i)
-			},
-		};
-		//format!("{}|{}", timestamp, r)
-		r
-	}
+    fn to_string(&self) -> String {
+        // let timestamp = "";
+        let r = match *self {
+            Event::SSAInsertNode(ref i, ref j) => {
+                format!("{}|{:?}|{:?}", "ssa_insert_node", i, j)
+            }
+            Event::SSARemoveNode(ref i) => {
+                format!("{}|{:?}", "ssa_remove_node", i)
+            }
+            Event::SSAReplaceNode(ref i, ref j) => {
+                format!("{}|{:?}|{:?}", "ssa_replace", i, j)
+            }
+            Event::SSAInsertEdge(ref i, ref j) => {
+                format!("{}|{:?}|{:?}", "ssa_insert_edge", i, j)
+            }
+            Event::SSARemoveEdge(ref i, ref j) => {
+                format!("{}|{:?}|{:?}", "ssa_remove_edge", i, j)
+            }
+            Event::SSAUpdateEdge(ref i, ref j) => {
+                format!("{}|{:?}|{:?}", "ssa_update_edge", i, j)
+            }
+            Event::SSAMarkNode(ref i) => {
+                format!("{}|{:?}", "ssa_mark_node", i)
+            }
+            Event::SSAClearMark(ref i) => {
+                format!("{}|{:?}", "ssa_clear_mark", i)
+            }
+            Event::SSAQueryExternal(ref i) => {
+                format!("{}|{:?}", "ssa_query_external", i)
+            }
+            Event::SSAQueryInternal(ref i) => {
+                format!("{}|{:?}", "ssa_query_internal", i)
+            }
+        };
+        // format!("{}|{}", timestamp, r)
+        r
+    }
 
 }
 

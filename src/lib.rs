@@ -6,27 +6,34 @@
 // except according to those terms.
 
 //! # The Radare2 Decompilation Library
-//! radeco-lib is the crate that powers the 
+//! radeco-lib is the crate that powers the
 //! [radare2 decompiler](https://github.com/radare/radeco).
-//! 
+//!
 //! Apart from decompilation, this library is designed to allow users to
 //! perform static analysis on binaries in a easy and intuitive way.
-//! __Reusuablility__ and __Interactivity__ are the most important 
-//! design principles of this library. 
+//! __Reusuablility__ and __Interactivity__ are the most important
+//! design principles of this library.
 //!
 //! # Design
-//! radeco-lib is built on top of r2pipe.rs, a simple library that provides methods
+//! radeco-lib is built on top of r2pipe.rs, a simple library that provides
+//! methods
 //! to communicate with radare2 (using pipes). To know more about r2pipe or
-//! radare2 in general, please head over to the [repo](https://github.com/radare/radare2).
-//! 
-//! radeco-lib works on analyzing ESIL (Evaluable Strings Intermediate Language), an intermediate
-//! representation (IR) used by radare2 for emulation. ESIL is converted into an internal SSA IR
+//! radare2 in general, please head over to the
+//! [repo](https://github.com/radare/radare2).
+//!
+//! radeco-lib works on analyzing ESIL (Evaluable Strings Intermediate
+//! Language), an intermediate
+//! representation (IR) used by radare2 for emulation. ESIL is converted into
+//! an internal SSA IR
 //! and used for subsequent analysis and optimizations.
 //!
 //! __NOTE__: This library is still under heavy developement.
-//! Some API's have been stabilized, please check the docs before using radeco-lib
-//! in your projects as changes may not be backwards compatible. Contributions, suggestions
-//! and bug reports are always welcome at: [tracker](https://github.com/radare/radeco-lib/issues)
+//! Some API's have been stabilized, please check the docs before using
+//! radeco-lib
+//! in your projects as changes may not be backwards compatible. Contributions,
+//! suggestions
+//! and bug reports are always welcome at:
+//! [tracker](https://github.com/radare/radeco-lib/issues)
 //!
 
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]

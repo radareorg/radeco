@@ -7,7 +7,7 @@
 
 //! Components concerned with getting input to SSA form.
 
-pub use super::middle::ir::{MInst, MVal, MOpcode, MValType, Address, MArity, MRegInfo, MAddr};
+pub use super::middle::ir::{Address, MAddr, MArity, MInst, MOpcode, MRegInfo, MVal, MValType};
 
 pub mod structs;
 pub mod parser;

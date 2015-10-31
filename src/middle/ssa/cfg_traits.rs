@@ -7,15 +7,15 @@
 
 //! Defines the traits to be implemented by the Control Flow Graph (CFG).
 //!
-//! These traits act as a way to abstract the actual storage 
+//! These traits act as a way to abstract the actual storage
 //! mechanism of the CFG (and SSA).
 //! Any struct that implement these traits can be used with other methods.
-//! 
+//!
 //! # Design
 //!
 //!  * `CFG` - This acts as the base trait upon which the
 //!  whole SSA form is build. The `CFG` trait provides __accessors__ to the
-//!  Basic Blocks of the program as well as the Control Flow edges that 
+//!  Basic Blocks of the program as well as the Control Flow edges that
 //!  connect these blocks.
 //!
 //!  * `CFGMod` - This trait provides methods to __manipulate__ the Control
@@ -47,65 +47,64 @@ pub trait CFG {
 	type ActionRef: Eq + Hash + Clone + Copy + Debug;
 	type CFEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
-	/// Reference to all blocks in the CFG
-	fn blocks(&self) -> Vec<Self::ActionRef>;
+    /// Reference to all blocks in the CFG
+    fn blocks(&self) -> Vec<Self::ActionRef>;
 
-	/// Reference to entry block of the CFG
-	fn start_node(&self) -> Self::ActionRef;
+    /// Reference to entry block of the CFG
+    fn start_node(&self) -> Self::ActionRef;
 
-	/// Reference to exit block of the CFG
-	fn exit_node(&self) -> Self::ActionRef;
+    /// Reference to exit block of the CFG
+    fn exit_node(&self) -> Self::ActionRef;
 
-	/// Reference to the next block in the natural flow of the CFG
-	fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef;
+    /// Reference to the next block in the natural flow of the CFG
+    fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef;
 
-	/// Reference to immediate predecessors of block
-	fn preds_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
+    /// Reference to immediate predecessors of block
+    fn preds_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
 
-	/// Reference to immediate successors of block
-	fn succs_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
+    /// Reference to immediate successors of block
+    fn succs_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
 
-	/// Reference that represents and Invalid block
-	fn invalid_action(&self) -> Self::ActionRef;
+    /// Reference that represents and Invalid block
+    fn invalid_action(&self) -> Self::ActionRef;
 
-	///////////////////////////////////////////////////////////////////////////
-	//// Edge accessors and helpers
-	///////////////////////////////////////////////////////////////////////////
+    /// ////////////////////////////////////////////////////////////////////////
+    /// / Edge accessors and helpers
+    /// ////////////////////////////////////////////////////////////////////////
 
-	/// Reference to all outgoing edges from a block
-	fn edges_of(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
-	
-	/// Reference to all the incoming edges to a block
-	fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
+    /// Reference to all outgoing edges from a block
+    fn edges_of(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
 
-	/// Returns (source_block, target_block) for an edge
-	fn info(&self, i: &Self::CFEdgeRef) -> (Self::ActionRef, Self::ActionRef);
+    /// Reference to all the incoming edges to a block
+    fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
 
-	/// Reference to the source block for the edge
-	fn source_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
-		self.info(i).0
-	}
-	
-	/// Reference to the target block for the edge
-	fn target_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
-		self.info(i).1 
-	}
+    /// Returns (source_block, target_block) for an edge
+    fn info(&self, i: &Self::CFEdgeRef) -> (Self::ActionRef, Self::ActionRef);
 
-	/// Reference to the edge that connects the source to the target.
-	fn find_edge(&self, source: &Self::ActionRef,
-				 target: &Self::ActionRef) -> Self::CFEdgeRef;
+    /// Reference to the source block for the edge
+    fn source_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
+        self.info(i).0
+    }
 
-	/// Reference to the true edge
-	fn true_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+    /// Reference to the target block for the edge
+    fn target_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
+        self.info(i).1
+    }
 
-	/// Reference to the false edge
-	fn false_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+    /// Reference to the edge that connects the source to the target.
+    fn find_edge(&self, source: &Self::ActionRef, target: &Self::ActionRef) -> Self::CFEdgeRef;
 
-	/// Reference to the unconditional edge that flows out of the block
-	fn next_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+    /// Reference to the true edge
+    fn true_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
 
-	/// Reference that represents an Invalid control flow edge.
-	fn invalid_edge(&self) -> Self::CFEdgeRef;
+    /// Reference to the false edge
+    fn false_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+
+    /// Reference to the unconditional edge that flows out of the block
+    fn next_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+
+    /// Reference that represents an Invalid control flow edge.
+    fn invalid_edge(&self) -> Self::CFEdgeRef;
 
 }
 
@@ -113,22 +112,21 @@ pub trait CFG {
 pub trait CFGMod: CFG {
 	type BBInfo;
 
-	/// Mark the start node for the SSA graph
-	fn mark_start_node(&mut self, start: &Self::ActionRef);
-	
-	/// Mark the exit node for the SSA graph
-	fn mark_exit_node(&mut self, exit: &Self::ActionRef);
+    /// Mark the start node for the SSA graph
+    fn mark_start_node(&mut self, start: &Self::ActionRef);
 
-	/// Add a new basic block
-	fn add_block(&mut self, info: Self::BBInfo) -> Self::ActionRef;
+    /// Mark the exit node for the SSA graph
+    fn mark_exit_node(&mut self, exit: &Self::ActionRef);
 
-	/// Add a new exit
-	fn add_dynamic(&mut self) -> Self::ActionRef;
+    /// Add a new basic block
+    fn add_block(&mut self, info: Self::BBInfo) -> Self::ActionRef;
 
-	/// Add a control edge between to basic blocks
-	fn add_control_edge(&mut self, source: Self::ActionRef, target:
-						Self::ActionRef, index: u8);
+    /// Add a new exit
+    fn add_dynamic(&mut self) -> Self::ActionRef;
 
-	/// Will remove a block and all its associated data from the graph
-	fn remove_block(&mut self, node: Self::ActionRef);
+    /// Add a control edge between to basic blocks
+    fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
+
+    /// Will remove a block and all its associated data from the graph
+    fn remove_block(&mut self, node: Self::ActionRef);
 }

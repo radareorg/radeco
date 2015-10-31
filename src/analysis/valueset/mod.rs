@@ -5,8 +5,10 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! This module offers traits for valuesets and implementations for valuesets of 64 bit integers
-//! using different compact representations, including methods for intersection and union.
+//! This module offers traits for valuesets and implementations for valuesets
+//! of 64 bit integers
+//! using different compact representations, including methods for intersection
+//! and union.
 //! (Currently unused)
 
 use std::fmt::Debug;
@@ -29,31 +31,46 @@ pub struct KnownBits {
     /// Bits that are cleared
     pub zerobits: u64,
     /// Bits that are set
-    pub onebits: u64
+    pub onebits: u64,
 }
 
 /// Value set of unsigned values that satisfy value % modulus = residue.
 #[derive(Clone, Copy, Debug)]
 pub struct UIntMultiple {
     pub modulus: u64,
-    pub residue: u64
+    pub residue: u64,
 }
 
 /// Value set of unsigned values between min and max.
 #[derive(Clone, Copy, Debug)]
-pub struct UIntRange { pub min: u64, pub max: u64 }
+pub struct UIntRange {
+    pub min: u64,
+    pub max: u64,
+}
 
 /// Value set of signed values between min and max.
 #[derive(Clone, Copy, Debug)]
-pub struct SIntRange { pub min: i64, pub max: i64 }
+pub struct SIntRange {
+    pub min: i64,
+    pub max: i64,
+}
 
-const EMPTY_UINTMULTIPLE: UIntMultiple = UIntMultiple { modulus: 0, residue: 0 };
-const EMPTY_UINTRANGE:    UIntRange    = UIntRange    { min: 0xffffffffffffffff, max:  0x0000000000000000 };
-const EMPTY_SINTRANGE:    SIntRange    = SIntRange    { min: 0x7fffffffffffffff, max: -0x8000000000000000 };
+const EMPTY_UINTMULTIPLE: UIntMultiple = UIntMultiple {
+    modulus: 0,
+    residue: 0,
+};
+const EMPTY_UINTRANGE: UIntRange = UIntRange {
+    min: 0xffffffffffffffff,
+    max: 0x0000000000000000,
+};
+const EMPTY_SINTRANGE: SIntRange = SIntRange {
+    min: 0x7fffffffffffffff,
+    max: -0x8000000000000000,
+};
 
 /// A value set. Some implementations introduce false positives when intersected or unified with each other.
 pub trait ValueSet<T>: Debug /*+ BitAnd<Self> + BitOr<Self>*/ {
-	fn contains(&self, value: T) -> bool;
+    fn contains(&self, value: T) -> bool;
 }
 
 /// A value set over a totally ordered domain with methods to query the next greater or smaller value

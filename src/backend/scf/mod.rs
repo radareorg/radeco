@@ -17,16 +17,16 @@ pub type RCond = u32;
 pub type RExpr = u32;
 
 pub enum LoopType {
-	While,
-	DoWhile,
-	ForEver,
+    While,
+    DoWhile,
+    ForEver,
 }
 
 pub enum AST {
-	Unit(RUnit),
+    Unit(RUnit),
 
-	Seq(Vec<AST_>),
-	Cond(RCond, AST_, AST_),
-	Loop(LoopType, RCond, AST_),
-	Switch(RExpr, BTreeMap<u64, AST_>, AST_),
+    Seq(Vec<AST_>),
+    Cond(RCond, AST_, AST_),
+    Loop(LoopType, RCond, AST_),
+    Switch(RExpr, BTreeMap<u64, AST_>, AST_),
 }
