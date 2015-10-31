@@ -3,7 +3,7 @@
 use std::io;
 use std::fs;
 use std::path::Path;
-use radeco_lib::utils::{Pipeline, Runner, Analysis, Pipeout};
+use radeco_lib::utils::{Analysis, Pipeline, Pipeout, Runner};
 use radeco_lib::frontend::r2;
 use errors::ArgError;
 use std::fs::File;
@@ -108,10 +108,7 @@ impl Input {
                 }
                 None => panic!("No file open in r2"),
             };
-            let file = path.file_name()
-                           .unwrap()
-                           .to_str()
-                           .map(|s| s.to_owned());
+            let file = path.file_name().unwrap().to_str().map(|s| s.to_owned());
             outpath = format!("./{}_out", file.as_ref().unwrap());
             name = Some(format!("{}.run", file.as_ref().unwrap()));
         } else {

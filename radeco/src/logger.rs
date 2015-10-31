@@ -1,6 +1,6 @@
 extern crate log;
 
-use log::{LogRecord, LogLevel, LogMetadata, LogLevelFilter, SetLoggerError};
+use log::{LogLevel, LogLevelFilter, LogMetadata, LogRecord, SetLoggerError};
 
 #[derive(Debug, RustcDecodable, RustcEncodable)]
 pub struct RadecoLog {
