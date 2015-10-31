@@ -120,9 +120,7 @@ impl Radeco {
     }
 
     pub fn init() -> ArgResult<Radeco> {
-        let args: Args = Docopt::new(USAGE)
-                             .and_then(|d| d.decode())
-                             .unwrap_or_else(|e| e.exit());
+        let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
 
         if args.flag_version {
             println!("Version: {:?}", VERSION);
@@ -250,8 +248,7 @@ impl Radeco {
         // These can be generation of svg, png etc
         for phase in self.post_runner.as_ref().unwrap() {
             match *phase {
-                PostRunner::Genpng |
-                PostRunner::Gensvg => {
+                PostRunner::Genpng | PostRunner::Gensvg => {
                     let format = if *phase == PostRunner::Genpng {
                         "png"
                     } else {
@@ -267,11 +264,7 @@ impl Radeco {
                     cmd.push_str(&format!("dot -T{} -O ", format));
                     cmd.push_str(&target);
 
-                    let _ = Command::new("sh")
-                                .arg("-c")
-                                .arg(cmd)
-                                .output()
-                                .unwrap();
+                    let _ = Command::new("sh").arg("-c").arg(cmd).output().unwrap();
                 }
             }
         }
