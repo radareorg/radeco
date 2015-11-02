@@ -397,7 +397,7 @@ impl Parser {
         // Check the alias of dst. If it is the instruction pointer, the assignment
         // should be a
         // OpJmp rather than a OpEq.
-        if dst.reg_info.clone().unwrap_or_default().alias == "pc" {
+        if dst.reg_info.clone().unwrap_or_default().alias == "PC" {
             let mut op = MOpcode::OpJmp;
             if let Some(ref info) = self.opinfo {
                 let optype = info.clone().optype.unwrap_or("".to_string());
