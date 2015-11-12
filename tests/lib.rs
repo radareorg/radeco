@@ -6,9 +6,10 @@
 // except according to those terms.
 
 extern crate radeco_lib;
+extern crate r2pipe;
 
 use radeco_lib::utils::{Pipeline, Runner, Pipeout, Analysis};
-use radeco_lib::frontend::r2::R2;
+use r2pipe::R2;
 
 #[test]
 fn test1() {
@@ -65,8 +66,8 @@ fn test_analysis2() {
 		Pipeline::ReadFromR2,
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
-		Pipeline::SSA,
-		Pipeline::Verify
+		Pipeline::SSA
+		//Pipeline::Verify
 		//Pipeline::DCE,
 		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
 		//Pipeline::DCE
