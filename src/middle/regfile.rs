@@ -10,12 +10,15 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use frontend::structs::LRegInfo;
+use std::convert::From;
+
+use r2pipe::structs::LRegInfo;
+
 use middle::ssa::{BBInfo, SSAMod, ValueType};
 use middle::ssa::verifier::VerifiedAdd;
 use middle::ir::{MOpcode, WidthSpec};
 use middle::phiplacement::PhiPlacer;
-use std::convert::From;
+
 #[derive(Clone, Copy, Debug)]
 struct SubRegister {
     pub base: usize,

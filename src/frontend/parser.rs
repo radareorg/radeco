@@ -13,8 +13,9 @@ use std::collections::HashMap;
 use std::cmp;
 use regex::Regex;
 
+use r2pipe::structs::{LAliasInfo, LFlagInfo, LOpInfo, LRegInfo, LRegProfile};
+
 use frontend::{Address, MAddr, MInst, MOpcode, MRegInfo, MVal, MValType};
-use frontend::structs::{LAliasInfo, LFlagInfo, LOpInfo, LRegInfo, LRegProfile};
 use middle::ir::WidthSpec; // move WidthSpec to a different module?
 
 // Macro to return a new hash given (key, value) tuples.
@@ -574,7 +575,7 @@ impl Parser {
                 tmp_p.stack.push(self.constant_value(1));
                 tmp_p.stack.push(MVal::esilcur());
                 try!(tmp_p.parse_str(&*s));
-                for i in (1..8) {
+                for i in 1..8 {
                     tmp_p.stack.push(self.constant_value(1));
                     tmp_p.stack.push(self.constant_value(i));
                     tmp_p.stack.push(MVal::esilcur());
@@ -589,7 +590,7 @@ impl Parser {
             'o' => {
                 // (esil_internal_carry_check (esil, esil->lastsz-1) ^
                 // esil_internal_carry_check (esil, esil->lastsz-2));
-                for i in (1..3) {
+                for i in 1..3 {
                     tmp_p.stack.push(MVal::esilcur());
                     tmp_p.stack.push(self.constant_value(1));
                     tmp_p.stack.push(self.constant_value(i));

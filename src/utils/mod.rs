@@ -11,9 +11,16 @@
 #[macro_use]
 pub mod logger;
 
+use std::io::prelude::*;
+use std::fs;
+use std::fs::File;
+use std::fmt;
+use std::path::PathBuf;
+
+use r2pipe::structs::{LOpInfo, LRegInfo};
+use r2pipe::R2;
+
 use frontend::parser::Parser;
-use frontend::structs::{LOpInfo, LRegInfo};
-use frontend::r2::R2;
 use frontend::esilssa::SSAConstruction;
 use middle::ir::MInst;
 use middle::cfg::CFG;
@@ -22,12 +29,6 @@ use middle::dce;
 use middle::ssa::SSAStorage;
 use analysis::constant_propagation::constant;
 use middle::ssa::verifier;
-
-use std::io::prelude::*;
-use std::fs;
-use std::fs::File;
-use std::fmt;
-use std::path::PathBuf;
 
 macro_rules! out {
 	($str: expr, $m: expr) => { if $m { println!($str) } }

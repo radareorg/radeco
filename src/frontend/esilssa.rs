@@ -12,7 +12,8 @@ use petgraph::graph::NodeIndex;
 use std::fmt::Debug;
 use std::convert::From;
 
-use frontend::structs::LRegInfo;
+use r2pipe::structs::LRegInfo;
+
 use middle::cfg::NodeData as CFGNodeData;
 use middle::cfg::EdgeType as CFGEdgeType;
 use middle::cfg::{BasicBlock, CFG};

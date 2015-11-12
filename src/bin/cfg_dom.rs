@@ -12,8 +12,10 @@
 //   * Emit Dot for CFG and Dom.
 
 extern crate radeco_lib;
+extern crate r2pipe;
 
-use radeco_lib::frontend::{parser, r2};
+use radeco_lib::frontend::{parser};
+use r2pipe::r2;
 use radeco_lib::middle::{cfg};
 use radeco_lib::middle::dot;
 use radeco_lib::analysis::dom::{DomTree};
