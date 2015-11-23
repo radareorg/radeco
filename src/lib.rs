@@ -49,6 +49,8 @@ extern crate log;
 #[macro_use]
 extern crate r2pipe;
 
+extern crate esil;
+
 #[macro_use]
 pub mod utils;
 pub mod middle;
