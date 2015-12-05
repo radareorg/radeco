@@ -2,6 +2,7 @@
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate radeco_lib;
+extern crate r2pipe;
 
 #[macro_use]
 extern crate log;
