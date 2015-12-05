@@ -4,7 +4,7 @@ use std::io;
 use std::fs;
 use std::path::Path;
 use radeco_lib::utils::{Analysis, Pipeline, Pipeout, Runner};
-use radeco_lib::frontend::r2;
+use r2pipe::r2;
 use errors::ArgError;
 use std::fs::File;
 use rustc_serialize::json;
