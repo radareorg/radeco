@@ -26,20 +26,6 @@ impl GraphDot for SSAStorage {
                  compound=true rankdir=TB;]\n")
     }
 
-    // fn nodes(&self) -> Vec<Self::NodeType> {
-    // let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
-    // res
-    // }
-
-    // fn edges(&self) -> Vec<Self::EdgeType> {
-    // let res = self.g.raw_edges().to_vec();
-    // res
-    // }
-
-    // fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
-    // self.g.node_weight(NodeIndex::new(n))
-    // }
-
     fn nodes(&self) -> Vec<Self::NodeIndex> {
         self.valid_nodes()
     }
@@ -63,8 +49,8 @@ impl GraphDot for SSAStorage {
     fn node_cluster(&self, exi: &Self::NodeIndex) -> Option<usize> {
         let i = &self.internal(exi);
         match self.g.node_weight(*i) {
-            Some(&NodeData::BasicBlock(_)) => Some(i.index()),
-            Some(&NodeData::DynamicAction) => Some(i.index()),
+            Some(&NodeData::BasicBlock(_)) => Some(exi.index()),
+            Some(&NodeData::DynamicAction) => Some(exi.index()),
             _ => Some(self.get_block(exi).index()),
         }
     }

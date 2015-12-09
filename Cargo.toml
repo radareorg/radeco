@@ -18,3 +18,6 @@ log = "*"
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"
+
+[dependencies.esil]
+path = "../esil-rs"

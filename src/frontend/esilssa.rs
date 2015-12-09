@@ -31,7 +31,7 @@ const ESIL_OLD: usize = 1;
 const LASTSZ: usize = 2;
 
 pub struct SSAConstruction<'a, T>
-    where T: 'a + Clone + Debug + Clone + SSAMod<BBInfo = BBInfo>
+    where T: 'a + Clone + Debug + SSAMod<BBInfo = BBInfo>
 {
     pub phiplacer: PhiPlacer<'a, T>,
     pub regfile: SubRegisterFile,

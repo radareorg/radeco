@@ -10,7 +10,6 @@
 
 use std::collections::{HashMap, HashSet};
 use super::ssa::{BBInfo, SSA, SSAMod, ValueType};
-use super::ssa::ssa_traits::{NodeData, NodeType};
 
 pub type VarId = usize;
 
@@ -55,14 +54,35 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
     }
 
     pub fn read_variable(&mut self, block: T::ActionRef, variable: VarId) -> T::ValueRef {
-        let n = match {
-                          self.current_def[variable].get(&block)
-                      }
-                      .map(|r| *r) {
-            Option::Some(r) => r,
-            Option::None => self.read_variable_recursive(variable, block),
+        self.current_def[variable].get(&block)
+            .map(|var| *var)
+            .unwrap_or(self.read_variable_recursive(variable, block))
+    }
+
+    fn read_variable_recursive(&mut self, variable: VarId, block: T::ActionRef) -> T::ValueRef {
+        let valtype = self.variable_types[variable];
+        let val = if !self.sealed_blocks.contains(&block) {
+            // Incomplete CFG
+            let _val = self.ssa.add_phi(block, valtype);
+            let old = self.incomplete_phis.get_mut(&block)
+                .and_then(|phi| phi.insert(variable, _val));
+            assert!(old.is_none());
+            _val
+        } else {
+            let preds = self.ssa.preds_of(block);
+            assert!(preds.len() > 0);
+            if preds.len() == 1 {
+                // Optimize the common case of one predecessor: No phi needed
+                self.read_variable(preds[0], variable)
+            } else {
+                // Break potential cycles with operandless phi
+                let _val = self.ssa.add_phi(block, valtype);
+                self.write_variable_internal(block, variable, _val);
+                self.add_phi_operands(block, variable, _val)
+            }
         };
-        return n;
+        self.write_variable_internal(block, variable, val);
+        return val;
     }
 
     pub fn add_block(&mut self, info: BBInfo) -> T::ActionRef {
@@ -73,51 +93,10 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 
     pub fn seal_block(&mut self, block: T::ActionRef) {
         let inc = self.incomplete_phis[&block].clone(); // TODO: remove clone
-
         for (variable, node) in inc {
-            self.add_phi_operands(block, variable.clone(), node.clone());
+            self.add_phi_operands(block, variable, node);
         }
         self.sealed_blocks.insert(block);
-    }
-
-    fn read_variable_recursive(&mut self, variable: VarId, block: T::ActionRef) -> T::ValueRef {
-        let valtype = self.variable_types[variable];
-        let mut val;
-
-        if !self.sealed_blocks.contains(&block) {
-            // Incomplete CFG
-            // TODO: bring back comments
-            // val = self.ssa.add_phi_comment(block, &variable);
-            val = self.ssa.add_phi(block, valtype);
-            let oldval = self.incomplete_phis
-                             .get_mut(&block)
-                             .unwrap()
-                             .insert(variable.clone(), val);
-            assert!(oldval.is_none());
-        } else {
-            let pred = self.ssa.preds_of(block);
-            if pred.len() == 1 {
-                // Optimize the common case of one predecessor: No phi needed
-                val = self.read_variable(pred[0], variable.clone())
-            } else {
-                // Break potential cycles with operandless phi
-
-                val = self.ssa.add_phi(block, valtype);
-                // = self.ssa.add_phi_comment(block, &variable);
-
-                // dkreuter:
-                // The paper suggests marking nodes instead of creating phi nodes.
-                // However this turned out to be almost as expensive
-                // and added unneccesary complexity to the code.
-                // Also, I can't see any marking implemented in libfirms implementation
-                // of this algorithm.
-
-                self.write_variable_internal(block, variable.clone(), val);
-                val = self.add_phi_operands(block, variable.clone(), val)
-            }
-        }
-        self.write_variable_internal(block, variable, val);
-        return val;
     }
 
     fn add_phi_operands(&mut self,
@@ -136,35 +115,36 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 
     fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
         let undef = self.ssa.invalid_value();
-        let mut same: T::ValueRef = undef; // The phi is unreachable or in the start block
+        // The phi is unreachable or in the start block
+        let mut same: T::ValueRef = undef;
         for op in self.ssa.args_of(phi) {
             if op == same || op == phi {
-                continue; // Unique value or self−reference
+                // Unique value or self−reference
+                continue;
             }
             if same != undef {
-                return phi; // The phi merges at least two values: not trivial
+                // The phi merges at least two values: not trivial
+                return phi;
             }
             same = op
         }
 
         if same == undef {
             let block = self.ssa.block_of(&phi);
-            let valtype = self.ssa.get_node_data(&phi).unwrap().vt;
+            let valtype = self.ssa.get_node_data(&phi).ok()
+                .expect("No Data associated with this node!").vt;
             same = self.ssa.add_undefined(block, valtype);
         }
 
         let users = self.ssa.uses_of(phi);
-        self.ssa.replace(phi, same); // Reroute all uses of phi to same and remove phi
-
+        // Reroute all uses of phi to same and remove phi
+        self.ssa.replace(phi, same);
         // Try to recursively remove all phi users, which might have become trivial
         for use_ in users {
             if use_ == phi {
                 continue;
             }
-            if let Ok(NodeData {nt: NodeType::Phi, ..}) = self.ssa.get_node_data(&use_) {
-                // 	self.ssa.g[phi],
-                // 	self.ssa.g[same],
-                // 	self.ssa.g[use_]);
+            if let Ok(_) = self.ssa.get_node_data(&use_) {
                 self.try_remove_trivial_phi(use_);
             }
         }
