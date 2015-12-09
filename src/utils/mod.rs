@@ -360,7 +360,7 @@ impl Runner {
                 continue;
             }
             let mut write_out = String::new();
-            let mut ext;
+            let ext;
             match *res {
                 Pipeout::Esil(ref s) => {
                     ext = "esil";

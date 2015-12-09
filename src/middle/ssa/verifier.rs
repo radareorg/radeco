@@ -25,7 +25,7 @@ use std::fmt::Debug;
 
 pub type VResult<T> = result::Result<(), SSAErr<T>>;
 
-pub trait Verify: SSA {
+pub trait Verify: SSA + Sized + Debug {
     fn verify_block(&self, i: &Self::ActionRef) -> VResult<Self>;
     fn verify_expr(&self, i: &Self::ValueRef) -> VResult<Self>;
 }

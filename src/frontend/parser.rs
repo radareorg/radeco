@@ -235,7 +235,7 @@ impl Parser {
 
             // Deal with normal 'composite' instructions.
             if token.char_indices().last().unwrap().1 != ']' {
-                let mut dst: MVal;
+                let dst: MVal;
                 if let Some(x) = self.stack.last() {
                     dst = x.clone();
                 } else {
