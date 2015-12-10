@@ -20,4 +20,5 @@ log = "*"
 git = "https://github.com/radare/r2pipe.rs"
 
 [dependencies.esil]
-path = "../esil-rs"
+git = "https://github.com/sushant94/esil-rs"
+# path = "../esil-rs"
