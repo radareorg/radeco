@@ -204,12 +204,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             MOpcode::OpLt => {
                 (lhs_val < rhs_val) as u64
             }
-            MOpcode::OpLteq => {
-                (lhs_val <= rhs_val) as u64
-            }
-            MOpcode::OpGteq => {
-                (lhs_val >= rhs_val) as u64
-            }
             MOpcode::OpLsl => {
                 lhs_val << rhs_val
             }
@@ -303,7 +297,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         for (k, v) in self.expr_val.iter() {
             if let ExprVal::Const(val) = *v {
                 let block = self.g.block_of(k);
-                let newnode = self.g.add_const(block, val);
+                // XXX
+                let newnode = self.g.add_const(val);
                 self.g.replace(*k, newnode);
             }
         }

@@ -45,8 +45,6 @@ impl fmt::Display for MInst {
         let s: String = match self.opcode {
             MOpcode::OpNot => format!("{} = {}{}", self.dst, self.opcode, self.operand_1),
             MOpcode::OpEq => format!("{} = {}", self.dst, self.operand_1),
-            MOpcode::OpInc => format!("{} = {} + 1", self.dst, self.operand_1),
-            MOpcode::OpDec => format!("{} = {} - 1", self.dst, self.operand_1),
             MOpcode::OpIf => format!("if ({}) {{", self.operand_1),
             MOpcode::OpLoad => format!("{} = {}({})", self.dst, self.opcode, self.operand_1),
             MOpcode::OpNarrow(w) =>
@@ -57,7 +55,6 @@ impl fmt::Display for MInst {
             MOpcode::OpJmp => format!("{} {}", self.opcode, self.operand_1),
             MOpcode::OpCJmp => format!("{} {}, {}", self.opcode, self.operand_1, self.operand_2),
             MOpcode::OpCall => format!("{} {}", self.opcode, self.operand_1),
-            MOpcode::OpCl => format!("{}", self.opcode),
             MOpcode::OpConst(v) => format!("let {} = {}", self.operand_1.name, v),
             _ => format!("{} = {} {} {}",
                          self.dst,

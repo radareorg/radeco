@@ -21,7 +21,7 @@ use r2pipe::structs::{LOpInfo, LRegInfo};
 use r2pipe::R2;
 
 use frontend::parser::Parser;
-use frontend::esilssa::SSAConstruction;
+//use frontend::esilssa::SSAConstruction;
 use middle::ir::MInst;
 use middle::cfg::CFG;
 use middle::dot;
@@ -266,8 +266,8 @@ impl Runner {
             Pipeout::CFG {ref cfg} => {
                 let mut ssa = SSAStorage::new();
                 {
-                    let mut con = SSAConstruction::new(&mut ssa, &r);
-                    con.run(cfg);
+                    //let mut con = SSAConstruction::new(&mut ssa, &r);
+                    //con.run(cfg);
                 }
                 let pipeout = Pipeout::SSA { ssa: ssa.clone() };
                 self.set_pipeout(&pipeout);

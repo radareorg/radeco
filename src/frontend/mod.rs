@@ -9,7 +9,7 @@
 
 pub use super::middle::ir::{Address, MAddr, MArity, MInst, MOpcode, MRegInfo, MVal, MValType};
 
-pub mod parser;
-pub mod esilssa;
+//pub mod parser;
+//pub mod esilssa;
 
 pub mod ssaconstructor;

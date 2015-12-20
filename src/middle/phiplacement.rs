@@ -8,90 +8,232 @@
 //! Implements the SSA construction algorithm described in
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
-use std::collections::{HashMap, HashSet};
-use super::ssa::{BBInfo, SSA, SSAMod, ValueType};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::cmp::Ordering;
+
+use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
+use middle::ir::{MAddress};
+
+use super::ssa::cfg_traits::{CFG, CFGMod};
+use middle::regfile::SubRegisterFile;
+use middle::ir::MOpcode;
 
 pub type VarId = usize;
 
-pub struct PhiPlacer<'a, T: SSAMod<BBInfo = BBInfo> + 'a> {
-    pub ssa: &'a mut T,
+const UNCOND_EDGE: u8 = 0;
+
+pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + 'a> {
+    ssa: &'a mut T,
     pub variable_types: Vec<ValueType>,
     sealed_blocks: HashSet<T::ActionRef>,
-    current_def: Vec<HashMap<T::ActionRef, T::ValueRef>>,
+    current_def: Vec<BTreeMap<MAddress, T::ValueRef>>,
     incomplete_phis: HashMap<T::ActionRef, HashMap<VarId, T::ValueRef>>,
+    regfile: SubRegisterFile,
+    blocks: BTreeMap<MAddress, T::ActionRef>,
+    index_to_addr: HashMap<T::ValueRef, MAddress>,
+    addr_to_index: BTreeMap<MAddress, T::ValueRef>,
+    outputs: HashMap<T::ValueRef, VarId>,
 }
 
-impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
-    pub fn new(ssa: &'a mut T) -> PhiPlacer<'a, T> {
+impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
+    pub fn new(ssa: &'a mut T, regfile: SubRegisterFile) -> PhiPlacer<'a, T> {
         PhiPlacer {
             ssa: ssa,
             variable_types: Vec::new(),
             sealed_blocks: HashSet::new(),
             current_def: Vec::new(),
             incomplete_phis: HashMap::new(),
+            regfile: regfile,
+            blocks: BTreeMap::new(),
+            index_to_addr: HashMap::new(),
+            addr_to_index: BTreeMap::new(),
+            outputs: HashMap::new(),
         }
     }
 
     pub fn add_variables(&mut self, variable_types: Vec<ValueType>) {
         for _ in &variable_types {
-            self.current_def.push(HashMap::new());
+            self.current_def.push(BTreeMap::new());
         }
         self.variable_types.extend(variable_types);
     }
 
-    pub fn write_variable(&mut self, block: T::ActionRef, variable: VarId, value: T::ValueRef) {
+    pub fn write_variable(&mut self, address: MAddress, variable: VarId, value: T::ValueRef) {
+        self.current_def[variable].insert(address, value);
+        self.outputs.insert(value, variable);
+    }
+
+    // Returns the address that provides this definition and the corresponding
+    // ValueRef.
+    // This method is different from current_def_in_block as this will return a
+    // ValueRef even if
+    // the definition is not within the same block.
+    fn current_def_at(&self, variable: VarId, address: MAddress) -> Option<(&MAddress, &T::ValueRef)> {
+        for (addr, idx) in self.current_def[variable].iter().rev() {
+            if *addr > address {
+                continue;
+            }
+            return Some((addr, idx));
+        }
+        None
+    }
+
+    fn current_def_in_block(&self, variable: VarId, address: MAddress) -> Option<&T::ValueRef> {
+        self.current_def_at(variable, address).and_then(|v| {
+            if self.block_of(*v.0) == self.block_of(address) {
+                Some(v.1)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn read_variable(&mut self, address: MAddress, variable: VarId) -> T::ValueRef {
+        // let block = self.block_of(address).unwrap();
+        // assert!(!self.sealed_blocks.contains(&block));
+        self.current_def_in_block(variable, address)
+            .cloned()
+            .unwrap_or(self.read_variable_recursive(variable, address))
+    }
+
+    fn read_variable_recursive(&mut self, variable: VarId, address: MAddress) -> T::ValueRef {
+        let block = self.block_of(address).unwrap();
         assert!(!self.sealed_blocks.contains(&block));
-        self.write_variable_internal(block, variable, value)
-    }
-
-    fn write_variable_internal(&mut self,
-                               block: T::ActionRef,
-                               variable: VarId,
-                               value: T::ValueRef) {
-        assert_eq!(self.ssa.get_node_data(&value).unwrap().vt,
-                   self.variable_types[variable]);
-        self.current_def[variable].insert(block, value);
-    }
-
-    pub fn read_variable(&mut self, block: T::ActionRef, variable: VarId) -> T::ValueRef {
-        self.current_def[variable].get(&block)
-            .map(|var| *var)
-            .unwrap_or(self.read_variable_recursive(variable, block))
-    }
-
-    fn read_variable_recursive(&mut self, variable: VarId, block: T::ActionRef) -> T::ValueRef {
         let valtype = self.variable_types[variable];
         let val = if !self.sealed_blocks.contains(&block) {
             // Incomplete CFG
-            let _val = self.ssa.add_phi(block, valtype);
-            self.incomplete_phis.get_mut(&block)
-                .and_then(|phi| phi.insert(variable, _val));
-            _val
+            let val_ = self.add_phi(address, valtype);
+            self.incomplete_phis.get_mut(&block).and_then(|hash| hash.insert(variable, val_));
+            val_
         } else {
             let preds = self.ssa.preds_of(block);
             assert!(preds.len() > 0);
             if preds.len() == 1 {
                 // Optimize the common case of one predecessor: No phi needed
-                self.read_variable(preds[0], variable)
+                let p_address = self.addr_of(&preds[0]);
+                self.read_variable(p_address, variable)
             } else {
                 // Break potential cycles with operandless phi
-                let _val = self.ssa.add_phi(block, valtype);
-                self.write_variable_internal(block, variable, _val);
+                let _val = self.add_phi(address, valtype);
+                self.write_variable(address, variable, _val);
                 self.add_phi_operands(block, variable, _val)
             }
         };
-        self.write_variable_internal(block, variable, val);
+        self.write_variable(address, variable, val);
         return val;
     }
 
-    pub fn add_block(&mut self, info: BBInfo) -> T::ActionRef {
-        let block = self.ssa.add_block(info);
-        self.incomplete_phis.insert(block, HashMap::new());
-        block
+    // TODO: Add methods to expose addition of edges between the basic blocks.
+
+    // In this new implementation, this method is a bit tricky.
+    // Let us break down this functionality into multiple steps.
+    // - add_block takes an address to add a block at.
+    // - It then determines if this address is already "seen".
+    // - If it has already seen this address, it means that we have a backwards
+    //   edge and we need to split the existing basic block at the target address.
+    //   Consequently, this method calls split_block to add references, phis etc.
+    // - If it is unseen, then a new basic block is created at this address and
+    //   kept ready to be used when instructions beloging to this basic block are
+    //   parsed for addition into the SSA.
+    //
+    // current_addr is the current address at which we are parsing. This is
+    // important to determine
+    // if the address we are trying to create a block is seen or not.
+    // - edge_type is the type of edge to be added between the block which contains
+    // the
+    // current_addr and the new block being added into the CFG.
+    pub fn add_block(&mut self,
+                     at: MAddress,
+                     current_addr: Option<MAddress>,
+                     edge_type: Option<u8>)
+                     -> T::ActionRef {
+        let seen = current_addr.map_or(false, |cur| {
+            match cur.cmp(&at) {
+                Ordering::Less | Ordering::Equal => false,
+                // Check if `at` is before the first block.
+                Ordering::Greater => self.block_of(at).is_some(),
+            }
+        });
+
+        // Create a new block and add the required type of edge.
+        let lower_block = self.new_block(at);
+        if let Some(e) = edge_type {
+            if let Some(addr) = current_addr {
+                let current_block = self.block_of(addr).unwrap();
+                self.ssa.add_control_edge(current_block, lower_block, e);
+            }
+        }
+
+        if seen {
+            // Details on performing the split up.
+            //   - Add an unconditional flow edge from the upper to the lower block.
+            // - We first find the defs for every expr in the `lower` block arising out
+            // of a
+            //   split (lower block is the block that has aatat`).
+            // - If these defs are in the `upper` block, then we add a phi (incomplete
+            // phi) and
+            //   this is used to provide the def for this use.
+            let upper_block = self.block_of(at).unwrap();
+
+            // Copy all the outgoing CF edges.
+            let outgoing = [
+                    self.ssa.next_edge_of(&upper_block),
+                    self.ssa.true_edge_of(&upper_block),
+                    self.ssa.false_edge_of(&upper_block),
+            ];
+            for (i, edge) in outgoing.iter().enumerate() {
+                if *edge != self.ssa.invalid_edge() {
+                    let target = self.ssa.target_of(&edge);
+                    self.ssa.add_control_edge(lower_block, target, i as u8);
+                    self.ssa.remove_control_edge(*edge);
+                }
+            }
+            
+            self.ssa.add_control_edge(upper_block, lower_block, UNCOND_EDGE);
+            self.blocks.insert(at, lower_block);
+
+            for (addr, ni) in self.addr_to_index.clone() {
+                if addr < at {
+                    continue;
+                }
+                if let Some(block) = self.block_of(addr) {
+                    if block != lower_block {
+                        break;
+                    }
+                }
+                // Now, this node index belongs to the lower part of the split block.
+                let operands = self.ssa.get_sparse_operands(&ni);
+                // Check if the operands belong to the upper block and if they do, remove the
+                // operands edge, add a new phi and connect the edge from phi to ni.
+                for operand_ in &operands {
+                    let (i, operand) = *operand_;
+                    let operand_addr = self.index_to_addr[&operand];
+                    let operand_block = self.block_of(operand_addr).unwrap();
+                    if operand_block == upper_block {
+                        // Since the current block is not sealed, we can add an incomplete phi and
+                        // modify the constructed SSA to take this phi as operand rather than the
+                        // node.
+                        // This can be summarized in the following operations:
+                        //   - Remove the edge from the operand to ni.
+                        //   - Add a new "incomplete" phi associated with the lower block.
+                        //   - Connect the edge.
+                        // The above two steps can easily be accomplished by doing a read_variable
+                        // and adding an operand edge.
+                        self.ssa.disconnect(&ni, &operand);
+                        let output_varid = self.outputs[&operand];
+                        let replacement_phi = self.read_variable(at, output_varid);
+                        self.ssa.op_use(ni, i, replacement_phi);
+                    }
+                }
+            }
+        } else {
+            self.blocks.insert(at, lower_block);
+        }
+        lower_block
     }
 
     pub fn seal_block(&mut self, block: T::ActionRef) {
-        let inc = self.incomplete_phis[&block].clone(); // TODO: remove clone
+        let inc = self.incomplete_phis[&block].clone();
         for (variable, node) in inc {
             self.add_phi_operands(block, variable, node);
         }
@@ -106,10 +248,11 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
         assert!(block == self.ssa.block_of(&phi));
         // Determine operands from predecessors
         for pred in self.ssa.preds_of(block) {
-            let datasource = self.read_variable(pred, variable.clone());
+            let p_addr = self.addr_of(&pred);
+            let datasource = self.read_variable(p_addr, variable.clone());
             self.ssa.phi_use(phi, datasource)
         }
-        return self.try_remove_trivial_phi(phi);
+        self.try_remove_trivial_phi(phi)
     }
 
     fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
@@ -130,9 +273,12 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
 
         if same == undef {
             let block = self.ssa.block_of(&phi);
-            let valtype = self.ssa.get_node_data(&phi).ok()
-                .expect("No Data associated with this node!").vt;
-            same = self.ssa.add_undefined(block, valtype);
+            let valtype = self.ssa
+                              .get_node_data(&phi)
+                              .expect("No Data associated with this node!")
+                              .vt;
+            let block_addr = self.addr_of(&block);
+            same = self.add_undefined(block_addr, valtype);
         }
 
         let users = self.ssa.uses_of(phi);
@@ -160,41 +306,193 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
     pub fn sync_register_state(&mut self, block: T::ActionRef) {
         let rs = self.ssa.registers_at(&block);
         for var in 0..self.variable_types.len() {
-            let val = self.read_variable(block, var);
+            let addr = self.addr_of(&block);
+            let val = self.read_variable(addr, var);
             self.ssa.op_use(rs, var as u8, val);
         }
     }
 
-// fn remove_redundant_phis(&self, phi_functions: Vec<T::ValueRef>) {
-// should phi_functions be `Vec` or something else?
-// let sccs = compute_phi_sccs(induced_subgraph(phi_functions));
-// for scc in topological_sort(sccs) {
-// processSCC(scc)
-// }
-// }
+    pub fn mark_start_node(&mut self, block: &T::ActionRef) {
+        self.ssa.mark_start_node(block);
+    }
 
-// fn processSCC(&self, scc) {
-// if len(scc) = 1 { return } // we already handled trivial φ functions
-//
-// let inner = HashSet::new();
-// let outerOps = HashSet::new();
-//
-// for phi in scc:
-// isInner = True
-// for operand in phi.getOperands() {
-// if operand not in scc {
-// outerOps.add(operand)
-// isInner = False
-// }
-// }
-// if isInner {
-// inner.add(phi)
-// }
-//
-// if len(outerOps) == 1 {
-// replaceSCCByValue(scc, outerOps.pop())
-// } else if len(outerOps) > 1 {
-// remove_redundant_phis(inner)
-// }
-// }
+    pub fn mark_exit_node(&mut self, block: &T::ActionRef) {
+        self.ssa.mark_exit_node(block);
+    }
+
+    // These functions take in address and automatically determine the block that
+    // they should
+    // belong to and make the necessary mapppings internally. This is useful as the
+    // outer struct
+    // never has to keep track of the current_block or determine which block a
+    // particular
+    // instruction has to go into.
+
+    fn add_phi(&mut self, address: MAddress, vt: ValueType) -> T::ValueRef {
+        let i = self.ssa.add_phi(vt);
+        self.index_to_addr.insert(i, address);
+        i
+    }
+
+    // Constants need not belong to any block. They are stored as a separate table.
+    pub fn add_const(&mut self, value: u64) -> T::ValueRef {
+        // All consts are assumed to be 64 bit wide.
+        self.ssa.add_const(value)
+        //self.index_to_addr.insert(i, address);
+    }
+
+    pub fn add_undefined(&mut self, address: MAddress, vt: ValueType) -> T::ValueRef {
+        let i = self.ssa.add_undefined(vt);
+        self.index_to_addr.insert(i, address);
+        i
+    }
+
+    pub fn add_comment(&mut self, address: MAddress, vt: ValueType, msg: String) -> T::ValueRef {
+        let i = self.ssa.add_comment(vt, msg);
+        self.index_to_addr.insert(i, address);
+        i
+    }
+
+    // TODO: Add a more convenient method to add an opcode and operands to it.
+    // Something like the previous verified_add_op.
+
+    pub fn add_op(&mut self, op: &MOpcode, address: MAddress, vt: ValueType) -> T::ValueRef {
+        let i = self.ssa.add_op(*op, vt, None);
+        self.index_to_addr.insert(i, address);
+        i
+    }
+
+    pub fn read_register(&mut self,
+                         base: usize,
+                         address: MAddress,
+                         var: &String)
+                         -> T::ValueRef {
+        let info = self.regfile.get_info(var).unwrap();
+        let id = info.base + base;
+        let mut value = self.read_variable(address, id);
+
+        let width = self.operand_width(&value);
+
+        if info.shift > 0 {
+            let shift_amount_node = self.add_const(info.shift as u64);
+            let opcode = MOpcode::OpLsr;
+            let vtype = From::from(width);
+            let op_node = self.add_op(&opcode, address, vtype);
+            self.op_use(&op_node, 0, &value);
+            self.op_use(&op_node, 1, &shift_amount_node);
+            value = op_node;
+        }
+
+        if info.width < width as usize {
+            let opcode = MOpcode::OpNarrow(info.width as u16);
+            let vtype = From::from(info.width);
+            let op_node = self.add_op(&opcode, address, vtype);
+            self.op_use(&op_node, 0, &value);
+            value = op_node;
+        }
+
+        value
+    }
+
+    pub fn write_register(&mut self,
+                          base: usize,
+                          address: MAddress,
+                          var: &String,
+                          mut value: T::ValueRef) {
+        let info = self.regfile.get_info(var).unwrap();
+        let id = info.base + base;
+
+        let width = match self.variable_types[id] {
+            ValueType::Integer { width } => width,
+        };
+
+        if info.width >= width as usize {
+            self.write_variable(address, id, value);
+            return;
+        }
+
+        let vt = From::from(width);
+        let opcode = MOpcode::OpWiden(width as u16);
+
+        if self.operand_width(&value) < width {
+            let opcode_node = self.add_op(&opcode, address, vt);
+            self.op_use(&opcode_node, 0, &value);
+            value = opcode_node;
+        }
+
+        if info.shift > 0 {
+            let shift_amount_node = self.add_const(info.shift as u64);
+            let opcode_node = self.add_op(&MOpcode::OpLsl, address, vt);
+            self.op_use(&opcode_node, 0, &value);
+            self.op_use(&opcode_node, 1, &shift_amount_node);
+            value = shift_amount_node;
+        }
+
+        let fullval: u64 = !((!1u64) << (width - 1));
+        let maskval: u64 = ((!((!1u64) << (info.width - 1))) << info.shift) ^ fullval;
+
+        if maskval == 0 {
+            self.write_variable(address, id, value);
+            return;
+        }
+
+        let mut ov = self.read_variable(address, id);
+        let maskvalue_node = self.add_const(maskval);
+
+        let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
+        self.op_use(&op_and, 0, &ov);
+        self.op_use(&op_and, 1, &maskvalue_node);
+
+        ov = op_and;
+        let op_or = self.add_op(&MOpcode::OpOr, address, vt);
+        self.op_use(&op_or, 0, &value);
+        self.op_use(&op_or, 1, &ov);
+        value = op_or;
+        self.write_variable(address, id, value);
+    }
+
+    pub fn op_use(&mut self, op: &T::ValueRef, index: u8, arg: &T::ValueRef) {
+        self.ssa.op_use(*op, index, *arg)
+    }
+
+    pub fn operand_width(&self, node: &T::ValueRef) -> u16 {
+        match self.ssa.get_node_data(node).unwrap().vt {
+            ValueType::Integer{ref width} => *width,
+        }
+    }
+
+    fn new_block(&mut self, bb: MAddress) -> T::ActionRef {
+        let block = self.ssa.add_block(bb);
+        self.incomplete_phis.insert(block, HashMap::new());
+        block
+    }
+
+    // Determine which block as address should belong to.
+    // This basically translates to finding the greatest address that is less that
+    // `address` in self.blocks. This is fairly simple as self.blocks is sorted.
+    fn block_of(&self, address: MAddress) -> Option<T::ActionRef> {
+        let mut last = None;
+        let start_address = {
+            let start = self.ssa.start_node();
+            self.addr_of(&start)
+        };
+        for (baddr, index) in self.blocks.iter().rev() {
+            if *baddr < address {
+                break;
+            }
+            // TODO: Better way to detect start block by using self.ssa.start_block
+            // If this is the start block.
+            if *baddr ==  start_address {
+                last = None;
+            } else {
+                last = Some(*index);
+            }
+        }
+        last
+    }
+
+    // Return the address corresponding to the block.
+    fn addr_of(&self, block: &T::ActionRef) -> MAddress {
+        self.ssa.address(block).unwrap()
+    }
 }

@@ -13,9 +13,9 @@ use middle::dot::{DotAttrBlock, GraphDot};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
 use super::ssa_traits::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
 
-/// ////////////////////////////////////////////////////////////////////////////
-/// / Implementation of GraphDot to emit Dot for SSAStorage.
-/// ////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of GraphDot to emit Dot for SSAStorage.
+///////////////////////////////////////////////////////////////////////////////
 
 impl GraphDot for SSAStorage {
 	type NodeIndex = graph::NodeIndex;
@@ -158,9 +158,9 @@ impl GraphDot for SSAStorage {
                 }
                 vec![("label".to_string(), r)]
             }
-            NodeData::BasicBlock(BBInfo{addr}) => {
+            NodeData::BasicBlock(addr) => {
                 let label_str = format!("<<font color=\"grey50\">Basic Block \
-                                         Information<br/>Start Address: 0x{:X}</font>>",
+                                         Information<br/>Start Address: {}</font>>",
                                         addr);
                 vec![("label".to_string(), label_str),
                      ("shape".to_string(), "box".to_string()),

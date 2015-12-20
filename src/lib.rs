@@ -38,6 +38,11 @@
 
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
+
+// Support for extra lints throgh clippy
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+
 extern crate regex;
 extern crate petgraph;
 extern crate rustc_serialize;
@@ -51,8 +56,8 @@ extern crate r2pipe;
 
 extern crate esil;
 
-#[macro_use]
-pub mod utils;
+//#[macro_use]
+//pub mod utils;
 pub mod middle;
 pub mod analysis;
 pub mod frontend;

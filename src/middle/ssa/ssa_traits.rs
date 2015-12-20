@@ -69,11 +69,12 @@ impl From<usize> for ValueType {
     }
 }
 
-/// Data associated with a basic block. Use is optional.
-#[derive(Clone, Debug)]
-pub struct BBInfo {
-    pub addr: u64,
-}
+pub struct BBInfo;
+//// Data associated with a basic block. Use is optional.
+//#[derive(Clone, Debug)]
+//pub struct BBInfo {
+    //pub addr: u64,
+//}
 
 /// Value node without operands
 #[derive(Clone, Debug)]
@@ -100,9 +101,9 @@ pub struct NodeData {
 pub trait SSA: CFG {
 	type ValueRef: Eq + Hash + Clone + Copy + Debug; // We could drop the Copy trait later and insert .clone()
 
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Node accessors and helpers
-    /// ////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    //// Node accessors and helpers
+    ///////////////////////////////////////////////////////////////////////////
 
     /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
     fn exprs_in(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
@@ -195,27 +196,28 @@ pub trait SSAMod: SSA + CFGMod {
 
     /// Add a new operation node.
     fn add_op(&mut self,
-              block: Self::ActionRef,
               opc: ir::MOpcode,
               vt: ValueType,
               addr: Option<u64>)
               -> Self::ValueRef;
 
     /// Add a new constant node.
-    fn add_const(&mut self, block: Self::ActionRef, value: u64) -> Self::ValueRef;
+    fn add_const(&mut self, value: u64) -> Self::ValueRef;
 
     /// Add a new phi node.
-    fn add_phi(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
+    fn add_phi(&mut self, vt: ValueType) -> Self::ValueRef;
 
     /// Add a new undefined node
-    fn add_undefined(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
+    fn add_undefined(&mut self, vt: ValueType) -> Self::ValueRef;
 
     /// Add a new comment node
     fn add_comment(&mut self,
-                   block: Self::ActionRef,
                    vt: ValueType,
                    msg: String)
                    -> Self::ValueRef;
+    
+    /// Associate a node with index n with a block
+    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef);
 
     /// Mark the node as selector for the control edges away from the specified basic block
     fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
@@ -228,6 +230,9 @@ pub trait SSAMod: SSA + CFGMod {
 
     /// Set the index-th argument of the node.
     fn op_use(&mut self, node: Self::ValueRef, index: u8, argument: Self::ValueRef);
+
+    /// Disconnect n1 from n2 (deletes the edge if one exists.
+    fn disconnect(&mut self, &Self::ValueRef, &Self::ValueRef);
 
     /// Replace one node by another within one basic block.
     fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);

@@ -19,7 +19,11 @@ use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAExtra, SSAMod, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 use super::bimap::BiMap;
-use utils::logger;
+//use utils::logger;
+
+macro_rules! radeco_trace {
+    ($e: expr) => ()
+}
 
 /// Structure that represents data that maybe associated with an node in the
 /// SSA
@@ -69,7 +73,7 @@ pub enum NodeData {
     /// Placeholder for action nodes.
     Unreachable,
     /// Represents a basic block.
-    BasicBlock(ssa_traits::BBInfo),
+    BasicBlock(ir::MAddress),
     /// Represents an action that doesn't contain any value nodes, described
     /// by its associated RegisterState (which includes the instruction
     /// pointer).
@@ -359,9 +363,9 @@ impl CFG for SSAStorage {
         NodeIndex::end()
     }
 
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Edge accessors and helpers
-    /// ////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    //// Edge accessors and helpers
+    ///////////////////////////////////////////////////////////////////////////
     fn edges_of(&self, exi: &NodeIndex) -> Vec<EdgeIndex> {
         let i = &self.internal(exi);
         let mut edges = Vec::<EdgeIndex>::new();
@@ -435,6 +439,15 @@ impl CFG for SSAStorage {
         return edges;
     }
 
+    fn address(&self, block: &Self::ActionRef) -> Option<ir::MAddress> {
+        let si = self.internal(block);
+        if let NodeData::BasicBlock(ref addr) = self.g[si] {
+            Some(*addr)
+        } else {
+            None
+        }
+    }
+
     fn invalid_edge(&self) -> EdgeIndex {
         EdgeIndex::end()
     }
@@ -442,7 +455,7 @@ impl CFG for SSAStorage {
 
 impl CFGMod for SSAStorage {
 
-	type BBInfo = ssa_traits::BBInfo;
+	type BBInfo = ir::MAddress;
 
     fn mark_start_node(&mut self, start: &Self::ActionRef) {
         let si = self.internal(start);
@@ -513,6 +526,10 @@ impl CFGMod for SSAStorage {
                 }
             }
         }
+    }
+
+    fn remove_control_edge(&mut self, edge: Self::CFEdgeRef) {
+        self.g.remove_edge(edge);
     }
 
 }
@@ -743,44 +760,39 @@ impl SSA for SSAStorage {
 impl SSAMod for SSAStorage {
 
     fn add_op(&mut self,
-              block: NodeIndex,
               opc: ir::MOpcode,
               vt: ValueType,
-              _: Option<u64>)
-              -> NodeIndex {
+              _: Option<u64>) -> NodeIndex
+    {
         let n = self.insert_node(NodeData::Op(opc, vt));
-        self.insert_edge(n, block, CONTEDGE);
         n
     }
 
-    fn add_const(&mut self, block: NodeIndex, value: u64) -> NodeIndex {
+    fn add_const(&mut self, value: u64) -> NodeIndex {
         // TODO:
         //  - Set correct size for the data.
         //  - Constants need/should not belong to any block.
         let data = NodeData::Op(ir::MOpcode::OpConst(value),
                                 ValueType::Integer { width: 64 });
 
-        let n = self.insert_node(data);
-        self.insert_edge(n, block, CONTEDGE);
-        n
+        self.insert_node(data)
+        //self.insert_edge(n, block, CONTEDGE);
     }
 
-    fn add_phi(&mut self, block: NodeIndex, vt: ValueType) -> NodeIndex {
-        let n = self.insert_node(NodeData::Phi(vt, "".to_owned()));
-        self.update_edge(n, block, CONTEDGE);
-        n
+    fn add_phi(&mut self, vt: ValueType) -> NodeIndex {
+        self.insert_node(NodeData::Phi(vt, "".to_owned()))
+        //self.update_edge(n, block, CONTEDGE);
+        //n
     }
 
-    fn add_undefined(&mut self, block: NodeIndex, vt: ValueType) -> NodeIndex {
-        let n = self.insert_node(NodeData::Undefined(vt));
-        self.insert_edge(n, block, CONTEDGE);
-        n
+    fn add_undefined(&mut self,vt: ValueType) -> NodeIndex {
+        self.insert_node(NodeData::Undefined(vt))
+        //self.insert_edge(n, block, CONTEDGE);
     }
 
-    fn add_comment(&mut self, block: NodeIndex, vt: ValueType, msg: String) -> NodeIndex {
-        let n = self.insert_node(NodeData::Comment(vt, msg));
-        self.insert_edge(n, block, CONTEDGE);
-        n
+    fn add_comment(&mut self, vt: ValueType, msg: String) -> NodeIndex {
+        self.insert_node(NodeData::Comment(vt, msg))
+        //self.insert_edge(n, block, CONTEDGE);
     }
 
     fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
@@ -800,6 +812,10 @@ impl SSAMod for SSAStorage {
             return;
         }
         self.insert_edge(node, argument, EdgeData::Data(index));
+    }
+    
+    fn disconnect(&mut self, op: &NodeIndex, operand: &NodeIndex) {
+        self.delete_edge(*op, *operand);
     }
 
     fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
@@ -838,6 +854,10 @@ impl SSAMod for SSAStorage {
         }
 
         self.g.remove_edge(*i);
+    }
+
+    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
+        self.insert_edge(node, block, CONTEDGE);
     }
 }
 

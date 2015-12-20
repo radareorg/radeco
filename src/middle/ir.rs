@@ -10,6 +10,7 @@
 //! ESIL parser.
 
 use std::default::Default;
+use std::fmt;
 
 pub type Address = u64;
 pub type WidthSpec = u16;
@@ -18,6 +19,34 @@ pub type WidthSpec = u16;
 pub struct MAddr {
     // maybe store section id and offset instead
     pub val: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// New address struct
+pub struct MAddress {
+    pub address: u64,
+    pub offset: u64,
+}
+
+impl MAddress {
+    pub fn new(address: u64, offset: u64) -> MAddress {
+        MAddress {
+            address: address,
+            offset: offset,
+        }
+    }
+}
+
+impl fmt::UpperHex for MAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:#08X}.{:04}", self.address, self.offset)
+    }
+}
+
+impl fmt::Display for MAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:X}", self)
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -55,8 +84,6 @@ pub enum MOpcode {
     OpCmp,
     OpGt,
     OpLt,
-    OpLteq,
-    OpGteq,
     OpLsl,
     OpLsr,
     OpIf,
@@ -70,9 +97,8 @@ pub enum MOpcode {
     OpConst(u64),
     OpNop,
     OpInvalid,
-    OpInc,
-    OpDec,
-    OpCl, // '}'
+    // If - Then - Else
+    OpITE,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -151,9 +177,6 @@ impl MOpcode {
             MOpcode::OpCJmp => false,
             MOpcode::OpNop => false,
             MOpcode::OpInvalid => false,
-            MOpcode::OpInc => false,
-            MOpcode::OpDec => false,
-            MOpcode::OpCl => false,
             _ => true,
         }
     }
@@ -173,8 +196,6 @@ impl MOpcode {
             MOpcode::OpCmp => ("==", MArity::Binary),
             MOpcode::OpGt => (">", MArity::Binary),
             MOpcode::OpLt => ("<", MArity::Binary),
-            MOpcode::OpLteq => ("<=", MArity::Binary),
-            MOpcode::OpGteq => (">=", MArity::Binary),
             MOpcode::OpLsl => ("<<", MArity::Binary),
             MOpcode::OpLsr => (">>", MArity::Binary),
             MOpcode::OpIf => ("if", MArity::Unary),
@@ -188,9 +209,7 @@ impl MOpcode {
             MOpcode::OpConst(_) => ("const", MArity::Zero),
             MOpcode::OpNop => ("nop", MArity::Zero),
             MOpcode::OpInvalid => ("invalid", MArity::Zero),
-            MOpcode::OpInc => ("++", MArity::Unary),
-            MOpcode::OpDec => ("--", MArity::Unary),
-            MOpcode::OpCl => ("}", MArity::Zero),
+            MOpcode::OpITE => ("ITE", MArity::Ternary),
         };
         (String::from(op), arity)
     }

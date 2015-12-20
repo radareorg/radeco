@@ -6,8 +6,12 @@ authors = [
 	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
 ]
 
+[lib]
+path = "src/lib.rs"
+
 [features]
 trace_log = []
+default = []
 
 [dependencies]
 regex = "*"
@@ -15,6 +19,9 @@ petgraph = "*"
 num = "*"
 rustc-serialize = "*"
 log = "*"
+
+[dependencies.clippy]
+clippy="*"
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"

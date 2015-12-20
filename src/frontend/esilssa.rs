@@ -43,9 +43,9 @@ where T: 'a + Clone + Debug + Verify + SSAExtra +
          SSAMod<BBInfo=BBInfo, ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
     pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruction<'a, T> {
+        let regfile = SubRegisterFile::new(reg_info);
         let mut sc = SSAConstruction {
-            phiplacer: PhiPlacer::new(ssa),
-            regfile: SubRegisterFile::new(reg_info),
+            phiplacer: PhiPlacer::new(ssa, regfile),
             temps: HashMap::new(),
         };
         sc.phiplacer.add_variables(vec![
@@ -121,8 +121,7 @@ where T: 'a + Clone + Debug + Verify + SSAExtra +
     fn process_in(&mut self, block: T::ActionRef, mval: &MVal, addr: u64) -> T::ValueRef {
         match mval.val_type {
             MValType::Register => {
-                let phip = &mut self.phiplacer;
-                self.regfile.read_register(phip, 3, block, &mval.name, addr)
+                self.phiplacer.read_register(3, block, &mval.name, addr)
             }
             MValType::Temporary => self.temps[&mval.name],
             MValType::Internal => panic!("This value type should be eliminated during parsing"),
@@ -138,12 +137,11 @@ where T: 'a + Clone + Debug + Verify + SSAExtra +
         let mval = &inst.dst;
         match mval.val_type { 
             MValType::Register => {
-                self.regfile.write_register(&mut self.phiplacer,
-                                            3,
-                                            block,
-                                            &mval.name,
-                                            value,
-                                            inst.addr.val);
+                self.phiplacer.write_register(3,
+                                              block,
+                                              &mval.name,
+                                              value,
+                                              inst.addr.val);
             }
             MValType::Temporary => {
                 self.temps.insert(mval.name.clone(), value);
