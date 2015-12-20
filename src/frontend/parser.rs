@@ -8,15 +8,16 @@
 //! Implements parser to convert from ESIL to RadecoIR.
 
 use num::traits::Num;
-
+use regex::Regex;
 use std::collections::HashMap;
 use std::cmp;
-use regex::Regex;
 
 use r2pipe::structs::{LAliasInfo, LFlagInfo, LOpInfo, LRegInfo, LRegProfile};
 
-use frontend::{Address, MAddr, MInst, MOpcode, MRegInfo, MVal, MValType};
 use middle::ir::WidthSpec; // move WidthSpec to a different module?
+use frontend::{Address, MAddr, MInst, MOpcode, MRegInfo, MVal, MValType};
+
+
 
 // Macro to return a new hash given (key, value) tuples.
 // Example: hash![("foo", "bar"), ("bar", "baz")]

@@ -13,9 +13,9 @@ use middle::dot::{DotAttrBlock, GraphDot};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
 use super::ssa_traits::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
 
-/// ////////////////////////////////////////////////////////////////////////////
-/// / Implementation of GraphDot to emit Dot for SSAStorage.
-/// ////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of GraphDot to emit Dot for SSAStorage.
+///////////////////////////////////////////////////////////////////////////////
 
 impl GraphDot for SSAStorage {
 	type NodeIndex = graph::NodeIndex;
@@ -25,20 +25,6 @@ impl GraphDot for SSAStorage {
         format!("digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" \
                  compound=true rankdir=TB;]\n")
     }
-
-    // fn nodes(&self) -> Vec<Self::NodeType> {
-    // let res = self.g.raw_nodes().iter().map(|e| e.weight.clone()).collect();
-    // res
-    // }
-
-    // fn edges(&self) -> Vec<Self::EdgeType> {
-    // let res = self.g.raw_edges().to_vec();
-    // res
-    // }
-
-    // fn get_node(&self, n: usize) -> Option<&Self::NodeType> {
-    // self.g.node_weight(NodeIndex::new(n))
-    // }
 
     fn nodes(&self) -> Vec<Self::NodeIndex> {
         self.valid_nodes()

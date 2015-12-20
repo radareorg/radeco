@@ -7,10 +7,10 @@
 
 //! Converts the from ESIL/CFG representation to SSA.
 
-use std::collections::HashMap;
 use petgraph::graph::NodeIndex;
-use std::fmt::Debug;
+use std::collections::HashMap;
 use std::convert::From;
+use std::fmt::Debug;
 
 use r2pipe::structs::LRegInfo;
 
@@ -28,7 +28,7 @@ pub type VarId = usize;
 
 const ESIL_CUR: usize = 0;
 const ESIL_OLD: usize = 1;
-const LASTSZ: usize = 2;
+const ESIL_LASTSZ: usize = 2;
 
 pub struct SSAConstruction<'a, T>
     where T: 'a + Clone + Debug + Clone + SSAMod<BBInfo = BBInfo>
@@ -128,7 +128,7 @@ where T: 'a + Clone + Debug + Verify + SSAExtra +
             MValType::Internal => panic!("This value type should be eliminated during parsing"),
             MValType::EsilCur => self.phiplacer.read_variable(block, ESIL_CUR),
             MValType::EsilOld => self.phiplacer.read_variable(block, ESIL_OLD),
-            MValType::Lastsz => self.phiplacer.read_variable(block, LASTSZ),
+            MValType::Lastsz => self.phiplacer.read_variable(block, ESIL_LASTSZ),
             MValType::Unknown => self.phiplacer.ssa.invalid_value(),
             MValType::Null => self.phiplacer.ssa.invalid_value(),
         }
