@@ -64,9 +64,8 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
         let val = if !self.sealed_blocks.contains(&block) {
             // Incomplete CFG
             let _val = self.ssa.add_phi(block, valtype);
-            let old = self.incomplete_phis.get_mut(&block)
+            self.incomplete_phis.get_mut(&block)
                 .and_then(|phi| phi.insert(variable, _val));
-            assert!(old.is_none());
             _val
         } else {
             let preds = self.ssa.preds_of(block);

@@ -68,9 +68,9 @@ pub trait CFG {
     /// Reference that represents and Invalid block
     fn invalid_action(&self) -> Self::ActionRef;
 
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Edge accessors and helpers
-    /// ////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    //// Edge accessors and helpers
+    ///////////////////////////////////////////////////////////////////////////
 
     /// Reference to all outgoing edges from a block
     fn edges_of(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
@@ -105,7 +105,6 @@ pub trait CFG {
 
     /// Reference that represents an Invalid control flow edge.
     fn invalid_edge(&self) -> Self::CFEdgeRef;
-
 }
 
 /// Provides __mutators__ to the underlying storage

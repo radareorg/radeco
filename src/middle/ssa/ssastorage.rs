@@ -693,7 +693,6 @@ impl SSA for SSAStorage {
                 return Some(self.external(&othernode));
             }
         }
-        // TODO: Something wrong here!
         return None;
     }
 

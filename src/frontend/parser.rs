@@ -174,7 +174,7 @@ impl Parser {
         }
 
         let esil: Vec<String> = esil.split(',').map(|x| x.to_string()).collect();
-        for token in esil {
+        for token in &esil {
             if token.len() == 0 {
                 continue;
             }
@@ -212,13 +212,13 @@ impl Parser {
                     val_type = MValType::Internal
                 } else {
                     // TODO
-                    panic!("Proper error handling here");
+                    panic!("Proper error handling here: {:?}", esil);
                 }
 
                 let v = if let Some(cv) = val {
                     self.constant_value(cv)
                 } else {
-                    MVal::new(token, size, val_type, 0, reg_info)
+                    MVal::new(token.clone(), size, val_type, 0, reg_info)
                 };
 
                 self.stack.push(v);
