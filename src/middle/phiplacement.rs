@@ -82,7 +82,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
             }
         };
         self.write_variable_internal(block, variable, val);
-        return val;
+        val
     }
 
     pub fn add_block(&mut self, info: BBInfo) -> T::ActionRef {
@@ -110,7 +110,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
             let datasource = self.read_variable(pred, variable.clone());
             self.ssa.phi_use(phi, datasource)
         }
-        return self.try_remove_trivial_phi(phi);
+        self.try_remove_trivial_phi(phi)
     }
 
     fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
@@ -148,7 +148,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
                 self.try_remove_trivial_phi(use_);
             }
         }
-        return same;
+        same
     }
 
     pub fn add_dynamic(&mut self) -> T::ActionRef {

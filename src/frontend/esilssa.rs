@@ -191,7 +191,7 @@ where T: 'a + Clone + Debug + Verify + SSAExtra +
             self.phiplacer.write_variable(block, 0, nn64);
         }
 
-        return nn;
+        nn
     }
 
     fn process_block(&mut self, block: T::ActionRef, source: &BasicBlock) {

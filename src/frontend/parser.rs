@@ -354,7 +354,7 @@ impl Parser {
         }
 
         self.insts = res;
-        return (self).insts.clone();
+        (self).insts.clone()
     }
 
     fn get_tmp_register(&mut self, mut size: WidthSpec) -> MVal {
