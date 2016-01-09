@@ -22,3 +22,12 @@ git = "https://github.com/radare/r2pipe.rs"
 # path = "../radeco-lib"
 git = "https://github.com/radare/radeco-lib"
 
+[profile.release]
+lto = true
+opt-level = 2
+codegen-units = 4
+
+[profile.dev]
+lto = false
+opt-level = 0
+codegen-units = 4
