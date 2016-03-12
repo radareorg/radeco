@@ -30,7 +30,11 @@ impl fmt::Display for MVal {
             }
             _ => {
                 if let Some(v) = self.as_literal {
-                    format!("{}[:{}]", v, self.size)
+                    if v > 255 {
+                        format!("{:#x}[:{}]", v, self.size)
+                    } else {
+                        format!("{}[:{}]", v, self.size)
+                    }
                 } else {
                     format!("{}[:{}]", self.name, self.size)
                 }
