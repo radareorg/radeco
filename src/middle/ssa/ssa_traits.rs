@@ -28,6 +28,7 @@
 
 use std::hash::Hash;
 use std::fmt::Debug;
+
 use middle::ir;
 use super::cfg_traits::{CFG, CFGMod};
 

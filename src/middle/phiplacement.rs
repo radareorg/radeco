@@ -54,9 +54,11 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
     }
 
     pub fn read_variable(&mut self, block: T::ActionRef, variable: VarId) -> T::ValueRef {
-        self.current_def[variable].get(&block)
-            .map(|var| *var)
-            .unwrap_or(self.read_variable_recursive(variable, block))
+        if let Some(var) = self.current_def[variable].get(&block).cloned() {
+            var
+        } else {
+            self.read_variable_recursive(variable, block)
+        }
     }
 
     fn read_variable_recursive(&mut self, variable: VarId, block: T::ActionRef) -> T::ValueRef {
@@ -70,7 +72,6 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
             _val
         } else {
             let preds = self.ssa.preds_of(block);
-            assert!(preds.len() > 0);
             if preds.len() == 1 {
                 // Optimize the common case of one predecessor: No phi needed
                 self.read_variable(preds[0], variable)
@@ -98,6 +99,7 @@ impl<'a, T: SSAMod<BBInfo=BBInfo> + 'a> PhiPlacer<'a, T> {
         }
         self.sealed_blocks.insert(block);
     }
+
 
     fn add_phi_operands(&mut self,
                         block: T::ActionRef,

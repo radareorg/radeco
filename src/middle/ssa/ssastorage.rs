@@ -11,14 +11,16 @@ use std::fmt::Debug;
 use std::collections::HashMap;
 use petgraph::EdgeDirection;
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
+
 use middle::ir;
 
+use super::bimap::BiMap;
+use super::cfg_traits::{CFG, CFGMod};
 use super::ssa_traits;
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAExtra, SSAMod, ValueType};
-use super::cfg_traits::{CFG, CFGMod};
-use super::bimap::BiMap;
+
 use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
