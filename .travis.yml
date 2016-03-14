@@ -43,7 +43,7 @@ after_success:
   # runs on the master branch, not individual PRs)
   - travis-cargo --only stable doc-upload
   # measure code coverage and upload to coveralls.io
-  - travis-cargo coveralls --no-sudo
+  - travis-cargo --only stable coveralls --no-sudo
 
 env:
   global:
