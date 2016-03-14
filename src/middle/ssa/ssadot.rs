@@ -49,8 +49,8 @@ impl GraphDot for SSAStorage {
     fn node_cluster(&self, exi: &Self::NodeIndex) -> Option<usize> {
         let i = &self.internal(exi);
         match self.g.node_weight(*i) {
-            Some(&NodeData::BasicBlock(_)) => Some(i.index()),
-            Some(&NodeData::DynamicAction) => Some(i.index()),
+            Some(&NodeData::BasicBlock(_)) => Some(exi.index()),
+            Some(&NodeData::DynamicAction) => Some(exi.index()),
             _ => Some(self.get_block(exi).index()),
         }
     }

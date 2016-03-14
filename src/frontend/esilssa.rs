@@ -31,7 +31,7 @@ const ESIL_OLD: usize = 1;
 const ESIL_LASTSZ: usize = 2;
 
 pub struct SSAConstruction<'a, T>
-    where T: 'a + Clone + Debug + Clone + SSAMod<BBInfo = BBInfo>
+    where T: 'a + Clone + Debug + SSAMod<BBInfo = BBInfo>
 {
     pub phiplacer: PhiPlacer<'a, T>,
     pub regfile: SubRegisterFile,
@@ -191,7 +191,7 @@ where T: 'a + Clone + Debug + Verify + SSAExtra +
             self.phiplacer.write_variable(block, 0, nn64);
         }
 
-        return nn;
+        nn
     }
 
     fn process_block(&mut self, block: T::ActionRef, source: &BasicBlock) {

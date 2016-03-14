@@ -811,35 +811,32 @@ impl SSAMod for SSAStorage {
 
     fn remove(&mut self, node: NodeIndex) {
         self.remove_node(node);
-        // self.remove_with_spacer(node, NodeData::Removed);
     }
 
     fn remove_edge(&mut self, i: &Self::CFEdgeRef) {
-        // TODO: Add assertion here
         if i.index() >= self.g.edge_count() {
             return;
         }
 
-        let edge_data = self.g[*i];
         let src_node = self.source_of(i);
-        if let EdgeData::Control(2) = edge_data {
-            self.g.remove_edge(*i);
-            return;
-        }
-        // Removing a true/false edge.
-        let selector = self.selector_of(&src_node);
-        if selector.is_some() {
-            self.remove(selector.unwrap());
+        if let Some(selector) = self.selector_of(&src_node) {
+            self.remove(selector);
         }
 
-        let other_edge = match edge_data {
-            EdgeData::Control(0) => self.true_edge_of(&src_node),
-            EdgeData::Control(1) => self.false_edge_of(&src_node),
-            _ => panic!("Found something other than a control flow edge!"),
+        let other_edge = match self.g[*i] {
+            EdgeData::Control(j) if j <= 2 => {
+                match j {
+                    0 => Some(self.true_edge_of(&src_node)),
+                    1 => Some(self.false_edge_of(&src_node)),
+                    2 => None,
+                    _ => unreachable!(),
+                }
+            },
+            _ => panic!("Found something other than a control edge!"),
         };
 
-        {
-            let wt = self.g.edge_weight_mut(other_edge).unwrap();
+        if let Some(oe) = other_edge {
+            let wt = self.g.edge_weight_mut(oe).unwrap();
             *wt = EdgeData::Control(2);
         }
 

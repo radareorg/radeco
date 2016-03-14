@@ -16,9 +16,8 @@
 //!
 //! # Design
 //! radeco-lib is built on top of r2pipe.rs, a simple library that provides
-//! methods
-//! to communicate with radare2 (using pipes). To know more about r2pipe or
-//! radare2 in general, please head over to the
+//! methods to communicate with radare2 (using pipes). To know more about
+//! r2pipe or radare2 in general, please head over to the
 //! [repo](https://github.com/radare/radare2).
 //!
 //! radeco-lib works on analyzing ESIL (Evaluable Strings Intermediate
@@ -48,6 +47,8 @@ extern crate log;
 
 #[macro_use]
 extern crate r2pipe;
+
+extern crate esil;
 
 #[macro_use]
 pub mod utils;

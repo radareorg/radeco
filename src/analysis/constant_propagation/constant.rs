@@ -24,6 +24,15 @@ pub enum ExprVal {
     Const(u64),
 }
 
+macro_rules! exprval_match {
+   ( $x:expr ) => {
+        match $x {
+           ExprVal::Const(cval) => cval,
+           _ => return $x
+        }
+   };
+}
+
 fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
     // Any ^ Top    = Any
     // Any ^ Bottom = Bottom
@@ -43,10 +52,10 @@ fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
     }
 
     if *v1 != *v2 {
-        return ExprVal::Bottom;
+        ExprVal::Bottom
+    } else {
+        *v1
     }
-
-    return *v1;
 }
 
 pub struct Analyzer<T: SSAMod + SSA + Clone> {
@@ -85,7 +94,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             let val = self.get_value(&op);
             phi_val = meet(&phi_val, &val);
         }
-        return phi_val;
+        phi_val
     }
 
     fn evaluate_control_flow(&mut self, i: &T::ValueRef) {
@@ -151,20 +160,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
     fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
         let operands = self.g.get_operands(i).iter().map(|x| self.get_value(x)).collect::<Vec<_>>();
-
-        let lhs = operands[0];
-        let rhs = operands[1];
-
-        let lhs_val = if let ExprVal::Const(cval) = lhs {
-            cval
-        } else {
-            return lhs;
-        };
-        let rhs_val = if let ExprVal::Const(cval) = rhs {
-            cval
-        } else {
-            return rhs;
-        };
+        let lhs_val = exprval_match! (operands[0]);
+        let rhs_val = exprval_match! (operands[1]);
 
         let _val = match opcode {
             MOpcode::OpAdd => {
