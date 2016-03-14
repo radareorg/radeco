@@ -27,10 +27,10 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + 'a> {
     pub variable_types: Vec<ValueType>,
     sealed_blocks: HashSet<T::ActionRef>,
     current_def: Vec<BTreeMap<MAddress, T::ValueRef>>,
-    incomplete_phis: HashMap<T::ActionRef, HashMap<VarId, T::ValueRef>>,
+    incomplete_phis: HashMap<MAddress, HashMap<VarId, T::ValueRef>>,
     regfile: SubRegisterFile,
-    blocks: BTreeMap<MAddress, T::ActionRef>,
-    index_to_addr: HashMap<T::ValueRef, MAddress>,
+    pub blocks: BTreeMap<MAddress, T::ActionRef>,
+    pub index_to_addr: HashMap<T::ValueRef, MAddress>,
     addr_to_index: BTreeMap<MAddress, T::ValueRef>,
     outputs: HashMap<T::ValueRef, VarId>,
 }
@@ -97,13 +97,14 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     }
 
     fn read_variable_recursive(&mut self, variable: VarId, address: MAddress) -> T::ValueRef {
+        println!("{} {}", variable, address);
         let block = self.block_of(address).unwrap();
         assert!(!self.sealed_blocks.contains(&block));
         let valtype = self.variable_types[variable];
         let val = if !self.sealed_blocks.contains(&block) {
             // Incomplete CFG
             let val_ = self.add_phi(address, valtype);
-            self.incomplete_phis.get_mut(&block).and_then(|hash| hash.insert(variable, val_));
+            self.incomplete_phis.get_mut(&address).and_then(|hash| hash.insert(variable, val_));
             val_
         } else {
             let preds = self.ssa.preds_of(block);
@@ -124,7 +125,6 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     }
 
     // TODO: Add methods to expose addition of edges between the basic blocks.
-
     // In this new implementation, this method is a bit tricky.
     // Let us break down this functionality into multiple steps.
     // - add_block takes an address to add a block at.
@@ -160,6 +160,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         if let Some(e) = edge_type {
             if let Some(addr) = current_addr {
                 let current_block = self.block_of(addr).unwrap();
+                println!("164: Adding edge between: {:?}({}) {:?}({})", current_block, addr, lower_block, at);
                 self.ssa.add_control_edge(current_block, lower_block, e);
             }
         }
@@ -184,11 +185,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             for (i, edge) in outgoing.iter().enumerate() {
                 if *edge != self.ssa.invalid_edge() {
                     let target = self.ssa.target_of(&edge);
+                    println!("189: Adding edge between: {:?} {:?}", lower_block, target);
                     self.ssa.add_control_edge(lower_block, target, i as u8);
                     self.ssa.remove_control_edge(*edge);
                 }
             }
-            
+
+            println!("195: Adding edge between: {:?} {:?}", upper_block, lower_block);
             self.ssa.add_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
@@ -232,8 +235,16 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         lower_block
     }
 
+    pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
+        let source_block = self.block_of(source).unwrap();
+        let target_block = self.block_of(target).unwrap();
+        println!("242: Adding edge between: {:?} {:?}", source_block, target_block);
+        self.ssa.add_control_edge(source_block, target_block, cftype);
+    }
+
     pub fn seal_block(&mut self, block: T::ActionRef) {
-        let inc = self.incomplete_phis[&block].clone();
+        let block_addr = self.addr_of(&block);
+        let inc = self.incomplete_phis[&block_addr].clone();
         for (variable, node) in inc {
             self.add_phi_operands(block, variable, node);
         }
@@ -245,10 +256,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                         variable: VarId,
                         phi: T::ValueRef)
                         -> T::ValueRef {
-        assert!(block == self.ssa.block_of(&phi));
+        //assert!(block == self.ssa.block_of(&phi));
         // Determine operands from predecessors
+        println!("{:?}", self.ssa.preds_of(block));
         for pred in self.ssa.preds_of(block) {
             let p_addr = self.addr_of(&pred);
+            println!("Pred is: {}", p_addr);
             let datasource = self.read_variable(p_addr, variable.clone());
             self.ssa.phi_use(phi, datasource)
         }
@@ -272,7 +285,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         }
 
         if same == undef {
-            let block = self.ssa.block_of(&phi);
+            println!("288: Finding block of {:?}", phi);
+            let phi_addr = self.index_to_addr.get(&phi).cloned().unwrap();
+            let block = self.block_of(phi_addr).unwrap();
             let valtype = self.ssa
                               .get_node_data(&phi)
                               .expect("No Data associated with this node!")
@@ -298,7 +313,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
     pub fn add_dynamic(&mut self) -> T::ActionRef {
         let action = self.ssa.add_dynamic();
-        self.incomplete_phis.insert(action, HashMap::new());
+        let dyn_addr = MAddress::new(0xffffffff, 0);
+        self.blocks.insert(dyn_addr, action);
+        self.incomplete_phis.insert(dyn_addr, HashMap::new());
         self.sync_register_state(action);
         action
     }
@@ -337,8 +354,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // Constants need not belong to any block. They are stored as a separate table.
     pub fn add_const(&mut self, value: u64) -> T::ValueRef {
         // All consts are assumed to be 64 bit wide.
-        self.ssa.add_const(value)
-        //self.index_to_addr.insert(i, address);
+        let ni = self.ssa.add_const(value);
+        //self.index_to_addr.insert(ni, address);
+        ni
     }
 
     pub fn add_undefined(&mut self, address: MAddress, vt: ValueType) -> T::ValueRef {
@@ -463,7 +481,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
     fn new_block(&mut self, bb: MAddress) -> T::ActionRef {
         let block = self.ssa.add_block(bb);
-        self.incomplete_phis.insert(block, HashMap::new());
+        self.incomplete_phis.insert(bb, HashMap::new());
         block
     }
 
@@ -477,15 +495,16 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             self.addr_of(&start)
         };
         for (baddr, index) in self.blocks.iter().rev() {
-            if *baddr < address {
-                break;
-            }
             // TODO: Better way to detect start block by using self.ssa.start_block
             // If this is the start block.
-            if *baddr ==  start_address {
+            if *baddr ==  start_address &&
+            *baddr != address {
                 last = None;
             } else {
                 last = Some(*index);
+            }
+            if *baddr <= address {
+                break;
             }
         }
         last
@@ -494,5 +513,24 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // Return the address corresponding to the block.
     fn addr_of(&self, block: &T::ActionRef) -> MAddress {
         self.ssa.address(block).unwrap()
+    }
+
+    pub fn associate_block(&mut self, node: &T::ValueRef, addr: MAddress) {
+        let block = self.block_of(addr);
+        self.ssa.add_to_block(*node, block.unwrap());
+    }
+
+    // Performs SSA finish operation such as assigning the blocks in the final
+    // graph, sealing blocks, running basic dead code eilimination etc.
+    pub fn finish(&mut self) {
+        // Iterate through blocks and seal them. Also associate nodes with their respective blocks.
+        for (node, addr) in self.index_to_addr.clone() {
+            self.associate_block(&node, addr);
+        }
+        let blocks = self.blocks.clone();
+        for (addr, block) in blocks.iter().rev() {
+            println!("Sealing: {:?} at {}", block, addr);
+            self.seal_block(*block);
+        }
     }
 }

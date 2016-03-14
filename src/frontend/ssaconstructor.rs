@@ -325,6 +325,9 @@ impl<'a, T> SSAConstruct<'a, T>
             Token::EBreak => {
                 unimplemented!()
             }
+            Token::ENop => {
+                return None;
+            }
             // Anything else is considered invalid. Log this as a warning and move on.
             // We may not
             // want to panic here as we can still achieve a reasonable decompilation
@@ -406,7 +409,9 @@ impl<'a, T> SSAConstruct<'a, T>
     // form.
     pub fn run(&mut self, op_info: Vec<LOpInfo>) {
         let mut p = Parser::init(None);
+        let mut first_block = true;
         self.init_blocks();
+        println!("Initialization Successfull");
         for op in &op_info {
             if op.esil.is_none() {
                 continue;
@@ -417,7 +422,10 @@ impl<'a, T> SSAConstruct<'a, T>
             // TODO: Improve this mechanism.
             self.instruction_offset = 0;
             let mut current_address = MAddress::new(offset, self.instruction_offset);
-
+            if first_block {
+                first_block = false;
+                self.phiplacer.add_block(current_address, Some(MAddress::new(0, 0)), Some(UNCOND_EDGE));
+            }
             // If the nesting vector has a non zero length, then we need to make another
             // block and add connecting false edges, note that this is in accordance to the
             // assumption stated at the top of this file.
@@ -431,6 +439,8 @@ impl<'a, T> SSAConstruct<'a, T>
                 self.phiplacer.op_use(src_node, 2, &false_comment);
             }
 
+            println!("ESIL: {:?}", i);
+
             while let Some(ref token) = p.parse::<_, Tokenizer>(i) {
                 let (lhs, rhs) = p.fetch_operands(token);
                 // Determine what to do with the operands and get the result.
@@ -441,14 +451,53 @@ impl<'a, T> SSAConstruct<'a, T>
                 current_address.offset += 1;
             }
         }
-        self.finish();
+        let last_addr = op_info.last().as_ref().unwrap().offset.unwrap();
+        self.phiplacer.add_edge(MAddress::new(last_addr, 0), MAddress::new(0xffffffff, 0), UNCOND_EDGE);
+        self.phiplacer.finish();
     }
-
-    // Performs SSA finish operation such as assigning the blocks in the final
-    // graph, sealing
-    // blocks, running basic dead code eilimination etc.
-    fn finish(&mut self) {
-        unimplemented!();
-    }
-
 } // end impl SSAConstruct
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::fs::File;
+    use std::io::prelude::*;
+    use rustc_serialize::json;
+    use r2pipe::structs::{LAliasInfo, LOpInfo, LRegInfo, LFunctionInfo};
+    use middle::ssa::ssastorage::SSAStorage;
+    use middle::dot;
+    use middle::dce;
+
+    fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
+        let mut register_profile = File::open("register_profile").unwrap();
+        let mut s = String::new();
+        register_profile.read_to_string(&mut s).unwrap();
+        *reg_profile = json::decode(&*s).unwrap();
+        let mut instruction_file = File::open(from).unwrap();
+        let mut s = String::new();
+        instruction_file.read_to_string(&mut s).unwrap();
+
+        //let len = s.len();
+        //s.truncate(len - 1);
+        println!("Got JSON: {}", s);
+        *instructions = json::decode(&*s).unwrap();
+    }
+
+    #[test]
+    fn ssa_simple_test_1() {
+        let mut reg_profile = Default::default();
+        let mut instructions = Default::default();
+        before_test(&mut reg_profile, &mut instructions, "instructions_json");
+        let mut ssa = SSAStorage::new();
+        {
+            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            constructor.run(instructions.ops.unwrap());
+        }
+        {
+            dce::collect(&mut ssa);
+        }
+        let tmp = dot::emit_dot(&ssa);
+        let mut f = File::create("yay.dot").unwrap();
+        f.write_all(tmp.as_bytes());
+    }
+}

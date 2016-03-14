@@ -443,6 +443,8 @@ impl CFG for SSAStorage {
         let si = self.internal(block);
         if let NodeData::BasicBlock(ref addr) = self.g[si] {
             Some(*addr)
+        } else if let NodeData::DynamicAction = self.g[si] {
+            Some(ir::MAddress::new(0xffffffff, 0))
         } else {
             None
         }
