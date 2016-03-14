@@ -44,10 +44,10 @@ fn test_analysis1() {
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
 		Pipeline::SSA,
-		Pipeline::Verify,
-		Pipeline::AnalyzeSSA(Analysis::ConstProp),
-		Pipeline::DCE,
 		Pipeline::Verify
+        //Pipeline::AnalyzeSSA(Analysis::ConstProp)
+		//Pipeline::DCE,
+		//Pipeline::Verify
 	];
 
 	let mut test = Runner::new(test_name, None, None, true, pipeline, None);
@@ -66,11 +66,11 @@ fn test_analysis2() {
 		Pipeline::ReadFromR2,
 		Pipeline::ParseEsil,
 		Pipeline::CFG,
-		Pipeline::SSA
-		//Pipeline::Verify
-		//Pipeline::DCE,
-		//Pipeline::AnalyzeSSA(Analysis::ConstProp),
-		//Pipeline::DCE
+		Pipeline::SSA,
+        Pipeline::Verify,
+        Pipeline::DCE,
+        Pipeline::AnalyzeSSA(Analysis::ConstProp),
+        Pipeline::DCE
 	];
 	let mut test = Runner::new(test_name, bin_name, addr, true, pipeline, None);
 	test.run();
