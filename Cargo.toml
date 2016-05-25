@@ -7,6 +7,7 @@ authors = [
 ]
 
 [features]
+default = []
 trace_log = []
 
 [dependencies]
@@ -15,10 +16,11 @@ petgraph = "*"
 num = "*"
 rustc-serialize = "*"
 log = "*"
+clippy = {version = "0.0.61", optional = true}
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"
 
 [dependencies.esil]
-git = "https://github.com/sushant94/esil-rs"
-# path = "../esil-rs"
+#git = "https://github.com/sushant94/esil-rs"
+ path = "../esil-rs"

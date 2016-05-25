@@ -173,6 +173,7 @@ impl Parser {
         if esil.len() == 0 {
             return Err(ParseError::InvalidEsil);
         }
+        println!("{:#x}:{}", self.addr, esil);
 
         let esil: Vec<String> = esil.split(',').map(|x| x.to_string()).collect();
         for token in esil {
@@ -206,13 +207,14 @@ impl Parser {
                     reg_info_.alias = alias;
                     reg_info = Some(reg_info_.clone());
                     size = r.size as WidthSpec;
-                } else if let Ok::<i64, _>(v) = hex_to_i!(token) {
+                } else if let Ok::<u64, _>(v) = hex_to_i!(token) {
                     // <u64>? will it be able to deal with negative numbers?
                     val = Some(v as u64);
                 } else if let Some('$') = token.chars().nth(0) {
                     val_type = MValType::Internal
                 } else {
                     // TODO
+                    println!("{}", token);
                     panic!("Proper error handling here");
                 }
 

@@ -37,6 +37,10 @@
 
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
+
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+
 extern crate regex;
 extern crate petgraph;
 extern crate rustc_serialize;
