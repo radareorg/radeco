@@ -11,36 +11,23 @@ static USAGE: &'static str = "
 radeco. The radare2 decompiler.
 Usage:
   radeco <file>
-  radeco \
-                              [options] [<file>]
+  radeco [options] [<file>]
   radeco run [options] [<file>]
 
 Options:
-  \
-                              --config <json_file>     Run decompilation using json rules file.
-  \
-                              --make-config <file>     Wizard to make the JSON config.
-  -a \
-                              --address=<addr>      Address of function to decompile.
-  -e \
-                              --esil=<esil_expr>    Evaluate given esil expression.
-  -o \
-                              --output=<output>     Specify output directory.
-  -p \
-                              --pipeline=<pipe>     Stages in the pipeline. Comma separated \
-                              values.
-                           Prefix the string with '=' (such \
-                              as =ssa)
+  --config <json_file>     Run decompilation using json rules file.
+  --make-config <file>     Wizard to make the JSON config.
+  -a --address=<addr>      Address of function to decompile.
+  -e --esil=<esil_expr>    Evaluate given esil expression.
+  -o --output=<output>     Specify output directory.
+  -p --pipeline=<pipe>     Stages in the pipeline. Comma separated values.
+                           Prefix the string with '=' (such as =ssa)
                            to obtain the output the stage.
-                           \
-                              Valid values: c,r2,ssa,cfg,const,dce,verify,svg,png
-  -q --quiet               \
-                              Display silent output.
-  -s --shell               Run interactive \
-                              prompt.
+                           Valid values: c,r2,ssa,cfg,const,dce,verify,svg,png
+  -q --quiet               Display silent output.
+  -s --shell               Run interactive prompt.
   -v --version             Show version.
-  -h --help                \
-                              Show this screen.
+  -h --help                Show this screen.
 ";
 
 #[derive(Debug, RustcDecodable)]

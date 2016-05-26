@@ -161,7 +161,7 @@ impl Input {
         let addr = if self.addr.is_some() {
             if bin.is_none() {
                 return Err(ArgError::InvalidArgument("Address provided without source binary"
-                                                         .to_owned()));
+                    .to_owned()));
             }
             self.addr.clone()
         } else {
@@ -282,14 +282,14 @@ pub fn input_builder() -> Input {
         println!("Quiet (y/N):");
         let _v = read!();
         _v.or(Some("n".to_owned()))
-          .map(|c| {
-              match &*c {
-                  "y" => true,
-                  "n" => false,
-                  _ => false,
-              }
-          })
-          .unwrap()
+            .map(|c| {
+                match &*c {
+                    "y" => true,
+                    "n" => false,
+                    _ => false,
+                }
+            })
+            .unwrap()
     };
 
     let outmodes = Some((0..(pipe.len() - 1) as u16).collect::<Vec<_>>());

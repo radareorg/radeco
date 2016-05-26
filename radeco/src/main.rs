@@ -17,8 +17,7 @@ mod logger;
 use std::process::exit;
 
 #[cfg(not(feature = "trace_log"))]
-fn init_logger() {
-}
+fn init_logger() {}
 #[cfg(feature = "trace_log")]
 fn init_logger() {
     logger::RadecoLog::init().ok();
