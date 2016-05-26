@@ -19,9 +19,11 @@ impl fmt::Display for ArgError {
             ArgError::IoError(ref err) => write!(f, "{}", err),
             ArgError::DecodeError(ref err) => write!(f, "{}", err),
             ArgError::InvalidArgument(ref err) => write!(f, "Invalid Argument: {}", err),
-            ArgError::NoSource => write!(f,
-                                         "{}",
-                                         "No source to run on. Please input binary or raw esil"),
+            ArgError::NoSource => {
+                write!(f,
+                       "{}",
+                       "No source to run on. Please input binary or raw esil")
+            }
             ArgError::MultipleSources => write!(f, "{}", "Cannot run radeco on multiple sources"),
             ArgError::MissingArgument(ref err) => write!(f, "Missing Argument: {}", err),
             ArgError::InvalidSource(ref err) => write!(f, "{}", err),
