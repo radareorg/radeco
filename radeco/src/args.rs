@@ -197,7 +197,7 @@ impl Radeco {
             }
 
             let mut _tmp_out = Vec::<u16>::new();
-            for i in (0..(pipe.len() - 1) as u16) {
+            for i in 0..(pipe.len() - 1) as u16 {
                 if exclude.contains(&i) {
                     continue;
                 }
