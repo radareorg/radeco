@@ -866,6 +866,7 @@ impl SSAMod for SSAStorage {
 impl SSAExtra for SSAStorage {
     fn mark(&mut self, i: &Self::ValueRef) {
         radeco_trace!(logger::Event::SSAMarkNode(i));
+        println!("MARKING: {:?}", i);
         let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
         data.mark = true;
     }
@@ -898,10 +899,10 @@ impl SSAExtra for SSAStorage {
     }
 
     fn is_marked(&self, i: &Self::ValueRef) -> bool {
+        //println!("{:#?}", self.assoc_data);
         self.assoc_data
             .get(i)
-            .and_then(|data| Some(data.mark))
-            .unwrap_or(AdditionalData::new().mark)
+            .unwrap_or(&AdditionalData::new()).mark
     }
 
     fn color(&self, i: &Self::ValueRef) -> Option<u8> {

@@ -167,6 +167,7 @@ impl MOpcode {
             MOpcode::OpJmp => true,
             MOpcode::OpCJmp => true,
             MOpcode::OpCall => true,
+            MOpcode::OpITE => true,
             _ => false,
         }
     }

@@ -43,12 +43,12 @@ const ESIL_CUR: usize = 0;
 const ESIL_OLD: usize = 1;
 const ESIL_LASTSZ: usize = 2;
 
-const UNCOND_EDGE: u8 = 0;
+const UNCOND_EDGE: u8 = 2;
 const TRUE_EDGE: u8 = 1;
-const FALSE_EDGE: u8 = 2;
+const FALSE_EDGE: u8 = 0;
 
 pub struct SSAConstruct<'a, T>
-    where T: 'a + Clone + Debug + SSAMod<BBInfo = MAddress>
+    where T: 'a + Clone + Debug + SSAMod<BBInfo = MAddress> + SSAExtra
 {
     phiplacer: PhiPlacer<'a, T>,
     regfile: SubRegisterFile,
@@ -59,6 +59,7 @@ pub struct SSAConstruct<'a, T>
     // alias information.
     alias_info: HashMap<String, String>,
     constants: HashMap<u64, T::ValueRef>,
+    ident_map: HashMap<String, u64>,
     // Used to keep track of esil if-else. The reference to the ITE node and the address of this
     // instruction.
     nesting: Vec<(T::ValueRef, MAddress)>,
@@ -84,6 +85,7 @@ impl<'a, T> SSAConstruct<'a, T>
             blocks: Vec::new(),
             intermediates: Vec::new(),
             alias_info: HashMap::new(),
+            ident_map: HashMap::new(),
             constants: HashMap::new(),
             nesting: Vec::new(),
             instruction_offset: 0,
@@ -97,6 +99,13 @@ impl<'a, T> SSAConstruct<'a, T>
             let alias_info = &mut sc.alias_info;
             for register in &reg_info.alias_info {
                 alias_info.insert(register.reg.clone(), register.role_str.clone());
+            }
+        }
+
+        {
+            let identmap = &mut sc.ident_map;
+            for register in &reg_info.reg_info {
+                identmap.insert(register.name.clone(), register.size as u64);
             }
         }
 
@@ -130,24 +139,24 @@ impl<'a, T> SSAConstruct<'a, T>
             }
             // We arrive at this case only when we have popped an operand that we have pushed
             // into the parser. id refers to the id of the var in our intermediates table.
-            Token::EEntry(ref id) => {
+            Token::EEntry(ref id, _) => {
                 self.intermediates[*id]
             }
             Token::EConstant(value) => {
                 // Add or retrieve a constant with the value from the table.
                 *self.constants.entry(value).or_insert(self.phiplacer.add_const(value))
             }
-            Token::EOld => {
-                self.esil_old.unwrap()
-            }
-            Token::ECur => {
-                self.esil_cur.unwrap()
-            }
-            Token::ELastsz => {
-                *self.constants
-                     .entry(self.esil_lastsz.unwrap())
-                     .or_insert(self.phiplacer.add_const(self.esil_lastsz.unwrap()))
-            }
+            // Token::EOld => {
+            // self.esil_old.unwrap()
+            // }
+            // Token::ECur => {
+            // self.esil_cur.unwrap()
+            // }
+            // Token::ELastsz => {
+            // *self.constants
+            // .entry(self.esil_lastsz.unwrap())
+            // .or_insert(self.phiplacer.add_const(self.esil_lastsz.unwrap()))
+            // }
             Token::EAddress => {
                 // Treat this as retrieving a constant.
                 *self.constants
@@ -173,7 +182,9 @@ impl<'a, T> SSAConstruct<'a, T>
             None
         } else {
             self.intermediates.push(result.unwrap());
-            Some(Token::EEntry(self.intermediates.len() - 1))
+            let result_id = self.intermediates.len() - 1;
+            let out_size = self.phiplacer.operand_width(result.as_ref().unwrap());
+            Some(Token::EEntry(result_id, Some(out_size as u64)))
         }
     }
 
@@ -227,6 +238,7 @@ impl<'a, T> SSAConstruct<'a, T>
                         // determine are the ones where the rhs is a constant.
                         if let Some(Token::EConstant(target)) = operands[1] {
                             let target_addr = MAddress::new(target, 0);
+                            println!("Adding uncond from : {}, to: {}", address, target_addr);
                             self.phiplacer.add_block(target_addr, Some(address), Some(UNCOND_EDGE));
                         }
                     } else {
@@ -269,7 +281,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 return None;
             }
             Token::EEndIf => {
-                unimplemented!()
+                return None;
             }
             Token::ELsl => {
                 (MOpcode::OpLsl, ValueType::Integer { width: result_size })
@@ -347,12 +359,14 @@ impl<'a, T> SSAConstruct<'a, T>
                     let vt = ValueType::Integer { width: lhs_size };
                     let casted_rhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(lhs_size), address, vt);
+                    self.phiplacer.op_use(&casted_rhs, 0, rhs.as_ref().unwrap());
                     (lhs.unwrap(), casted_rhs)
                 }
                 Ordering::Less => {
                     let vt = ValueType::Integer { width: rhs_size };
                     let casted_lhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(rhs_size), address, vt);
+                    self.phiplacer.op_use(&casted_lhs, 0, lhs.as_ref().unwrap());
                     (casted_lhs, rhs.unwrap())
                 }
                 Ordering::Equal => {
@@ -382,16 +396,16 @@ impl<'a, T> SSAConstruct<'a, T>
 
         let zero = self.phiplacer.add_const(0);
         // TODO: This might not be necessary anymore.
-        self.phiplacer.write_variable(start_address, ESIL_CUR, zero);
-        self.phiplacer.write_variable(start_address, ESIL_OLD, zero);
-        self.phiplacer.write_variable(start_address, ESIL_LASTSZ, zero);
+        // self.phiplacer.write_variable(start_address, ESIL_CUR, zero);
+        // self.phiplacer.write_variable(start_address, ESIL_OLD, zero);
+        // self.phiplacer.write_variable(start_address, ESIL_LASTSZ, zero);
 
         for (i, name) in self.regfile.whole_names.iter().enumerate() {
             let reg = self.regfile.whole_registers[i];
             // Name the newly created nodes with register names.
             let argnode = self.phiplacer.add_comment(start_address, reg, name.clone());
             // 0, 1 and 2 are esilcur, esilold and lastsz respectively
-            self.phiplacer.write_variable(start_address, i + 3, argnode);
+            self.phiplacer.write_variable(start_address, i, argnode);
         }
 
         self.phiplacer.sync_register_state(start_block);
@@ -408,10 +422,11 @@ impl<'a, T> SSAConstruct<'a, T>
     // it merely takes this vector of ESIL strings and transforms it into its SSA
     // form.
     pub fn run(&mut self, op_info: Vec<LOpInfo>) {
-        let mut p = Parser::init(None);
+        let mut p = Parser::init(Some(self.ident_map.clone()), Some(64));
         let mut first_block = true;
+        let mut current_address = MAddress::new(0, 0);
         self.init_blocks();
-        println!("Initialization Successfull");
+        // println!("Initialization Successfull");
         for op in &op_info {
             if op.esil.is_none() {
                 continue;
@@ -421,10 +436,19 @@ impl<'a, T> SSAConstruct<'a, T>
             // Reset the instruction offset and remake the current_address.
             // TODO: Improve this mechanism.
             self.instruction_offset = 0;
-            let mut current_address = MAddress::new(offset, self.instruction_offset);
+            let next_address = MAddress::new(offset, self.instruction_offset);
+
+            if !first_block &&
+               self.phiplacer.block_of(current_address) != self.phiplacer.block_of(next_address) {
+                self.phiplacer.add_edge(current_address, next_address, UNCOND_EDGE);
+            }
+
+            current_address = next_address;
             if first_block {
                 first_block = false;
-                self.phiplacer.add_block(current_address, Some(MAddress::new(0, 0)), Some(UNCOND_EDGE));
+                self.phiplacer.add_block(current_address,
+                                         Some(MAddress::new(0, 0)),
+                                         Some(UNCOND_EDGE));
             }
             // If the nesting vector has a non zero length, then we need to make another
             // block and add connecting false edges, note that this is in accordance to the
@@ -442,17 +466,20 @@ impl<'a, T> SSAConstruct<'a, T>
             println!("ESIL: {:?}", i);
 
             while let Some(ref token) = p.parse::<_, Tokenizer>(i) {
+                println!("Got token from parser: {:?}", token);
                 let (lhs, rhs) = p.fetch_operands(token);
                 // Determine what to do with the operands and get the result.
                 let result = self.process_op(token, current_address, &[lhs, rhs]);
-                if let Some(_result) = self.process_out(result, current_address) {
-                    p.push(_result);
+                if let Some(result_) = self.process_out(result, current_address) {
+                    p.push(result_);
                 }
                 current_address.offset += 1;
             }
         }
         let last_addr = op_info.last().as_ref().unwrap().offset.unwrap();
-        self.phiplacer.add_edge(MAddress::new(last_addr, 0), MAddress::new(0xffffffff, 0), UNCOND_EDGE);
+        self.phiplacer.add_edge(MAddress::new(last_addr, 0),
+                                MAddress::new(0xffffffff, 0),
+                                UNCOND_EDGE);
         self.phiplacer.finish();
     }
 } // end impl SSAConstruct
@@ -463,7 +490,7 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
     use rustc_serialize::json;
-    use r2pipe::structs::{LAliasInfo, LOpInfo, LRegInfo, LFunctionInfo};
+    use r2pipe::structs::{LAliasInfo, LFunctionInfo, LOpInfo, LRegInfo};
     use middle::ssa::ssastorage::SSAStorage;
     use middle::dot;
     use middle::dce;
@@ -476,10 +503,6 @@ mod test {
         let mut instruction_file = File::open(from).unwrap();
         let mut s = String::new();
         instruction_file.read_to_string(&mut s).unwrap();
-
-        //let len = s.len();
-        //s.truncate(len - 1);
-        println!("Got JSON: {}", s);
         *instructions = json::decode(&*s).unwrap();
     }
 

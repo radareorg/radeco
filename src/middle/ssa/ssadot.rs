@@ -9,6 +9,7 @@
 
 use petgraph::graph;
 
+use middle::ir::MOpcode;
 use middle::dot::{DotAttrBlock, GraphDot};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
 use super::ssa_traits::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
@@ -142,12 +143,12 @@ impl GraphDot for SSAStorage {
         let node = &self.g[*i];
         let mut prefix = String::new();
         prefix.push_str(&format!("n{}", i.index()));
+
         let attr = match *node {
             NodeData::Op(opc, ValueType::Integer{width: w}) => {
-                // TODO
-                // self.extras_dump();
-                let addr = self.addr(i);
+                let mut attrs = Vec::new();
                 let mut r = String::new();
+                let addr = self.addr(i);
                 if addr.is_some() {
                     r.push_str(&format!("<<font color=\"grey50\">0x{}: </font>",
                                         addr.as_ref().unwrap()))
@@ -156,7 +157,24 @@ impl GraphDot for SSAStorage {
                 if addr.is_some() {
                     r.push_str(">");
                 }
-                vec![("label".to_string(), r)]
+
+                if let MOpcode::OpConst(_) = opc {
+                    attrs.push(("style".to_owned(), "filled".to_owned()));
+                    attrs.push(("color".to_owned(), "black".to_owned()));
+                    attrs.push(("fillcolor".to_owned(), "yellow".to_owned()));
+                };
+
+                if self.is_marked(exi) {
+                    println!("{:?} is MARKED", exi);
+                    attrs.push(("label".to_string(), r));
+                    attrs.push(("style".to_owned(), "filled".to_owned()));
+                    attrs.push(("color".to_owned(), "black".to_owned()));
+                    attrs.push(("fillcolor".to_owned(), "green".to_owned()));
+                } else {
+                    println!("{:?} is UNMARKED", exi);
+                    attrs.push(("label".to_string(), r));
+                }
+                attrs
             }
             NodeData::BasicBlock(addr) => {
                 let label_str = format!("<<font color=\"grey50\">Basic Block \
@@ -168,11 +186,25 @@ impl GraphDot for SSAStorage {
             }
             NodeData::Comment(_, ref msg) => {
                 vec![("label".to_string(),
-                      format!("\"{}\"", msg.replace("\"", "\\\"")))]
+                      format!("\"{}\"", msg.replace("\"", "\\\""))),
+                ("shape".to_owned(), "box".to_owned()),
+                ("style".to_owned(), "filled".to_owned()),
+                ("color".to_owned(), "black".to_owned()),
+                ("fillcolor".to_owned(), "greenyellow".to_owned())]
             }
             _ => {
-                vec![("label".to_string(),
+                if self.is_marked(exi) {
+                    println!("{:?} is MARKED", exi);
+                    vec![("label".to_string(),
+                      format!("\"{}\"", format!("\"{:?}\"", node).replace("\"", "\\\""))),
+                         ("style".to_owned(), "filled".to_owned()),
+                         ("color".to_owned(), "black".to_owned()),
+                         ("fillcolor".to_owned(), "green".to_owned())]
+                } else {
+                    println!("{:?} is UNMARKED", exi);
+                    vec![("label".to_string(),
                       format!("\"{}\"", format!("\"{:?}\"", node).replace("\"", "\\\"")))]
+                }
             }
         };
         DotAttrBlock::Hybrid(prefix, attr)

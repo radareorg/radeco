@@ -160,7 +160,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         if let Some(e) = edge_type {
             if let Some(addr) = current_addr {
                 let current_block = self.block_of(addr).unwrap();
-                println!("164: Adding edge between: {:?}({}) {:?}({})", current_block, addr, lower_block, at);
+                println!("164: Adding {:?} edge between: {:?}({}) {:?}({})", edge_type, current_block, addr, lower_block, at);
                 self.ssa.add_control_edge(current_block, lower_block, e);
             }
         }
@@ -488,7 +488,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // Determine which block as address should belong to.
     // This basically translates to finding the greatest address that is less that
     // `address` in self.blocks. This is fairly simple as self.blocks is sorted.
-    fn block_of(&self, address: MAddress) -> Option<T::ActionRef> {
+    pub fn block_of(&self, address: MAddress) -> Option<T::ActionRef> {
         let mut last = None;
         let start_address = {
             let start = self.ssa.start_node();
@@ -498,7 +498,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             // TODO: Better way to detect start block by using self.ssa.start_block
             // If this is the start block.
             if *baddr ==  start_address &&
-            *baddr != address {
+               *baddr != address {
                 last = None;
             } else {
                 last = Some(*index);
@@ -521,13 +521,15 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     }
 
     // Performs SSA finish operation such as assigning the blocks in the final
-    // graph, sealing blocks, running basic dead code eilimination etc.
+    // graph, sealing blocks, running basic dead code elimination etc.
     pub fn finish(&mut self) {
         // Iterate through blocks and seal them. Also associate nodes with their respective blocks.
         for (node, addr) in self.index_to_addr.clone() {
             self.associate_block(&node, addr);
         }
         let blocks = self.blocks.clone();
+        let exit_node = self.ssa.exit_node();
+        self.seal_block(exit_node);
         for (addr, block) in blocks.iter().rev() {
             println!("Sealing: {:?} at {}", block, addr);
             self.seal_block(*block);
