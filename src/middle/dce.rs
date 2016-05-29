@@ -17,7 +17,7 @@ use middle::ssa::ssa_traits::NodeType;
 /// look at `analysis::constant_propagation`.
 pub fn collect<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
     mark(ssa);
-    //sweep(ssa);
+    sweep(ssa);
 }
 
 /// Marks node for removal. This method does not remove nodes

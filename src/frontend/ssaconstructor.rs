@@ -109,13 +109,6 @@ impl<'a, T> SSAConstruct<'a, T>
             }
         }
 
-        // Add esil_cur, esil_old, and esil_lastsz to the variable list.
-        sc.phiplacer.add_variables(vec![
-                                   From::from(64 as u16),
-                                   From::from(64 as u16),
-                                   From::from(64 as u16),
-        ]);
-
         // Add all the registers to the variable list.
         sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
         sc
@@ -135,7 +128,7 @@ impl<'a, T> SSAConstruct<'a, T>
             // Since ESIL has no concept of intermediates, the identifier spotted by parser
             // has to be a register.
             Token::ERegister(ref name) | Token::EIdentifier(ref name) => {
-                self.phiplacer.read_register(3, address, name)
+                self.phiplacer.read_register(0, address, name)
             }
             // We arrive at this case only when we have popped an operand that we have pushed
             // into the parser. id refers to the id of the var in our intermediates table.
@@ -144,19 +137,9 @@ impl<'a, T> SSAConstruct<'a, T>
             }
             Token::EConstant(value) => {
                 // Add or retrieve a constant with the value from the table.
-                *self.constants.entry(value).or_insert(self.phiplacer.add_const(value))
+                *self.constants.entry(value)
+                               .or_insert(self.phiplacer.add_const(value))
             }
-            // Token::EOld => {
-            // self.esil_old.unwrap()
-            // }
-            // Token::ECur => {
-            // self.esil_cur.unwrap()
-            // }
-            // Token::ELastsz => {
-            // *self.constants
-            // .entry(self.esil_lastsz.unwrap())
-            // .or_insert(self.phiplacer.add_const(self.esil_lastsz.unwrap()))
-            // }
             Token::EAddress => {
                 // Treat this as retrieving a constant.
                 *self.constants
@@ -243,8 +226,8 @@ impl<'a, T> SSAConstruct<'a, T>
                         }
                     } else {
                         // We are writing into a register.
-                        self.esil_old = Some(self.phiplacer.read_register(3, address, &name));
-                        self.phiplacer.write_register(3, address, &name, rhs.unwrap());
+                        self.esil_old = Some(self.phiplacer.read_register(0, address, &name));
+                        self.phiplacer.write_register(0, address, &name, rhs.unwrap());
                         self.esil_cur = Some(rhs.unwrap());
                     }
                 } else {
@@ -395,11 +378,6 @@ impl<'a, T> SSAConstruct<'a, T>
         self.phiplacer.mark_start_node(&start_block);
 
         let zero = self.phiplacer.add_const(0);
-        // TODO: This might not be necessary anymore.
-        // self.phiplacer.write_variable(start_address, ESIL_CUR, zero);
-        // self.phiplacer.write_variable(start_address, ESIL_OLD, zero);
-        // self.phiplacer.write_variable(start_address, ESIL_LASTSZ, zero);
-
         for (i, name) in self.regfile.whole_names.iter().enumerate() {
             let reg = self.regfile.whole_registers[i];
             // Name the newly created nodes with register names.
@@ -476,8 +454,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 current_address.offset += 1;
             }
         }
-        let last_addr = op_info.last().as_ref().unwrap().offset.unwrap();
-        self.phiplacer.add_edge(MAddress::new(last_addr, 0),
+        self.phiplacer.add_edge(current_address,
                                 MAddress::new(0xffffffff, 0),
                                 UNCOND_EDGE);
         self.phiplacer.finish();
@@ -510,7 +487,7 @@ mod test {
     fn ssa_simple_test_1() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "instructions_json");
+        before_test(&mut reg_profile, &mut instructions, "instructions_json_");
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);

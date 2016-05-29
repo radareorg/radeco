@@ -90,10 +90,10 @@ impl GraphDot for SSAStorage {
         // TODO: Error Handling
         let edge = &self.g.raw_edges()[i.index()];
         let mut prefix = String::new();
-        let src = edge.source().index();
-        let target = edge.target().index();
+        let src = edge.source();
+        let target = edge.target();
 
-        prefix.push_str(&format!("n{} -> n{}", src, target));
+        prefix.push_str(&format!("n{} -> n{}", self.external(&src).index(), self.external(&target).index()));
         let target_is_bb = if let NodeData::BasicBlock(_) = self.g[edge.target()] {
             true
         } else {
@@ -142,7 +142,7 @@ impl GraphDot for SSAStorage {
         let i = &self.internal(exi);
         let node = &self.g[*i];
         let mut prefix = String::new();
-        prefix.push_str(&format!("n{}", i.index()));
+        prefix.push_str(&format!("n{}", exi.index()));
 
         let attr = match *node {
             NodeData::Op(opc, ValueType::Integer{width: w}) => {

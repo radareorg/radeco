@@ -182,7 +182,7 @@ impl SSAStorage {
                         NodeData::Phi(_, _) => {
                             self.phi_use(othernode_e, j);
                         }
-                        _ => panic!(),
+                        _ => {},
                     }
                 }
                 _ => (),

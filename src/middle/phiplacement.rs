@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 
 use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
-use middle::ir::{MAddress};
+use middle::ir::MAddress;
 
 use super::ssa::cfg_traits::{CFG, CFGMod};
 use middle::regfile::SubRegisterFile;
@@ -59,6 +59,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     }
 
     pub fn write_variable(&mut self, address: MAddress, variable: VarId, value: T::ValueRef) {
+        println!("Writing {:?} into {} ({:?}) as addr: {}",
+                 value,
+                 variable,
+                 self.regfile.whole_names.get(variable),
+                 address);
         self.current_def[variable].insert(address, value);
         self.outputs.insert(value, variable);
     }
@@ -68,44 +73,68 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // This method is different from current_def_in_block as this will return a
     // ValueRef even if
     // the definition is not within the same block.
-    fn current_def_at(&self, variable: VarId, address: MAddress) -> Option<(&MAddress, &T::ValueRef)> {
+    fn current_def_at(&self,
+                      variable: VarId,
+                      address: MAddress)
+                      -> Option<(&MAddress, &T::ValueRef)> {
         for (addr, idx) in self.current_def[variable].iter().rev() {
-            if *addr > address {
-                continue;
-            }
+            //if *addr > address {
+                //continue;
+            //}
+            if self.block_of(*addr) != self.block_of(address) &&
+                *addr > address {
+                    continue;
+                }
             return Some((addr, idx));
         }
         None
     }
 
     fn current_def_in_block(&self, variable: VarId, address: MAddress) -> Option<&T::ValueRef> {
-        self.current_def_at(variable, address).and_then(|v| {
+        if let Some(v) = self.current_def_at(variable, address) {
             if self.block_of(*v.0) == self.block_of(address) {
                 Some(v.1)
             } else {
                 None
             }
-        })
+        } else {
+            None
+        }
     }
 
     pub fn read_variable(&mut self, address: MAddress, variable: VarId) -> T::ValueRef {
-        // let block = self.block_of(address).unwrap();
-        // assert!(!self.sealed_blocks.contains(&block));
-        self.current_def_in_block(variable, address)
-            .cloned()
-            .unwrap_or(self.read_variable_recursive(variable, address))
+        match self.current_def_in_block(variable, address).cloned() {
+            Some(var) => var,
+            None => self.read_variable_recursive(variable, address),
+        }
     }
 
     fn read_variable_recursive(&mut self, variable: VarId, address: MAddress) -> T::ValueRef {
-        println!("{} {}", variable, address);
         let block = self.block_of(address).unwrap();
         assert!(!self.sealed_blocks.contains(&block));
         let valtype = self.variable_types[variable];
         let val = if !self.sealed_blocks.contains(&block) {
             // Incomplete CFG
             let val_ = self.add_phi(address, valtype);
-            self.incomplete_phis.get_mut(&address).and_then(|hash| hash.insert(variable, val_));
-            val_
+            let block_addr = self.addr_of(&block);
+            if let Some(hash) = self.incomplete_phis.get_mut(&block_addr) {
+                match hash.get(&variable).cloned() {
+                    Some(v) => v,
+                    None => {
+                        println!("Added new phi ({:?}) for var: {} ({:?}), as addr: {}, \
+                                  belonging to block at: {}",
+                                 val_,
+                                 variable,
+                                 self.regfile.whole_names.get(variable),
+                                 address,
+                                 block_addr);
+                        hash.insert(variable, val_);
+                        val_
+                    }
+                }
+            } else {
+                panic!()
+            }
         } else {
             let preds = self.ssa.preds_of(block);
             assert!(preds.len() > 0);
@@ -160,7 +189,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         if let Some(e) = edge_type {
             if let Some(addr) = current_addr {
                 let current_block = self.block_of(addr).unwrap();
-                println!("164: Adding {:?} edge between: {:?}({}) {:?}({})", edge_type, current_block, addr, lower_block, at);
+                println!("164: Adding {:?} edge between: {:?}({}) {:?}({})",
+                         edge_type,
+                         current_block,
+                         addr,
+                         lower_block,
+                         at);
                 self.ssa.add_control_edge(current_block, lower_block, e);
             }
         }
@@ -177,11 +211,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             let upper_block = self.block_of(at).unwrap();
 
             // Copy all the outgoing CF edges.
-            let outgoing = [
-                    self.ssa.next_edge_of(&upper_block),
-                    self.ssa.true_edge_of(&upper_block),
-                    self.ssa.false_edge_of(&upper_block),
-            ];
+            let outgoing = [self.ssa.next_edge_of(&upper_block),
+                            self.ssa.true_edge_of(&upper_block),
+                            self.ssa.false_edge_of(&upper_block)];
             for (i, edge) in outgoing.iter().enumerate() {
                 if *edge != self.ssa.invalid_edge() {
                     let target = self.ssa.target_of(&edge);
@@ -191,7 +223,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                 }
             }
 
-            println!("195: Adding edge between: {:?} {:?}", upper_block, lower_block);
+            println!("195: Adding edge between: {:?} {:?}",
+                     upper_block,
+                     lower_block);
             self.ssa.add_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
@@ -238,7 +272,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
         let source_block = self.block_of(source).unwrap();
         let target_block = self.block_of(target).unwrap();
-        println!("242: Adding edge between: {:?} {:?}", source_block, target_block);
+        println!("{} --{}--> {}", source, cftype, target);
         self.ssa.add_control_edge(source_block, target_block, cftype);
     }
 
@@ -256,13 +290,18 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                         variable: VarId,
                         phi: T::ValueRef)
                         -> T::ValueRef {
-        //assert!(block == self.ssa.block_of(&phi));
+        // assert!(block == self.ssa.block_of(&phi));
         // Determine operands from predecessors
         println!("{:?}", self.ssa.preds_of(block));
+        let baddr = self.addr_of(&block);
         for pred in self.ssa.preds_of(block) {
             let p_addr = self.addr_of(&pred);
-            println!("Pred is: {}", p_addr);
+            println!("Pred of {} is: {}", baddr, p_addr);
             let datasource = self.read_variable(p_addr, variable.clone());
+            println!("Got source for VarId: {} ({:?}), {:?}",
+                     variable,
+                     self.regfile.whole_names.get(variable),
+                     datasource);
             self.ssa.phi_use(phi, datasource)
         }
         self.try_remove_trivial_phi(phi)
@@ -355,7 +394,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     pub fn add_const(&mut self, value: u64) -> T::ValueRef {
         // All consts are assumed to be 64 bit wide.
         let ni = self.ssa.add_const(value);
-        //self.index_to_addr.insert(ni, address);
+        // self.index_to_addr.insert(ni, address);
         ni
     }
 
@@ -380,13 +419,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         i
     }
 
-    pub fn read_register(&mut self,
-                         base: usize,
-                         address: MAddress,
-                         var: &String)
-                         -> T::ValueRef {
+    pub fn read_register(&mut self, base: usize, address: MAddress, var: &String) -> T::ValueRef {
         let info = self.regfile.get_info(var).unwrap();
-        let id = info.base + base;
+        let id = info.base;
         let mut value = self.read_variable(address, id);
 
         let width = self.operand_width(&value);
@@ -409,6 +444,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             value = op_node;
         }
 
+        println!("Read request for {}, serviced with: {:?}", var, value);
         value
     }
 
@@ -417,8 +453,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                           address: MAddress,
                           var: &String,
                           mut value: T::ValueRef) {
+        println!("Writing into {}, value: {:?}", var, value);
         let info = self.regfile.get_info(var).unwrap();
-        let id = info.base + base;
+        let id = info.base;
 
         let width = match self.variable_types[id] {
             ValueType::Integer { width } => width,
@@ -497,8 +534,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         for (baddr, index) in self.blocks.iter().rev() {
             // TODO: Better way to detect start block by using self.ssa.start_block
             // If this is the start block.
-            if *baddr ==  start_address &&
-               *baddr != address {
+            if *baddr == start_address && *baddr != address {
                 last = None;
             } else {
                 last = Some(*index);
@@ -523,13 +559,14 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // Performs SSA finish operation such as assigning the blocks in the final
     // graph, sealing blocks, running basic dead code elimination etc.
     pub fn finish(&mut self) {
-        // Iterate through blocks and seal them. Also associate nodes with their respective blocks.
+        // Iterate through blocks and seal them. Also associate nodes with their
+        // respective blocks.
         for (node, addr) in self.index_to_addr.clone() {
             self.associate_block(&node, addr);
         }
         let blocks = self.blocks.clone();
         let exit_node = self.ssa.exit_node();
-        self.seal_block(exit_node);
+        // self.seal_block(exit_node);
         for (addr, block) in blocks.iter().rev() {
             println!("Sealing: {:?} at {}", block, addr);
             self.seal_block(*block);
