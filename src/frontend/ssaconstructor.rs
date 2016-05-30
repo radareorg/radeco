@@ -211,7 +211,6 @@ impl<'a, T> SSAConstruct<'a, T>
                         // determine are the ones where the rhs is a constant.
                         if let Some(Token::EConstant(target)) = operands[1] {
                             let target_addr = MAddress::new(target, 0);
-                            println!("Adding uncond from : {}, to: {}", address, target_addr);
                             self.phiplacer.add_block(target_addr, Some(address), Some(UNCOND_EDGE));
                         }
                     } else {
@@ -388,7 +387,6 @@ impl<'a, T> SSAConstruct<'a, T>
         let mut first_block = true;
         let mut current_address = MAddress::new(0, 0);
         self.init_blocks();
-        // println!("Initialization Successfull");
         for op in &op_info {
             if op.esil.is_none() {
                 continue;
@@ -425,10 +423,11 @@ impl<'a, T> SSAConstruct<'a, T>
                 self.phiplacer.op_use(src_node, 2, &false_comment);
             }
 
-            println!("ESIL: {:?}", i);
+            radeco_trace!("ssa_construct_esil|{}|{:?}", current_address, i);
 
             while let Some(ref token) = p.parse::<_, Tokenizer>(i) {
-                println!("Got token from parser: {:?}", token);
+                radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
+
                 let (lhs, rhs) = p.fetch_operands(token);
                 // Determine what to do with the operands and get the result.
                 let result = self.process_op(token, current_address, &[lhs, rhs]);
@@ -455,8 +454,10 @@ mod test {
     use middle::ssa::ssastorage::SSAStorage;
     use middle::dot;
     use middle::dce;
+    use utils;
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
+        enable_logging!();
         let mut register_profile = File::open("register_profile").unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();

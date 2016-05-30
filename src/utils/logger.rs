@@ -8,6 +8,10 @@
 //! Structs, Strings and Enums to support trace logging of radeco
 
 use std::fmt::Debug;
+use log::{self, LogLevel, LogLevelFilter, LogMetadata, LogRecord, SetLoggerError};
+use std::fs::OpenOptions;
+use std::path::Path;
+use std::io::Write;
 
 // Proposed log format.
 // [
@@ -106,4 +110,55 @@ macro_rules! radeco_warn {
 			warn!("{}", $t.to_string());
 		}
 	}
+}
+
+
+/// Support for consumers to use logger.
+#[derive(Debug)]
+pub struct RadecoLogger<T: AsRef<Path>> {
+    f: Option<T>,
+    level: LogLevel,
+}
+
+impl<T: AsRef<Path> + Send + Sync> log::Log for RadecoLogger<T> {
+    fn enabled(&self, metadata: &LogMetadata) -> bool {
+        metadata.level() <= self.level
+    }
+
+    fn log(&self, record: &LogRecord) {
+        if self.enabled(record.metadata()) {
+            let fmt = format!("{}|{}:{} -> {}",
+                              record.level(),
+                              record.location().file(),
+                              record.location().line(),
+                              record.args());
+            if let Some(ref fname) = self.f {
+                let mut f = OpenOptions::new()
+                                .append(true)
+                                .open(fname.as_ref())
+                                .expect("Unable to open log file");
+                f.write_all(fmt.as_bytes());
+            } else {
+                println!("{}", fmt);
+            }
+        }
+    }
+}
+
+pub fn logger_init<T>(f: Option<T>, level: Option<LogLevel>) -> Result<(), SetLoggerError>
+where T: 'static + AsRef<Path> + Send + Sync + Clone {
+    log::set_logger(|max_log_level| {
+        max_log_level.set(level.as_ref().unwrap_or(&LogLevel::Trace).to_log_level_filter());
+        Box::new(RadecoLogger {
+            f: f,
+            level: level.unwrap_or(LogLevel::Trace),
+        })
+    })
+}
+
+macro_rules! enable_logging {
+    () => (utils::logger::logger_init::<String>(None, None));
+    ($f: expr) => (logger_init(Some($f), None));
+    ($f: expr, $l: expr) => (logger_init($f, $l));
+    (stdout $l: expr) => (logger_init::<String>(None, Some($l)));
 }

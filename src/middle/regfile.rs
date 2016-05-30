@@ -82,7 +82,9 @@ impl SubRegisterFile {
             let cur_until = current.shift + current.width;
             if ev.shift >= cur_until {
                 current = ev;
-                println!("mapping: {} -> {}", whole.len(), name);
+
+                radeco_trace!("regfile_mappings|{} -> {}", whole.len(), &name);
+
                 whole.push(From::from(current.width));
                 names.push(name.clone());
             } else {

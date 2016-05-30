@@ -165,13 +165,11 @@ impl GraphDot for SSAStorage {
                 };
 
                 if self.is_marked(exi) {
-                    println!("{:?} is MARKED", exi);
                     attrs.push(("label".to_string(), r));
                     attrs.push(("style".to_owned(), "filled".to_owned()));
                     attrs.push(("color".to_owned(), "black".to_owned()));
                     attrs.push(("fillcolor".to_owned(), "green".to_owned()));
                 } else {
-                    println!("{:?} is UNMARKED", exi);
                     attrs.push(("label".to_string(), r));
                 }
                 attrs
@@ -194,14 +192,12 @@ impl GraphDot for SSAStorage {
             }
             _ => {
                 if self.is_marked(exi) {
-                    println!("{:?} is MARKED", exi);
                     vec![("label".to_string(),
                       format!("\"{}\"", format!("\"{:?}\"", node).replace("\"", "\\\""))),
                          ("style".to_owned(), "filled".to_owned()),
                          ("color".to_owned(), "black".to_owned()),
                          ("fillcolor".to_owned(), "green".to_owned())]
                 } else {
-                    println!("{:?} is UNMARKED", exi);
                     vec![("label".to_string(),
                       format!("\"{}\"", format!("\"{:?}\"", node).replace("\"", "\\\"")))]
                 }
