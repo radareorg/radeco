@@ -137,7 +137,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             MOpcode::OpNarrow(size) => {
                 // Max size is 64. Therefore, we can _never_ narrow to 64.
                 assert!(size < 64);
-                let mask = (2 << (size + 1)) - 1;
+                let mask = (1 << (size)) - 1;
                 const_val & mask
             }
             MOpcode::OpNot => {
@@ -326,9 +326,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         self.g.clone()
     }
 
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Helper functions.
-    /// ////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    //// Helper functions.
+    ///////////////////////////////////////////////////////////////////////////
 
     fn is_executable(&mut self, i: &T::CFEdgeRef) -> bool {
         *(self.executable.entry(*i).or_insert(false))

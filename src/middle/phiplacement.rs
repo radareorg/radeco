@@ -15,6 +15,7 @@ use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
 use middle::ir::MAddress;
 
 use super::ssa::cfg_traits::{CFG, CFGMod};
+use middle::ssa::ssa_traits::NodeType;
 use middle::regfile::SubRegisterFile;
 use middle::ir::MOpcode;
 
@@ -550,6 +551,18 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         // respective blocks.
         for (node, addr) in self.index_to_addr.clone() {
             self.associate_block(&node, addr);
+            // Mark selector.
+            if let Ok(ndata) = self.ssa.get_node_data(&node) {
+                match ndata.nt {
+                    NodeType::Op(MOpcode::OpITE) => {
+                        let block = self.block_of(addr);
+                        let cond_node = self.ssa.get_operands(&node)[0];
+                        self.ssa.mark_selector(cond_node, block.unwrap());
+                        self.ssa.remove(node);
+                    },
+                    _ => {},
+                }
+            }
         }
         let blocks = self.blocks.clone();
         for (addr, block) in blocks.iter().rev() {

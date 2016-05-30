@@ -31,6 +31,8 @@ pub fn mark<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
             if let NodeType::Op(ref op) = result.nt {
                 if op.has_sideeffects() {
                     queue.push_back(*node);
+                } else if ssa.is_selector(node) {
+                    queue.push_back(*node);
                 }
             }
         } else {

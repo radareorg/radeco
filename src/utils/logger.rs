@@ -51,7 +51,6 @@ pub enum Event<'a, T: 'a + Debug> {
 
 impl<'a, T: Debug> ToString for Event<'a, T> {
     fn to_string(&self) -> String {
-        // let timestamp = "";
         let r = match *self {
             Event::SSAInsertNode(ref i, ref j) => {
                 format!("{}|{:?}|{:?}", "ssa_insert_node", i, j)
@@ -84,7 +83,6 @@ impl<'a, T: Debug> ToString for Event<'a, T> {
                 format!("{}|{:?}", "ssa_query_internal", i)
             }
         };
-        // format!("{}|{}", timestamp, r)
         r
     }
 
@@ -105,11 +103,16 @@ macro_rules! radeco_trace {
 }
 
 macro_rules! radeco_warn {
-	($t: expr) => {
+	($t: expr) => ({
 		if cfg!(feature = "trace_log") {
 			warn!("{}", $t.to_string());
 		}
-	}
+	});
+    ($fmt:expr, $($arg:tt)*) => ({
+        if cfg!(feature = "trace_log") {
+            warn!("{}", format_args!($fmt, $($arg)*));
+        }
+    });
 }
 
 

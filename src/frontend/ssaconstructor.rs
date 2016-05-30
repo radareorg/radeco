@@ -183,8 +183,8 @@ impl<'a, T> SSAConstruct<'a, T>
         // Get the radeco Opcode and the output width.
         let (op, vt) = match *token {
             Token::ECmp => {
-                let op = MOpcode::OpCmp;
-                let vt = ValueType::Integer { width: 1 };
+                let op = MOpcode::OpSub;
+                let vt = ValueType::Integer { width: result_size };
                 (op, vt)
             }
             Token::ELt => {
@@ -455,6 +455,7 @@ mod test {
     use middle::dot;
     use middle::dce;
     use utils;
+    use analysis::constant_propagation::constant;
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
         enable_logging!();
@@ -478,6 +479,32 @@ mod test {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
             constructor.run(instructions.ops.unwrap());
         }
+        {
+            dce::collect(&mut ssa);
+        }
+        let tmp = dot::emit_dot(&ssa);
+        let mut f = File::create("yay.dot").unwrap();
+        f.write_all(tmp.as_bytes());
+    }
+
+    #[test]
+    fn ssa_const_prop_test_1() {
+        let mut reg_profile = Default::default();
+        let mut instructions = Default::default();
+        before_test(&mut reg_profile, &mut instructions, "instructions_json_");
+        let mut ssa = SSAStorage::new();
+        {
+            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            constructor.run(instructions.ops.unwrap());
+        }
+        {
+            dce::collect(&mut ssa);
+        }
+        let mut ssa = {
+            let mut analyzer = constant::Analyzer::new(&mut ssa);
+            analyzer.analyze();
+            analyzer.emit_ssa()
+        };
         {
             dce::collect(&mut ssa);
         }

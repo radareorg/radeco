@@ -379,7 +379,12 @@ impl CFG for SSAStorage {
     }
 
     fn info(&self, i: &EdgeIndex) -> (NodeIndex, NodeIndex) {
+        if self.invalid_edge() == *i {
+            return (self.invalid_value(), self.invalid_value());
+        }
+
         let edge_count = self.g.edge_count();
+        println!("{:?} {:?}", edge_count, i);
         assert!(i.index() < edge_count);
         let edges = self.g.raw_edges();
         let edge_data = edges[i.index()].clone();
@@ -388,14 +393,17 @@ impl CFG for SSAStorage {
     }
 
     fn find_edge(&self, source: &NodeIndex, target: &NodeIndex) -> EdgeIndex {
+        if *source == self.invalid_value() || *target == self.invalid_value() {
+            return self.invalid_edge();
+        }
+
         let si = self.internal(source);
         let ti = self.internal(target);
         self.g.find_edge(si, ti).unwrap_or(EdgeIndex::end())
     }
 
     fn true_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
-        let i = &self.internal(exi);
-        let edges = self.edges_of(i);
+        let edges = self.edges_of(exi);
         for edge in edges.iter() {
             if let EdgeData::Control(1) = self.g[*edge] {
                 return *edge;
@@ -405,8 +413,7 @@ impl CFG for SSAStorage {
     }
 
     fn false_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
-        let i = &self.internal(exi);
-        let edges = self.edges_of(i);
+        let edges = self.edges_of(exi);
         for edge in edges.iter() {
             if let EdgeData::Control(0) = self.g[*edge] {
                 return *edge;
@@ -417,8 +424,10 @@ impl CFG for SSAStorage {
 
     // TODO: Optimize and add asserts
     fn next_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
-        let i = &self.internal(exi);
-        let edges = self.edges_of(i);
+        if self.invalid_value() == *exi {
+            return self.invalid_edge();
+        }
+        let edges = self.edges_of(exi);
         for edge in edges.iter() {
             if let EdgeData::Control(2) = self.g[*edge] {
                 return *edge;
@@ -544,6 +553,10 @@ impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;
 
     fn exprs_in(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
+        if self.invalid_value() == *exi {
+            return Vec::new();
+        }
+        let i = &self.internal(exi);
         let i = &self.internal(exi);
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
@@ -566,6 +579,9 @@ impl SSA for SSAStorage {
     }
 
     fn get_phis(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
+        if self.invalid_value() == *exi {
+            return Vec::new();
+        }
         let i = &self.internal(exi);
         let mut phis = Vec::<NodeIndex>::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
@@ -851,8 +867,10 @@ impl SSAMod for SSAStorage {
         };
 
         if let Some(oe) = other_edge {
-            let wt = self.g.edge_weight_mut(oe).unwrap();
-            *wt = EdgeData::Control(2);
+            if oe != EdgeIndex::end() {
+                let wt = self.g.edge_weight_mut(oe).expect("No weight found!");
+                *wt = EdgeData::Control(2);
+            }
         }
 
         self.g.remove_edge(*i);
