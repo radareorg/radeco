@@ -30,7 +30,6 @@ pub fn mark<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
         if let Ok(ref result) = ssa.get_node_data(node) {
             if let NodeType::Op(ref op) = result.nt {
                 if op.has_sideeffects() {
-                    ssa.mark(node);
                     queue.push_back(*node);
                 }
             }
@@ -41,9 +40,9 @@ pub fn mark<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
     ssa.clear_mark(&roots);
     queue.extend(&[roots]);
     while let Some(ni) = queue.pop_front() {
-        //if ssa.is_marked(&ni) {
-            //continue;
-        //}
+        if ssa.is_marked(&ni) {
+            continue;
+        }
         ssa.mark(&ni);
         queue.extend(ssa.args_of(ni));
     }

@@ -39,13 +39,9 @@ use middle::ssa::verifier::{VerifiedAdd, Verify};
 
 pub type VarId = usize;
 
-const ESIL_CUR: usize = 0;
-const ESIL_OLD: usize = 1;
-const ESIL_LASTSZ: usize = 2;
-
-const UNCOND_EDGE: u8 = 2;
-const TRUE_EDGE: u8 = 1;
 const FALSE_EDGE: u8 = 0;
+const TRUE_EDGE: u8 = 1;
+const UNCOND_EDGE: u8 = 2;
 
 pub struct SSAConstruct<'a, T>
     where T: 'a + Clone + Debug + SSAMod<BBInfo = MAddress> + SSAExtra
@@ -65,9 +61,6 @@ pub struct SSAConstruct<'a, T>
     nesting: Vec<(T::ValueRef, MAddress)>,
     // Used to keep track of the offset within an instruction.
     instruction_offset: u64,
-    esil_old: Option<T::ValueRef>,
-    esil_cur: Option<T::ValueRef>,
-    esil_lastsz: Option<u64>,
 }
 
 impl<'a, T> SSAConstruct<'a, T>
@@ -89,9 +82,6 @@ impl<'a, T> SSAConstruct<'a, T>
             constants: HashMap::new(),
             nesting: Vec::new(),
             instruction_offset: 0,
-            esil_cur: None,
-            esil_old: None,
-            esil_lastsz: None,
         };
 
         {
@@ -226,9 +216,7 @@ impl<'a, T> SSAConstruct<'a, T>
                         }
                     } else {
                         // We are writing into a register.
-                        self.esil_old = Some(self.phiplacer.read_register(0, address, &name));
                         self.phiplacer.write_register(0, address, &name, rhs.unwrap());
-                        self.esil_cur = Some(rhs.unwrap());
                     }
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
@@ -333,8 +321,6 @@ impl<'a, T> SSAConstruct<'a, T>
             }
         };
 
-        let op_node;
-
         // Insert `widen` cast of the two are not of same size and rhs is_some.
         if rhs.is_some() {
             let (lhs, rhs) = match lhs_size.cmp(&rhs_size) {
@@ -356,15 +342,16 @@ impl<'a, T> SSAConstruct<'a, T>
                     (lhs.unwrap(), rhs.unwrap())
                 }
             };
-            op_node = self.phiplacer.add_op(&op, address, vt);
-            self.phiplacer.op_use(&op_node, 0, &lhs);
-            self.phiplacer.op_use(&op_node, 1, &rhs);
+            let op_node_ = self.phiplacer.add_op(&op, address, vt);
+            self.phiplacer.op_use(&op_node_, 0, &lhs);
+            self.phiplacer.op_use(&op_node_, 1, &rhs);
+            Some(op_node_)
         } else {
             // There is only one operand, that is lhs. No need for cast.
-            op_node = self.phiplacer.add_op(&op, address, vt);
-            self.phiplacer.op_use(&op_node, 0, lhs.as_ref().unwrap());
+            let op_node_ = self.phiplacer.add_op(&op, address, vt);
+            self.phiplacer.op_use(&op_node_, 0, lhs.as_ref().unwrap());
+            Some(op_node_)
         }
-        Some(op_node)
     }
 
     fn init_blocks(&mut self) {
@@ -372,7 +359,6 @@ impl<'a, T> SSAConstruct<'a, T>
         // Seal this block as the start block cannot have any more successors.
         // Create another block and return as "current_block" that we are processing.
         let start_address = MAddress::new(0, 0);
-
         let start_block = self.phiplacer.add_block(start_address, None, None);
 
         self.phiplacer.mark_start_node(&start_block);
@@ -382,12 +368,10 @@ impl<'a, T> SSAConstruct<'a, T>
             let reg = self.regfile.whole_registers[i];
             // Name the newly created nodes with register names.
             let argnode = self.phiplacer.add_comment(start_address, reg, name.clone());
-            // 0, 1 and 2 are esilcur, esilold and lastsz respectively
             self.phiplacer.write_variable(start_address, i, argnode);
         }
 
         self.phiplacer.sync_register_state(start_block);
-
         // Add the exit block
         let exit_block = self.phiplacer.add_dynamic();
         self.phiplacer.mark_exit_node(&exit_block);
@@ -498,6 +482,24 @@ mod test {
         }
         let tmp = dot::emit_dot(&ssa);
         let mut f = File::create("yay.dot").unwrap();
+        f.write_all(tmp.as_bytes());
+    }
+
+    #[test]
+    fn ssa_test_2() {
+        let mut reg_profile = Default::default();
+        let mut instructions = Default::default();
+        before_test(&mut reg_profile, &mut instructions, "instructions2.json");
+        let mut ssa = SSAStorage::new();
+        {
+            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            constructor.run(instructions.ops.unwrap());
+        }
+        {
+            dce::collect(&mut ssa);
+        }
+        let tmp = dot::emit_dot(&ssa);
+        let mut f = File::create("example2.dot").unwrap();
         f.write_all(tmp.as_bytes());
     }
 }
