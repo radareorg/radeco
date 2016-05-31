@@ -16,34 +16,49 @@ use std::collections::HashMap;
 use middle::ssa::{SSA, SSAMod};
 use middle::ssa::ssa_traits::NodeType;
 use middle::ir::{MArity, MOpcode};
+use middle::ssa::cfg_traits::CFG;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum ExprVal {
+enum LatticeValue {
     Top,
     Bottom,
     Const(u64),
 }
 
-fn meet(v1: &ExprVal, v2: &ExprVal) -> ExprVal {
+impl LatticeValue {
+    fn is_undefined(&self) -> bool {
+        *self == LatticeValue::Top
+    }
+
+    fn is_overdefined(&self) -> bool {
+        *self == LatticeValue::Bottom
+    }
+
+    fn is_constant(&self) -> bool {
+        !(self.is_undefined() || self.is_overdefined())
+    }
+}
+
+fn meet(v1: &LatticeValue, v2: &LatticeValue) -> LatticeValue {
     // Any ^ Top    = Any
     // Any ^ Bottom = Bottom
     //   C ^ C      = C      (C = Constant)
     //   C ^ D      = Bottom (C, D = Constant and C != D).
 
     match *v1 {
-        ExprVal::Top => return *v2,
-        ExprVal::Bottom => return ExprVal::Bottom,
+        LatticeValue::Top => return *v2,
+        LatticeValue::Bottom => return LatticeValue::Bottom,
         _ => {}
     }
 
     match *v2 {
-        ExprVal::Top => return *v1,
-        ExprVal::Bottom => return ExprVal::Bottom,
+        LatticeValue::Top => return *v1,
+        LatticeValue::Bottom => return LatticeValue::Bottom,
         _ => {}
     }
 
     if *v1 != *v2 {
-        return ExprVal::Bottom;
+        return LatticeValue::Bottom;
     }
 
     return *v1;
@@ -53,7 +68,7 @@ pub struct Analyzer<T: SSAMod + SSA + Clone> {
     ssa_worklist: Vec<T::ValueRef>,
     cfg_worklist: Vec<T::CFEdgeRef>,
     executable: HashMap<T::CFEdgeRef, bool>,
-    expr_val: HashMap<T::ValueRef, ExprVal>,
+    expr_val: HashMap<T::ValueRef, LatticeValue>,
     g: T,
 }
 
@@ -72,18 +87,41 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         println!("{:?}", self.expr_val);
     }
 
-    fn visit_phi(&mut self, i: &T::ValueRef) -> ExprVal {
+    fn visit_phi(&mut self, i: &T::ValueRef) -> LatticeValue {
         let operands = self.g.get_operands(i);
         let mut phi_val = self.get_value(i);
-        let cur_block = self.g.get_block(i);
+
+        // If "overdefined" return it.
+        if phi_val.is_overdefined() {
+            return LatticeValue::Bottom;
+        }
+
+        let parent_block = self.g.get_block(i);
         for op in operands.iter() {
-            let b = self.g.get_block(&op);
-            let edge = self.g.find_edge(&b, &cur_block);
-            if !self.is_executable(&edge) {
+            let operand_block = self.g.get_block(&op);
+            println!("start: {:?} | phi: {:?} ({:?}), operand: {:?} ({:?})",
+                     self.g.start_node(),
+                     i,
+                     parent_block,
+                     op,
+                     operand_block);
+            let op_val = self.get_value(&op);
+
+            if op_val.is_undefined() {
                 continue;
             }
-            let val = self.get_value(&op);
-            phi_val = meet(&phi_val, &val);
+
+            if op_val.is_overdefined() {
+                return LatticeValue::Bottom;
+            }
+
+            let edge = self.g.find_edge(&operand_block, &parent_block);
+            if !self.is_executable(&edge) && edge != self.g.invalid_edge() {
+                continue;
+            }
+
+            println!("executable phi: {:?}, operand: {:?}", i, op);
+            phi_val = meet(&phi_val, &op_val);
         }
         return phi_val;
     }
@@ -96,35 +134,35 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         let true_branch = self.g.true_edge_of(&block);
         let false_branch = self.g.false_edge_of(&block);
         match cond_val {
-            ExprVal::Bottom => {
+            LatticeValue::Bottom => {
                 self.cfg_worklist.push(true_branch);
                 self.cfg_worklist.push(false_branch);
             }
-            ExprVal::Top => {
+            LatticeValue::Top => {
                 // TODO: Not really sure what to do here.
             }
-            ExprVal::Const(cval) => {
+            LatticeValue::Const(cval) => {
                 if cval == 0 {
-                    self.cfg_worklist.push(true_branch);
+                    self.cfgwl_push(&true_branch);
                 } else {
-                    self.cfg_worklist.push(false_branch);
+                    self.cfgwl_push(&false_branch);
                 }
             }
         }
     }
 
-    fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
+    fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
         let operand = self.g.get_operands(i);
         let operand = if operand.len() > 0 {
             operand[0]
         } else {
             // TODO: panic! or return correct error.
             // panic!("Unary operation has less than one operand!\n");
-            return ExprVal::Top;
+            return LatticeValue::Top;
         };
 
         let val = self.get_value(&operand);
-        let const_val = if let ExprVal::Const(cval) = val {
+        let const_val = if let LatticeValue::Const(cval) = val {
             cval
         } else {
             return val;
@@ -146,21 +184,21 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             _ => unreachable!(),
         };
 
-        ExprVal::Const(_val)
+        LatticeValue::Const(_val)
     }
 
-    fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> ExprVal {
+    fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
         let operands = self.g.get_operands(i).iter().map(|x| self.get_value(x)).collect::<Vec<_>>();
 
         let lhs = operands[0];
         let rhs = operands[1];
 
-        let lhs_val = if let ExprVal::Const(cval) = lhs {
+        let lhs_val = if let LatticeValue::Const(cval) = lhs {
             cval
         } else {
             return lhs;
         };
-        let rhs_val = if let ExprVal::Const(cval) = rhs {
+        let rhs_val = if let LatticeValue::Const(cval) = rhs {
             cval
         } else {
             return rhs;
@@ -213,11 +251,11 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             _ => unreachable!(),
         };
 
-        ExprVal::Const(_val)
+        LatticeValue::Const(_val)
     }
 
-    fn visit_expression(&mut self, i: &T::ValueRef) -> ExprVal {
-        let expr = self.g.get_node_data(i).unwrap(); //"visit_expression() received invalid valueref");
+    fn visit_expression(&mut self, i: &T::ValueRef) -> LatticeValue {
+        let expr = self.g.get_node_data(i).unwrap();
         let opcode = if let NodeType::Op(_opcode) = expr.nt {
             _opcode.clone()
         } else {
@@ -225,7 +263,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         };
 
         if let MOpcode::OpConst(v) = opcode {
-            return ExprVal::Const(v as u64);
+            return LatticeValue::Const(v as u64);
         }
 
         let val = match opcode.arity() {
@@ -251,51 +289,75 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         {
             let start_node = self.g.start_node();
             let edges = self.g.edges_of(&start_node);
-            for next in edges.iter() {
-                self.mark_executable(next);
+            for &(ref next, _) in edges.iter() {
                 self.cfgwl_push(next);
             }
         }
 
         while self.ssa_worklist.len() > 0 || self.cfg_worklist.len() > 0 {
             while let Some(edge) = self.cfg_worklist.pop() {
-                let block = self.g.target_of(&edge);
-                self.mark_executable(&edge);
-                let phis = self.g.get_phis(&block);
-                for phi in phis.iter() {
-                    let v = self.visit_phi(phi);
-                    self.set_value(phi, v);
-                }
+                if !self.is_executable(&edge) {
+                    self.mark_executable(&edge);
+                    let block = self.g.target_of(&edge);
+                    println!("In block: {:?}", block);
 
-                let next_edge = self.g.next_edge_of(&block);
-                if next_edge != self.g.invalid_edge() {
-                    self.cfgwl_push(&next_edge);
-                    self.mark_executable(&next_edge);
-                }
+                    let phis = self.g.get_phis(&block);
+                    for phi in phis.iter() {
+                        let v = self.visit_phi(phi);
+                        self.set_value(phi, v);
+                    }
 
-                for expr in self.g.exprs_in(&block) {
-                    let val = self.visit_expression(&expr);
-                    self.set_value(&expr, val);
-                    for _use in self.g.get_uses(&expr) {
-                        self.ssawl_push(&_use);
+                    let visits = self.g.incoming_edges(&block).iter().fold(0, |acc, &e| {
+                        if self.is_executable(&e.0) {
+                            acc + 1
+                        } else {
+                            acc
+                        }
+                    });
+
+                    // If this is the first visit to the block.
+                    if visits == 1 {
+                        for expr in self.g.exprs_in(&block) {
+                            let val = self.visit_expression(&expr);
+                            self.set_value(&expr, val);
+                            for _use in self.g.get_uses(&expr) {
+                                self.ssawl_push(&_use);
+                            }
+                        }
+                    }
+
+                    let next_edge = self.g.next_edge_of(&block);
+                    if next_edge != self.g.invalid_edge() {
+                        self.cfgwl_push(&next_edge);
                     }
                 }
-            }
+            } // End of cfgwl
+
             while let Some(e) = self.ssa_worklist.pop() {
-                let t = self.visit_expression(&e);
+                let t = if self.g.is_expr(&e) {
+                    let block_of = self.g.block_of(&e);
+                    if self.is_block_executable(&block_of) {
+                        self.visit_expression(&e)
+                    } else {
+                        self.get_value(&e)
+                    }
+                } else {
+                    self.visit_phi(&e)
+                };
+
                 if t != self.get_value(&e) {
                     self.set_value(&e, t);
-                    for _use in self.g.get_uses(&e).iter() {
-                        self.ssawl_push(_use);
+                    for use_ in self.g.get_uses(&e).iter() {
+                        self.ssawl_push(use_);
                     }
                 }
-            }
-        }
+            } // End of ssawl
+        } // End of while-loop
     }
 
     pub fn emit_ssa(&mut self) -> T {
         for (k, v) in self.expr_val.iter() {
-            if let ExprVal::Const(val) = *v {
+            if let LatticeValue::Const(val) = *v {
                 let block = self.g.block_of(k);
                 // XXX
                 let newnode = self.g.add_const(val);
@@ -307,7 +369,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         let mut remove_blocks = Vec::<T::ActionRef>::new();
         for block in blocks.iter() {
             let edges = self.g.edges_of(block);
-            for edge in edges.iter() {
+            for &(ref edge, _) in edges.iter() {
                 if !self.is_executable(edge) {
                     remove_edges.push(*edge);
                 }
@@ -326,9 +388,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         self.g.clone()
     }
 
-    ///////////////////////////////////////////////////////////////////////////
-    //// Helper functions.
-    ///////////////////////////////////////////////////////////////////////////
+    /// ////////////////////////////////////////////////////////////////////////
+    /// / Helper functions.
+    /// ////////////////////////////////////////////////////////////////////////
 
     fn is_executable(&mut self, i: &T::CFEdgeRef) -> bool {
         *(self.executable.entry(*i).or_insert(false))
@@ -340,16 +402,16 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     }
 
     // Determines the Initial value
-    fn init_val(&self, i: &T::ValueRef) -> ExprVal {
+    fn init_val(&self, i: &T::ValueRef) -> LatticeValue {
         let node_data = self.g.get_node_data(i).unwrap();
         match node_data.nt {
-            NodeType::Op(MOpcode::OpConst(v)) => ExprVal::Const(v),
-            NodeType::Undefined => ExprVal::Bottom,
-            _ => ExprVal::Top,
+            NodeType::Op(MOpcode::OpConst(v)) => LatticeValue::Const(v),
+            NodeType::Undefined => LatticeValue::Bottom,
+            _ => LatticeValue::Top,
         }
     }
 
-    fn get_value(&mut self, i: &T::ValueRef) -> ExprVal {
+    fn get_value(&mut self, i: &T::ValueRef) -> LatticeValue {
         if self.expr_val.contains_key(i) {
             return self.expr_val[i];
         }
@@ -359,8 +421,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         v
     }
 
-    fn set_value(&mut self, i: &T::ValueRef, v: ExprVal) {
-        let n = self.expr_val.entry(*i).or_insert(ExprVal::Top);
+    fn set_value(&mut self, i: &T::ValueRef, v: LatticeValue) {
+        let n = self.expr_val.entry(*i).or_insert(LatticeValue::Top);
         *n = v;
     }
 
@@ -370,7 +432,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             return true;
         }
         let incoming = self.g.incoming_edges(i);
-        for edge in incoming.iter() {
+        for &(ref edge, _) in incoming.iter() {
             if self.is_executable(edge) {
                 return true;
             }
@@ -395,14 +457,14 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
 #[cfg(test)]
 mod test {
-    use super::{ExprVal, meet};
+    use super::{LatticeValue, meet};
 
     #[test]
     fn test_meet() {
-        let t = ExprVal::Top;
-        let b = ExprVal::Bottom;
-        let c1 = ExprVal::Const(1);
-        let c2 = ExprVal::Const(2);
+        let t = LatticeValue::Top;
+        let b = LatticeValue::Bottom;
+        let c1 = LatticeValue::Const(1);
+        let c2 = LatticeValue::Const(2);
 
         assert_eq!(meet(&t, &t), t);
         assert_eq!(meet(&t, &b), b);

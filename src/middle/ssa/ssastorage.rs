@@ -366,16 +366,16 @@ impl CFG for SSAStorage {
     ///////////////////////////////////////////////////////////////////////////
     //// Edge accessors and helpers
     ///////////////////////////////////////////////////////////////////////////
-    fn edges_of(&self, exi: &NodeIndex) -> Vec<EdgeIndex> {
+    fn edges_of(&self, exi: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
         let i = &self.internal(exi);
-        let mut edges = Vec::<EdgeIndex>::new();
+        let mut edges = Vec::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
         while let Some((edge, _)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::Control(_) = self.g[edge] {
-                edges.push(edge);
+            if let EdgeData::Control(i) = self.g[edge] {
+                edges.push((edge, i));
             }
         }
-        return edges;
+        edges
     }
 
     fn info(&self, i: &EdgeIndex) -> (NodeIndex, NodeIndex) {
@@ -404,7 +404,7 @@ impl CFG for SSAStorage {
 
     fn true_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
         let edges = self.edges_of(exi);
-        for edge in edges.iter() {
+        for &(ref edge, _) in edges.iter() {
             if let EdgeData::Control(1) = self.g[*edge] {
                 return *edge;
             }
@@ -414,7 +414,7 @@ impl CFG for SSAStorage {
 
     fn false_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
         let edges = self.edges_of(exi);
-        for edge in edges.iter() {
+        for &(ref edge, _) in edges.iter() {
             if let EdgeData::Control(0) = self.g[*edge] {
                 return *edge;
             }
@@ -428,7 +428,7 @@ impl CFG for SSAStorage {
             return self.invalid_edge();
         }
         let edges = self.edges_of(exi);
-        for edge in edges.iter() {
+        for &(ref edge, _) in edges.iter() {
             if let EdgeData::Control(2) = self.g[*edge] {
                 return *edge;
             }
@@ -436,13 +436,13 @@ impl CFG for SSAStorage {
         return EdgeIndex::end();
     }
 
-    fn incoming_edges(&self, exi: &NodeIndex) -> Vec<EdgeIndex> {
+    fn incoming_edges(&self, exi: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
         let i = &self.internal(exi);
-        let mut edges = Vec::<EdgeIndex>::new();
+        let mut edges = Vec::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
         while let Some((edge, _)) = walk.next_neighbor(&self.g) {
-            if let EdgeData::Control(_) = self.g[edge] {
-                edges.push(edge);
+            if let EdgeData::Control(i) = self.g[edge] {
+                edges.push((edge, i));
             }
         }
         return edges;
@@ -545,9 +545,9 @@ impl CFGMod for SSAStorage {
 
 }
 
-/// ////////////////////////////////////////////////////////////////////////////
-/// / Implementation of SSA for SSAStorage.
-/// ////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of SSA for SSAStorage.
+///////////////////////////////////////////////////////////////////////////////
 
 impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;

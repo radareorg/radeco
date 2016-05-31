@@ -35,7 +35,6 @@ use middle::ir::{MAddress, MInst, MOpcode, MVal, MValType};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
 use middle::ssa::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
-use middle::ssa::verifier::{VerifiedAdd, Verify};
 
 pub type VarId = usize;
 
@@ -66,7 +65,6 @@ pub struct SSAConstruct<'a, T>
 impl<'a, T> SSAConstruct<'a, T>
     where T: 'a + Clone
     + Debug
-    + Verify
     + SSAExtra
     + SSAMod<BBInfo=MAddress, ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
@@ -523,6 +521,14 @@ mod test {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
             constructor.run(instructions.ops.unwrap());
         }
+        {
+            dce::collect(&mut ssa);
+        }
+        let mut ssa = {
+            let mut analyzer = constant::Analyzer::new(&mut ssa);
+            analyzer.analyze();
+            analyzer.emit_ssa()
+        };
         {
             dce::collect(&mut ssa);
         }

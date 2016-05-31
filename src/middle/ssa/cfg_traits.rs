@@ -75,10 +75,10 @@ pub trait CFG {
     ///////////////////////////////////////////////////////////////////////////
 
     /// Reference to all outgoing edges from a block
-    fn edges_of(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
+    fn edges_of(&self, i: &Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
 
     /// Reference to all the incoming edges to a block
-    fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
+    fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
 
     /// Returns (source_block, target_block) for an edge
     fn info(&self, i: &Self::CFEdgeRef) -> (Self::ActionRef, Self::ActionRef);

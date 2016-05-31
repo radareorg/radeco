@@ -16,7 +16,7 @@ pub mod cfg_traits;
 pub mod ssa_traits;
 pub mod ssastorage;
 pub mod ssadot;
-pub mod verifier;
+//pub mod verifier;
 pub mod error;
 mod bimap;
 

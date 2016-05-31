@@ -58,4 +58,43 @@ pub fn sweep<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
         }
         ssa.clear_mark(node);
     }
+
+    // Remove empty blocks and redirect control flows.
+    let blocks = ssa.blocks();
+    for block in &blocks {
+        // Do not touch start or exit nodes
+        if *block == ssa.start_node() || *block == ssa.exit_node() {
+            continue;
+        }
+
+        let remove_block = if ssa.exprs_in(block).is_empty() &&
+            ssa.get_phis(block).is_empty() {
+                let incoming = ssa.incoming_edges(block);
+                let outgoing = ssa.edges_of(block);
+                // Two cases.
+                if outgoing.len() == 1 {
+                    let new_target = ssa.target_of(&outgoing[0].0);
+                    for &(ref ie, ref i) in &incoming {
+                        let new_src = ssa.source_of(ie);
+                        ssa.remove_control_edge(*ie);
+                        ssa.add_control_edge(new_src, new_target, *i);
+                    }
+                    ssa.remove_control_edge(outgoing[0].0);
+                    true
+                } else if outgoing.len() == 2 {
+                    // Incoming edge has to be an unconditional,
+                    // else we cannot re-route.
+                    // TODO: This is currently unimplemented!
+                    false
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+        if remove_block {
+            radeco_trace!("dce_rm_empty|{:?}", block);
+            ssa.remove_block(*block);
+        }
+    }
 }

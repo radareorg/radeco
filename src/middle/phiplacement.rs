@@ -60,8 +60,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     }
 
     pub fn write_variable(&mut self, address: MAddress, variable: VarId, value: T::ValueRef) {
-        radeco_trace!("phip_write_var|{:?}|{} ({:?})|{}", value, variable,
-                 self.regfile.whole_names.get(variable), address);
+        radeco_trace!("phip_write_var|{:?}|{} ({:?})|{}",
+                      value,
+                      variable,
+                      self.regfile.whole_names.get(variable),
+                      address);
 
         self.current_def[variable].insert(address, value);
         self.outputs.insert(value, variable);
@@ -77,13 +80,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                       address: MAddress)
                       -> Option<(&MAddress, &T::ValueRef)> {
         for (addr, idx) in self.current_def[variable].iter().rev() {
-            //if *addr > address {
-                //continue;
-            //}
-            if self.block_of(*addr) != self.block_of(address) &&
-                *addr > address {
-                    continue;
-                }
+            // if *addr > address {
+            // continue;
+            // }
+            if self.block_of(*addr) != self.block_of(address) && *addr > address {
+                continue;
+            }
             return Some((addr, idx));
         }
         None
@@ -120,8 +122,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                     Some(v) => v,
                     None => {
                         radeco_trace!("phip_rvr|phi({:?})|{}({:?})|{}|{}",
-                                 val_, variable, self.regfile.whole_names.get(variable),
-                                 address, block_addr);
+                                      val_,
+                                      variable,
+                                      self.regfile.whole_names.get(variable),
+                                      address,
+                                      block_addr);
 
                         hash.insert(variable, val_);
                         val_
@@ -284,9 +289,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
             let datasource = self.read_variable(p_addr, variable.clone());
             radeco_trace!("phip_add_phi_operands_src|{} ({:?})|{:?}",
-                     variable,
-                     self.regfile.whole_names.get(variable),
-                     datasource);
+                          variable,
+                          self.regfile.whole_names.get(variable),
+                          datasource);
             self.ssa.phi_use(phi, datasource)
         }
         self.try_remove_trivial_phi(phi)
@@ -559,8 +564,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                         let cond_node = self.ssa.get_operands(&node)[0];
                         self.ssa.mark_selector(cond_node, block.unwrap());
                         self.ssa.remove(node);
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }
