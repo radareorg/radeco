@@ -13,4 +13,6 @@
 pub mod valueset;
 // pub mod propagate;
 pub mod dom;
-pub mod constant_propagation;
+pub mod sccp {
+    pub mod sccp;
+}

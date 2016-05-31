@@ -27,11 +27,8 @@ use r2pipe::structs::{LAliasInfo, LOpInfo, LRegInfo};
 use esil::parser::{Parse, Parser};
 use esil::lexer::{Token, Tokenizer};
 
-use middle::cfg::NodeData as CFGNodeData;
-use middle::cfg::EdgeType as CFGEdgeType;
-use middle::cfg::{BasicBlock, CFG};
 use middle::dce;
-use middle::ir::{MAddress, MInst, MOpcode, MVal, MValType};
+use middle::ir::{MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
 use middle::ssa::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
@@ -453,7 +450,7 @@ mod test {
     use middle::dot;
     use middle::dce;
     use utils;
-    use analysis::constant_propagation::constant;
+    use analysis::sccp::sccp;
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
         enable_logging!();
@@ -499,7 +496,7 @@ mod test {
             dce::collect(&mut ssa);
         }
         let mut ssa = {
-            let mut analyzer = constant::Analyzer::new(&mut ssa);
+            let mut analyzer = sccp::Analyzer::new(&mut ssa);
             analyzer.analyze();
             analyzer.emit_ssa()
         };
@@ -525,7 +522,7 @@ mod test {
             dce::collect(&mut ssa);
         }
         let mut ssa = {
-            let mut analyzer = constant::Analyzer::new(&mut ssa);
+            let mut analyzer = sccp::Analyzer::new(&mut ssa);
             analyzer.analyze();
             analyzer.emit_ssa()
         };

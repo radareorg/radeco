@@ -15,12 +15,6 @@ use std::fmt;
 pub type Address = u64;
 pub type WidthSpec = u16;
 
-#[derive(Debug, Clone, Default)]
-pub struct MAddr {
-    // maybe store section id and offset instead
-    pub val: u64,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // New address struct
 pub struct MAddress {
@@ -54,19 +48,7 @@ pub enum MArity {
     Zero,
     Unary,
     Binary,
-    Ternary, // Unused for now. Maybe remove later?
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum MValType {
-    Register,
-    Temporary,
-    Internal,
-    EsilCur,
-    EsilOld,
-    Lastsz,
-    Unknown,
-    Null,
+    Ternary,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -101,50 +83,7 @@ pub enum MOpcode {
     OpITE,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct MRegInfo {
-    pub reg_type: String,
-    pub reg: String,
-    pub size: usize,
-    pub alias: String,
-    pub offset: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct MVal {
-    pub name: String,
-    pub size: WidthSpec,
-    pub val_type: MValType,
-    pub reg_info: Option<MRegInfo>,
-    pub typeset: u32,
-    pub as_literal: Option<u64>,
-}
-
-// Default for MVal is null.
-impl Default for MVal {
-    fn default() -> Self {
-        MVal::new("".to_string(), 0, MValType::Null, 0, None)
-    }
-}
-
-// Minor: Change MInst to take Option<MVal> instead. This will allow us to
-// eliminate MVal::null and
-// check for `None` instead.
-#[derive(Debug, Clone)]
-pub struct MInst {
-    pub addr: MAddr,
-    pub opcode: MOpcode,
-    pub dst: MVal,
-    pub operand_1: MVal,
-    pub operand_2: MVal,
-    pub update_flags: bool,
-}
-
 impl MOpcode {
-    pub fn to_inst(&self, dst: MVal, op1: MVal, op2: MVal, addr: Option<MAddr>) -> MInst {
-        MInst::new(*self, dst, op1, op2, addr)
-    }
-
     pub fn is_binary(&self) -> bool {
         self.arity() == MArity::Binary
     }
@@ -177,6 +116,7 @@ impl MOpcode {
             MOpcode::OpJmp => false,
             MOpcode::OpCJmp => false,
             MOpcode::OpNop => false,
+            MOpcode::OpITE => false,
             MOpcode::OpInvalid => false,
             _ => true,
         }
@@ -216,67 +156,8 @@ impl MOpcode {
     }
 }
 
-impl MRegInfo {
-    pub fn new() -> MRegInfo {
-        let def: MRegInfo = Default::default();
-        def
-    }
-}
-
-impl MVal {
-    pub fn new(name: String,
-               size: WidthSpec,
-               val_type: MValType,
-               typeset: u32,
-               reg_info: Option<MRegInfo>)
-               -> MVal {
-        MVal {
-            name: name.clone(),
-            size: size,
-            val_type: val_type,
-            typeset: typeset,
-            reg_info: reg_info,
-            as_literal: None,
-        }
-    }
-
-    pub fn null() -> MVal {
-        MVal::new("".to_string(), 0, MValType::Null, 0, None)
-    }
-
-    pub fn tmp(i: u64, size: WidthSpec) -> MVal {
-        MVal::new(format!("tmp_{:x}", i), size, MValType::Temporary, 0, None)
-    }
-
-    pub fn esilcur() -> MVal {
-        MVal::new("".to_string(), 64, MValType::EsilCur, 0, None)
-    }
-
-    pub fn esilold() -> MVal {
-        MVal::new("".to_string(), 64, MValType::EsilOld, 0, None)
-    }
-
-    pub fn esillastsz() -> MVal {
-        MVal::new("".to_string(), 64, MValType::Lastsz, 0, None)
-    }
-}
-
-impl MInst {
-    pub fn new(opcode: MOpcode, dst: MVal, op1: MVal, op2: MVal, _addr: Option<MAddr>) -> MInst {
-        let addr = _addr.unwrap_or_default();
-        MInst {
-            addr: addr,
-            opcode: opcode,
-            dst: dst,
-            operand_1: op1,
-            operand_2: op2,
-            update_flags: false,
-        }
-    }
-}
-
-impl MAddr {
-    pub fn new(addr: u64) -> MAddr {
-        MAddr { val: addr }
+impl fmt::Display for MOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }

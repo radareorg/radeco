@@ -60,5 +60,7 @@ extern crate esil;
 pub mod utils;
 pub mod middle;
 pub mod analysis;
-pub mod frontend;
+pub mod frontend {
+    pub mod ssaconstructor;
+}
 pub mod backend;

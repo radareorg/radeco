@@ -7,7 +7,7 @@
 
 //! Module that implements constant propagation on the SSA IR.
 //!
-//! This module implements 'Sparse Conditional Constant' algorithm to
+//! This module implements 'Sparse Conditional Constant Propagation (SCCP)' algorithm to
 //! perform the propagation. For more details, please refer:
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
