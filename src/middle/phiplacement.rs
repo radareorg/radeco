@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 
-use middle::ssa::ssa_traits::{BBInfo, SSA, SSAMod, ValueType};
+use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType};
 use middle::ir::MAddress;
 
 use super::ssa::cfg_traits::{CFG, CFGMod};
@@ -113,7 +113,20 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     fn read_variable_recursive(&mut self, variable: VarId, address: MAddress) -> T::ValueRef {
         let block = self.block_of(address).unwrap();
         let valtype = self.variable_types[variable];
-        let val = if !self.sealed_blocks.contains(&block) {
+        let val = if self.sealed_blocks.contains(&block) {
+            let preds = self.ssa.preds_of(block);
+            assert!(preds.len() > 0);
+            if preds.len() == 1 {
+                // Optimize the common case of one predecessor: No phi needed
+                let p_address = self.addr_of(&preds[0]);
+                self.read_variable(p_address, variable)
+            } else {
+                // Break potential cycles with operandless phi
+                let val = self.add_phi(address, valtype);
+                self.write_variable(address, variable, val);
+                self.add_phi_operands(block, variable, val)
+            }
+        } else {
             // Incomplete CFG
             let val_ = self.add_phi(address, valtype);
             let block_addr = self.addr_of(&block);
@@ -135,22 +148,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             } else {
                 panic!()
             }
-        } else {
-            let preds = self.ssa.preds_of(block);
-            assert!(preds.len() > 0);
-            if preds.len() == 1 {
-                // Optimize the common case of one predecessor: No phi needed
-                let p_address = self.addr_of(&preds[0]);
-                self.read_variable(p_address, variable)
-            } else {
-                // Break potential cycles with operandless phi
-                let _val = self.add_phi(address, valtype);
-                self.write_variable(address, variable, _val);
-                self.add_phi_operands(block, variable, _val)
-            }
+
         };
         self.write_variable(address, variable, val);
-        return val;
+        val
     }
 
     // TODO: Add methods to expose addition of edges between the basic blocks.
@@ -287,7 +288,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
             radeco_trace!("phip_add_phi_operands|cur:{}|pred:{}", baddr, p_addr);
 
-            let datasource = self.read_variable(p_addr, variable.clone());
+            let datasource = self.read_variable(p_addr, variable);
             radeco_trace!("phip_add_phi_operands_src|{} ({:?})|{:?}",
                           variable,
                           self.regfile.whole_names.get(variable),
@@ -336,7 +337,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                 self.try_remove_trivial_phi(use_);
             }
         }
-        return same;
+        same
     }
 
     pub fn add_dynamic(&mut self) -> T::ActionRef {
@@ -382,9 +383,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // Constants need not belong to any block. They are stored as a separate table.
     pub fn add_const(&mut self, value: u64) -> T::ValueRef {
         // All consts are assumed to be 64 bit wide.
-        let ni = self.ssa.add_const(value);
-        // self.index_to_addr.insert(ni, address);
-        ni
+        self.ssa.add_const(value)
     }
 
     pub fn add_undefined(&mut self, address: MAddress, vt: ValueType) -> T::ValueRef {
@@ -408,7 +407,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         i
     }
 
-    pub fn read_register(&mut self, base: usize, address: MAddress, var: &String) -> T::ValueRef {
+    pub fn read_register(&mut self, address: MAddress, var: &str) -> T::ValueRef {
         radeco_trace!("phip_read_reg|{}", var);
 
         let info = self.regfile.get_info(var).unwrap();
@@ -439,11 +438,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         value
     }
 
-    pub fn write_register(&mut self,
-                          base: usize,
-                          address: MAddress,
-                          var: &String,
-                          mut value: T::ValueRef) {
+    pub fn write_register(&mut self, address: MAddress, var: &str, mut value: T::ValueRef) {
 
         radeco_trace!("phip_write_reg|{}<-{:?}", var, value);
 
@@ -558,14 +553,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             self.associate_block(&node, addr);
             // Mark selector.
             if let Ok(ndata) = self.ssa.get_node_data(&node) {
-                match ndata.nt {
-                    NodeType::Op(MOpcode::OpITE) => {
-                        let block = self.block_of(addr);
-                        let cond_node = self.ssa.get_operands(&node)[0];
-                        self.ssa.mark_selector(cond_node, block.unwrap());
-                        self.ssa.remove(node);
-                    }
-                    _ => {}
+                if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
+                    let block = self.block_of(addr);
+                    let cond_node = self.ssa.get_operands(&node)[0];
+                    self.ssa.mark_selector(cond_node, block.unwrap());
+                    self.ssa.remove(node);
                 }
             }
         }

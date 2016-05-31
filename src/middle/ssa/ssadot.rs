@@ -5,14 +5,14 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Implements the `GraphDot` trait for SSAStorage
+//! Implements the `GraphDot` trait for `SSAStorage`
 
 use petgraph::graph;
 
 use middle::ir::MOpcode;
 use middle::dot::{DotAttrBlock, GraphDot};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
-use super::ssa_traits::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
+use super::ssa_traits::{SSA, SSAExtra, SSAMod, ValueType};
 
 ///////////////////////////////////////////////////////////////////////////////
 //// Implementation of GraphDot to emit Dot for SSAStorage.
@@ -23,8 +23,8 @@ impl GraphDot for SSAStorage {
 	type EdgeIndex = graph::EdgeIndex;
 
     fn configure(&self) -> String {
-        format!("digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" \
-                 compound=true rankdir=TB;]\n")
+        "digraph cfg {{\nsplines=\"true\";\ngraph [fontsize=12 fontname=\"Verdana\" \
+                 compound=true rankdir=TB;]\n".to_owned()
     }
 
     fn nodes(&self) -> Vec<Self::NodeIndex> {
@@ -50,8 +50,8 @@ impl GraphDot for SSAStorage {
     fn node_cluster(&self, exi: &Self::NodeIndex) -> Option<usize> {
         let i = &self.internal(exi);
         match self.g.node_weight(*i) {
-            Some(&NodeData::BasicBlock(_)) => Some(exi.index()),
-            Some(&NodeData::DynamicAction) => Some(exi.index()),
+            Some(&NodeData::BasicBlock(_))
+            | Some(&NodeData::DynamicAction) => Some(exi.index()),
             _ => Some(self.get_block(exi).index()),
         }
     }
@@ -77,7 +77,7 @@ impl GraphDot for SSAStorage {
     fn edge_skip(&self, i: &Self::EdgeIndex) -> bool {
         let edge = &self.g.raw_edges()[i.index()];
         match edge.weight {
-            EdgeData::ContainedInBB => true,
+            EdgeData::ContainedInBB |
             EdgeData::RegisterState => true,
             _ => false,
         }
@@ -114,10 +114,10 @@ impl GraphDot for SSAStorage {
                     _ => unreachable!(),
                 };
                 vec![("color".to_string(), color.to_string()),
-                     ("label".to_string(), format!("{}", label.to_string())),
+                     ("label".to_string(), label.to_string()),
                      ("ltail".to_string(), format!("cluster_{}", source_cluster)),
                      ("lhead".to_string(), format!("cluster_{}", dst_cluster)),
-                     ("minlen".to_string(), format!("9"))]
+                     ("minlen".to_string(), "9".to_owned())]
             }
             EdgeData::Data(i) => {
                 vec![("dir".to_string(), "back".to_string()),

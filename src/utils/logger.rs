@@ -8,7 +8,7 @@
 //! Structs, Strings and Enums to support trace logging of radeco
 
 use std::fmt::Debug;
-use log::{self, LogLevel, LogLevelFilter, LogMetadata, LogRecord, SetLoggerError};
+use log::{self, LogLevel, LogMetadata, LogRecord, SetLoggerError};
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::io::Write;
@@ -51,7 +51,7 @@ pub enum Event<'a, T: 'a + Debug> {
 
 impl<'a, T: Debug> ToString for Event<'a, T> {
     fn to_string(&self) -> String {
-        let r = match *self {
+        match *self {
             Event::SSAInsertNode(ref i, ref j) => {
                 format!("{}|{:?}|{:?}", "ssa_insert_node", i, j)
             }
@@ -82,8 +82,7 @@ impl<'a, T: Debug> ToString for Event<'a, T> {
             Event::SSAQueryInternal(ref i) => {
                 format!("{}|{:?}", "ssa_query_internal", i)
             }
-        };
-        r
+        }
     }
 
 }
@@ -140,7 +139,7 @@ impl<T: AsRef<Path> + Send + Sync> log::Log for RadecoLogger<T> {
                                 .append(true)
                                 .open(fname.as_ref())
                                 .expect("Unable to open log file");
-                f.write_all(fmt.as_bytes());
+                f.write_all(fmt.as_bytes()).expect("Write failed");
             } else {
                 println!("{}", fmt);
             }

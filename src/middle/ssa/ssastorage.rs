@@ -9,21 +9,17 @@
 
 use std::fmt::Debug;
 use std::collections::HashMap;
+use std::default;
 use petgraph::EdgeDirection;
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
 use middle::ir;
 
-use super::ssa_traits;
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAExtra, SSAMod, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 use super::bimap::BiMap;
-//use utils::logger;
-
-macro_rules! radeco_trace {
-    ($e: expr) => ()
-}
+use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
 /// SSA
@@ -38,6 +34,18 @@ pub struct AdditionalData {
 
 impl AdditionalData {
     fn new() -> AdditionalData {
+        AdditionalData {
+            address: None,
+            comments: None,
+            flag: None,
+            mark: false,
+            color: None,
+        }
+    }
+}
+
+impl default::Default for AdditionalData {
+    fn default() -> AdditionalData {
         AdditionalData {
             address: None,
             comments: None,
@@ -119,6 +127,19 @@ pub struct SSAStorage {
     last_key: usize,
 }
 
+impl default::Default for SSAStorage {
+    fn default() -> SSAStorage {
+        SSAStorage {
+            g: Graph::new(),
+            start_node: NodeIndex::end(),
+            exit_node: NodeIndex::end(),
+            assoc_data: HashMap::new(),
+            stablemap: BiMap::new(),
+            last_key: 0,
+        }
+    }
+}
+
 impl SSAStorage {
     pub fn new() -> SSAStorage {
         SSAStorage {
@@ -144,7 +165,7 @@ impl SSAStorage {
         self.stablemap.insert(ret, n);
         self.last_key += 1;
         radeco_trace!(logger::Event::SSAInsertNode(&ret, &n));
-        return ret;
+        ret
     }
 
     fn remove_node(&mut self, exi: NodeIndex) {
@@ -173,19 +194,16 @@ impl SSAStorage {
         let mut walk = self.g.walk_edges_directed(internal_i, EdgeDirection::Incoming);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
             let othernode_e = self.external(&othernode);
-            match self.g[edge] {
-                EdgeData::Data(d) => {
-                    match self.g[othernode] {
-                        NodeData::Op(_, _) | NodeData::RegisterState => {
-                            self.op_use(othernode_e, d, j);
-                        }
-                        NodeData::Phi(_, _) => {
-                            self.phi_use(othernode_e, j);
-                        }
-                        _ => {},
+            if let EdgeData::Data(d) = self.g[edge] {
+                match self.g[othernode] {
+                    NodeData::Op(_, _) | NodeData::RegisterState => {
+                        self.op_use(othernode_e, d, j);
                     }
+                    NodeData::Phi(_, _) => {
+                        self.phi_use(othernode_e, j);
+                    }
+                    _ => {},
                 }
-                _ => (),
             }
         }
 
@@ -209,23 +227,24 @@ impl SSAStorage {
 
     fn insert_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
         radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
-        let _i = self.internal(&i);
-        let _j = self.internal(&j);
-        self.g.add_edge(_i, _j, e)
+        let i = self.internal(&i);
+        let j = self.internal(&j);
+        self.g.add_edge(i, j, e)
     }
 
+    #[allow(dead_code)]
     fn update_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
         radeco_trace!(logger::Event::SSAUpdateEdge(&i, &j));
-        let _i = self.internal(&i);
-        let _j = self.internal(&j);
-        self.g.update_edge(_i, _j, e)
+        let i = self.internal(&i);
+        let j = self.internal(&j);
+        self.g.update_edge(i, j, e)
     }
 
     fn delete_edge(&mut self, i: NodeIndex, j: NodeIndex) {
         radeco_trace!(logger::Event::SSARemoveEdge(&i, &j));
-        let _i = self.internal(&i);
-        let _j = self.internal(&j);
-        let e = self.g.find_edge(_i, _j);
+        let i = self.internal(&i);
+        let j = self.internal(&j);
+        let e = self.g.find_edge(i, j);
         if let Some(ei) = e {
             self.g.remove_edge(ei);
         }
@@ -236,7 +255,7 @@ impl SSAStorage {
     }
 
     pub fn read_const(&self, ni: NodeIndex) -> Option<u64> {
-        if let &NodeData::Op(ir::MOpcode::OpConst(n), _) = &self.g[ni] {
+        if let NodeData::Op(ir::MOpcode::OpConst(n), _) = self.g[ni] {
             Some(n)
         } else {
             None
@@ -321,7 +340,7 @@ impl CFG for SSAStorage {
     fn blocks(&self) -> Vec<NodeIndex> {
         let len = self.g.node_count();
         let mut blocks = Vec::<NodeIndex>::new();
-        for i in (0..len).map(|x| NodeIndex::new(x)).collect::<Vec<NodeIndex>>().iter() {
+        for i in &(0..len).map(NodeIndex::new).collect::<Vec<NodeIndex>>() {
             match self.g[*i] {
                 NodeData::BasicBlock(_) => blocks.push(self.external(i)),
                 _ => continue,
@@ -348,7 +367,7 @@ impl CFG for SSAStorage {
                 return self.external(&othernode);
             }
         }
-        return NodeIndex::end();
+        NodeIndex::end()
     }
 
     fn preds_of(&self, exi: NodeIndex) -> Vec<NodeIndex> {
@@ -399,27 +418,27 @@ impl CFG for SSAStorage {
 
         let si = self.internal(source);
         let ti = self.internal(target);
-        self.g.find_edge(si, ti).unwrap_or(EdgeIndex::end())
+        self.g.find_edge(si, ti).unwrap_or_else(EdgeIndex::end)
     }
 
     fn true_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
         let edges = self.edges_of(exi);
-        for &(ref edge, _) in edges.iter() {
+        for &(ref edge, _) in &edges {
             if let EdgeData::Control(1) = self.g[*edge] {
                 return *edge;
             }
         }
-        return EdgeIndex::end();
+        EdgeIndex::end()
     }
 
     fn false_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
         let edges = self.edges_of(exi);
-        for &(ref edge, _) in edges.iter() {
+        for &(ref edge, _) in &edges {
             if let EdgeData::Control(0) = self.g[*edge] {
                 return *edge;
             }
         }
-        return EdgeIndex::end();
+        EdgeIndex::end()
     }
 
     // TODO: Optimize and add asserts
@@ -428,12 +447,12 @@ impl CFG for SSAStorage {
             return self.invalid_edge();
         }
         let edges = self.edges_of(exi);
-        for &(ref edge, _) in edges.iter() {
+        for &(ref edge, _) in &edges {
             if let EdgeData::Control(2) = self.g[*edge] {
                 return *edge;
             }
         }
-        return EdgeIndex::end();
+        EdgeIndex::end()
     }
 
     fn incoming_edges(&self, exi: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
@@ -445,7 +464,7 @@ impl CFG for SSAStorage {
                 edges.push((edge, i));
             }
         }
-        return edges;
+        edges
     }
 
     fn address(&self, block: &Self::ActionRef) -> Option<ir::MAddress> {
@@ -557,7 +576,6 @@ impl SSA for SSAStorage {
             return Vec::new();
         }
         let i = &self.internal(exi);
-        let i = &self.internal(exi);
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
         while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
@@ -626,7 +644,7 @@ impl SSA for SSAStorage {
                 return self.external(&othernode);
             }
         }
-        return NodeIndex::end();
+        NodeIndex::end()
     }
 
     fn get_branches(&self, exi: &NodeIndex) -> (NodeIndex, NodeIndex) {
@@ -675,7 +693,7 @@ impl SSA for SSAStorage {
                 args.push((index, self.external(&othernode)));
             }
         }
-        return args;
+        args
     }
 
     fn get_node_data(&self, exi: &NodeIndex) -> Result<TNodeData, Box<Debug>> {
@@ -692,10 +710,7 @@ impl SSA for SSAStorage {
                 vt: vt,
                 nt: TNodeType::Phi,
             }),
-            NodeData::Comment(vt, _) => Ok(TNodeData {
-                vt: vt,
-                nt: TNodeType::Undefined,
-            }),
+            NodeData::Comment(vt, _) |
             NodeData::Undefined(vt) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Undefined,
@@ -716,7 +731,7 @@ impl SSA for SSAStorage {
                 return true;
             }
         }
-        return false;
+        false
     }
 
 
@@ -728,7 +743,7 @@ impl SSA for SSAStorage {
                 return Some(self.external(&othernode));
             }
         }
-        return None;
+        None
     }
 
     fn get_target(&self, exi: &NodeIndex) -> NodeIndex {
@@ -741,7 +756,7 @@ impl SSA for SSAStorage {
                 return self.external(&othernode);
             }
         }
-        return NodeIndex::end();
+        NodeIndex::end()
     }
 
     fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
@@ -782,8 +797,7 @@ impl SSAMod for SSAStorage {
               vt: ValueType,
               _: Option<u64>) -> NodeIndex
     {
-        let n = self.insert_node(NodeData::Op(opc, vt));
-        n
+        self.insert_node(NodeData::Op(opc, vt))
     }
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
@@ -799,18 +813,14 @@ impl SSAMod for SSAStorage {
 
     fn add_phi(&mut self, vt: ValueType) -> NodeIndex {
         self.insert_node(NodeData::Phi(vt, "".to_owned()))
-        //self.update_edge(n, block, CONTEDGE);
-        //n
     }
 
     fn add_undefined(&mut self,vt: ValueType) -> NodeIndex {
         self.insert_node(NodeData::Undefined(vt))
-        //self.insert_edge(n, block, CONTEDGE);
     }
 
     fn add_comment(&mut self, vt: ValueType, msg: String) -> NodeIndex {
         self.insert_node(NodeData::Comment(vt, msg))
-        //self.insert_edge(n, block, CONTEDGE);
     }
 
     fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
@@ -884,7 +894,7 @@ impl SSAMod for SSAStorage {
 impl SSAExtra for SSAStorage {
     fn mark(&mut self, i: &Self::ValueRef) {
         radeco_trace!(logger::Event::SSAMarkNode(i));
-        let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
         data.mark = true;
     }
 
@@ -896,22 +906,22 @@ impl SSAExtra for SSAStorage {
     }
 
     fn set_color(&mut self, i: &Self::ValueRef, color: u8) {
-        let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
         data.color = Some(color);
     }
 
     fn set_comment(&mut self, i: &Self::ValueRef, comment: String) {
-        let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
         data.comments = Some(comment);
     }
 
     fn set_addr(&mut self, i: &Self::ValueRef, addr: String) {
-        let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
         data.address = Some(addr);
     }
 
     fn add_flag(&mut self, i: &Self::ValueRef, f: String) {
-        let data = self.assoc_data.entry(*i).or_insert(AdditionalData::new());
+        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
         data.flag = Some(f);
     }
 

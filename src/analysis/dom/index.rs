@@ -5,7 +5,7 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Implements InternalIndex used for DomTree.
+//! Implements `InternalIndex` used for `DomTree`.
 
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::ops::Index;
@@ -35,10 +35,10 @@ impl InternalIndex {
     }
 }
 
-/// ////////////////////////////////////////////////////////////////////////////
-/// / Trait implementations to ensure InternalIndex
-/// / behaves like InternalIndex::index (usize)
-/// ////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//// Trait implementations to ensure InternalIndex
+//// behaves like InternalIndex::index (usize)
+///////////////////////////////////////////////////////////////////////////////
 
 impl PartialEq for InternalIndex {
     fn eq(&self, other: &Self) -> bool {
@@ -56,8 +56,8 @@ impl Eq for InternalIndex { }
 
 impl Index<InternalIndex> for Vec<InternalIndex> {
 	type Output = InternalIndex;
-    fn index<'a>(&'a self, _index: InternalIndex) -> &'a InternalIndex {
-        &self[_index.index]
+    fn index(&self, index: InternalIndex) -> &InternalIndex {
+        &self[index.index]
     }
 }
 

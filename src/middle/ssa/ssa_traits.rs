@@ -7,7 +7,7 @@
 
 //! Defines the traits to be implemented by SSA data structures.
 //!
-//! These traits extend upon the ones provided in cfg_traits.
+//! These traits extend upon the ones provided in `cfg_traits.1
 //!
 //! # Design
 //!
@@ -21,7 +21,7 @@
 //!
 //! The associated type `SSA::ValueRef` is used by the methods to refer to
 //! nodes.
-//!  ValueRefs are invalidated by removal or replacement of the target node.
+//!  `ValueRefs` are invalidated by removal or replacement of the target node.
 //!  You can revalidate a ValueRef by calling `SSA::refresh` on it.
 //!  Currently `SSAStorage` automatically uses `refresh` on arguments of its
 //!  `*_use`, `get_node_data` and `replace` methods.
@@ -128,12 +128,12 @@ pub trait SSA: CFG {
 
     /// Get the lhs() of the Operation with NodeIndex 'i'.
     fn lhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[0].clone()
+        self.get_operands(i)[0]
     }
 
     /// Get the rhs() of the Operation with NodeIndex 'i'.
     fn rhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[1].clone()
+        self.get_operands(i)[1]
     }
 
     /// Get the actual NodeData.
@@ -246,35 +246,17 @@ pub trait SSAMod: SSA + CFGMod {
 
 /// Extras. TODO
 ///
-/// Design requirement - For a method to be a part of SSAExtras, it __has__ to have a default
+/// Design requirement - For a method to be a part of `SSAExtras`, it __has__ to have a default
 /// implementation that would work out of the box. Since these methods are only extras and do not
 /// add any major functionality, but rather just convinence or display glitter, the user must not
 /// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
 pub trait SSAExtra: SSA {
-    fn mark(&mut self, _: &Self::ValueRef) {
-        ();
-    }
-
-    fn clear_mark(&mut self, &Self::ValueRef) {
-        ();
-    }
-
-    fn set_color(&mut self, _: &Self::ValueRef, _: u8) {
-        ();
-    }
-
-    fn set_comment(&mut self, _: &Self::ValueRef, _: String) {
-        ();
-    }
-
-    fn set_addr(&mut self, _: &Self::ValueRef, _: String) {
-        ();
-    }
-
-    fn add_flag(&mut self, _: &Self::ValueRef, _: String) {
-        ();
-    }
-
+    fn mark(&mut self, _: &Self::ValueRef) { }
+    fn clear_mark(&mut self, &Self::ValueRef) { }
+    fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
+    fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
+    fn set_addr(&mut self, _: &Self::ValueRef, _: String) { }
+    fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false
     }

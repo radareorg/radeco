@@ -9,7 +9,6 @@
 //! Shared by the SSA representation and the intermediate representation of the
 //! ESIL parser.
 
-use std::default::Default;
 use std::fmt;
 
 pub type Address = u64;
@@ -102,10 +101,10 @@ impl MOpcode {
 
     pub fn has_sideeffects(&self) -> bool {
         match *self {
-            MOpcode::OpStore => true,
-            MOpcode::OpJmp => true,
-            MOpcode::OpCJmp => true,
-            MOpcode::OpCall => true,
+            MOpcode::OpStore |
+            MOpcode::OpJmp |
+            MOpcode::OpCJmp |
+            MOpcode::OpCall |
             MOpcode::OpITE => true,
             _ => false,
         }
@@ -113,10 +112,10 @@ impl MOpcode {
 
     pub fn allowed_in_ssa(&self) -> bool {
         match *self {
-            MOpcode::OpJmp => false,
-            MOpcode::OpCJmp => false,
-            MOpcode::OpNop => false,
-            MOpcode::OpITE => false,
+            MOpcode::OpJmp |
+            MOpcode::OpCJmp |
+            MOpcode::OpNop |
+            MOpcode::OpITE |
             MOpcode::OpInvalid => false,
             _ => true,
         }

@@ -113,7 +113,7 @@ impl<'a, T> SSAConstruct<'a, T>
             // Since ESIL has no concept of intermediates, the identifier spotted by parser
             // has to be a register.
             Token::ERegister(ref name) | Token::EIdentifier(ref name) => {
-                self.phiplacer.read_register(0, address, name)
+                self.phiplacer.read_register(address, name)
             }
             // We arrive at this case only when we have popped an operand that we have pushed
             // into the parser. id refers to the id of the var in our intermediates table.
@@ -210,7 +210,7 @@ impl<'a, T> SSAConstruct<'a, T>
                         }
                     } else {
                         // We are writing into a register.
-                        self.phiplacer.write_register(0, address, &name, rhs.unwrap());
+                        self.phiplacer.write_register(address, &name, rhs.unwrap());
                     }
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
@@ -243,9 +243,6 @@ impl<'a, T> SSAConstruct<'a, T>
                                                               format!("T: {}", true_address));
                 self.phiplacer.op_use(&op_node, 0, lhs.as_ref().unwrap());
                 self.phiplacer.op_use(&op_node, 1, &true_comment);
-                return None;
-            }
-            Token::EEndIf => {
                 return None;
             }
             Token::ELsl => {
@@ -294,7 +291,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 (MOpcode::OpLoad, ValueType::Integer { width: n as u16 })
             }
             Token::EPop => {
-                unimplemented!()
+                unreachable!()
             }
             Token::EGoto => {
                 unimplemented!()
@@ -302,7 +299,7 @@ impl<'a, T> SSAConstruct<'a, T>
             Token::EBreak => {
                 unimplemented!()
             }
-            Token::ENop => {
+            Token::EEndIf | Token::ENop => {
                 return None;
             }
             // Anything else is considered invalid. Log this as a warning and move on.

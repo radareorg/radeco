@@ -35,14 +35,14 @@ impl SubRegister {
 
 /// A structure containing information about whole and partial registers of a platform.
 /// Upon creation it builds a vector of `ValueType`s representing whole registers
-/// to be added to a PhiPlacer.
+/// to be added to a `PhiPlacer`.
 ///
 /// It can then translate accesses to partial registers to accesses of whole registers.
 /// Shifts and masks are added automatically.
 #[derive(Clone, Debug)]
 pub struct SubRegisterFile {
-    /// `ValueType`s of whole registers ready to be added to a PhiPlacer.
-    /// The index within PhiPlacer to the first register is needed
+    /// `ValueType`s of whole registers ready to be added to a `PhiPlacer`.
+    /// The index within `PhiPlacer` to the first register is needed
     /// as argument `base` to `read_register` and `write_register` later.
     pub whole_registers: Vec<ValueType>,
     /// Contains the respective names for the registers described in `whole_registers`
@@ -104,7 +104,7 @@ impl SubRegisterFile {
         }
     }
 
-    pub fn get_info(&self, name: &String) -> Option<SubRegister> {
+    pub fn get_info(&self, name: &str) -> Option<SubRegister> {
         self.named_registers.get(name).cloned()
     }
 

@@ -29,9 +29,7 @@ pub fn mark<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
     for node in &nodes {
         if let Ok(ref result) = ssa.get_node_data(node) {
             if let NodeType::Op(ref op) = result.nt {
-                if op.has_sideeffects() {
-                    queue.push_back(*node);
-                } else if ssa.is_selector(node) {
+                if op.has_sideeffects() || ssa.is_selector(node) {
                     queue.push_back(*node);
                 }
             }
@@ -81,12 +79,10 @@ pub fn sweep<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
                     }
                     ssa.remove_control_edge(outgoing[0].0);
                     true
-                } else if outgoing.len() == 2 {
+                } else {
                     // Incoming edge has to be an unconditional,
                     // else we cannot re-route.
                     // TODO: This is currently unimplemented!
-                    false
-                } else {
                     false
                 }
             } else {

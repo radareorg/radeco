@@ -38,8 +38,8 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
     }
 
     pub fn insert(&mut self, k: K, v: V) {
-        let _v = Record::Primary(v.clone());
-        if let Some(Record::Primary(x)) = self.f.insert(k.clone(), _v) {
+        let v_ = Record::Primary(v.clone());
+        if let Some(Record::Primary(x)) = self.f.insert(k.clone(), v_) {
             self.b.remove(&x);
         }
         if let Some(_) = self.b.insert(v, k) {
@@ -51,8 +51,8 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
     // When queried for k, respond with _k.
     // NOTE: Replace technically works as an alias by pointing one key to another.
     // Hence such a key cannot and should not be a part of a backward map.
-    pub fn replace(&mut self, k: K, _k: K) {
-        if let Some(Record::Primary(v)) = self.f.insert(k, Record::Alias(_k)) {
+    pub fn replace(&mut self, k: K, k_: K) {
+        if let Some(Record::Primary(v)) = self.f.insert(k, Record::Alias(k_)) {
             self.b.remove(&v);
         }
     }
@@ -83,18 +83,14 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
         self.b.remove(v)
     }
 
-    pub fn get(&self, _k: &K) -> Option<&V> {
+    pub fn get(&self, key: &K) -> Option<&V> {
         // If a node is replaced, we need to get the Node that it is replaced
         // by.
-        let mut v: Option<_>;
-        let mut k = _k;
-        loop {
+        let mut v: Option<_> = None;
+        let mut k = key;
+        while let Some(&Record::Alias(ref x)) = self.f.get(&k) {
             v = self.f.get(&k);
-            if let Some(&Record::Alias(ref x)) = v {
-                k = x;
-            } else {
-                break;
-            }
+            k = x;
         }
 
         if v.is_none() {
@@ -112,7 +108,7 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
     }
 
     pub fn keys(&self) -> Vec<K> {
-        self.b.values().map(|n| n.clone()).collect()
+        self.b.values().cloned().collect()
     }
 }
 
