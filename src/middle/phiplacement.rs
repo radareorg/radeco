@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 
-use middle::ssa::{BBInfo, SSA, SSAMod, ValueType};
+use middle::ssa::ssa_traits::{BBInfo, SSA, SSAMod, ValueType};
 use middle::ir::MAddress;
 
 use super::ssa::cfg_traits::{CFG, CFGMod};

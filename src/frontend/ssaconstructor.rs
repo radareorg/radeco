@@ -31,7 +31,7 @@ use middle::dce;
 use middle::ir::{MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
+use middle::ssa::ssa_traits::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
 
 pub type VarId = usize;
 

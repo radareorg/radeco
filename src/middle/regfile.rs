@@ -14,7 +14,7 @@ use std::convert::From;
 
 use r2pipe::structs::LRegInfo;
 
-use middle::ssa::ValueType;
+use middle::ssa::ssa_traits::ValueType;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SubRegister {

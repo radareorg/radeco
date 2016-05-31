@@ -8,7 +8,7 @@
 //! Dead code elimination
 
 use std::collections::VecDeque;
-use middle::ssa::{SSA, SSAExtra, SSAMod};
+use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod};
 use middle::ssa::ssa_traits::NodeType;
 
 /// Removes SSA nodes that are not used by any other node.

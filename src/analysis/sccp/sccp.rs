@@ -13,7 +13,7 @@
 //!
 
 use std::collections::HashMap;
-use middle::ssa::{SSA, SSAMod};
+use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssa_traits::NodeType;
 use middle::ir::{MArity, MOpcode};
 use middle::ssa::cfg_traits::CFG;
