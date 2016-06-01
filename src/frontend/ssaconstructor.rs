@@ -476,7 +476,7 @@ mod test {
         }
         let tmp = dot::emit_dot(&ssa);
         let mut f = File::create("yay.dot").unwrap();
-        f.write_all(tmp.as_bytes());
+        f.write_all(tmp.as_bytes()).expect("Write failed!");
     }
 
     #[test]
@@ -502,7 +502,7 @@ mod test {
         }
         let tmp = dot::emit_dot(&ssa);
         let mut f = File::create("yay.dot").unwrap();
-        f.write_all(tmp.as_bytes());
+        f.write_all(tmp.as_bytes()).expect("Write failed!");
     }
 
     #[test]
@@ -528,6 +528,6 @@ mod test {
         }
         let tmp = dot::emit_dot(&ssa);
         let mut f = File::create("example2.dot").unwrap();
-        f.write_all(tmp.as_bytes());
+        f.write_all(tmp.as_bytes()).expect("Write failed");
     }
 }
