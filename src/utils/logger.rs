@@ -159,8 +159,8 @@ where T: 'static + AsRef<Path> + Send + Sync + Clone {
 }
 
 macro_rules! enable_logging {
-    () => (utils::logger::logger_init::<String>(None, None));
-    ($f: expr) => (logger_init(Some($f), None));
-    ($f: expr, $l: expr) => (logger_init($f, $l));
-    (stdout $l: expr) => (logger_init::<String>(None, Some($l)));
+    () => (utils::logger::logger_init::<String>(None, None).expect("Logger Init Failed"));
+    ($f: expr) => (logger_init(Some($f), None).expect("Logger Init Failed"));
+    ($f: expr, $l: expr) => (logger_init($f, $l).expect("Logger Init Failed"));
+    (stdout $l: expr) => (logger_init::<String>(None, Some($l)).expect("Logger Init Failed"));
 }

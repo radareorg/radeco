@@ -86,11 +86,11 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
     pub fn get(&self, key: &K) -> Option<&V> {
         // If a node is replaced, we need to get the Node that it is replaced
         // by.
-        let mut v: Option<_> = None;
         let mut k = key;
-        while let Some(&Record::Alias(ref x)) = self.f.get(&k) {
-            v = self.f.get(&k);
+        let mut v = self.f.get(&k);
+        while let Some(&Record::Alias(ref x)) = v {
             k = x;
+            v = self.f.get(&k);
         }
 
         if v.is_none() {

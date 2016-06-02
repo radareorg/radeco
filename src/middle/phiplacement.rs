@@ -541,7 +541,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
     pub fn associate_block(&mut self, node: &T::ValueRef, addr: MAddress) {
         let block = self.block_of(addr);
-        self.ssa.add_to_block(*node, block.unwrap());
+        self.ssa.add_to_block(*node, block.unwrap(), addr);
     }
 
     // Performs SSA finish operation such as assigning the blocks in the final
@@ -550,6 +550,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         // Iterate through blocks and seal them. Also associate nodes with their
         // respective blocks.
         for (node, addr) in self.index_to_addr.clone() {
+            println!("node: {:?} at addr: {}", node, addr);
             self.associate_block(&node, addr);
             // Mark selector.
             if let Ok(ndata) = self.ssa.get_node_data(&node) {

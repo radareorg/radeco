@@ -217,7 +217,7 @@ pub trait SSAMod: SSA + CFGMod {
                    -> Self::ValueRef;
     
     /// Associate a node with index n with a block
-    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef);
+    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, ir::MAddress);
 
     /// Mark the node as selector for the control edges away from the specified basic block
     fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
@@ -255,7 +255,7 @@ pub trait SSAExtra: SSA {
     fn clear_mark(&mut self, &Self::ValueRef) { }
     fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
     fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
-    fn set_addr(&mut self, _: &Self::ValueRef, _: String) { }
+    fn set_addr(&mut self, _: &Self::ValueRef, _: ir::MAddress) { }
     fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false
@@ -276,4 +276,9 @@ pub trait SSAExtra: SSA {
     fn flags(&self, _: &Self::ValueRef) -> Option<String> {
         None
     }
+}
+
+pub trait SSAWalk<I: Iterator<Item=<Self as SSA>::ValueRef>>: SSA {
+    fn bfs_walk(&self) -> I;
+    fn dfs_walk(&self) -> I;
 }

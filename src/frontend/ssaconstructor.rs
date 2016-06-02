@@ -444,13 +444,18 @@ mod test {
     use rustc_serialize::json;
     use r2pipe::structs::{LAliasInfo, LFunctionInfo, LOpInfo, LRegInfo};
     use middle::ssa::ssastorage::SSAStorage;
+    use middle::ssa::ssa_traits::SSAWalk;
+    use middle::ir_writer::IRWriter;
     use middle::dot;
     use middle::dce;
     use utils;
     use analysis::sccp::sccp;
+    use std::io;
+
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
-        enable_logging!();
+        // Enable for debugging only.
+        //enable_logging!();
         let mut register_profile = File::open("register_profile").unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
@@ -529,5 +534,23 @@ mod test {
         let tmp = dot::emit_dot(&ssa);
         let mut f = File::create("example2.dot").unwrap();
         f.write_all(tmp.as_bytes()).expect("Write failed");
+    }
+
+    #[test]
+    fn ssa_bfs_walk() {
+        let mut reg_profile = Default::default();
+        let mut instructions = Default::default();
+        before_test(&mut reg_profile, &mut instructions, "instructions_json_");
+        let mut ssa = SSAStorage::new();
+        {
+            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            constructor.run(instructions.ops.unwrap());
+        }
+        {
+            dce::collect(&mut ssa);
+        }
+
+        let mut writer: IRWriter = Default::default();
+        writer.emit_il(None, &ssa, &mut io::stdout())
     }
 }

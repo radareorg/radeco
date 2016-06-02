@@ -8,7 +8,7 @@
 //! Module that holds the struct and trait implementations for the ssa form.
 
 use std::fmt::Debug;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque, HashSet};
 use std::default;
 use petgraph::EdgeDirection;
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
@@ -16,16 +16,16 @@ use middle::ir;
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
-use super::ssa_traits::{SSA, SSAExtra, SSAMod, ValueType};
+use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 use super::bimap::BiMap;
 use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
 /// SSA
-#[derive(Clone, Debug, RustcEncodable)]
+#[derive(Clone, Debug)]
 pub struct AdditionalData {
-    address: Option<String>,
+    pub address: Option<ir::MAddress>,
     comments: Option<String>,
     flag: Option<String>,
     mark: bool,
@@ -122,7 +122,7 @@ pub struct SSAStorage {
     pub g: Graph<NodeData, EdgeData>,
     pub start_node: NodeIndex,
     pub exit_node: NodeIndex,
-    assoc_data: AssociatedData,
+    pub assoc_data: AssociatedData,
     stablemap: BiMap<NodeIndex, NodeIndex>,
     last_key: usize,
 }
@@ -152,9 +152,9 @@ impl SSAStorage {
         }
     }
 
-    /// ///////////////////////////////////////////////////////////////////////
-    /// / Revised API for SSAStorage.
-    /// ///////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
+    //// Revised API for SSAStorage.
+    //////////////////////////////////////////////////////////////////////////
 
     // Regulate all access to SSAStorage, especially insertions and deletions
     // through this API to prevent stablemap from being out of sync.
@@ -202,7 +202,7 @@ impl SSAStorage {
                     NodeData::Phi(_, _) => {
                         self.phi_use(othernode_e, j);
                     }
-                    _ => {},
+                    _ => {}
                 }
             }
         }
@@ -564,9 +564,9 @@ impl CFGMod for SSAStorage {
 
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//// Implementation of SSA for SSAStorage.
-///////////////////////////////////////////////////////////////////////////////
+/// ////////////////////////////////////////////////////////////////////////////
+/// / Implementation of SSA for SSAStorage.
+/// ////////////////////////////////////////////////////////////////////////////
 
 impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;
@@ -710,8 +710,7 @@ impl SSA for SSAStorage {
                 vt: vt,
                 nt: TNodeType::Phi,
             }),
-            NodeData::Comment(vt, _) |
-            NodeData::Undefined(vt) => Ok(TNodeData {
+            NodeData::Comment(vt, _) | NodeData::Undefined(vt) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Undefined,
             }),
@@ -792,11 +791,7 @@ impl SSA for SSAStorage {
 
 impl SSAMod for SSAStorage {
 
-    fn add_op(&mut self,
-              opc: ir::MOpcode,
-              vt: ValueType,
-              _: Option<u64>) -> NodeIndex
-    {
+    fn add_op(&mut self, opc: ir::MOpcode, vt: ValueType, _: Option<u64>) -> NodeIndex {
         self.insert_node(NodeData::Op(opc, vt))
     }
 
@@ -808,14 +803,14 @@ impl SSAMod for SSAStorage {
                                 ValueType::Integer { width: 64 });
 
         self.insert_node(data)
-        //self.insert_edge(n, block, CONTEDGE);
+        // self.insert_edge(n, block, CONTEDGE);
     }
 
     fn add_phi(&mut self, vt: ValueType) -> NodeIndex {
         self.insert_node(NodeData::Phi(vt, "".to_owned()))
     }
 
-    fn add_undefined(&mut self,vt: ValueType) -> NodeIndex {
+    fn add_undefined(&mut self, vt: ValueType) -> NodeIndex {
         self.insert_node(NodeData::Undefined(vt))
     }
 
@@ -841,7 +836,7 @@ impl SSAMod for SSAStorage {
         }
         self.insert_edge(node, argument, EdgeData::Data(index));
     }
-    
+
     fn disconnect(&mut self, op: &NodeIndex, operand: &NodeIndex) {
         self.delete_edge(*op, *operand);
     }
@@ -872,7 +867,7 @@ impl SSAMod for SSAStorage {
                     2 => None,
                     _ => unreachable!(),
                 }
-            },
+            }
             _ => panic!("Found something other than a control edge!"),
         };
 
@@ -886,8 +881,10 @@ impl SSAMod for SSAStorage {
         self.g.remove_edge(*i);
     }
 
-    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
+    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, at: ir::MAddress) {
         self.insert_edge(node, block, CONTEDGE);
+        let data = self.assoc_data.entry(node).or_insert_with(AdditionalData::new);
+        data.address = Some(at);
     }
 }
 
@@ -915,7 +912,7 @@ impl SSAExtra for SSAStorage {
         data.comments = Some(comment);
     }
 
-    fn set_addr(&mut self, i: &Self::ValueRef, addr: String) {
+    fn set_addr(&mut self, i: &Self::ValueRef, addr: ir::MAddress) {
         let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
         data.address = Some(addr);
     }
@@ -926,9 +923,7 @@ impl SSAExtra for SSAStorage {
     }
 
     fn is_marked(&self, i: &Self::ValueRef) -> bool {
-        self.assoc_data
-            .get(i)
-            .unwrap_or(&AdditionalData::new()).mark
+        self.assoc_data.get(i).unwrap_or(&AdditionalData::new()).mark
     }
 
     fn color(&self, i: &Self::ValueRef) -> Option<u8> {
@@ -940,10 +935,72 @@ impl SSAExtra for SSAStorage {
     }
 
     fn addr(&self, i: &Self::ValueRef) -> Option<String> {
-        self.assoc_data.get(i).and_then(|data| data.address.clone())
+        if let Some(data) = self.assoc_data.get(i) {
+            if let Some(addr) = data.address {
+                Some(format!("{}", addr))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn flags(&self, i: &Self::ValueRef) -> Option<String> {
         self.assoc_data.get(i).and_then(|data| data.flag.clone())
+    }
+}
+
+impl SSAWalk<Walker> for SSAStorage {
+    fn bfs_walk(&self) -> Walker {
+        let mut walker = Walker { nodes: VecDeque::new() };
+        {
+            let mut visited = HashSet::new();
+            let mut explorer = VecDeque::new();
+            explorer.push_back(self.start_node());
+            let nodes = &mut walker.nodes;
+            while let Some(ref block) = explorer.pop_front() {
+                if visited.contains(block) {
+                    continue;
+                }
+                visited.insert(*block);
+                nodes.push_back(self.to_value(*block));
+                let mut exprs = self.exprs_in(block)
+                                    .iter()
+                                    .chain(self.get_phis(block).iter())
+                                    .cloned()
+                                    .collect::<Vec<NodeIndex>>();
+
+                exprs.sort_by(|a, b| {
+                    let x = AdditionalData::new();
+                    let addr_x = self.assoc_data.get(a).unwrap_or(&x).address;
+                    let addr_y = self.assoc_data.get(b).unwrap_or(&x).address;
+                    addr_x.cmp(&addr_y)
+                });
+                for expr in &exprs {
+                    nodes.push_back(*expr);
+                }
+                let mut outgoing = self.edges_of(block);
+                outgoing.sort_by(|a, b| (a.1).cmp(&b.1));
+                explorer.extend(outgoing.iter().map(|x| self.target_of(&x.0)));
+            }
+        }
+        walker
+    }
+
+    fn dfs_walk(&self) -> Walker {
+        unimplemented!()
+    }
+}
+
+// Iterators for `SSAStorage`
+pub struct Walker {
+    pub nodes: VecDeque<NodeIndex>,
+}
+
+impl Iterator for Walker {
+    type Item = NodeIndex;
+    fn next(&mut self) -> Option<NodeIndex> {
+        self.nodes.pop_front()
     }
 }
