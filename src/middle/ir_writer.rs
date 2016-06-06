@@ -27,7 +27,7 @@ macro_rules! concat_strln {
 }
 
 // Format constants.
-macro_rules! fmtconst {
+macro_rules! fmt_const {
     ($c:expr) => { format!("#x{:x}", $c); }
 }
 
@@ -76,6 +76,7 @@ macro_rules! indent {
 pub struct IRWriter {
     seen: HashMap<NodeIndex, u64>,
     indent: u64,
+    ctr: u64,
 }
 
 impl default::Default for IRWriter {
@@ -83,6 +84,7 @@ impl default::Default for IRWriter {
         IRWriter {
             seen: HashMap::new(),
             indent: 1,
+            ctr: 0,
         }
     }
 }
@@ -92,12 +94,53 @@ impl IRWriter {
         unimplemented!();
     }
 
-    fn fmt_operands(&self, operands: &[NodeIndex]) -> Vec<String> {
-        vec!["undef".to_owned()]
+    fn fmt_operands(&self, operands: &[NodeIndex], ssa: &SSAStorage) -> Vec<String> {
+        let mut result = Vec::new();
+        for operand in operands {
+            let op_internal = ssa.internal(operand);
+            match ssa.g[op_internal] {
+                NodeData::BasicBlock(addr) => result.push(format!("{}", addr)),
+                NodeData::DynamicAction => result.push("dynamic_action".to_owned()),
+                NodeData::Op(MOpcode::OpConst(ref value), _) => result.push(fmt_const!(value)),
+                NodeData::Comment(_, ref named) => result.push(named.clone()),
+                _ => {
+                    result.push(format!("%{}: $unknown", self.seen.get(operand).unwrap()));
+                }
+            }
+        }
+        result
     }
 
-    fn fmt_expression(&mut self, opcode: MOpcode, vt: ValueType, operands: Vec<String>) -> String {
-        "undef".to_owned()
+    fn fmt_expression(&mut self,
+                      ni: NodeIndex,
+                      opcode: MOpcode,
+                      vt: ValueType,
+                      operands: Vec<String>)
+                      -> String {
+        self.ctr += 1;
+        self.seen.insert(ni, self.ctr);
+        match opcode {
+            MOpcode::OpAdd => format!("%{} = {} + {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpSub => format!("%{} = {} - {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpMul => format!("%{} = {} * {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpDiv => format!("%{} = {} / {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpMod => format!("%{} = {} % {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpAnd => format!("%{} = {} & {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpOr => format!("%{} = {} | {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpXor => format!("%{} = {} ^ {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpNot => format!("%{} = !{}", self.ctr, operands[0]),
+            MOpcode::OpCmp => format!("%{} = {} == {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpGt => format!("%{} = {} > {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpLt => format!("%{} = {} < {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpLsl => format!("%{} = {} << {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpLsr => format!("%{} = {} >> {}", self.ctr, operands[0], operands[1]),
+            MOpcode::OpLoad => format!("%{} = OpLoad({})", self.ctr, operands[0]),
+            MOpcode::OpStore => format!("%{} = Store({}, {})", self.ctr, operands[0], operands[1]),
+            MOpcode::OpNarrow(w) => format!("%{} = Narrow{}({})", self.ctr, w, operands[0]),
+            MOpcode::OpWiden(w) => format!("%{} = Widen{}({})", self.ctr, w, operands[0]),
+            MOpcode::OpCall => format!("{}", operands[0]),
+            _ => unreachable!(),
+        }
     }
 
     fn fmt_indent(by: u64) -> String {
@@ -119,18 +162,32 @@ impl IRWriter {
             "fn_apple".to_owned()
         };
 
-        for node in ssa.bfs_walk() {
+        for node in ssa.inorder_walk() {
             let intn = ssa.internal(&node);
             let line = match ssa.g[intn] {
                 NodeData::Op(opcode, vt) => {
-                    let operands = self.fmt_operands(ssa.get_operands(&node).as_slice());
-                    indent!(self.indent, self.fmt_expression(opcode, vt, operands))
+                    if let MOpcode::OpConst(_) = opcode {
+                        String::new()
+                    } else {
+                        let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), &ssa);
+                        indent!(self.indent, self.fmt_expression(node, opcode, vt, operands))
+                    }
                 }
                 NodeData::Phi(vt, ref name) => {
-                    String::new()
+                    let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), &ssa);
+                    self.ctr += 1;
+                    self.seen.insert(node, self.ctr);
+                    let mut phi_line = format!("%{} = Phi(", self.ctr);
+                    for operand in operands {
+                        phi_line = format!("{}{}, ", phi_line, operand);
+                    }
+                    let len = phi_line.len();
+                    phi_line.truncate(len - 2);
+                    phi_line.push_str(")");
+                    indent!(self.indent, phi_line)
                 }
                 NodeData::Undefined(vt) => {
-                    String::new()
+                    "Undefined".to_owned()
                 }
                 NodeData::BasicBlock(addr) => {
                     let bbline = if let Some(ref prev_block) = last {
@@ -142,19 +199,27 @@ impl IRWriter {
                         // This is a conditional jump.
                         if outgoing.len() > 1 {
                             let condition = self.fmt_operands(&[ssa.selector_of(prev_block)
-                                                                   .unwrap()]);
+                                                                   .unwrap()], &ssa);
                             jmp_statement = format!("{} IF {}", jmp_statement, condition[0]);
                         }
+
+                        let mut target_string = String::new();
                         for (target, edge_type) in outgoing {
                             if target == node {
                                 continue;
                             }
-                            jmp_statement = format!("{} {}",
-                                                    jmp_statement,
-                                                    self.fmt_operands(&[target])[0]);
+                            target_string = format!("{} {}",
+                                                    target_string,
+                                                    self.fmt_operands(&[target], &ssa)[0]);
                         }
-                        concat_strln!(text_il, indent!(self.indent, jmp_statement));
-                        indent!(self.indent - 1, bb!(addr))
+
+                        if target_string.is_empty() {
+                            indent!(self.indent - 1, bb!(addr))
+                        } else {
+                            concat_str!(jmp_statement, target_string);
+                            concat_strln!(text_il, indent!(self.indent, jmp_statement));
+                            indent!(self.indent - 1, bb!(addr))
+                        }
                     } else {
                         self.indent += 1;
                         fmt_fn!(fn_name)
@@ -162,10 +227,32 @@ impl IRWriter {
                     last = Some(node);
                     bbline
                 }
-                _ => { String::new() }
+                _ => {
+                    String::new()
+                }
             };
-            concat_strln!(text_il, line);
+
+            if !line.is_empty() {
+                concat_strln!(text_il, line);
+            }
         }
+
+        let exit_node = ssa.exit_node();
+        let final_state = ssa.registers_at(&exit_node);
+
+        for (i, reg) in ssa.get_operands(&final_state).iter().enumerate() {
+            let rint = ssa.internal(&reg);
+            let reg_assign = match ssa.g[rint] {
+                NodeData::Comment(_, _) => String::new(),
+                _ => {
+                    format!("{} = {}", ssa.regnames[i], self.fmt_operands(&[*reg], &ssa)[0])
+                }
+            };
+            if !reg_assign.is_empty() {
+                concat_strln!(text_il, indent!(self.indent, reg_assign));
+            }
+        }
+
         concat_strln!(text_il, CL_BLOCK_SEP);
         writeln!(sink, "{}", text_il);
     }

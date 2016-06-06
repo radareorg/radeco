@@ -242,6 +242,8 @@ pub trait SSAMod: SSA + CFGMod {
 
     /// Remove control flow edge. This is a part of SSAMod as this potentially modifies the ssa.
     fn remove_edge(&mut self, i: &Self::CFEdgeRef);
+
+    fn map_registers(&mut self, regs: Vec<String>);
 }
 
 /// Extras. TODO
@@ -280,5 +282,6 @@ pub trait SSAExtra: SSA {
 
 pub trait SSAWalk<I: Iterator<Item=<Self as SSA>::ValueRef>>: SSA {
     fn bfs_walk(&self) -> I;
+    fn inorder_walk(&self) -> I;
     fn dfs_walk(&self) -> I;
 }

@@ -21,7 +21,7 @@ use middle::ir::MOpcode;
 
 pub type VarId = usize;
 
-const UNCOND_EDGE: u8 = 0;
+const UNCOND_EDGE: u8 = 2;
 
 pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + 'a> {
     ssa: &'a mut T,
@@ -185,6 +185,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             }
         });
 
+        let mut upper_block = self.ssa.invalid_action();
+        if seen {
+            upper_block = self.block_of(at).unwrap();
+        }
+
         // Create a new block and add the required type of edge.
         let lower_block = self.new_block(at);
         if let Some(e) = edge_type {
@@ -192,6 +197,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                 let current_block = self.block_of(addr).unwrap();
                 self.ssa.add_control_edge(current_block, lower_block, e);
             }
+        }
+        
+        if upper_block == lower_block {
+            return upper_block;
         }
 
         if seen {
@@ -203,17 +212,20 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             // - If these defs are in the `upper` block, then we add a phi (incomplete
             // phi) and
             //   this is used to provide the def for this use.
-            let upper_block = self.block_of(at).unwrap();
+
 
             // Copy all the outgoing CF edges.
-            let outgoing = [self.ssa.next_edge_of(&upper_block),
+            let outgoing = [self.ssa.false_edge_of(&upper_block),
                             self.ssa.true_edge_of(&upper_block),
-                            self.ssa.false_edge_of(&upper_block)];
+                            self.ssa.next_edge_of(&upper_block)
+                            ];
             for (i, edge) in outgoing.iter().enumerate() {
                 if *edge != self.ssa.invalid_edge() {
                     let target = self.ssa.target_of(&edge);
-                    self.ssa.add_control_edge(lower_block, target, i as u8);
-                    self.ssa.remove_control_edge(*edge);
+                    if lower_block != target {
+                        self.ssa.add_control_edge(lower_block, target, i as u8);
+                        self.ssa.remove_control_edge(*edge);
+                    }
                 }
             }
 
@@ -265,6 +277,18 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         let target_block = self.block_of(target).unwrap();
         radeco_trace!("phip_add_edge|{} --{}--> {}", source, cftype, target);
         self.ssa.add_control_edge(source_block, target_block, cftype);
+    }
+
+    // Adds an unconditional edge the the next block if there are no edges for the current block.
+    pub fn maybe_add_edge(&mut self, source: MAddress, target: MAddress) {
+        let source_block = self.block_of(source).unwrap();
+        if self.ssa.edges_of(&source_block).is_empty() {
+            let target_block = self.block_of(target).unwrap();
+            if target_block != source_block {
+                radeco_trace!("phip_add_edge|{} --{}--> {}", source, UNCOND_EDGE, target);
+                self.ssa.add_control_edge(source_block, target_block, UNCOND_EDGE);
+            }
+        }
     }
 
     pub fn seal_block(&mut self, block: T::ActionRef) {
@@ -401,18 +425,22 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // TODO: Add a more convenient method to add an opcode and operands to it.
     // Something like the previous verified_add_op.
 
-    pub fn add_op(&mut self, op: &MOpcode, address: MAddress, vt: ValueType) -> T::ValueRef {
+    pub fn add_op(&mut self, op: &MOpcode, address: &mut MAddress, vt: ValueType) -> T::ValueRef {
         let i = self.ssa.add_op(*op, vt, None);
-        self.index_to_addr.insert(i, address);
+        match *op {
+            MOpcode::OpConst(_) => { },
+            _ => { self.index_to_addr.insert(i, *address); },
+        }
+        address.offset += 1;
         i
     }
 
-    pub fn read_register(&mut self, address: MAddress, var: &str) -> T::ValueRef {
+    pub fn read_register(&mut self, address: &mut MAddress, var: &str) -> T::ValueRef {
         radeco_trace!("phip_read_reg|{}", var);
 
         let info = self.regfile.get_info(var).unwrap();
         let id = info.base;
-        let mut value = self.read_variable(address, id);
+        let mut value = self.read_variable(*address, id);
 
         let width = self.operand_width(&value);
 
@@ -438,7 +466,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         value
     }
 
-    pub fn write_register(&mut self, address: MAddress, var: &str, mut value: T::ValueRef) {
+    pub fn write_register(&mut self, address: &mut MAddress, var: &str, mut value: T::ValueRef) {
 
         radeco_trace!("phip_write_reg|{}<-{:?}", var, value);
 
@@ -450,7 +478,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         };
 
         if info.width >= width as usize {
-            self.write_variable(address, id, value);
+            self.write_variable(*address, id, value);
             return;
         }
 
@@ -475,11 +503,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         let maskval: u64 = ((!((!1u64) << (info.width - 1))) << info.shift) ^ fullval;
 
         if maskval == 0 {
-            self.write_variable(address, id, value);
+            self.write_variable(*address, id, value);
             return;
         }
 
-        let mut ov = self.read_variable(address, id);
+        let mut ov = self.read_variable(*address, id);
         let maskvalue_node = self.add_const(maskval);
 
         let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
@@ -491,7 +519,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         self.op_use(&op_or, 0, &value);
         self.op_use(&op_or, 1, &ov);
         value = op_or;
-        self.write_variable(address, id, value);
+        self.write_variable(*address, id, value);
     }
 
     pub fn op_use(&mut self, op: &T::ValueRef, index: u8, arg: &T::ValueRef) {
@@ -505,9 +533,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     }
 
     fn new_block(&mut self, bb: MAddress) -> T::ActionRef {
-        let block = self.ssa.add_block(bb);
-        self.incomplete_phis.insert(bb, HashMap::new());
-        block
+        if let Some(b) = self.blocks.get(&bb) {
+            *b
+        } else {
+            let block = self.ssa.add_block(bb);
+            self.incomplete_phis.insert(bb, HashMap::new());
+            block
+        }
     }
 
     // Determine which block as address should belong to.
@@ -549,23 +581,29 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     pub fn finish(&mut self) {
         // Iterate through blocks and seal them. Also associate nodes with their
         // respective blocks.
-        for (node, addr) in self.index_to_addr.clone() {
-            println!("node: {:?} at addr: {}", node, addr);
-            self.associate_block(&node, addr);
-            // Mark selector.
-            if let Ok(ndata) = self.ssa.get_node_data(&node) {
-                if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
-                    let block = self.block_of(addr);
-                    let cond_node = self.ssa.get_operands(&node)[0];
-                    self.ssa.mark_selector(cond_node, block.unwrap());
-                    self.ssa.remove(node);
-                }
-            }
-        }
         let blocks = self.blocks.clone();
         for (addr, block) in blocks.iter().rev() {
             radeco_trace!("phip_seal_block|{:?}|{}", block, addr);
             self.seal_block(*block);
         }
+
+        for node in self.ssa.nodes() {
+            if let Some(addr) = self.index_to_addr.get(&node).cloned() {
+                self.associate_block(&node, addr);
+                // Mark selector.
+                if let Ok(ndata) = self.ssa.get_node_data(&node) {
+                    if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
+                        let block = self.block_of(addr);
+                        let cond_node = self.ssa.get_operands(&node)[0];
+                        self.ssa.mark_selector(cond_node, block.unwrap());
+                        self.ssa.remove(node);
+                    }
+                }
+            }
+        }
+
+        // XXX: For some reason, constants are being associated with block. Fix that!
+
+        self.ssa.map_registers(self.regfile.whole_names.clone());
     }
 }

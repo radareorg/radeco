@@ -129,13 +129,14 @@ impl<T: AsRef<Path> + Send + Sync> log::Log for RadecoLogger<T> {
 
     fn log(&self, record: &LogRecord) {
         if self.enabled(record.metadata()) {
-            let fmt = format!("{}|{}:{} -> {}",
+            let fmt = format!("{}|{}:{} -> {}\n",
                               record.level(),
                               record.location().file(),
                               record.location().line(),
                               record.args());
             if let Some(ref fname) = self.f {
                 let mut f = OpenOptions::new()
+                                .create(true)
                                 .append(true)
                                 .open(fname.as_ref())
                                 .expect("Unable to open log file");
@@ -160,7 +161,7 @@ where T: 'static + AsRef<Path> + Send + Sync + Clone {
 
 macro_rules! enable_logging {
     () => (utils::logger::logger_init::<String>(None, None).expect("Logger Init Failed"));
-    ($f: expr) => (logger_init(Some($f), None).expect("Logger Init Failed"));
-    ($f: expr, $l: expr) => (logger_init($f, $l).expect("Logger Init Failed"));
-    (stdout $l: expr) => (logger_init::<String>(None, Some($l)).expect("Logger Init Failed"));
+    ($f: expr) => (utils::logger::logger_init(Some($f), None).expect("Logger Init Failed"));
+    ($f: expr, $l: expr) => (utils::logger::logger_init($f, $l).expect("Logger Init Failed"));
+    (stdout $l: expr) => (utils::logger::logger_init::<String>(None, Some($l)).expect("Logger Init Failed"));
 }

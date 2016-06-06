@@ -8,8 +8,9 @@
 //! Module that holds the struct and trait implementations for the ssa form.
 
 use std::fmt::Debug;
-use std::collections::{HashMap, VecDeque, HashSet};
+use std::collections::{HashMap, VecDeque, HashSet, BinaryHeap};
 use std::default;
+use std::cmp::{PartialOrd, PartialEq, Ordering};
 use petgraph::EdgeDirection;
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
 use middle::ir;
@@ -123,6 +124,7 @@ pub struct SSAStorage {
     pub start_node: NodeIndex,
     pub exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
+    pub regnames: Vec<String>,
     stablemap: BiMap<NodeIndex, NodeIndex>,
     last_key: usize,
 }
@@ -135,6 +137,7 @@ impl default::Default for SSAStorage {
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
             stablemap: BiMap::new(),
+            regnames: Vec::new(),
             last_key: 0,
         }
     }
@@ -148,6 +151,7 @@ impl SSAStorage {
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
             stablemap: BiMap::new(),
+            regnames: Vec::new(),
             last_key: 0,
         }
     }
@@ -182,6 +186,7 @@ impl SSAStorage {
             // Correct the map, i.e. Map the external index of n to v.
             let ext = self.stablemap.remove_v(&NodeIndex::new(n));
             self.stablemap.insert(ext.unwrap(), v.unwrap());
+            radeco_trace!("ssa_remapped|{:?}->{:?}", ext, v);
         }
     }
 
@@ -403,7 +408,6 @@ impl CFG for SSAStorage {
         }
 
         let edge_count = self.g.edge_count();
-        println!("{:?} {:?}", edge_count, i);
         assert!(i.index() < edge_count);
         let edges = self.g.raw_edges();
         let edge_data = edges[i.index()].clone();
@@ -501,7 +505,7 @@ impl CFGMod for SSAStorage {
         let bb = self.insert_node(NodeData::BasicBlock(info));
         let rs = self.insert_node(NodeData::RegisterState);
         self.insert_edge(bb, rs, EdgeData::RegisterState);
-        self.insert_edge(rs, bb, EdgeData::RegisterState);
+        self.insert_edge(rs, bb, CONTEDGE);
         bb
     }
 
@@ -796,14 +800,12 @@ impl SSAMod for SSAStorage {
     }
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
-        // TODO:
-        //  - Set correct size for the data.
-        //  - Constants need/should not belong to any block.
+
         let data = NodeData::Op(ir::MOpcode::OpConst(value),
                                 ValueType::Integer { width: 64 });
 
-        self.insert_node(data)
-        // self.insert_edge(n, block, CONTEDGE);
+        let i = self.insert_node(data);
+        i
     }
 
     fn add_phi(&mut self, vt: ValueType) -> NodeIndex {
@@ -886,6 +888,10 @@ impl SSAMod for SSAStorage {
         let data = self.assoc_data.entry(node).or_insert_with(AdditionalData::new);
         data.address = Some(at);
     }
+
+    fn map_registers(&mut self, regs: Vec<String>) {
+        self.regnames = regs;
+    }
 }
 
 impl SSAExtra for SSAStorage {
@@ -951,6 +957,58 @@ impl SSAExtra for SSAStorage {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct InorderKey {
+    pub address: ir::MAddress,
+    pub value: NodeIndex,
+}
+
+impl InorderKey {
+    pub fn new(addr: ir::MAddress, node: NodeIndex) -> InorderKey {
+        InorderKey {
+            address: addr,
+            value: node,
+        }
+    }
+}
+
+impl PartialOrd for InorderKey {
+    fn partial_cmp(&self, other: &InorderKey) -> Option<Ordering> {
+        let c = other.address.address.cmp(&self.address.address);
+        match c {
+            Ordering::Equal => Some(other.address.offset.cmp(&self.address.offset)),
+            _ => Some(c),
+        }
+    }
+}
+
+impl Eq for InorderKey { }
+
+impl Ord for InorderKey {
+    fn cmp(&self, other: &InorderKey) -> Ordering {
+        let c = other.address.address.cmp(&self.address.address);
+        match c {
+            Ordering::Equal => other.address.offset.cmp(&self.address.offset),
+            _ => c,
+        }
+    }
+}
+
+impl PartialEq for InorderKey {
+    fn eq(&self, other: &InorderKey) -> bool {
+        match self.address.address.cmp(&other.address.address) {
+            Ordering::Equal => {
+                match self.address.offset.cmp(&other.address.offset) {
+                    Ordering::Equal => true,
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+}
+
+
 impl SSAWalk<Walker> for SSAStorage {
     fn bfs_walk(&self) -> Walker {
         let mut walker = Walker { nodes: VecDeque::new() };
@@ -983,6 +1041,47 @@ impl SSAWalk<Walker> for SSAStorage {
                 let mut outgoing = self.edges_of(block);
                 outgoing.sort_by(|a, b| (a.1).cmp(&b.1));
                 explorer.extend(outgoing.iter().map(|x| self.target_of(&x.0)));
+            }
+        }
+        walker
+    }
+
+    fn inorder_walk(&self) -> Walker {
+        let mut walker = Walker { nodes: VecDeque::new() };
+        {
+            let mut visited = HashSet::new();
+            let mut explorer = BinaryHeap::<InorderKey>::new();
+            explorer.push(InorderKey::new(ir::MAddress::new(0, 0), self.start_node()));
+            let nodes = &mut walker.nodes;
+            while let Some(ref key) = explorer.pop() {
+                let block = &key.value;
+                if visited.contains(block) {
+                    continue;
+                }
+                visited.insert(*block);
+                nodes.push_back(self.to_value(*block));
+                let mut exprs = self.exprs_in(block)
+                                    .iter()
+                                    .chain(self.get_phis(block).iter())
+                                    .cloned()
+                                    .collect::<Vec<NodeIndex>>();
+
+                exprs.sort_by(|a, b| {
+                    let x = AdditionalData::new();
+                    let addr_x = self.assoc_data.get(a).unwrap_or(&x).address;
+                    let addr_y = self.assoc_data.get(b).unwrap_or(&x).address;
+                    addr_x.cmp(&addr_y)
+                });
+                for expr in &exprs {
+                    nodes.push_back(*expr);
+                }
+                let mut outgoing = self.edges_of(block);
+                for outedge in outgoing {
+                    let target = self.target_of(&outedge.0);
+                    let addr = self.address(&target).unwrap();
+                    let key = InorderKey::new(addr, target);
+                    explorer.push(key);
+                }
             }
         }
         walker

@@ -57,6 +57,7 @@ pub struct SSAConstruct<'a, T>
     nesting: Vec<(T::ValueRef, MAddress)>,
     // Used to keep track of the offset within an instruction.
     instruction_offset: u64,
+    needs_new_block: bool,
 }
 
 impl<'a, T> SSAConstruct<'a, T>
@@ -77,6 +78,7 @@ impl<'a, T> SSAConstruct<'a, T>
             constants: HashMap::new(),
             nesting: Vec::new(),
             instruction_offset: 0,
+            needs_new_block: true,
         };
 
         {
@@ -105,7 +107,7 @@ impl<'a, T> SSAConstruct<'a, T>
     // It will remain as a Token::Identifier only the first time the parser
     // encounters
     // it, we always push in a Token::Register or a Token::Intermediate.
-    fn process_in(&mut self, var: &Option<Token>, address: MAddress) -> Option<T::ValueRef> {
+    fn process_in(&mut self, var: &Option<Token>, address: &mut MAddress) -> Option<T::ValueRef> {
         if var.is_none() {
             return None;
         }
@@ -122,8 +124,7 @@ impl<'a, T> SSAConstruct<'a, T>
             }
             Token::EConstant(value) => {
                 // Add or retrieve a constant with the value from the table.
-                *self.constants.entry(value)
-                               .or_insert(self.phiplacer.add_const(value))
+                *self.constants.entry(value).or_insert(self.phiplacer.add_const(value))
             }
             Token::EAddress => {
                 // Treat this as retrieving a constant.
@@ -158,7 +159,7 @@ impl<'a, T> SSAConstruct<'a, T>
 
     fn process_op(&mut self,
                   token: &Token,
-                  address: MAddress,
+                  address: &mut MAddress,
                   operands: &[Option<Token>; 2])
                   -> Option<T::ValueRef> {
         // This is where the real transformation from ESIL to radeco IL happens. This
@@ -206,7 +207,8 @@ impl<'a, T> SSAConstruct<'a, T>
                         // determine are the ones where the rhs is a constant.
                         if let Some(Token::EConstant(target)) = operands[1] {
                             let target_addr = MAddress::new(target, 0);
-                            self.phiplacer.add_block(target_addr, Some(address), Some(UNCOND_EDGE));
+                            self.phiplacer.add_block(target_addr, Some(*address), Some(UNCOND_EDGE));
+                            self.needs_new_block = true;
                         }
                     } else {
                         // We are writing into a register.
@@ -230,15 +232,15 @@ impl<'a, T> SSAConstruct<'a, T>
                 let op_node = self.phiplacer.add_op(&MOpcode::OpITE,
                                                     address,
                                                     ValueType::Integer { width: 1 });
-                self.nesting.push((op_node, address));
+                self.nesting.push((op_node, *address));
                 // Though this is a ternary operator, the other two operands are actually
                 // represented throught the control flow edges of the block to which ITE belongs
                 // to. For clarity, we will add comments to show the same.
                 // Hence: 0 -> compare statement. 1 -> T. 2 -> F.
                 let true_address = MAddress::new(address.address, address.offset + 1);
                 let true_block = self.phiplacer
-                                     .add_block(true_address, Some(address), Some(TRUE_EDGE));
-                let true_comment = self.phiplacer.add_comment(address,
+                                     .add_block(true_address, Some(*address), Some(TRUE_EDGE));
+                let true_comment = self.phiplacer.add_comment(*address,
                                                               ValueType::Integer { width: 0 },
                                                               format!("T: {}", true_address));
                 self.phiplacer.op_use(&op_node, 0, lhs.as_ref().unwrap());
@@ -369,14 +371,13 @@ impl<'a, T> SSAConstruct<'a, T>
     }
 
     // For now, some other component provides SSAConstruct with the instructions
-    // that it is
-    // supposed to convert into SSA. SSAConstruct does not care from where this
-    // ESIL is received,
-    // it merely takes this vector of ESIL strings and transforms it into its SSA
+    // that it is supposed to convert into SSA. SSAConstruct does not care from
+    // where this
+    // ESIL is received, it merely takes this vector of ESIL strings and transforms
+    // it into its SSA
     // form.
     pub fn run(&mut self, op_info: Vec<LOpInfo>) {
         let mut p = Parser::init(Some(self.ident_map.clone()), Some(64));
-        let mut first_block = true;
         let mut current_address = MAddress::new(0, 0);
         self.init_blocks();
         for op in &op_info {
@@ -389,19 +390,15 @@ impl<'a, T> SSAConstruct<'a, T>
             // TODO: Improve this mechanism.
             self.instruction_offset = 0;
             let next_address = MAddress::new(offset, self.instruction_offset);
-
-            if !first_block &&
-               self.phiplacer.block_of(current_address) != self.phiplacer.block_of(next_address) {
-                self.phiplacer.add_edge(current_address, next_address, UNCOND_EDGE);
+            if self.needs_new_block {
+                self.needs_new_block = false;
+                self.phiplacer.add_block(next_address, None, None);
             }
 
+            current_address.offset = 0;
+            self.phiplacer.maybe_add_edge(current_address, next_address);
             current_address = next_address;
-            if first_block {
-                first_block = false;
-                self.phiplacer.add_block(current_address,
-                                         Some(MAddress::new(0, 0)),
-                                         Some(UNCOND_EDGE));
-            }
+
             // If the nesting vector has a non zero length, then we need to make another
             // block and add connecting false edges, note that this is in accordance to the
             // assumption stated at the top of this file.
@@ -417,21 +414,35 @@ impl<'a, T> SSAConstruct<'a, T>
 
             radeco_trace!("ssa_construct_esil|{}|{:?}", current_address, i);
 
+            // Handle call separately.
+            // NOTE: This is a hack.
+            if let Some(ref ty) = op.optype {
+                if ty == "call" {
+                    let call_operand = self.phiplacer.add_comment(current_address,
+                                                                  ValueType::Integer { width: 0 },
+                                                                  op.opcode.clone().unwrap());
+
+                    let op_call = self.phiplacer.add_op(&MOpcode::OpCall,
+                                                        &mut current_address,
+                                                        ValueType::Integer { width: 0 });
+                    self.phiplacer.op_use(&op_call, 0, &call_operand);
+                    continue;
+                }
+            }
+
             while let Some(ref token) = p.parse::<_, Tokenizer>(i) {
                 radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
 
                 let (lhs, rhs) = p.fetch_operands(token);
                 // Determine what to do with the operands and get the result.
-                let result = self.process_op(token, current_address, &[lhs, rhs]);
+                let result = self.process_op(token, &mut current_address, &[lhs, rhs]);
                 if let Some(result_) = self.process_out(result, current_address) {
                     p.push(result_);
                 }
                 current_address.offset += 1;
             }
         }
-        self.phiplacer.add_edge(current_address,
-                                MAddress::new(0xffffffff, 0),
-                                UNCOND_EDGE);
+        self.phiplacer.add_edge(current_address, MAddress::new(0xffffffff, 0), UNCOND_EDGE);
         self.phiplacer.finish();
     }
 } // end impl SSAConstruct
@@ -455,7 +466,7 @@ mod test {
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
         // Enable for debugging only.
-        //enable_logging!();
+        // enable_logging!();
         let mut register_profile = File::open("register_profile").unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
@@ -512,6 +523,7 @@ mod test {
 
     #[test]
     fn ssa_test_2() {
+        enable_logging!("./crowell.log");
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
         before_test(&mut reg_profile, &mut instructions, "instructions2.json");
@@ -523,6 +535,10 @@ mod test {
         {
             dce::collect(&mut ssa);
         }
+
+        let mut writer: IRWriter = Default::default();
+        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+
         let mut ssa = {
             let mut analyzer = sccp::Analyzer::new(&mut ssa);
             analyzer.analyze();
@@ -534,6 +550,9 @@ mod test {
         let tmp = dot::emit_dot(&ssa);
         let mut f = File::create("example2.dot").unwrap();
         f.write_all(tmp.as_bytes()).expect("Write failed");
+
+        let mut writer: IRWriter = Default::default();
+        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
     }
 
     #[test]
@@ -549,8 +568,19 @@ mod test {
         {
             dce::collect(&mut ssa);
         }
-
+        println!("\nBefore Constant Propagation:");
         let mut writer: IRWriter = Default::default();
-        writer.emit_il(None, &ssa, &mut io::stdout())
+        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+        let mut ssa = {
+            let mut analyzer = sccp::Analyzer::new(&mut ssa);
+            analyzer.analyze();
+            analyzer.emit_ssa()
+        };
+        {
+            dce::collect(&mut ssa);
+        }
+        println!("\nAfter Constant Propagation:");
+        let mut writer: IRWriter = Default::default();
+        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
     }
 }

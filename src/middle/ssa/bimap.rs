@@ -49,7 +49,7 @@ impl<K: Hash + Eq + Clone, V: Hash + Eq + Clone> BiMap<K, V> {
 
     // Replace k with a new alias k_, i.e. Make a map from k -> _k,
     // When queried for k, respond with _k.
-    // NOTE: Replace technically works as an alias by pointing one key to another.
+    // NOTE: Replace works as an alias by pointing one key to another.
     // Hence such a key cannot and should not be a part of a backward map.
     pub fn replace(&mut self, k: K, k_: K) {
         if let Some(Record::Primary(v)) = self.f.insert(k, Record::Alias(k_)) {

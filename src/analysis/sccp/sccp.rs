@@ -85,7 +85,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     }
 
     pub fn dump(&self) {
-        println!("{:?}", self.expr_val);
     }
 
     fn visit_phi(&mut self, i: &T::ValueRef) -> LatticeValue {
@@ -100,12 +99,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         let parent_block = self.g.get_block(i);
         for op in &operands {
             let operand_block = self.g.get_block(&op);
-            println!("start: {:?} | phi: {:?} ({:?}), operand: {:?} ({:?})",
-                     self.g.start_node(),
-                     i,
-                     parent_block,
-                     op,
-                     operand_block);
             let op_val = self.get_value(&op);
 
             if op_val.is_undefined() {
@@ -121,7 +114,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 continue;
             }
 
-            println!("executable phi: {:?}, operand: {:?}", i, op);
             phi_val = meet(&phi_val, &op_val);
         }
         phi_val
@@ -298,7 +290,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 if !self.is_executable(&edge) {
                     self.mark_executable(&edge);
                     let block = self.g.target_of(&edge);
-                    println!("In block: {:?}", block);
 
                     let phis = self.g.get_phis(&block);
                     for phi in &phis {
