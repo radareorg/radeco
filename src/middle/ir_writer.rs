@@ -134,7 +134,7 @@ impl IRWriter {
             MOpcode::OpLt => format!("%{} = {} < {}", self.ctr, operands[0], operands[1]),
             MOpcode::OpLsl => format!("%{} = {} << {}", self.ctr, operands[0], operands[1]),
             MOpcode::OpLsr => format!("%{} = {} >> {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpLoad => format!("%{} = OpLoad({})", self.ctr, operands[0]),
+            MOpcode::OpLoad => format!("%{} = Load({})", self.ctr, operands[0]),
             MOpcode::OpStore => format!("%{} = Store({}, {})", self.ctr, operands[0], operands[1]),
             MOpcode::OpNarrow(w) => format!("%{} = Narrow{}({})", self.ctr, w, operands[0]),
             MOpcode::OpWiden(w) => format!("%{} = Widen{}({})", self.ctr, w, operands[0]),

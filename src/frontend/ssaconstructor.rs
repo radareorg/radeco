@@ -432,7 +432,6 @@ impl<'a, T> SSAConstruct<'a, T>
 
             while let Some(ref token) = p.parse::<_, Tokenizer>(i) {
                 radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
-
                 let (lhs, rhs) = p.fetch_operands(token);
                 // Determine what to do with the operands and get the result.
                 let result = self.process_op(token, &mut current_address, &[lhs, rhs]);

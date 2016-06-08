@@ -99,6 +99,20 @@ impl MOpcode {
         self.info().0
     }
 
+    pub fn is_commutative(&self) -> bool {
+        match *self {
+            MOpcode::OpAdd |
+            MOpcode::OpMul |
+            MOpcode::OpAnd |
+            MOpcode::OpOr |
+            MOpcode::OpXor |
+            MOpcode::OpCmp |
+            MOpcode::OpGt |
+            MOpcode::OpLt => true,
+            _ => false,
+        }
+    }
+
     pub fn has_sideeffects(&self) -> bool {
         match *self {
             MOpcode::OpStore |
