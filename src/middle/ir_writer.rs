@@ -94,7 +94,7 @@ impl IRWriter {
         unimplemented!();
     }
 
-    fn fmt_operands(&self, operands: &[NodeIndex], ssa: &SSAStorage) -> Vec<String> {
+    fn fmt_operands(&mut self, operands: &[NodeIndex], ssa: &SSAStorage) -> Vec<String> {
         let mut result = Vec::new();
         for operand in operands {
             let op_internal = ssa.internal(operand);
@@ -104,7 +104,12 @@ impl IRWriter {
                 NodeData::Op(MOpcode::OpConst(ref value), _) => result.push(fmt_const!(value)),
                 NodeData::Comment(_, ref named) => result.push(named.clone()),
                 _ => {
-                    result.push(format!("%{}: $unknown", self.seen.get(operand).unwrap()));
+                    let next = self.ctr + 1;
+                    let op_i = self.seen.entry(*operand).or_insert(next);
+                    if *op_i == next {
+                        self.ctr += 1;
+                    }
+                    result.push(format!("%{}", op_i));
                 }
             }
         }
@@ -117,27 +122,104 @@ impl IRWriter {
                       vt: ValueType,
                       operands: Vec<String>)
                       -> String {
-        self.ctr += 1;
-        self.seen.insert(ni, self.ctr);
+        let next = self.ctr + 1;
+        let result_idx = self.seen.entry(ni).or_insert(next);
+        if *result_idx == next {
+            self.ctr += 1;
+        }
+
+        let w = match vt {
+            ValueType::Integer { width } => width,
+        };
+
         match opcode {
-            MOpcode::OpAdd => format!("%{} = {} + {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpSub => format!("%{} = {} - {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpMul => format!("%{} = {} * {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpDiv => format!("%{} = {} / {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpMod => format!("%{} = {} % {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpAnd => format!("%{} = {} & {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpOr => format!("%{} = {} | {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpXor => format!("%{} = {} ^ {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpNot => format!("%{} = !{}", self.ctr, operands[0]),
-            MOpcode::OpCmp => format!("%{} = {} == {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpGt => format!("%{} = {} > {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpLt => format!("%{} = {} < {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpLsl => format!("%{} = {} << {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpLsr => format!("%{} = {} >> {}", self.ctr, operands[0], operands[1]),
-            MOpcode::OpLoad => format!("%{} = Load({})", self.ctr, operands[0]),
-            MOpcode::OpStore => format!("%{} = Store({}, {})", self.ctr, operands[0], operands[1]),
-            MOpcode::OpNarrow(w) => format!("%{} = Narrow{}({})", self.ctr, w, operands[0]),
-            MOpcode::OpWiden(w) => format!("%{} = Widen{}({})", self.ctr, w, operands[0]),
+            MOpcode::OpAdd => format!("%{}: $Unknown{}  = {} + {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpSub => format!("%{}: $Unknown{} = {} - {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpMul => format!("%{}: $Unknown{} = {} * {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpDiv => format!("%{}: $Unknown{} = {} / {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpMod => format!("%{}: $Unknown{} = {} % {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpAnd => format!("%{}: $Unknown{} = {} & {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpOr => format!("%{}: $Unknown{} = {} | {}",
+                                     result_idx,
+                                     w,
+                                     operands[0],
+                                     operands[1]),
+            MOpcode::OpXor => format!("%{}: $Unknown{} = {} ^ {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpNot => format!("%{}: $Unknown{} = !{}", result_idx, w, operands[0]),
+            MOpcode::OpCmp => format!("%{}: $Unknown{} = {} == {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpGt => format!("%{}: $Unknown{} = {} > {}",
+                                     result_idx,
+                                     w,
+                                     operands[0],
+                                     operands[1]),
+            MOpcode::OpLt => format!("%{}: $Unknown{} = {} < {}",
+                                     result_idx,
+                                     w,
+                                     operands[0],
+                                     operands[1]),
+            MOpcode::OpLsl => format!("%{}: $Unknown{} = {} << {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpLsr => format!("%{}: $Unknown{} = {} >> {}",
+                                      result_idx,
+                                      w,
+                                      operands[0],
+                                      operands[1]),
+            MOpcode::OpLoad => format!("%{}: $Unknown{} = Load({}, {})",
+                                       result_idx,
+                                       w,
+                                       operands[0],
+                                       operands[1]),
+            MOpcode::OpStore => format!("%{}: $Unknown{} = Store({}, {}, {})",
+                                        result_idx,
+                                        w,
+                                        operands[0],
+                                        operands[1],
+                                        operands[2]),
+            MOpcode::OpNarrow(wd) => format!("%{}: $Unknown{} = Narrow{}({})",
+                                             result_idx,
+                                             w,
+                                             wd,
+                                             operands[0]),
+            MOpcode::OpWiden(wd) => format!("%{}: $Unknown{} = Widen{}({})",
+                                            result_idx,
+                                            w,
+                                            wd,
+                                            operands[0]),
             MOpcode::OpCall => format!("{}", operands[0]),
             _ => unreachable!(),
         }
@@ -175,9 +257,12 @@ impl IRWriter {
                 }
                 NodeData::Phi(vt, ref name) => {
                     let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), &ssa);
-                    self.ctr += 1;
-                    self.seen.insert(node, self.ctr);
-                    let mut phi_line = format!("%{} = Phi(", self.ctr);
+                    let next = self.ctr + 1;
+                    let result_idx = self.seen.entry(node).or_insert(next);
+                    if *result_idx == next {
+                        self.ctr += 1;
+                    }
+                    let mut phi_line = format!("%{} = Phi(", result_idx);
                     for operand in operands {
                         phi_line = format!("{}{}, ", phi_line, operand);
                     }
@@ -199,17 +284,26 @@ impl IRWriter {
                         // This is a conditional jump.
                         if outgoing.len() > 1 {
                             let condition = self.fmt_operands(&[ssa.selector_of(prev_block)
-                                                                   .unwrap()], &ssa);
+                                                                   .unwrap()],
+                                                              &ssa);
                             jmp_statement = format!("{} IF {}", jmp_statement, condition[0]);
                         }
 
                         let mut target_string = String::new();
                         for (target, edge_type) in outgoing {
-                            if target == node {
+                            if target == node  && edge_type == 0 {
                                 continue;
                             }
-                            target_string = format!("{} {}",
+
+                            let join = if edge_type == 0 {
+                                " ELSE "
+                            } else {
+                                " "
+                            };
+
+                            target_string = format!("{}{}{}",
                                                     target_string,
+                                                    join,
                                                     self.fmt_operands(&[target], &ssa)[0]);
                         }
 
@@ -239,13 +333,19 @@ impl IRWriter {
 
         let exit_node = ssa.exit_node();
         let final_state = ssa.registers_at(&exit_node);
+        let mem_comment = "mem".to_owned();
 
         for (i, reg) in ssa.get_operands(&final_state).iter().enumerate() {
             let rint = ssa.internal(&reg);
             let reg_assign = match ssa.g[rint] {
                 NodeData::Comment(_, _) => String::new(),
                 _ => {
-                    format!("{} = {}", ssa.regnames[i], self.fmt_operands(&[*reg], &ssa)[0])
+                    format!("{} = {}",
+                            ssa.regnames.get(i).unwrap_or_else(|| {
+                                assert!(i == ssa.regnames.len());
+                                &mem_comment
+                            }),
+                            self.fmt_operands(&[*reg], &ssa)[0])
                 }
             };
             if !reg_assign.is_empty() {

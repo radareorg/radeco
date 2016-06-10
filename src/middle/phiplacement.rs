@@ -103,27 +103,27 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         }
     }
 
-    pub fn read_variable(&mut self, address: MAddress, variable: VarId) -> T::ValueRef {
-        match self.current_def_in_block(variable, address).cloned() {
+    pub fn read_variable(&mut self, address: &mut MAddress, variable: VarId) -> T::ValueRef {
+        match self.current_def_in_block(variable, *address).cloned() {
             Some(var) => var,
             None => self.read_variable_recursive(variable, address),
         }
     }
 
-    fn read_variable_recursive(&mut self, variable: VarId, address: MAddress) -> T::ValueRef {
-        let block = self.block_of(address).unwrap();
+    fn read_variable_recursive(&mut self, variable: VarId, address: &mut MAddress) -> T::ValueRef {
+        let block = self.block_of(*address).unwrap();
         let valtype = self.variable_types[variable];
         let val = if self.sealed_blocks.contains(&block) {
             let preds = self.ssa.preds_of(block);
             assert!(preds.len() > 0);
             if preds.len() == 1 {
                 // Optimize the common case of one predecessor: No phi needed
-                let p_address = self.addr_of(&preds[0]);
-                self.read_variable(p_address, variable)
+                let mut p_address = self.addr_of(&preds[0]);
+                self.read_variable(&mut p_address, variable)
             } else {
                 // Break potential cycles with operandless phi
                 let val = self.add_phi(address, valtype);
-                self.write_variable(address, variable, val);
+                self.write_variable(*address, variable, val);
                 self.add_phi_operands(block, variable, val)
             }
         } else {
@@ -150,7 +150,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             }
 
         };
-        self.write_variable(address, variable, val);
+        self.write_variable(*address, variable, val);
         val
     }
 
@@ -261,7 +261,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                         // and adding an operand edge.
                         self.ssa.disconnect(&ni, &operand);
                         let output_varid = self.outputs[&operand];
-                        let replacement_phi = self.read_variable(at, output_varid);
+                        let mut at_ = at;
+                        let replacement_phi = self.read_variable(&mut at_, output_varid);
                         self.ssa.op_use(ni, i, replacement_phi);
                     }
                 }
@@ -308,11 +309,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         // Determine operands from predecessors
         let baddr = self.addr_of(&block);
         for pred in self.ssa.preds_of(block) {
-            let p_addr = self.addr_of(&pred);
+            let mut p_addr = self.addr_of(&pred);
 
             radeco_trace!("phip_add_phi_operands|cur:{}|pred:{}", baddr, p_addr);
 
-            let datasource = self.read_variable(p_addr, variable);
+            let datasource = self.read_variable(&mut p_addr, variable);
             radeco_trace!("phip_add_phi_operands_src|{} ({:?})|{:?}",
                           variable,
                           self.regfile.whole_names.get(variable),
@@ -376,8 +377,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     pub fn sync_register_state(&mut self, block: T::ActionRef) {
         let rs = self.ssa.registers_at(&block);
         for var in 0..self.variable_types.len() {
-            let addr = self.addr_of(&block);
-            let val = self.read_variable(addr, var);
+            let mut addr = self.addr_of(&block);
+            let val = self.read_variable(&mut addr, var);
             self.ssa.op_use(rs, var as u8, val);
         }
     }
@@ -398,9 +399,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     // particular
     // instruction has to go into.
 
-    fn add_phi(&mut self, address: MAddress, vt: ValueType) -> T::ValueRef {
+    fn add_phi(&mut self, address: &mut MAddress, vt: ValueType) -> T::ValueRef {
         let i = self.ssa.add_phi(vt);
-        self.index_to_addr.insert(i, address);
+        self.index_to_addr.insert(i, *address);
+        address.offset += 1;
         i
     }
 
@@ -440,7 +442,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
         let info = self.regfile.get_info(var).unwrap();
         let id = info.base;
-        let mut value = self.read_variable(*address, id);
+        let mut value = self.read_variable(address, id);
 
         let width = self.operand_width(&value);
 
@@ -507,7 +509,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             return;
         }
 
-        let mut ov = self.read_variable(*address, id);
+        let mut ov = self.read_variable(address, id);
         let maskvalue_node = self.add_const(maskval);
 
         let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
@@ -601,8 +603,6 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                 }
             }
         }
-
-        // XXX: For some reason, constants are being associated with block. Fix that!
 
         self.ssa.map_registers(self.regfile.whole_names.clone());
     }

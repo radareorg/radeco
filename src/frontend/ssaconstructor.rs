@@ -12,26 +12,21 @@
 // have any
 // instructions after "}" in the same instruction.
 
-// TODO: Remove these lints
-#![allow(unused_imports, unused_variables, dead_code)]
-
 use std::collections::HashMap;
 use petgraph::graph::NodeIndex;
 use std::fmt::Debug;
-use std::convert::From;
 use std::cmp::Ordering;
 use std::cmp;
 
-use r2pipe::structs::{LAliasInfo, LOpInfo, LRegInfo};
+use r2pipe::structs::{LOpInfo, LRegInfo};
 
 use esil::parser::{Parse, Parser};
 use esil::lexer::{Token, Tokenizer};
 
-use middle::dce;
 use middle::ir::{MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{BBInfo, SSA, SSAExtra, SSAMod, ValueType};
+use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueType};
 
 pub type VarId = usize;
 
@@ -44,7 +39,6 @@ pub struct SSAConstruct<'a, T>
 {
     phiplacer: PhiPlacer<'a, T>,
     regfile: SubRegisterFile,
-    blocks: Vec<T::ActionRef>,
     intermediates: Vec<T::ValueRef>,
     // TODO: Combine this information with the registers field.
     // even better if this is done at the r2pipe level and we expose API to get
@@ -58,6 +52,7 @@ pub struct SSAConstruct<'a, T>
     // Used to keep track of the offset within an instruction.
     instruction_offset: u64,
     needs_new_block: bool,
+    mem_id: usize,
 }
 
 impl<'a, T> SSAConstruct<'a, T>
@@ -71,7 +66,6 @@ impl<'a, T> SSAConstruct<'a, T>
         let mut sc = SSAConstruct {
             phiplacer: PhiPlacer::new(ssa, regfile.clone()),
             regfile: regfile,
-            blocks: Vec::new(),
             intermediates: Vec::new(),
             alias_info: HashMap::new(),
             ident_map: HashMap::new(),
@@ -79,6 +73,7 @@ impl<'a, T> SSAConstruct<'a, T>
             nesting: Vec::new(),
             instruction_offset: 0,
             needs_new_block: true,
+            mem_id: 0,
         };
 
         {
@@ -98,8 +93,22 @@ impl<'a, T> SSAConstruct<'a, T>
 
         // Add all the registers to the variable list.
         sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
+        // Add a new variable for "memory".
+        sc.phiplacer.add_variables(vec![ValueType::Integer { width: 0 }]);
         sc
     }
+
+    fn set_mem_id(&mut self, id: usize) {
+        assert_eq!(self.mem_id, 0);
+        self.mem_id = id;
+    }
+
+    fn mem_id(&self) -> usize {
+        assert!(self.mem_id != 0);
+        self.mem_id
+    }
+
+
 
     // If the operand is a Token::Identifier, it has to be a register.
     // This is because we never push in a temporary that we create as a
@@ -198,8 +207,6 @@ impl<'a, T> SSAConstruct<'a, T>
                 // of an assignment.
                 if let Some(Token::EIdentifier(ref name)) = operands[0] {
                     if Some("PC".to_owned()) == self.alias_info.get(name).cloned() {
-                        let opcode = MOpcode::OpJmp;
-                        let jump_target = rhs;
                         // There is a possibility that the jump target is not a constant and we
                         // don't have enough information right now to resolve this target. In this
                         // case, we add a new block and label it unresolved. This maybe resolved as
@@ -207,7 +214,8 @@ impl<'a, T> SSAConstruct<'a, T>
                         // determine are the ones where the rhs is a constant.
                         if let Some(Token::EConstant(target)) = operands[1] {
                             let target_addr = MAddress::new(target, 0);
-                            self.phiplacer.add_block(target_addr, Some(*address), Some(UNCOND_EDGE));
+                            self.phiplacer
+                                .add_block(target_addr, Some(*address), Some(UNCOND_EDGE));
                             self.needs_new_block = true;
                         }
                     } else {
@@ -238,8 +246,8 @@ impl<'a, T> SSAConstruct<'a, T>
                 // to. For clarity, we will add comments to show the same.
                 // Hence: 0 -> compare statement. 1 -> T. 2 -> F.
                 let true_address = MAddress::new(address.address, address.offset + 1);
-                let true_block = self.phiplacer
-                                     .add_block(true_address, Some(*address), Some(TRUE_EDGE));
+                let _true_block = self.phiplacer
+                                      .add_block(true_address, Some(*address), Some(TRUE_EDGE));
                 let true_comment = self.phiplacer.add_comment(*address,
                                                               ValueType::Integer { width: 0 },
                                                               format!("T: {}", true_address));
@@ -287,10 +295,25 @@ impl<'a, T> SSAConstruct<'a, T>
                 (MOpcode::OpMod, ValueType::Integer { width: result_size })
             }
             Token::EPoke(n) => {
-                (MOpcode::OpStore, ValueType::Integer { width: n as u16 })
+                let mem = self.phiplacer.read_variable(address, self.mem_id);
+                let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
+                                                    address,
+                                                    ValueType::Integer { width: 0 });
+                self.phiplacer.op_use(&op_node, 0, &mem);
+                self.phiplacer.op_use(&op_node, 1, lhs.as_ref().unwrap());
+                self.phiplacer.op_use(&op_node, 2, rhs.as_ref().unwrap());
+
+                self.phiplacer.write_variable(*address, self.mem_id, op_node);
+                return None;
             }
             Token::EPeek(n) => {
-                (MOpcode::OpLoad, ValueType::Integer { width: n as u16 })
+                let mem = self.phiplacer.read_variable(address, self.mem_id);
+                let op_node = self.phiplacer.add_op(&MOpcode::OpLoad,
+                                                    address,
+                                                    ValueType::Integer { width: n as u16 });
+                self.phiplacer.op_use(&op_node, 0, &mem);
+                self.phiplacer.op_use(&op_node, 1, lhs.as_ref().unwrap());
+                return Some(op_node);
             }
             Token::EPop => {
                 unreachable!()
@@ -356,12 +379,21 @@ impl<'a, T> SSAConstruct<'a, T>
 
         self.phiplacer.mark_start_node(&start_block);
 
-        let zero = self.phiplacer.add_const(0);
         for (i, name) in self.regfile.whole_names.iter().enumerate() {
             let reg = self.regfile.whole_registers[i];
             // Name the newly created nodes with register names.
             let argnode = self.phiplacer.add_comment(start_address, reg, name.clone());
             self.phiplacer.write_variable(start_address, i, argnode);
+        }
+
+        {
+            // Insert "mem" pseudo variable
+            let reglen = self.regfile.whole_names.len();
+            self.set_mem_id(reglen);
+            let mem_comment = self.phiplacer.add_comment(start_address,
+                                                         ValueType::Integer { width: 0 },
+                                                         "mem".to_owned());
+            self.phiplacer.write_variable(start_address, self.mem_id, mem_comment);
         }
 
         self.phiplacer.sync_register_state(start_block);
