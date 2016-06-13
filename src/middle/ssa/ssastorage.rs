@@ -845,6 +845,9 @@ impl SSAMod for SSAStorage {
 
     fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
         self.replace_node(node, replacement);
+        if let Some(adata) = self.assoc_data.get(&node).cloned() {
+            self.assoc_data.insert(replacement, adata.clone());
+        }
     }
 
     fn remove(&mut self, node: NodeIndex) {

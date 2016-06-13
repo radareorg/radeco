@@ -291,7 +291,7 @@ impl IRWriter {
 
                         let mut target_string = String::new();
                         for (target, edge_type) in outgoing {
-                            if target == node  && edge_type == 0 {
+                            if target == node  && (edge_type == 0 || edge_type == 2) {
                                 continue;
                             }
 

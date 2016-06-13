@@ -28,18 +28,22 @@
 //! ```
 //!       0x004004e6      55             8,rsp,-=,rbp,rsp,=[8]
 //!       0x004004e7      4889e5         rsp,rbp,=
-//!       0x004004ea      4883ec10       16,rsp,-=,$o,of,=,$s,sf,=,$z,zf,=,$p,pf,=,$b8,cf,=
+//! 0x004004ea      4883ec10
+//! 16,rsp,-=,$o,of,=,$s,sf,=,$z,zf,=,$p,pf,=,$b8,cf,=
 //!       0x004004ee      48c745f8ffff.  -1,0x8,rbp,-,=[8]
 //!       0x004004f6      c745f4000000.  0,0xc,rbp,-,=[4]
 //!       0x004004fd      b8ffffffff     4294967295,rax,=
-//!       0x00400502      483145f8       rax,0x8,rbp,-,^=[8],$z,zf,=,$p,pf,=,$s,sf,=,$0,cf,=,$0,of,=
-//!       0x00400506      48837df80a     10,0x8,rbp,-,[8],==,$z,zf,=,$b64,cf,=,$p,pf,=,$s,sf,=
+//! 0x00400502      483145f8
+//! rax,0x8,rbp,-,^=[8],$z,zf,=,$p,pf,=,$s,sf,=,$0,cf,=,$0,of,=
+//! 0x00400506      48837df80a
+//! 10,0x8,rbp,-,[8],==,$z,zf,=,$b64,cf,=,$p,pf,=,$s,sf,=
 //!   ┌─< 0x0040050b      7e19           of,sf,^,zf,|,?{,4195622,rip,=,}
 //!   │   0x0040050d      c745f4000000.  0,0xc,rbp,-,=[4]
 //!  ┌──< 0x00400514      eb0a           0x400520,rip,=
 //! ┌───> 0x00400516      bfc4054000     4195780,rdi,=
 //! │││   0x0040051b      e8a0feffff     rip,8,rsp,-=,rsp,=[],4195264,rip,=
-//! │└──> 0x00400520      837df418       24,0xc,rbp,-,[4],==,$z,zf,=,$b32,cf,=,$p,pf,=,$s,sf,=
+//! │└──> 0x00400520      837df418
+//! 24,0xc,rbp,-,[4],==,$z,zf,=,$b32,cf,=,$p,pf,=,$s,sf,=
 //! └───< 0x00400524      7ef0           of,sf,^,zf,|,?{,4195606,rip,=,}
 //!   └─> 0x00400526      bfc6054000     4195782,rdi,=
 //!       0x0040052b      e890feffff     rip,8,rsp,-=,rsp,=[],4195264,rip,=
@@ -62,10 +66,11 @@ use r2pipe::structs::{LFunctionInfo, LRegInfo};
 
 use radeco_lib::frontend::ssaconstructor::SSAConstruct;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
-use radeco_lib::middle::ir_writer::{IRWriter};
+use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp::sccp;
 use radeco_lib::analysis::cse::cse::CSE;
+use radeco_lib::analysis::matcher::gmatch::GraphMatcher;
 
 const REGISTER_PROFILE: &'static str = "register_profile";
 const INSTRUCTIONS: &'static str = "instructions2.json";
@@ -93,7 +98,7 @@ fn run_construction() -> SSAStorage {
     {
         dce::collect(&mut ssa);
     }
-    { 
+    {
         let tmp = dot::emit_dot(&ssa);
         let mut f = File::create("ct1.dot").unwrap();
         f.write_all(tmp.as_bytes()).expect("Write failed!");
@@ -156,6 +161,27 @@ fn ct1_cse_sccp() {
             run_cse(&mut ssa_);
         }
         run_sccp(&mut ssa_)
+    };
+    let mut writer: IRWriter = Default::default();
+    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+}
+
+#[test]
+fn ct1_grep_replace() {
+    let ssa = {
+        let mut ssa_ = run_construction();
+        {
+            run_cse(&mut ssa_);
+        }
+        {
+            let find_pat = "(OpSub #x1, #x40)".to_owned();
+            let mut matcher = GraphMatcher::new(&mut ssa_, find_pat.clone(), None);
+            let matches = matcher.grep(find_pat);
+            for m in matches {
+                matcher.replace(m, "#xcafebabe".to_owned())
+            }
+        }
+        ssa_
     };
     let mut writer: IRWriter = Default::default();
     writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
