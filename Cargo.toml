@@ -18,6 +18,7 @@ regex = "*"
 petgraph = "*"
 num = "*"
 rustc-serialize = "*"
+lazy_static = "*"
 log = "*"
 clippy = {version = "0.0.61", optional = true}
 

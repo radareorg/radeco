@@ -1,6 +1,6 @@
 //! Common Subexpression Elimination (CSE)
 //!
-//! This moduile implements methods and structs to perform CSE.
+//! This module implements methods and structs to perform CSE.
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
