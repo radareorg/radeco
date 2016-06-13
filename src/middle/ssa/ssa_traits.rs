@@ -85,6 +85,7 @@ pub enum NodeType {
     Phi,
     /// A node with unknown value.
     Undefined,
+    Comment(String),
 }
 
 /// Value node without operands with `ValueType`
@@ -105,6 +106,7 @@ pub trait SSA: CFG {
     //// Node accessors and helpers
     ///////////////////////////////////////////////////////////////////////////
 
+    fn get_address(&self, &Self::ValueRef) -> ir::MAddress;
     /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
     fn exprs_in(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
@@ -244,6 +246,8 @@ pub trait SSAMod: SSA + CFGMod {
     fn remove_edge(&mut self, i: &Self::CFEdgeRef);
 
     fn map_registers(&mut self, regs: Vec<String>);
+
+    fn set_addr(&mut self, &Self::ValueRef, ir::MAddress);
 }
 
 /// Extras. TODO
@@ -257,7 +261,6 @@ pub trait SSAExtra: SSA {
     fn clear_mark(&mut self, &Self::ValueRef) { }
     fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
     fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
-    fn set_addr(&mut self, _: &Self::ValueRef, _: ir::MAddress) { }
     fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false

@@ -55,7 +55,7 @@ extern crate esil;
 
 #[macro_use] pub mod utils;
 pub mod middle;
-pub mod analysis;
+#[macro_use] pub mod analysis;
 pub mod frontend {
     pub mod ssaconstructor;
 }

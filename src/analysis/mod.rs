@@ -21,6 +21,8 @@ pub mod cse {
     pub mod cse;
 }
 
+#[macro_use]
 pub mod matcher {
+    #[macro_use]
     pub mod gmatch;
 }

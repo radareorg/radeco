@@ -18,7 +18,7 @@ use std::fmt;
 
 use regex::Regex;
 
-use middle::ir::MOpcode;
+use middle::ir::{MOpcode, MAddress};
 use middle::ssa::ssa_traits::{NodeData, NodeType, SSA, SSAMod, SSAWalk, ValueType};
 use middle::ssa::ssastorage::SSAStorage;
 
@@ -40,28 +40,44 @@ pub struct GraphMatcher<'a, I, S>
           S: 'a + SSA + SSAMod + SSAWalk<I>
 {
     ssa: &'a mut S,
-    find: String,
-    replace: Option<String>,
     foo: PhantomData<I>,
 }
 
+#[macro_export]
+macro_rules! grep {
+    ($s: ident, $f: expr) => {
+        {
+            let matcher = gmatch::GraphMatcher::new(&mut $s);
+            matcher.grep($f.to_owned())
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! grep_and_replace {
+    ($s: ident, $f: expr => $r: expr) => {
+        {
+            let mut matcher = gmatch::GraphMatcher::new(&mut $s);
+            for m in matcher.grep($f.to_owned()) {
+                matcher.replace(m, $r.to_owned());
+            }
+        }
+    };
+}
 
 impl<'a, I, S> GraphMatcher<'a, I, S>
 where I: Iterator<Item=S::ValueRef>,
       S: 'a + SSA + SSAMod + SSAWalk<I>
 {
-    pub fn new(ssa: &'a mut S, find: String, replace: Option<String>) -> GraphMatcher<'a, I, S> {
+    pub fn new(ssa: &'a mut S) -> GraphMatcher<'a, I, S> {
         GraphMatcher {
             ssa: ssa,
-            find: find,
-            replace: replace,
             foo: PhantomData,
         }
     }
 
     // Some notes on parsing the expression (find / replace patterns).
-    fn next_token(&mut self, expr: &str) -> ParseToken {
-        println!("{}", expr);
+    fn next_token(&self, expr: &str) -> ParseToken {
         lazy_static! {
             static ref RE: Regex = Regex::new("[(]([:alnum:]+) ([(][a-zA-Z0-9 %#,]+[)]|[a-zA-Z0-9 %#]+)(?:, ([(]?[:ascii:]+[)]?))?[)]").unwrap();
         }
@@ -81,7 +97,7 @@ where I: Iterator<Item=S::ValueRef>,
         }
     }
 
-    fn hash_data(&mut self, ni: S::ValueRef) -> String {
+    fn hash_data(&self, ni: S::ValueRef) -> String {
         let mut result = String::new();
         if let Ok(node_data) = self.ssa.get_node_data(&ni) {
             if let NodeType::Op(opc) = node_data.nt {
@@ -108,6 +124,8 @@ where I: Iterator<Item=S::ValueRef>,
                     MOpcode::OpCall => "OpCall".to_owned(),
                     _ => unreachable!(),
                 });
+            } else if let NodeType::Comment(s) = node_data.nt {
+                result.push_str(&s);
             }
         }
         result
@@ -118,7 +136,7 @@ where I: Iterator<Item=S::ValueRef>,
     //   1. Optimize by adding a first level of filtering for potential nodes.
     //   2. Avoid borrowing mutably for grep.
     //   3. Memoize seen expressions to avoid repeated regular expression matches.
-    pub fn grep(&mut self, find: String) -> Vec<Match<S::ValueRef>> {
+    pub fn grep(&self, find: String) -> Vec<Match<S::ValueRef>> {
         let mut subtree_match_map = Vec::<(S::ValueRef, Option<String>)>::new();
         let mut bindings = HashMap::new();
         let mut found = Vec::new();
@@ -137,7 +155,6 @@ where I: Iterator<Item=S::ValueRef>,
 
                 let current_h = self.hash_data(inner_node);
                 let t = self.next_token(match_str.as_ref().unwrap());
-                println!("Got: {:?}", t);
 
                 if t.current.is_none() {
                     // Mismatch
@@ -146,7 +163,6 @@ where I: Iterator<Item=S::ValueRef>,
                 }
 
                 let current = t.current.unwrap();
-                println!("{} {}", current, current_h);
                 if current.starts_with("%") {
                     if let Some((old, _)) = bindings.insert(current,
                                                             (current_h.clone(), inner_node)) {
@@ -164,7 +180,6 @@ where I: Iterator<Item=S::ValueRef>,
                 }
 
                 let args = self.ssa.args_of(inner_node);
-                println!("{:?}", args);
 
                 // All the cases which can cause a mismatch in the node and it's arguments.
                 if args.len() > 2 || (args.len() == 2 && (t.rhs.is_none() || t.lhs.is_none())) ||
@@ -185,7 +200,6 @@ where I: Iterator<Item=S::ValueRef>,
             }
 
             if viable {
-                // XXX
                 let mut vbind = Vec::new();
                 for (k, v) in &bindings {
                     vbind.push((k.clone(), v.1));
@@ -199,40 +213,54 @@ where I: Iterator<Item=S::ValueRef>,
             }
         }
 
-        println!("{:?}", found);
         found
     }
 
-    fn map_token_to_node(&mut self, t: &str) -> S::ValueRef {
+    fn map_token_to_node(&mut self, t: &str, block: &S::ActionRef, addr: &mut MAddress) -> S::ValueRef {
         let opcode = if t.starts_with("#x") {
-            MOpcode::OpConst(u64::from_str_radix(&t[2..], 16).expect("Invalid hex integer"))
+            Some(MOpcode::OpConst(u64::from_str_radix(&t[2..], 16).expect("Invalid hex integer")))
         } else if t.starts_with("OpNarrow") {
-            MOpcode::OpNarrow(u16::from_str_radix(&t[8..], 10).expect("Invalid decimal integer"))
+            Some(MOpcode::OpNarrow(u16::from_str_radix(&t[8..], 10).expect("Invalid decimal integer")))
         } else if t.starts_with("OpWiden") {
-            MOpcode::OpWiden(u16::from_str_radix(&t[7..], 10).expect("Invalid decimal integer"))
+            Some(MOpcode::OpWiden(u16::from_str_radix(&t[7..], 10).expect("Invalid decimal integer")))
         } else {
             match t {
-                "OpAdd" => MOpcode::OpAdd,
-                "OpSub" => MOpcode::OpSub,
-                "OpMul" => MOpcode::OpMul,
-                "OpDiv" => MOpcode::OpDiv,
-                "OpMod" => MOpcode::OpMod,
-                "OpAnd" => MOpcode::OpAnd,
-                "OpOr" => MOpcode::OpOr,
-                "OpXor" => MOpcode::OpXor,
-                "OpNot" => MOpcode::OpNot,
-                "OpCmp" => MOpcode::OpCmp,
-                "OpGt" => MOpcode::OpGt,
-                "OpLt" => MOpcode::OpLt,
-                "OpLsl" => MOpcode::OpLsl,
-                "OpLsr" => MOpcode::OpLsr,
-                "OpLoad" => MOpcode::OpLoad,
-                "OpStore" => MOpcode::OpStore,
-                "OpCall" => MOpcode::OpCall,
-                _ => panic!("Unknown opcode in expression"),
+                "OpAdd" => Some(MOpcode::OpAdd),
+                "OpSub" => Some(MOpcode::OpSub),
+                "OpMul" => Some(MOpcode::OpMul),
+                "OpDiv" => Some(MOpcode::OpDiv),
+                "OpMod" => Some(MOpcode::OpMod),
+                "OpAnd" => Some(MOpcode::OpAnd),
+                "OpOr" => Some(MOpcode::OpOr),
+                "OpXor" => Some(MOpcode::OpXor),
+                "OpNot" => Some(MOpcode::OpNot),
+                "OpCmp" => Some(MOpcode::OpCmp),
+                "OpGt" => Some(MOpcode::OpGt),
+                "OpLt" => Some(MOpcode::OpLt),
+                "OpLsl" => Some(MOpcode::OpLsl),
+                "OpLsr" => Some(MOpcode::OpLsr),
+                "OpLoad" => Some(MOpcode::OpLoad),
+                "OpStore" => Some(MOpcode::OpStore),
+                "OpCall" => Some(MOpcode::OpCall),
+                _ => None,
             }
         };
-        self.ssa.add_op(opcode, ValueType::Integer { width: 64 }, None)
+        if let Some(op) = opcode {
+            let node = self.ssa.add_op(op, ValueType::Integer { width: 64 }, None);
+            match op {
+                MOpcode::OpConst(_) => { },
+                _ => {
+                    addr.offset += 1;
+                    self.ssa.add_to_block(node, *block, *addr);
+                }
+            }
+            node
+        } else {
+            let node = self.ssa.add_comment(ValueType::Integer { width: 0 }, t.to_owned());
+            addr.offset += 1;
+            self.ssa.add_to_block(node, *block, *addr);
+            node
+        }
     }
 
     /// Replaces the subtree rooted at `S::ValueRef` by the `replace` expression.
@@ -242,13 +270,17 @@ where I: Iterator<Item=S::ValueRef>,
         let mut worklist = Vec::new();
         // Remove operands to the root node and prepare for replace.
         let root = found.root;
+        let mut address = self.ssa.get_address(&root);
+        let block = self.ssa.block_of(&root);
+
         for arg in &self.ssa.args_of(root) {
             self.ssa.disconnect(&root, arg);
         }
+
         // Now we have a root node with no args, but retaining its uses.
         // Replace this node with the root node in the replace expression.
         let r = self.next_token(&replace);
-        let replace_root = self.map_token_to_node(r.current.as_ref().unwrap());
+        let replace_root = self.map_token_to_node(r.current.as_ref().unwrap(), &block, &mut address);
         self.ssa.replace(root, replace_root);
         if let Some(lhs) = r.lhs {
             worklist.push((replace_root, 0, lhs));
@@ -263,7 +295,7 @@ where I: Iterator<Item=S::ValueRef>,
             let inner_node = if current.starts_with("%") {
                 *bindings.get(&current).expect("Unknown Binding")
             } else {
-                self.map_token_to_node(&current)
+                self.map_token_to_node(&current, &block, &mut address)
             };
             self.ssa.op_use(parent, edge_idx, inner_node);
             if let Some(lhs) = pt.lhs {
@@ -273,6 +305,9 @@ where I: Iterator<Item=S::ValueRef>,
                 worklist.push((inner_node, 1, rhs));
             }
         }
+
+        address.offset += 1;
+        self.ssa.set_addr(&replace_root, address);
     }
 
     pub fn match_and_replace(ssa: &mut SSAStorage, pattern: String, replace: String) {
@@ -295,7 +330,7 @@ mod test {
     fn parse_expr() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpXor %1, %1)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa, find_pat.clone(), None);
+        let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.next_token(&find_pat);
         assert_eq!(Some("OpXor".to_owned()), t.current);
         assert_eq!(Some("%1".to_owned()), t.lhs);
@@ -306,7 +341,7 @@ mod test {
     fn parse_expr1() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(EEq eax, (EAdd eax, (EAdd eax, cf)))".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa, find_pat.clone(), None);
+        let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.next_token(&find_pat);
         assert_eq!(Some("EEq".to_owned()), t.current);
         assert_eq!(Some("eax".to_owned()), t.lhs);
@@ -317,7 +352,7 @@ mod test {
     fn parse_expr2() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(EAdd (EAdd eax, of), (EAdd eax, cf))".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa, find_pat.clone(), None);
+        let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.next_token(&find_pat);
         assert_eq!(Some("EAdd".to_owned()), t.current);
         assert_eq!(Some("(EAdd eax, of)".to_owned()), t.lhs);
@@ -328,7 +363,7 @@ mod test {
     fn parse_expr_unary() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpNot rax)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa, find_pat.clone(), None);
+        let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.next_token(&find_pat);
         assert_eq!(Some("OpNot".to_owned()), t.current);
         assert_eq!(Some("rax".to_owned()), t.lhs);
@@ -347,8 +382,8 @@ mod test {
         ssa.mark_start_node(&add);
         let _ = ssa.add_op(MOpcode::OpAdd, vt, None);
 
-        let find_pat = "(OpAdd #x2, #x1)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa, find_pat.clone(), None);
+        let find_pat = "(OpAdd #x1, #x2)".to_owned();
+        let mut matcher = GraphMatcher::new(&mut ssa);
         matcher.grep(find_pat);
     }
 
@@ -363,7 +398,7 @@ mod test {
         ssa.mark_start_node(&add);
 
         let find_pat = "(OpXor %1, %1)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa, find_pat.clone(), None);
+        let mut matcher = GraphMatcher::new(&mut ssa);
         matcher.grep(find_pat);
     }
 
@@ -380,7 +415,7 @@ mod test {
         //{
 
         //let find_pat = "(OpXor %1, %1)".to_owned();
-        //let mut matcher = GraphMatcher::new(&mut ssa, find_pat.clone(), None);
+        //let mut matcher = GraphMatcher::new(&mut ssa);
         //let matches = matcher.grep(find_pat);
         //for m in matches {
             //matcher.replace(m, "#x0".to_owned())

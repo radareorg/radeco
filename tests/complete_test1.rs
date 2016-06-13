@@ -53,7 +53,7 @@
 //! ```
 //!
 
-extern crate radeco_lib;
+#[macro_use] extern crate radeco_lib;
 extern crate r2pipe;
 extern crate rustc_serialize;
 
@@ -70,7 +70,8 @@ use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp::sccp;
 use radeco_lib::analysis::cse::cse::CSE;
-use radeco_lib::analysis::matcher::gmatch::GraphMatcher;
+
+use radeco_lib::analysis::matcher::gmatch;
 
 const REGISTER_PROFILE: &'static str = "register_profile";
 const INSTRUCTIONS: &'static str = "instructions2.json";
@@ -173,13 +174,12 @@ fn ct1_grep_replace() {
         {
             run_cse(&mut ssa_);
         }
+
+        grep_and_replace!(ssa_, "(OpSub (OpSub rsp, #x8), #xc)" => "&var_C");
+        grep_and_replace!(ssa_, "(OpSub (OpSub rsp, #x8), #x8)" => "&var_8");
+
         {
-            let find_pat = "(OpSub #x1, #x40)".to_owned();
-            let mut matcher = GraphMatcher::new(&mut ssa_, find_pat.clone(), None);
-            let matches = matcher.grep(find_pat);
-            for m in matches {
-                matcher.replace(m, "#xcafebabe".to_owned())
-            }
+            dce::collect(&mut ssa_);
         }
         ssa_
     };
