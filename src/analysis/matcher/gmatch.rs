@@ -24,9 +24,29 @@ use middle::ssa::ssastorage::SSAStorage;
 
 #[derive(Clone, Debug)]
 struct ParseToken {
-    current: Option<String>,
-    lhs: Option<String>,
-    rhs: Option<String>,
+    parsed: Vec<String>,
+}
+
+impl ParseToken {
+    fn current(&self) -> Option<String> {
+        self.op(0)
+    }
+
+    fn rhs(&self) -> Option<String> {
+        self.op(2)
+    }
+
+    fn lhs(&self) -> Option<String> {
+        self.op(1)
+    }
+
+    fn op(&self, i: usize) -> Option<String> {
+        self.parsed.get(i).cloned()
+    }
+
+    fn len(&self) -> usize {
+        self.parsed.len() - 1
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -80,22 +100,31 @@ where I: Iterator<Item=S::ValueRef>,
 
     // Some notes on parsing the expression (find / replace patterns).
     fn parse_expression(&self, expr: &str) -> ParseToken {
-        lazy_static! {
-            static ref RE: Regex = Regex::new("[(]([:alnum:]+) ([(][a-zA-Z0-9 %#,]+[)]|[a-zA-Z0-9 %#]+)(?:, ([(]?[:ascii:]+[)]?))?[)]").unwrap();
+        let mut depth = 0;
+        let mut sub_expr = Vec::new();
+        sub_expr.push(String::new());
+        for c in expr.chars() {
+            match c {
+                ' ' if depth == 1 => sub_expr.push(String::new()),
+                ',' if depth == 1 => { },
+                ')' => {
+                    depth -= 1;
+                    if depth > 0 {
+                        sub_expr.last_mut().unwrap().push(c);
+                    }
+                }
+                '(' => {
+                    depth += 1;
+                    if depth > 1 {
+                        sub_expr.last_mut().unwrap().push(c);
+                    }
+                }
+                _ => sub_expr.last_mut().unwrap().push(c),
+            }
         }
-
-        if let Some(ref cap) = RE.captures(expr) {
-            ParseToken {
-                current: cap.at(1).map(|x| x.to_owned()),
-                lhs: cap.at(2).map(|x| x.to_owned()),
-                rhs: cap.at(3).map(|x| x.to_owned()),
-            }
-        } else {
-            ParseToken {
-                current: Some(expr.to_owned()),
-                lhs: None,
-                rhs: None,
-            }
+        println!("{:?}", sub_expr);
+        ParseToken {
+            parsed: sub_expr
         }
     }
 
@@ -143,27 +172,19 @@ where I: Iterator<Item=S::ValueRef>,
         for node in self.ssa.inorder_walk() {
             // First level of filtering.
             let nh = self.hash_data(node);
-            if first_expr.current.as_ref().unwrap() != &nh {
+            if first_expr.current().as_ref().unwrap() != &nh {
                 continue;
             }
             {
                 let args = self.ssa.args_of(node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
-                if args.len() > 2 ||
-                   (args.len() == 2 && (first_expr.rhs.is_none() || first_expr.lhs.is_none())) ||
-                   (args.len() == 1 && first_expr.lhs.is_none()) ||
-                   (args.len() == 0 && (first_expr.lhs.is_some() || first_expr.rhs.is_some())) {
+                if args.len() != first_expr.len() {
                     continue;
                 }
                 worklist.clear();
                 bindings.clear();
                 for (i, argn) in args.iter().enumerate() {
-                    let subtree_str = match i {
-                        0 => first_expr.lhs.clone(),
-                        1 => first_expr.rhs.clone(),
-                        _ => unreachable!(),
-                    };
-                    worklist.push((*argn, subtree_str));
+                    worklist.push((*argn, first_expr.op(i + 1)));
                 }
             }
 
@@ -184,13 +205,13 @@ where I: Iterator<Item=S::ValueRef>,
                     t_
                 };
 
-                if t.current.is_none() {
+                if t.current().is_none() {
                     // Mismatch
                     viable = false;
                     break;
                 }
 
-                let current = t.current.unwrap();
+                let current = t.current().unwrap();
                 if current.starts_with("%") {
                     if let Some((old, _)) = bindings.insert(current,
                                                             (current_h.clone(), inner_node)) {
@@ -209,20 +230,13 @@ where I: Iterator<Item=S::ValueRef>,
 
                 let args = self.ssa.args_of(inner_node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
-                if args.len() > 2 || (args.len() == 2 && (t.rhs.is_none() || t.lhs.is_none())) ||
-                   (args.len() == 1 && t.lhs.is_none()) ||
-                   (args.len() == 0 && (t.lhs.is_some() || t.rhs.is_some())) {
+                if args.len() != t.len() {
                     viable = false;
                     break;
                 }
 
                 for (i, argn) in args.iter().enumerate() {
-                    let subtree_str = match i {
-                        0 => t.lhs.clone(),
-                        1 => t.rhs.clone(),
-                        _ => unreachable!(),
-                    };
-                    worklist.push((*argn, subtree_str));
+                    worklist.push((*argn, t.op(i + 1)));
                 }
             }
 
@@ -320,15 +334,12 @@ where I: Iterator<Item=S::ValueRef>,
             t_
         };
 
-        let replace_root = self.map_token_to_node(r.current.as_ref().unwrap(),
+        let replace_root = self.map_token_to_node(r.current().as_ref().unwrap(),
                                                   &block,
                                                   &mut address);
         self.ssa.replace(root, replace_root);
-        if let Some(lhs) = r.lhs {
-            worklist.push((replace_root, 0, lhs));
-        }
-        if let Some(rhs) = r.rhs {
-            worklist.push((replace_root, 1, rhs));
+        for i in 0..r.len() {
+            worklist.push((replace_root, 0, r.op(i + 1).unwrap()));
         }
 
         while let Some((parent, edge_idx, subexpr)) = worklist.pop() {
@@ -339,18 +350,15 @@ where I: Iterator<Item=S::ValueRef>,
                 self.seen.insert(subexpr, t_.clone());
                 t_
             };
-            let current = pt.current.unwrap();
+            let current = pt.current().unwrap();
             let inner_node = if current.starts_with("%") {
                 *bindings.get(&current).expect("Unknown Binding")
             } else {
                 self.map_token_to_node(&current, &block, &mut address)
             };
             self.ssa.op_use(parent, edge_idx, inner_node);
-            if let Some(lhs) = pt.lhs {
-                worklist.push((inner_node, 0, lhs));
-            }
-            if let Some(rhs) = pt.rhs {
-                worklist.push((inner_node, 1, rhs));
+            for i in 0..pt.len() {
+                worklist.push((inner_node, i as u8, pt.op(i + 1).unwrap()));
             }
         }
 
@@ -377,9 +385,9 @@ mod test {
         let find_pat = "(OpXor %1, %1)".to_owned();
         let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
-        assert_eq!(Some("OpXor".to_owned()), t.current);
-        assert_eq!(Some("%1".to_owned()), t.lhs);
-        assert_eq!(Some("%1".to_owned()), t.rhs);
+        assert_eq!(Some("OpXor".to_owned()), t.current());
+        assert_eq!(Some("%1".to_owned()), t.lhs());
+        assert_eq!(Some("%1".to_owned()), t.rhs());
     }
 
     #[test]
@@ -388,9 +396,9 @@ mod test {
         let find_pat = "(EEq eax, (EAdd eax, (EAdd eax, cf)))".to_owned();
         let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
-        assert_eq!(Some("EEq".to_owned()), t.current);
-        assert_eq!(Some("eax".to_owned()), t.lhs);
-        assert_eq!(Some("(EAdd eax, (EAdd eax, cf))".to_owned()), t.rhs);
+        assert_eq!(Some("EEq".to_owned()), t.current());
+        assert_eq!(Some("eax".to_owned()), t.lhs());
+        assert_eq!(Some("(EAdd eax, (EAdd eax, cf))".to_owned()), t.rhs());
     }
 
     #[test]
@@ -399,9 +407,9 @@ mod test {
         let find_pat = "(EAdd (EAdd eax, of), (EAdd eax, cf))".to_owned();
         let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
-        assert_eq!(Some("EAdd".to_owned()), t.current);
-        assert_eq!(Some("(EAdd eax, of)".to_owned()), t.lhs);
-        assert_eq!(Some("(EAdd eax, cf)".to_owned()), t.rhs);
+        assert_eq!(Some("EAdd".to_owned()), t.current());
+        assert_eq!(Some("(EAdd eax, of)".to_owned()), t.lhs());
+        assert_eq!(Some("(EAdd eax, cf)".to_owned()), t.rhs());
     }
 
     #[test]
@@ -410,9 +418,21 @@ mod test {
         let find_pat = "(OpNot rax)".to_owned();
         let mut matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
-        assert_eq!(Some("OpNot".to_owned()), t.current);
-        assert_eq!(Some("rax".to_owned()), t.lhs);
-        assert!(t.rhs.is_none());
+        assert_eq!(Some("OpNot".to_owned()), t.current());
+        assert_eq!(Some("rax".to_owned()), t.lhs());
+        assert!(t.rhs().is_none());
+    }
+
+    #[test]
+    fn parse_expr_ternary() {
+        let mut ssa = SSAStorage::new();
+        let find_pat = "(OpStore %1, %2, %3)".to_owned();
+        let mut matcher = GraphMatcher::new(&mut ssa);
+        let t = matcher.parse_expression(&find_pat);
+        assert_eq!(Some("OpStore".to_owned()), t.current());
+        assert_eq!(Some("%1".to_owned()), t.lhs());
+        assert_eq!(Some("%2".to_owned()), t.rhs());
+        assert_eq!(Some("%3".to_owned()), t.op(3));
     }
 
     #[test]
