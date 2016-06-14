@@ -134,19 +134,41 @@ where I: Iterator<Item=S::ValueRef>,
     }
 
     /// Returns the root of the subtree that matches the given `find` expression.
-    // TODO:
-    //   1. Optimize by adding a first level of filtering for potential nodes.
     pub fn grep(&self, find: String) -> Vec<Match<S::ValueRef>> {
-        let mut subtree_match_map = Vec::<(S::ValueRef, Option<String>)>::new();
+        let mut worklist = Vec::<(S::ValueRef, Option<String>)>::new();
         let mut bindings = HashMap::new();
         let mut seen_exprs = HashMap::new();
         let mut found = Vec::new();
+        let first_expr = self.parse_expression(&find);
         for node in self.ssa.inorder_walk() {
+            // First level of filtering.
+            let nh = self.hash_data(node);
+            if first_expr.current.as_ref().unwrap() != &nh {
+                continue;
+            }
+            {
+                let args = self.ssa.args_of(node);
+                // All the cases which can cause a mismatch in the node and it's arguments.
+                if args.len() > 2 ||
+                   (args.len() == 2 && (first_expr.rhs.is_none() || first_expr.lhs.is_none())) ||
+                   (args.len() == 1 && first_expr.lhs.is_none()) ||
+                   (args.len() == 0 && (first_expr.lhs.is_some() || first_expr.rhs.is_some())) {
+                    continue;
+                }
+                worklist.clear();
+                bindings.clear();
+                for (i, argn) in args.iter().enumerate() {
+                    let subtree_str = match i {
+                        0 => first_expr.lhs.clone(),
+                        1 => first_expr.rhs.clone(),
+                        _ => unreachable!(),
+                    };
+                    worklist.push((*argn, subtree_str));
+                }
+            }
+
             let mut viable = true;
-            subtree_match_map.clear();
-            bindings.clear();
-            subtree_match_map.push((node, Some(find.clone())));
-            while let Some((inner_node, match_str)) = subtree_match_map.pop() {
+            while let Some((inner_node, match_str)) = worklist.pop() {
                 if match_str.is_none() {
                     // Mismatch
                     viable = false;
@@ -186,7 +208,6 @@ where I: Iterator<Item=S::ValueRef>,
                 }
 
                 let args = self.ssa.args_of(inner_node);
-
                 // All the cases which can cause a mismatch in the node and it's arguments.
                 if args.len() > 2 || (args.len() == 2 && (t.rhs.is_none() || t.lhs.is_none())) ||
                    (args.len() == 1 && t.lhs.is_none()) ||
@@ -201,7 +222,7 @@ where I: Iterator<Item=S::ValueRef>,
                         1 => t.rhs.clone(),
                         _ => unreachable!(),
                     };
-                    subtree_match_map.push((*argn, subtree_str));
+                    worklist.push((*argn, subtree_str));
                 }
             }
 
@@ -284,7 +305,7 @@ where I: Iterator<Item=S::ValueRef>,
         let root = found.root;
         let mut address = self.ssa.get_address(&root);
         let block = self.ssa.block_of(&root);
-        
+
         // Now we have a root node with no args, but retaining its uses.
         // Replace this node with the root node in the replace expression.
         for arg in &self.ssa.args_of(root) {
