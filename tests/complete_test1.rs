@@ -174,14 +174,12 @@ fn ct1_grep_replace() {
         {
             run_cse(&mut ssa_);
         }
-
-        grep_and_replace!(ssa_, "(OpSub (OpSub rsp, #x8), #xc)" => "&var_C");
+        grep_and_replace!(ssa_, "(OpSub (OpSub rsp, #x8), %1)" => "&var_C");
         grep_and_replace!(ssa_, "(OpSub (OpSub rsp, #x8), #x8)" => "&var_8");
-
-        {
-            dce::collect(&mut ssa_);
-        }
-        ssa_
+        grep_and_replace!(ssa_, "(OpLoad (OpStore %1, &var_C, %3), &var_C)" => "%3");
+        grep_and_replace!(ssa_, "(OpLoad (OpStore %1, &var_8, %3), &var_8)" => "%3");
+        grep_and_replace!(ssa_, "(OpStore mem, (OpSub rsp, #x8), rbp)" => "mem'");
+        run_sccp(&mut ssa_)
     };
     let mut writer: IRWriter = Default::default();
     writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());

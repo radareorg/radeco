@@ -122,7 +122,6 @@ where I: Iterator<Item=S::ValueRef>,
                 _ => sub_expr.last_mut().unwrap().push(c),
             }
         }
-        println!("{:?}", sub_expr);
         ParseToken {
             parsed: sub_expr
         }
@@ -230,12 +229,13 @@ where I: Iterator<Item=S::ValueRef>,
 
                 let args = self.ssa.args_of(inner_node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
-                if args.len() != t.len() {
+                if args.len() != t.len() && t.len() > 0 {
                     viable = false;
                     break;
                 }
 
                 for (i, argn) in args.iter().enumerate() {
+                    if i >= t.len() { break; }
                     worklist.push((*argn, t.op(i + 1)));
                 }
             }
@@ -334,9 +334,14 @@ where I: Iterator<Item=S::ValueRef>,
             t_
         };
 
-        let replace_root = self.map_token_to_node(r.current().as_ref().unwrap(),
+        let replace_root = if r.current().as_ref().unwrap().starts_with("%") {
+            *bindings.get(r.current().as_ref().unwrap()).expect("Unknown Binding")
+        } else {
+            self.map_token_to_node(r.current().as_ref().unwrap(),
                                                   &block,
-                                                  &mut address);
+                                                  &mut address)
+        };
+
         self.ssa.replace(root, replace_root);
         for i in 0..r.len() {
             worklist.push((replace_root, 0, r.op(i + 1).unwrap()));
@@ -370,13 +375,14 @@ where I: Iterator<Item=S::ValueRef>,
 #[cfg(test)]
 mod test {
     use super::*;
+    use petgraph::graph::NodeIndex;
     use analysis::matcher::gmatch;
     use std::io::prelude::*;
     use std::io;
-    use middle::ssa::ssastorage::SSAStorage;
-    use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType};
+    use middle::ssa::ssastorage::{SSAStorage, NodeData};
+    use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType, SSAWalk};
     use middle::ssa::cfg_traits::{CFG, CFGMod};
-    use middle::ir::MOpcode;
+    use middle::ir::{MOpcode, MAddress};
     use middle::ir_writer::IRWriter;
 
     #[test]
@@ -446,7 +452,8 @@ mod test {
         ssa.op_use(add, 1, const_2);
         ssa.mark_start_node(&add);
         let _ = ssa.add_op(MOpcode::OpAdd, vt, None);
-        grep!(ssa, "(OpAdd #x1, #x2)");
+        let m = grep!(ssa, "(OpAdd #x1, #x2)");
+        assert_eq!(m[0].root.index(), 0);
     }
 
     #[test]
@@ -458,6 +465,56 @@ mod test {
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_1);
         ssa.mark_start_node(&add);
-        grep!(ssa, "(OpXor %1, %1)");
+        let m = grep!(ssa, "(OpXor %1, %1)");
+        assert_eq!(m[0].root.index(), 0);
+        assert_eq!(m[0].bindings[0].0, "%1");
+        assert_eq!(m[0].bindings[0].1.index(), 1);
+    }
+
+    #[test]
+    fn simple_grep_replace1() {
+        let mut ssa = SSAStorage::new();
+        {
+            let blk = ssa.add_dynamic();
+            let vt = ValueType::Integer { width: 64 };
+            let add = ssa.add_op(MOpcode::OpAdd, vt, None);
+            let const_1 = ssa.add_const(1);
+            let const_2 = ssa.add_const(2);
+            let addr = MAddress::new(0, 0);
+            ssa.add_to_block(add, blk, addr);
+            ssa.add_to_block(const_1, blk, addr);
+            ssa.add_to_block(const_2, blk, addr);
+            ssa.op_use(add, 0, const_1);
+            ssa.op_use(add, 1, const_2);
+            ssa.mark_start_node(&blk);
+        }
+
+        grep_and_replace!(ssa, "(OpAdd %1, %2)" => "(OpSub %1, %2)");
+        let sub_node = ssa.inorder_walk().last().expect("No last node!");
+        let args = ssa.args_of(sub_node);
+
+        assert!({
+            let sub_nodei = ssa.internal(&sub_node);
+            match ssa.g[sub_nodei] {
+                NodeData::Op(MOpcode::OpSub, _) => true,
+                _ => false,
+            }
+        });
+
+        assert!({
+            let nodei = ssa.internal(&args[0]);
+            match ssa.g[nodei] {
+                NodeData::Op(MOpcode::OpConst(1), _) => true,
+                _ => false,
+            }
+        });
+
+        assert!({
+            let nodei = ssa.internal(&args[1]);
+            match ssa.g[nodei] {
+                NodeData::Op(MOpcode::OpConst(2), _) => true,
+                _ => false,
+            }
+        });
     }
 }
