@@ -9,3 +9,6 @@
 
 // pub mod lang_c;
 pub mod scf;
+pub mod x86 {
+    pub mod x86_idioms;
+}

@@ -73,8 +73,8 @@ use radeco_lib::analysis::cse::cse::CSE;
 
 use radeco_lib::analysis::matcher::gmatch;
 
-const REGISTER_PROFILE: &'static str = "register_profile";
-const INSTRUCTIONS: &'static str = "instructions2.json";
+const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+const INSTRUCTIONS: &'static str = "test_files/ct1_instructions.json";
 
 fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
     let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
@@ -174,11 +174,12 @@ fn ct1_grep_replace() {
         {
             run_cse(&mut ssa_);
         }
-        grep_and_replace!(ssa_, "(OpSub (OpSub rsp, #x8), %1)" => "&var_C");
-        grep_and_replace!(ssa_, "(OpSub (OpSub rsp, #x8), #x8)" => "&var_8");
-        grep_and_replace!(ssa_, "(OpLoad (OpStore %1, &var_C, %3), &var_C)" => "%3");
-        grep_and_replace!(ssa_, "(OpLoad (OpStore %1, &var_8, %3), &var_8)" => "%3");
-        grep_and_replace!(ssa_, "(OpStore mem, (OpSub rsp, #x8), rbp)" => "mem'");
+        grep_and_replace!(&mut ssa_, "(OpSub (OpSub rsp, #x8), %1)" => "&var_C");
+        grep_and_replace!(&mut ssa_, "(OpSub (OpSub rsp, #x8), #x8)" => "&var_8");
+        grep_and_replace!(&mut ssa_, "(OpLoad (OpStore %1, &var_C, %3), &var_C)" => "%3");
+        grep_and_replace!(&mut ssa_, "(OpLoad (OpStore %1, &var_8, %3), &var_8)" => "%3");
+        //grep_and_replace!(&mut ssa_, "(OpStore (OpStore %1, %2, %3), %2, %4)" => "(OpStore %1, %2, %4)");
+        grep_and_replace!(&mut ssa_, "(OpStore mem, (OpSub rsp, #x8), rbp)" => "mem'");
         run_sccp(&mut ssa_)
     };
     let mut writer: IRWriter = Default::default();

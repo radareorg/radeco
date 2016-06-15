@@ -495,10 +495,12 @@ mod test {
     use std::io;
 
 
+    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
         // Enable for debugging only.
         // enable_logging!();
-        let mut register_profile = File::open("register_profile").unwrap();
+        let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
         *reg_profile = json::decode(&*s).unwrap();
@@ -512,7 +514,7 @@ mod test {
     fn ssa_simple_test_1() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "instructions_json_");
+        before_test(&mut reg_profile, &mut instructions, "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
@@ -530,7 +532,7 @@ mod test {
     fn ssa_const_prop_test_1() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "instructions_json_");
+        before_test(&mut reg_profile, &mut instructions, "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
@@ -590,7 +592,7 @@ mod test {
     fn ssa_bfs_walk() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "instructions_json_");
+        before_test(&mut reg_profile, &mut instructions, "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);

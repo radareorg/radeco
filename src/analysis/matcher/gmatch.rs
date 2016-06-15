@@ -76,9 +76,9 @@ macro_rules! grep {
 
 #[macro_export]
 macro_rules! grep_and_replace {
-    ($s: ident, $f: expr => $r: expr) => {
+    ($s: expr, $f: expr => $r: expr) => {
         {
-            let mut matcher = gmatch::GraphMatcher::new(&mut $s);
+            let mut matcher = gmatch::GraphMatcher::new($s);
             for m in matcher.grep($f.to_owned()) {
                 matcher.replace(m, $r.to_owned());
             }
@@ -124,6 +124,22 @@ where I: Iterator<Item=S::ValueRef>,
         }
         ParseToken {
             parsed: sub_expr
+        }
+    }
+
+    fn hash_subtree(&self, root: S::ValueRef) -> String {
+        let mut argh = String::new();
+        for arg in self.ssa.args_of(root) {
+            if !argh.is_empty() {
+                argh.push_str(", ");
+            }
+            argh = format!("{}", self.hash_subtree(arg));
+        }
+        let node_h = self.hash_data(root);
+        if !argh.is_empty() {
+            format!("({} {})", node_h, argh)
+        } else {
+            node_h
         }
     }
 
@@ -212,9 +228,12 @@ where I: Iterator<Item=S::ValueRef>,
 
                 let current = t.current().unwrap();
                 if current.starts_with("%") {
-                    if let Some((old, _)) = bindings.insert(current,
-                                                            (current_h.clone(), inner_node)) {
-                        if old != current_h {
+                    // Match the current subtree to the subtree bound by the variable before. If
+                    // they do not match, then report as mismatch.
+                    let subtreeh = self.hash_subtree(inner_node);
+                    if let Some((old, _)) = bindings.insert(current.clone(),
+                                                            (subtreeh.clone(), inner_node)) {
+                        if old != subtreeh {
                             // Mismatch
                             viable = false;
                             break;
@@ -229,13 +248,15 @@ where I: Iterator<Item=S::ValueRef>,
 
                 let args = self.ssa.args_of(inner_node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
-                if args.len() != t.len() && t.len() > 0 {
+                // Since "%" binds the entire subtree, it will not have any arguments. So we skip
+                // this case.
+                if args.len() != t.len() && !current.starts_with("%") {
                     viable = false;
                     break;
                 }
 
                 for (i, argn) in args.iter().enumerate() {
-                    if i >= t.len() { break; }
+                    if i >= t.len() { break; };
                     worklist.push((*argn, t.op(i + 1)));
                 }
             }
@@ -489,7 +510,7 @@ mod test {
             ssa.mark_start_node(&blk);
         }
 
-        grep_and_replace!(ssa, "(OpAdd %1, %2)" => "(OpSub %1, %2)");
+        grep_and_replace!(&mut ssa, "(OpAdd %1, %2)" => "(OpSub %1, %2)");
         let sub_node = ssa.inorder_walk().last().expect("No last node!");
         let args = ssa.args_of(sub_node);
 
