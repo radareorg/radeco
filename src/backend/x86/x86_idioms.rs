@@ -12,6 +12,8 @@ const PATTERNS: &'static [(&'static str, &'static str)] = &[
     ("(OpOr %1, #x0)", "%1"),
     ("(OpOr %1, #x1)", "#x1"),
     ("(OpSub %1, %1)", "#x0"),
+    // Reduce x86 comparisons using flags to >, <, <=, >=, ==
+
 ];
 
 pub fn replace<I, S>(ssa: &mut S)

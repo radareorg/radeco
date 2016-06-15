@@ -556,7 +556,6 @@ mod test {
 
     #[test]
     fn ssa_test_2() {
-        enable_logging!("./crowell.log");
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
         before_test(&mut reg_profile, &mut instructions, "instructions2.json");

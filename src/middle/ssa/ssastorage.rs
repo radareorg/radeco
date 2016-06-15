@@ -569,6 +569,12 @@ impl SSA for SSAStorage {
                 }
             }
         }
+        expressions.sort_by(|a, b| {
+            let x = AdditionalData::new();
+            let addr_x = self.assoc_data.get(a).unwrap_or(&x).address;
+            let addr_y = self.assoc_data.get(b).unwrap_or(&x).address;
+            addr_x.cmp(&addr_y)
+        });
         expressions
     }
 

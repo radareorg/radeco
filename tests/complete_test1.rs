@@ -178,7 +178,7 @@ fn ct1_grep_replace() {
         grep_and_replace!(&mut ssa_, "(OpSub (OpSub rsp, #x8), #x8)" => "&var_8");
         grep_and_replace!(&mut ssa_, "(OpLoad (OpStore %1, &var_C, %3), &var_C)" => "%3");
         grep_and_replace!(&mut ssa_, "(OpLoad (OpStore %1, &var_8, %3), &var_8)" => "%3");
-        //grep_and_replace!(&mut ssa_, "(OpStore (OpStore %1, %2, %3), %2, %4)" => "(OpStore %1, %2, %4)");
+        grep_and_replace!(&mut ssa_, "(OpStore (OpStore %1, %2, %3), %2, %4)" => "(OpStore %1, %2, %4)");
         grep_and_replace!(&mut ssa_, "(OpStore mem, (OpSub rsp, #x8), rbp)" => "mem'");
         run_sccp(&mut ssa_)
     };

@@ -12,7 +12,7 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssa_traits::NodeType;
 use middle::ir::{MArity, MOpcode};
@@ -66,8 +66,8 @@ fn meet(v1: &LatticeValue, v2: &LatticeValue) -> LatticeValue {
 }
 
 pub struct Analyzer<T: SSAMod + SSA + Clone> {
-    ssa_worklist: Vec<T::ValueRef>,
-    cfg_worklist: Vec<T::CFEdgeRef>,
+    ssa_worklist: VecDeque<T::ValueRef>,
+    cfg_worklist: VecDeque<T::CFEdgeRef>,
     executable: HashMap<T::CFEdgeRef, bool>,
     expr_val: HashMap<T::ValueRef, LatticeValue>,
     g: T,
@@ -76,8 +76,8 @@ pub struct Analyzer<T: SSAMod + SSA + Clone> {
 impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     pub fn new(g: &mut T) -> Analyzer<T> {
         Analyzer {
-            ssa_worklist: Vec::new(),
-            cfg_worklist: Vec::new(),
+            ssa_worklist: VecDeque::new(),
+            cfg_worklist: VecDeque::new(),
             executable: HashMap::new(),
             expr_val: HashMap::new(),
             g: g.clone(),
@@ -128,14 +128,14 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         let false_branch = self.g.false_edge_of(&block);
         match cond_val {
             LatticeValue::Bottom => {
-                self.cfg_worklist.push(true_branch);
-                self.cfg_worklist.push(false_branch);
+                self.cfg_worklist.push_back(true_branch);
+                self.cfg_worklist.push_back(false_branch);
             }
             LatticeValue::Top => {
                 // TODO: Not really sure what to do here.
             }
             LatticeValue::Const(cval) => {
-                if cval == 0 {
+                if cval == 1 {
                     self.cfgwl_push(&true_branch);
                 } else {
                     self.cfgwl_push(&false_branch);
@@ -158,6 +158,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         } else {
             return val;
         };
+
         let val = match opcode {
             MOpcode::OpWiden(_) => {
                 // Nothing to do in case of widen as the value cannot change.
@@ -179,6 +180,12 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     }
 
     fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
+        // Do not reason about load/stores.
+        match opcode {
+            MOpcode::OpLoad | MOpcode::OpStore => return LatticeValue::Bottom,
+            _ => { },
+        }
+
         let operands = self.g.get_operands(i).iter().map(|x| self.get_value(x)).collect::<Vec<_>>();
 
         let lhs = operands[0];
@@ -286,11 +293,10 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         }
 
         while !self.ssa_worklist.is_empty() || !self.cfg_worklist.is_empty() {
-            while let Some(edge) = self.cfg_worklist.pop() {
+            while let Some(edge) = self.cfg_worklist.pop_front() {
                 if !self.is_executable(&edge) {
                     self.mark_executable(&edge);
                     let block = self.g.target_of(&edge);
-
                     let phis = self.g.get_phis(&block);
                     for phi in &phis {
                         let v = self.visit_phi(phi);
@@ -323,7 +329,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 }
             } // End of cfgwl
 
-            while let Some(e) = self.ssa_worklist.pop() {
+            while let Some(e) = self.ssa_worklist.pop_front() {
                 let t = if self.g.is_expr(&e) {
                     let block_of = self.g.block_of(&e);
                     if self.is_block_executable(&block_of) {
@@ -434,12 +440,12 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         }
         let owner_block = self.g.get_block(&i);
         if self.is_block_executable(&owner_block) {
-            self.ssa_worklist.push(*i);
+            self.ssa_worklist.push_back(*i);
         }
     }
 
     fn cfgwl_push(&mut self, i: &T::CFEdgeRef) {
-        self.cfg_worklist.push(*i);
+        self.cfg_worklist.push_back(*i);
     }
 }
 

@@ -178,6 +178,8 @@ where I: Iterator<Item=S::ValueRef>,
     }
 
     /// Returns the root of the subtree that matches the given `find` expression.
+    // TODO:
+    //   - Handle commutativity
     pub fn grep(&self, find: String) -> Vec<Match<S::ValueRef>> {
         let mut worklist = Vec::<(S::ValueRef, Option<String>)>::new();
         let mut bindings = HashMap::new();
@@ -266,7 +268,6 @@ where I: Iterator<Item=S::ValueRef>,
                 for (k, v) in &bindings {
                     vbind.push((k.clone(), v.1));
                 }
-
                 let nmatch = Match {
                     root: node,
                     bindings: vbind,
@@ -274,7 +275,6 @@ where I: Iterator<Item=S::ValueRef>,
                 found.push(nmatch);
             }
         }
-
         found
     }
 
@@ -332,7 +332,8 @@ where I: Iterator<Item=S::ValueRef>,
     }
 
     /// Replaces the subtree rooted at `S::ValueRef` by the `replace` expression.
-    pub fn replace(&mut self, found: Match<S::ValueRef>, replace: String) {
+    /// Returns the root of the replaced expression.
+    pub fn replace(&mut self, found: Match<S::ValueRef>, replace: String) -> S::ValueRef {
         let bindings = found.bindings.iter().cloned().collect::<HashMap<_, _>>();
         // Vec of (parent, lhs/rhs (0/1), parse_expression)
         let mut worklist = Vec::new();
@@ -365,7 +366,7 @@ where I: Iterator<Item=S::ValueRef>,
 
         self.ssa.replace(root, replace_root);
         for i in 0..r.len() {
-            worklist.push((replace_root, 0, r.op(i + 1).unwrap()));
+            worklist.push((replace_root, i as u8, r.op(i + 1).unwrap()));
         }
 
         while let Some((parent, edge_idx, subexpr)) = worklist.pop() {
@@ -390,6 +391,7 @@ where I: Iterator<Item=S::ValueRef>,
 
         address.offset += 1;
         self.ssa.set_addr(&replace_root, address);
+        replace_root
     }
 }
 

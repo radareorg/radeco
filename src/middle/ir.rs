@@ -153,7 +153,7 @@ impl MOpcode {
             MOpcode::OpLsl => ("<<", MArity::Binary),
             MOpcode::OpLsr => (">>", MArity::Binary),
             MOpcode::OpIf => ("if", MArity::Unary),
-            MOpcode::OpLoad => ("load", MArity::Unary),
+            MOpcode::OpLoad => ("load", MArity::Binary),
             MOpcode::OpStore => ("store", MArity::Binary),
             MOpcode::OpNarrow(_) => ("narrow", MArity::Unary),
             MOpcode::OpWiden(_) => ("widen", MArity::Unary),
