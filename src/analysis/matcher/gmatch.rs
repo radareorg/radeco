@@ -133,7 +133,7 @@ where I: Iterator<Item=S::ValueRef>,
             if !argh.is_empty() {
                 argh.push_str(", ");
             }
-            argh = format!("{}", self.hash_subtree(arg));
+            argh = format!("{}{}", argh, self.hash_subtree(arg));
         }
         let node_h = self.hash_data(root);
         if !argh.is_empty() {
