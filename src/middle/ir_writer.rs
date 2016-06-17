@@ -120,7 +120,8 @@ impl IRWriter {
                       ni: NodeIndex,
                       opcode: MOpcode,
                       vt: ValueType,
-                      operands: Vec<String>)
+                      operands: Vec<String>,
+                      ssa: &SSAStorage)
                       -> String {
         let next = self.ctr + 1;
         let result_idx = self.seen.entry(ni).or_insert(next);
@@ -220,7 +221,22 @@ impl IRWriter {
                                             w,
                                             wd,
                                             operands[0]),
-            MOpcode::OpCall => format!("{}", operands[0]),
+            MOpcode::OpCall => {
+                let mem = "mem".to_owned();
+                format!("{}({})",
+                        operands[0],
+                        &operands[1..]
+                             .iter()
+                             .enumerate()
+                             .map(|i| format!("{}={}", ssa.regnames.get(i.0).unwrap_or(&mem), i.1))
+                             .fold(String::new(), |acc, x| {
+                                 if !acc.is_empty() {
+                                     format!("{}, {}", acc, x)
+                                 } else {
+                                     format!("{}", x)
+                                 }
+                             }))
+            }
             _ => unreachable!(),
         }
     }
@@ -252,7 +268,8 @@ impl IRWriter {
                         String::new()
                     } else {
                         let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), &ssa);
-                        indent!(self.indent, self.fmt_expression(node, opcode, vt, operands))
+                        indent!(self.indent,
+                                self.fmt_expression(node, opcode, vt, operands, &ssa))
                     }
                 }
                 NodeData::Phi(vt, ref name) => {
@@ -291,7 +308,7 @@ impl IRWriter {
 
                         let mut target_string = String::new();
                         for (target, edge_type) in outgoing {
-                            if target == node  && (edge_type == 0 || edge_type == 2) {
+                            if target == node && (edge_type == 0 || edge_type == 2) {
                                 continue;
                             }
 

@@ -72,6 +72,7 @@ use radeco_lib::analysis::sccp::sccp;
 use radeco_lib::analysis::cse::cse::CSE;
 
 use radeco_lib::analysis::matcher::gmatch;
+use radeco_lib::backend::x86::x86_idioms;
 
 const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
 const INSTRUCTIONS: &'static str = "test_files/ct1_instructions.json";
@@ -182,6 +183,19 @@ fn ct1_grep_replace() {
         grep_and_replace!(&mut ssa_, "(OpStore mem, (OpSub rsp, #x8), rbp)" => "mem'");
         run_sccp(&mut ssa_)
     };
+    let mut writer: IRWriter = Default::default();
+    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+}
+
+#[test]
+fn ct1_x86_idioms() {
+    let mut ssa = run_construction();
+    {
+        x86_idioms::replace(&mut ssa);
+    }
+    {
+        dce::collect(&mut ssa);
+    }
     let mut writer: IRWriter = Default::default();
     writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
 }

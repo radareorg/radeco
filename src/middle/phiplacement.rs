@@ -115,7 +115,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         let valtype = self.variable_types[variable];
         let val = if self.sealed_blocks.contains(&block) {
             let preds = self.ssa.preds_of(block);
-            assert!(preds.len() > 0);
+            //assert!(preds.len() > 0);
             if preds.len() == 1 {
                 // Optimize the common case of one predecessor: No phi needed
                 let mut p_address = self.addr_of(&preds[0]);
@@ -393,7 +393,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
     // These functions take in address and automatically determine the block that
     // they should
-    // belong to and make the necessary mapppings internally. This is useful as the
+    // belong to and make the necessary mappings internally. This is useful as the
     // outer struct
     // never has to keep track of the current_block or determine which block a
     // particular
@@ -435,6 +435,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         }
         address.offset += 1;
         i
+    }
+
+    pub fn set_address(&mut self, node: &T::ValueRef, address: MAddress) {
+        self.index_to_addr.insert(*node, address);
     }
 
     pub fn read_register(&mut self, address: &mut MAddress, var: &str) -> T::ValueRef {

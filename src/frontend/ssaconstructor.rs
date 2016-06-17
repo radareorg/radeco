@@ -453,10 +453,22 @@ impl<'a, T> SSAConstruct<'a, T>
                     let call_operand = self.phiplacer.add_comment(current_address,
                                                                   ValueType::Integer { width: 0 },
                                                                   op.opcode.clone().unwrap());
-
                     let op_call = self.phiplacer.add_op(&MOpcode::OpCall,
                                                         &mut current_address,
                                                         ValueType::Integer { width: 0 });
+                    // Since we cannot reason about call, a safe assumption is that it reads and
+                    // writes every register.
+                    for (i, reg) in self.regfile.whole_names.iter().enumerate() {
+                        let rnode = self.phiplacer.read_register(&mut current_address, reg);
+                        self.phiplacer.op_use(&op_call, (i + 1) as u8, &rnode);
+                        let new_register_comment = format!("{}@{}", reg, current_address);
+                        let width = self.regfile.whole_registers[i];
+                        let comment_node = self.phiplacer.add_comment(current_address, width, new_register_comment);
+                        self.phiplacer.write_register(&mut current_address, reg, comment_node);
+                        self.phiplacer.op_use(&comment_node, i as u8, &op_call);
+                    }
+                    current_address.offset += 1;
+                    self.phiplacer.set_address(&op_call, current_address);
                     self.phiplacer.op_use(&op_call, 0, &call_operand);
                     continue;
                 }

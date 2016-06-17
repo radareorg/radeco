@@ -209,6 +209,9 @@ impl SSAStorage {
                     }
                     _ => {}
                 }
+            } else if let EdgeData::Selector = self.g[edge] {
+                let bb = self.block_of(&i);
+                self.mark_selector(j, bb);
             }
         }
 
