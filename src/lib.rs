@@ -58,5 +58,6 @@ pub mod middle;
 #[macro_use] pub mod analysis;
 pub mod frontend {
     pub mod ssaconstructor;
+    pub mod source;
 }
 pub mod backend;
