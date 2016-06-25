@@ -59,5 +59,6 @@ pub mod middle;
 pub mod frontend {
     pub mod ssaconstructor;
     pub mod source;
+    pub mod containers;
 }
 pub mod backend;

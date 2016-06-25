@@ -1,11 +1,5 @@
 //! Defines the `Source` Trait.
 
-// Module TODO:
-//  - Implement cache source
-//  - Implement source for r2
-//  - Implement source to read from a file
-//  - Implement conversion trait `From` for r2 -> file source.
-
 use std::collections::{BTreeMap, HashMap};
 use std::path::{self, Path, PathBuf};
 use std::fs::{self, File};
@@ -85,7 +79,8 @@ impl Source for R2 {
     }
 
     fn functions(&mut self) -> Vec<FunctionInfo> {
-        self.fn_list().expect("Failed to load funtion info from r2")
+        let fns = self.fn_list();
+        fns.expect("Failed to load funtion info from r2")
     }
 
     fn instructions_at(&mut self, address: u64) -> Vec<LOpInfo> {
@@ -141,7 +136,7 @@ impl FileSource {
     fn write_file(&mut self, suffix: &str, data: &str) {
         let mut path = PathBuf::from(&self.dir);
         path.push(&format!("{}_{}.json", self.base_name, suffix));
-        let mut f = File::open(path).expect("Failed to open file");
+        let mut f = File::create(path).expect("Failed to open file");
         let _ = f.write_all(data.to_string()
                                 .as_bytes()).expect("Failed to read file");
     }
@@ -247,5 +242,19 @@ impl From<R2> for FileSource {
         }
 
         fsource
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use r2pipe::r2;
+
+    #[test]
+    fn src_conversion_test() {
+        let mut r2 = r2::R2::new(Some("/bin/ls")).expect("Failed to load file to r2");
+        r2.init();
+        let mut fsource = FileSource::from(r2);
+        println!("{:#?}", fsource.strings());
     }
 }

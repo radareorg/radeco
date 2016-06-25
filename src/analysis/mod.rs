@@ -6,8 +6,6 @@
 // except according to those terms.
 
 //! Module that implements analysis and optimizations on radeco IR.
-//!
-//!
 
 #[allow(dead_code)]
 pub mod valueset;
@@ -25,4 +23,9 @@ pub mod cse {
 pub mod matcher {
     #[macro_use]
     pub mod gmatch;
+}
+
+pub mod interproc {
+    pub mod call_summary;
+    pub mod transfer;
 }
