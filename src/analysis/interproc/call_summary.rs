@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use analysis::interproc::transfer::{Propagate, Transfer};
 use frontend::containers::{RFunction, RModule};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct InterProc<'a, M, T>
     where M: 'a + RModule,
           T: Transfer<M> + Propagate<M>
@@ -19,7 +19,7 @@ impl<'a, M, T> InterProc<'a, M, T>
     where M: 'a + RModule,
           T: Transfer<M> + Propagate<M>
 {
-    pub fn new(rmod: &mut M) -> InterProc<'a, M, T> {
+    pub fn new(rmod: &'a mut M) -> InterProc<'a, M, T> {
         InterProc {
             summarized: HashSet::new(),
             rmod: rmod,
@@ -46,13 +46,13 @@ impl<'a, M, T> InterProc<'a, M, T>
         }
 
         // Propagate changes and remove deadcode based on the analysis information from
-        // the
-        // children. Perform context translations from caller to callee etc.
+        // the children. Perform context translations from caller to callee etc.
         // TODO.
-
         {
-            let fun = self.rmod.get_fn_mut(rfn);
-            CallSummarizer::generate_summary(fun);
+            // Pull changes from callee.
+            T::propagate(self.rmod, rfn);
+            // Analyze transfer function for the current function.
+            T::transfer(self.rmod, rfn);
         }
 
         // Insert the current function into summarized set.
