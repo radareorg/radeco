@@ -3,6 +3,8 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::collections::{BTreeSet, HashMap};
+use std::thread;
+use std::sync::mpsc;
 
 use r2pipe::structs::{LOpInfo, LRegInfo};
 
@@ -77,6 +79,10 @@ impl CallContext {
     }
 }
 
+// TODO
+fn ssa_single_fn() -> () {
+}
+
 // From trait to construct a module from `Source`.
 // Note that this conversion is expensive as the source is used to construct
 // the SSA for all the
@@ -85,42 +91,61 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule {
     fn from(source: &'a mut T) -> RadecoModule {
         let reg_info = source.register_profile();
         let mut rmod = RadecoModule::default();
+        //let mut childs = Vec::new();
+        let (tx, rx) = mpsc::channel();
+        let mut i = 0;
+        let mut handles = Vec::new();
         for f in source.functions() {
-            // TODO: Thread this part.
-            if f.name.as_ref().unwrap().contains("imp") {
-                continue
+            if f.name.as_ref().unwrap().contains("sym.imp") {
+                continue;
             }
-
             let offset = f.offset.expect("Invalid offset");
             let instructions = source.instructions_at(offset);
-            let mut rfn = RadecoFunction::construct(&reg_info, instructions);
-            rfn.name = f.name.as_ref().unwrap().clone();
-            if let Some(ref callrefs) = f.callrefs {
-                rfn.callrefs = callrefs.iter()
-                                       .filter(|x| {
-                                           match x.call_type {
-                                               Some(ref c) if c == "C" => true,
-                                               _ => false,
-                                           }
-                                       })
-                                       .map(|x| x.addr.expect("Invalid address"))
-                                       .collect::<BTreeSet<_>>();
-            }
+            let tx = tx.clone();
+            let reg_info = reg_info.clone();
 
-            if let Some(ref callxrefs) = f.codexrefs {
-                rfn.callxrefs = callxrefs.iter()
-                                       .filter(|x| {
-                                           match x.call_type {
-                                               Some(ref c) if c == "C" => true,
-                                               _ => false,
-                                           }
-                                       })
-                                       .map(|x| x.addr.expect("Invalid address"))
-                                       .collect::<BTreeSet<_>>();
-            }
+            let handle = thread::spawn(move || {
+                let mut rfn = RadecoFunction::construct(&reg_info, instructions);
+                rfn.name = f.name.as_ref().unwrap().clone();
+                if let Some(ref callrefs) = f.callrefs {
+                    rfn.callrefs = callrefs.iter()
+                                           .filter(|x| {
+                                               match x.call_type {
+                                                   Some(ref c) if c == "C" => true,
+                                                   _ => false,
+                                               }
+                                           })
+                                           .map(|x| x.addr.expect("Invalid address"))
+                                           .collect::<BTreeSet<_>>();
+                }
 
+                if let Some(ref callxrefs) = f.codexrefs {
+                    rfn.callxrefs = callxrefs.iter()
+                                             .filter(|x| {
+                                                 match x.call_type {
+                                                     Some(ref c) if c == "C" => true,
+                                                     _ => false,
+                                                 }
+                                             })
+                                             .map(|x| x.addr.expect("Invalid address"))
+                                             .collect::<BTreeSet<_>>();
+                }
+                tx.send((offset, f.name.unwrap(), rfn)).unwrap();
+            });
+            handles.push(handle);
+        }
+
+        let mut success = 0;
+        for h in handles {
+            if let Ok(_) = h.join() {
+                success += 1;
+            }
+        }
+
+        for _ in 0..success {
+            let (offset, name, rfn) = rx.recv().unwrap();
             rmod.functions.insert(offset, rfn);
-            rmod.fname.insert(f.name.unwrap(), offset);
+            rmod.fname.insert(name, offset);
         }
         rmod
     }
@@ -139,7 +164,8 @@ pub trait RModule {
     fn callees_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
     fn callers_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
     fn functions(&self) -> Vec<Self::FnRef>;
-    fn function_by_ref(&self, &Self::FnRef) -> Box<&RFunction>;
+    fn function_ref(&self, &Self::FnRef) -> &RFunction;
+    fn function_ref_mut(&mut self, &Self::FnRef) -> &mut RFunction;
 }
 
 #[cfg(test)]
@@ -150,7 +176,7 @@ mod test {
     use middle::ir_writer::IRWriter;
     use std::io;
     use middle::dce;
-    
+
     #[test]
     fn module_test() {
         let mut r2 = R2::open(Some("./crowell_example.o")).expect("Failed to open r2");
