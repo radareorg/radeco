@@ -244,17 +244,3 @@ impl From<R2> for FileSource {
         fsource
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use r2pipe::r2;
-
-    #[test]
-    fn src_conversion_test() {
-        let mut r2 = r2::R2::new(Some("/bin/ls")).expect("Failed to load file to r2");
-        r2.init();
-        let mut fsource = FileSource::from(r2);
-        println!("{:#?}", fsource.strings());
-    }
-}

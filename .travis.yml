@@ -18,8 +18,6 @@ notifications:
   irc: "chat.freenode.net#radare-rsoc"
   email: false
 
-before_install: ./scripts/install-dependencies.sh
-
 # load travis-cargo
 before_script:
   - |
