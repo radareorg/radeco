@@ -168,7 +168,7 @@ fn ct1_cse_sccp() {
     writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
 }
 
-#[test]
+//#[test]
 fn ct1_grep_replace() {
     let ssa = {
         let mut ssa_ = run_construction();
@@ -187,7 +187,7 @@ fn ct1_grep_replace() {
     writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
 }
 
-#[test]
+//#[test]
 fn ct1_x86_idioms() {
     let mut ssa = run_construction();
     {
