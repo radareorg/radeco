@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::thread;
 use std::sync::mpsc;
 
-use r2pipe::structs::{LOpInfo, LRegInfo};
+use r2pipe::structs::{FunctionInfo, LOpInfo, LRegInfo};
 
 use petgraph::graph::NodeIndex;
 
@@ -20,7 +20,7 @@ pub struct RadecoModule {
     fname: HashMap<String, u64>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RadecoFunction {
     ssa: SSAStorage,
     name: String,
@@ -29,18 +29,32 @@ pub struct RadecoFunction {
     callxrefs: BTreeSet<u64>,
 }
 
-impl Default for RadecoFunction {
-    fn default() -> RadecoFunction {
-        RadecoFunction {
-            ssa: SSAStorage::new(),
-            call_ctx: Vec::new(),
-            callrefs: BTreeSet::new(),
-            callxrefs: BTreeSet::new(),
-            name: String::new(),
-        }
-    }
+#[derive(Clone, Debug, Default)]
+pub struct CallContext {
+    /// Start offset of caller (uniquely identifies a function).
+    caller: u64,
+    /// Start offset of callee (uniquely identifies a function).
+    callee: u64,
+    /// Offset the call. Note that this will belong to the caller function.
+    call_site: u64,
+    /// Translate a node in callees context into a node in caller's context.
+    ctx_translate: HashMap<NodeIndex, NodeIndex>,
 }
 
+// TODO: Re-enable if needed. Current members of RadecoFunction have default implementation.
+//impl Default for RadecoFunction {
+    //fn default() -> RadecoFunction {
+        //RadecoFunction {
+            //ssa: SSAStorage::new(),
+            //call_ctx: Vec::new(),
+            //callrefs: BTreeSet::new(),
+            //callxrefs: BTreeSet::new(),
+            //name: String::new(),
+        //}
+    //}
+//}
+
+// Implementations sepecific to `RadecoFunction`.
 impl RadecoFunction {
     fn new() -> RadecoFunction {
         RadecoFunction::default()
@@ -56,18 +70,6 @@ impl RadecoFunction {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct CallContext {
-    /// Start offset of caller (uniquely identifies a function).
-    caller: u64,
-    /// Start offset of callee (uniquely identifies a function).
-    callee: u64,
-    /// Offset the call. Note that this will belong to the caller function.
-    call_site: u64,
-    /// Translate a node in callees context into a node in caller's context.
-    ctx_translate: HashMap<NodeIndex, NodeIndex>,
-}
-
 impl CallContext {
     pub fn new(caller: u64, callee: u64, call_site: u64) -> CallContext {
         CallContext {
@@ -79,22 +81,50 @@ impl CallContext {
     }
 }
 
-// TODO
-fn ssa_single_fn() -> () {
+// Private function that is run to construct SSA for a single function and fill in the basic
+// information. Note that this function is the function that is run in each thread.
+fn ssa_single_fn(f: &FunctionInfo,
+                 reg_info: &LRegInfo,
+                 instructions: Vec<LOpInfo>)
+                 -> RadecoFunction {
+    let mut rfn = RadecoFunction::construct(reg_info, instructions);
+    rfn.name = f.name.as_ref().unwrap().clone();
+    if let Some(ref callrefs) = f.callrefs {
+        rfn.callrefs = callrefs.iter()
+                               .filter(|x| {
+                                   match x.call_type {
+                                       Some(ref c) if c == "C" => true,
+                                       _ => false,
+                                   }
+                               })
+                               .map(|x| x.addr.expect("Invalid address"))
+                               .collect::<BTreeSet<_>>();
+    }
+
+    if let Some(ref callxrefs) = f.codexrefs {
+        rfn.callxrefs = callxrefs.iter()
+                                 .filter(|x| {
+                                     match x.call_type {
+                                         Some(ref c) if c == "C" => true,
+                                         _ => false,
+                                     }
+                                 })
+                                 .map(|x| x.addr.expect("Invalid address"))
+                                 .collect::<BTreeSet<_>>();
+    }
+    rfn
 }
 
+// MAYBE TODO: Replace `RadecoModule` and `RadecoFunction` by generic `RModule` and `RFunction`.
 // From trait to construct a module from `Source`.
 // Note that this conversion is expensive as the source is used to construct
-// the SSA for all the
-// function that it holds and perform basic analysis.
+// the SSA for all the function that it holds and perform basic analysis.
 impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule {
     fn from(source: &'a mut T) -> RadecoModule {
         let reg_info = source.register_profile();
         let mut rmod = RadecoModule::default();
-        //let mut childs = Vec::new();
-        let (tx, rx) = mpsc::channel();
-        let mut i = 0;
         let mut handles = Vec::new();
+        let (tx, rx) = mpsc::channel();
         for f in source.functions() {
             if f.name.as_ref().unwrap().contains("sym.imp") {
                 continue;
@@ -105,31 +135,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule {
             let reg_info = reg_info.clone();
 
             let handle = thread::spawn(move || {
-                let mut rfn = RadecoFunction::construct(&reg_info, instructions);
-                rfn.name = f.name.as_ref().unwrap().clone();
-                if let Some(ref callrefs) = f.callrefs {
-                    rfn.callrefs = callrefs.iter()
-                                           .filter(|x| {
-                                               match x.call_type {
-                                                   Some(ref c) if c == "C" => true,
-                                                   _ => false,
-                                               }
-                                           })
-                                           .map(|x| x.addr.expect("Invalid address"))
-                                           .collect::<BTreeSet<_>>();
-                }
-
-                if let Some(ref callxrefs) = f.codexrefs {
-                    rfn.callxrefs = callxrefs.iter()
-                                             .filter(|x| {
-                                                 match x.call_type {
-                                                     Some(ref c) if c == "C" => true,
-                                                     _ => false,
-                                                 }
-                                             })
-                                             .map(|x| x.addr.expect("Invalid address"))
-                                             .collect::<BTreeSet<_>>();
-                }
+                let rfn = ssa_single_fn(&f, &reg_info, instructions);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();
             });
             handles.push(handle);
@@ -137,8 +143,9 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule {
 
         let mut success = 0;
         for h in handles {
-            if let Ok(_) = h.join() {
-                success += 1;
+            match h.join() {
+                Ok(_) => success += 1,
+                Err(e) => radeco_warn!("{:?}", e),
             }
         }
 
@@ -151,13 +158,17 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule {
     }
 }
 
+// Implementations that are specific to `RadecoModule`.
 impl RadecoModule {
     fn construct<S: Source>(mut source: S) -> RadecoModule {
         RadecoModule::from(&mut source)
     }
 }
 
+/// Trait that defines a `Function`.
 pub trait RFunction { }
+/// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
+/// all information loaded from the binary. It acts as a container for `Function`s.
 pub trait RModule {
     type FnRef: Copy + Clone + Debug + Hash + Eq;
 
@@ -167,6 +178,7 @@ pub trait RModule {
     fn function_ref(&self, &Self::FnRef) -> &RFunction;
     fn function_ref_mut(&mut self, &Self::FnRef) -> &mut RFunction;
 }
+
 
 #[cfg(test)]
 mod test {
