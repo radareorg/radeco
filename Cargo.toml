@@ -6,6 +6,9 @@ authors = [
 	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
 ]
 
+[lib]
+path = "src/lib.rs"
+
 [features]
 default = []
 trace_log = []
@@ -15,12 +18,14 @@ regex = "*"
 petgraph = "*"
 num = "*"
 rustc-serialize = "*"
+lazy_static = "*"
 log = "*"
 clippy = {version = "0.0.61", optional = true}
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"
+#path = "../r2pipe.rs"
 
 [dependencies.esil]
-#git = "https://github.com/sushant94/esil-rs"
- path = "../esil-rs"
+git = "https://github.com/radare/esil-rs"
+#path = "../esil-rs"

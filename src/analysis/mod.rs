@@ -6,11 +6,26 @@
 // except according to those terms.
 
 //! Module that implements analysis and optimizations on radeco IR.
-//!
-//!
 
 #[allow(dead_code)]
 pub mod valueset;
 // pub mod propagate;
 pub mod dom;
-pub mod constant_propagation;
+pub mod sccp {
+    pub mod sccp;
+}
+
+pub mod cse {
+    pub mod cse;
+}
+
+#[macro_use]
+pub mod matcher {
+    #[macro_use]
+    pub mod gmatch;
+}
+
+pub mod interproc {
+    pub mod call_summary;
+    pub mod transfer;
+}

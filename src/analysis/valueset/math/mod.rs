@@ -34,10 +34,10 @@ pub fn gcd_lcm(mut m: u64, mut n: u64) -> (u64, u64) {
         n = o;
     }
     (n,
-     if n != 0 {
-        p / n
-    } else {
+     if n == 0 {
         0
+    } else {
+        p / n
     })
 }
 

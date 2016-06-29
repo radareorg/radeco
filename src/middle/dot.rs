@@ -26,7 +26,7 @@ macro_rules! add_strings {
 	};
 }
 
-/// Represents the contents of a GraphViz attribute block
+/// Represents the contents of a `GraphViz` attribute block
 pub enum DotAttrBlock {
     /// The attribute block as string including the surrounding square brackets.
     /// Values have to be escaped manually.
@@ -41,21 +41,21 @@ pub enum DotAttrBlock {
 impl DotAttrBlock {
     fn bake(&mut self) -> &String {
         let mut r = String::new();
-        let attr = if let &mut DotAttrBlock::Hybrid(ref s, ref attr) = self {
+        let attr = if let DotAttrBlock::Hybrid(ref s, ref attr) = *self {
             r.push_str(&s);
             attr.clone()
         } else {
             Vec::new()
         };
 
-        if attr.len() > 0 {
+        if !attr.is_empty() {
             *self = DotAttrBlock::Attributes(attr);
         }
 
-        let s: String = match self {
-            &mut DotAttrBlock::Raw(ref l) => return l,
-            &mut DotAttrBlock::Attributes(ref attrs) => {
-                if attrs.len() == 0 {
+        let s: String = match *self {
+            DotAttrBlock::Raw(ref l) => return l,
+            DotAttrBlock::Attributes(ref attrs) => {
+                if attrs.is_empty() {
                     "".to_owned()
                 } else {
                     let mut t = " [".to_string();
@@ -72,7 +72,7 @@ impl DotAttrBlock {
         r.push_str(&s);
         r.push_str(";\n");
         *self = DotAttrBlock::Raw(r);
-        if let &mut DotAttrBlock::Raw(ref r) = self {
+        if let DotAttrBlock::Raw(ref r) = *self {
             return r;
         }
         unreachable!();
@@ -136,13 +136,13 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
         for i in &nodes {
             let block = g.node_cluster(i);
             clustermap.entry(T::node_index_new(block.unwrap()))
-                      .or_insert(Vec::new())
+                      .or_insert_with(Vec::new)
                       .push(i.clone());
         }
 
-        for (k, v) in clustermap.iter() {
+        for (k, v) in &clustermap {
             result.push_str(&*format!("subgraph cluster_{} {{\n", k.to_index()));
-            result.push_str(&*format!("rankdir=TB;\n"));
+            result.push_str("rankdir=TB;\n");
             for node in v.iter() {
                 result.push_str(&*g.node_attrs(node).bake());
             }

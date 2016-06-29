@@ -7,6 +7,7 @@
 
 //! Implements Dominance frontier and dominance tree computation.
 
+use std::default;
 use std::collections::{HashMap, HashSet};
 use petgraph::graph::Graph;
 use petgraph::graph;
@@ -24,6 +25,16 @@ pub struct DFSVisitor {
     visited: Vec<graph::NodeIndex>,
 }
 
+impl default::Default for DFSVisitor {
+    fn default() -> DFSVisitor {
+        DFSVisitor {
+            post_order: Vec::new(),
+            pre_order: Vec::new(),
+            visited: Vec::new(),
+        }
+    }
+}
+
 impl DFSVisitor {
     pub fn new() -> DFSVisitor {
         DFSVisitor {
@@ -38,17 +49,17 @@ impl DFSVisitor {
             return;
         }
 
-        self.pre_order.push(node.clone());
+        self.pre_order.push(node);
         let direction = EdgeDirection::Outgoing;
         let neighbors_iter = g.neighbors_directed(node, direction)
                               .collect::<Vec<graph::NodeIndex>>();
 
-        for n in neighbors_iter.iter() {
-            self.dfs(g, n.clone());
+        for n in &neighbors_iter {
+            self.dfs(g, *n);
         }
 
-        self.visited.push(node.clone());
-        self.post_order.push(node.clone());
+        self.visited.push(node);
+        self.post_order.push(node);
     }
 
     pub fn post_order(&self) -> Vec<graph::NodeIndex> {
@@ -61,11 +72,20 @@ impl DFSVisitor {
 }
 
 #[derive(Clone, Debug)]
-/// Wrapper struct that consolidates the Dom and PostDom information for a
+/// Wrapper struct that consolidates the `Dom` and `PostDom` information for a
 /// Graph.
 pub struct DomInfo {
     dom: Option<DomTree>,
     postdom: Option<DomTree>,
+}
+
+impl default::Default for DomInfo {
+    fn default() -> DomInfo {
+        DomInfo {
+            dom: None,
+            postdom: None,
+        }
+    }
 }
 
 impl DomInfo {
@@ -93,9 +113,9 @@ impl DomInfo {
               E: Clone
     {
 
-        let mut _g = (*g).clone();
-        _g.reverse();
-        let mut postdom = DomTree::build_dom_tree(&_g, i);
+        let mut g_ = (*g).clone();
+        g_.reverse();
+        let mut postdom = DomTree::build_dom_tree(&g_, i);
         postdom.compute_dominance_frontier();
         self.postdom = Some(postdom);
     }
@@ -153,7 +173,7 @@ impl DomInfo {
 /// Stores dominator information for a graph.
 ///
 /// Provides finer grained control over the analysis of a Graph and base for
-/// DomInfo.
+/// `DomInfo`.
 ///
 /// Module level documentation provides more information.
 pub struct DomTree {
@@ -162,6 +182,18 @@ pub struct DomTree {
     g: Graph<graph::NodeIndex, u8>,
     preds_map: HashMap<graph::NodeIndex, Vec<InternalIndex>>,
     dom_frontier: Option<HashMap<graph::NodeIndex, HashSet<graph::NodeIndex>>>,
+}
+
+impl default::Default for DomTree {
+    fn default() -> DomTree {
+        DomTree {
+            idom: Vec::new(),
+            rmap: HashMap::new(),
+            g: Graph::new(),
+            preds_map: HashMap::new(),
+            dom_frontier: None,
+        }
+    }
 }
 
 impl DomTree {
@@ -188,11 +220,11 @@ impl DomTree {
         let mut idom = *internal_index;
         let mut doms = Vec::<InternalIndex>::new();
         while idom != self.idom[idom] {
-            doms.push(idom.clone());
+            doms.push(idom);
             idom = self.idom[idom];
         }
 
-        doms.push(idom.clone());
+        doms.push(idom);
         doms.iter().map(|d| d.external()).collect()
     }
 
@@ -217,7 +249,7 @@ impl DomTree {
                 f2 = idom[f2];
             }
         }
-        return f1;
+        f1
     }
 
     pub fn build_dom_tree<N, E>(g: &Graph<N, E>, start_node: graph::NodeIndex) -> DomTree
@@ -252,8 +284,8 @@ impl DomTree {
             let mut dom_tree_nodes: Vec<InternalIndex> = Vec::new();
 
             // Initializations for nodes.
-            for item in nodes_iter.iter() {
-                let i = InternalIndex::new(item.1, item.0.clone());
+            for item in &nodes_iter {
+                let i = InternalIndex::new(item.1, item.0);
 
                 if item.0 == start_node {
                     start_index = i;
@@ -264,7 +296,7 @@ impl DomTree {
 
                 dom_tree.add_node(graph::NodeIndex::new(item.1));
                 dom_tree_nodes.push(i);
-                rmap.insert(item.0.clone(), i);
+                rmap.insert(item.0, i);
             }
             {
                 let tmp = Vec::<InternalIndex>::new();
@@ -276,12 +308,12 @@ impl DomTree {
             let mut changed = true;
             while changed {
                 changed = false;
-                for n in nodes_iter.iter() {
+                for n in &nodes_iter {
                     let node: graph::NodeIndex = n.0;
-                    let preds_iter = g.neighbors_directed(node.clone(), EdgeDirection::Incoming)
-                                      .map(|x| rmap.get(&x).unwrap().clone());
-                    let preds = preds_map.entry(node.clone())
-                                         .or_insert(preds_iter.collect::<Vec<_>>());
+                    let preds_iter = g.neighbors_directed(node, EdgeDirection::Incoming)
+                                      .map(|x| rmap.get(&x).unwrap());
+                    let preds = preds_map.entry(node)
+                                         .or_insert(preds_iter.cloned().collect::<Vec<_>>());
                     let mut new_idom = invalid_index;
                     for p in preds.iter() {
                         if idom[*p] < invalid_index {
@@ -304,7 +336,7 @@ impl DomTree {
             }
 
             // Add edges to the graph based on the idom information.
-            for i in dom_tree_nodes.iter() {
+            for i in &dom_tree_nodes {
                 if *i == idom[*i] {
                     continue;
                 }
@@ -312,7 +344,7 @@ impl DomTree {
             }
         }
 
-        return tree;
+        tree
     }
 
     pub fn compute_dominance_frontier(&mut self) {
@@ -322,7 +354,7 @@ impl DomTree {
 
         let node_count = self.idom.len();
         let mut frontier_map = HashMap::<graph::NodeIndex, HashSet<graph::NodeIndex>>::new();
-        for node in (0..node_count).map(|x| graph::NodeIndex::new(x)) {
+        for node in (0..node_count).map(graph::NodeIndex::new) {
             let internal_index = self.rmap.get(&node).unwrap();
             let preds = self.preds_map.get(&node).unwrap();
 
@@ -334,7 +366,7 @@ impl DomTree {
                 let mut runner = *p;
                 while runner != self.idom[*internal_index] {
                     let runner_index = runner.external();
-                    frontier_map.entry(runner_index).or_insert(HashSet::new()).insert(node);
+                    frontier_map.entry(runner_index).or_insert_with(HashSet::new).insert(node);
 
                     runner = self.idom[runner];
                 }
@@ -375,11 +407,11 @@ impl GraphDot for DomTree {
     }
 
     fn configure(&self) -> String {
-        format!("digraph cfg {{\nsplines=\"true\";\n")
+        "digraph cfg {{\nsplines=\"true\";\n".to_owned()
     }
 
     fn nodes(&self) -> Vec<Self::NodeIndex> {
-        (0..self.node_count()).map(|n| graph::NodeIndex::new(n)).collect()
+        (0..self.node_count()).map(graph::NodeIndex::new).collect()
     }
 
     fn edge_source(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {

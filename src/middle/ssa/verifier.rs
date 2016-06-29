@@ -49,7 +49,8 @@ impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
                        addr: Option<u64>)
                        -> Self::ValueRef {
         assert!(opc.allowed_in_ssa());
-        let op = self.add_op(block, opc, vt, addr);
+        // XXX
+        let op = self.add_op(opc, vt, addr);
         for (i, arg) in args.iter().enumerate() {
             self.op_use(op, i as u8, *arg);
         }
@@ -192,9 +193,7 @@ impl Verify for SSAStorage {
                     }
                     MOpcode::OpCmp |
                     MOpcode::OpGt |
-                    MOpcode::OpLt |
-                    MOpcode::OpLteq |
-                    MOpcode::OpGteq => {
+                    MOpcode::OpLt => {
                         check!(w == 1, SSAErr::IncompatibleWidth(*i, 1, w));
                     }
                     MOpcode::OpCall | MOpcode::OpStore => {}

@@ -16,8 +16,9 @@
 //!
 //! # Design
 //! radeco-lib is built on top of r2pipe.rs, a simple library that provides
-//! methods to communicate with radare2 (using pipes). To know more about
-//! r2pipe or radare2 in general, please head over to the
+//! methods
+//! to communicate with radare2 (using pipes). To know more about r2pipe or
+//! radare2 in general, please head over to the
 //! [repo](https://github.com/radare/radare2).
 //!
 //! radeco-lib works on analyzing ESIL (Evaluable Strings Intermediate
@@ -38,6 +39,7 @@
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
 
+// Support for extra lints throgh clippy
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
 
@@ -45,18 +47,18 @@ extern crate regex;
 extern crate petgraph;
 extern crate rustc_serialize;
 extern crate num;
-
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate r2pipe;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate log;
+#[macro_use] extern crate r2pipe;
 
 extern crate esil;
 
-#[macro_use]
-pub mod utils;
+#[macro_use] pub mod utils;
 pub mod middle;
-pub mod analysis;
-pub mod frontend;
+#[macro_use] pub mod analysis;
+pub mod frontend {
+    pub mod ssaconstructor;
+    pub mod source;
+    pub mod containers;
+}
 pub mod backend;

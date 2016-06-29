@@ -7,7 +7,7 @@
 
 //! Defines the traits to be implemented by SSA data structures.
 //!
-//! These traits extend upon the ones provided in cfg_traits.
+//! These traits extend upon the ones provided in `cfg_traits.1
 //!
 //! # Design
 //!
@@ -21,7 +21,7 @@
 //!
 //! The associated type `SSA::ValueRef` is used by the methods to refer to
 //! nodes.
-//!  ValueRefs are invalidated by removal or replacement of the target node.
+//!  `ValueRefs` are invalidated by removal or replacement of the target node.
 //!  You can revalidate a ValueRef by calling `SSA::refresh` on it.
 //!  Currently `SSAStorage` automatically uses `refresh` on arguments of its
 //!  `*_use`, `get_node_data` and `replace` methods.
@@ -70,11 +70,12 @@ impl From<usize> for ValueType {
     }
 }
 
-/// Data associated with a basic block. Use is optional.
-#[derive(Clone, Debug)]
-pub struct BBInfo {
-    pub addr: u64,
-}
+pub struct BBInfo;
+//// Data associated with a basic block. Use is optional.
+//#[derive(Clone, Debug)]
+//pub struct BBInfo {
+    //pub addr: u64,
+//}
 
 /// Value node without operands
 #[derive(Clone, Debug)]
@@ -85,6 +86,7 @@ pub enum NodeType {
     Phi,
     /// A node with unknown value.
     Undefined,
+    Comment(String),
 }
 
 /// Value node without operands with `ValueType`
@@ -101,10 +103,11 @@ pub struct NodeData {
 pub trait SSA: CFG {
 	type ValueRef: Eq + Hash + Clone + Copy + Debug; // We could drop the Copy trait later and insert .clone()
 
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Node accessors and helpers
-    /// ////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    //// Node accessors and helpers
+    ///////////////////////////////////////////////////////////////////////////
 
+    fn get_address(&self, &Self::ValueRef) -> ir::MAddress;
     /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
     fn exprs_in(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
@@ -128,12 +131,12 @@ pub trait SSA: CFG {
 
     /// Get the lhs() of the Operation with NodeIndex 'i'.
     fn lhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[0].clone()
+        self.get_operands(i)[0]
     }
 
     /// Get the rhs() of the Operation with NodeIndex 'i'.
     fn rhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[1].clone()
+        self.get_operands(i)[1]
     }
 
     /// Get the actual NodeData.
@@ -196,27 +199,28 @@ pub trait SSAMod: SSA + CFGMod {
 
     /// Add a new operation node.
     fn add_op(&mut self,
-              block: Self::ActionRef,
               opc: ir::MOpcode,
               vt: ValueType,
               addr: Option<u64>)
               -> Self::ValueRef;
 
     /// Add a new constant node.
-    fn add_const(&mut self, block: Self::ActionRef, value: u64) -> Self::ValueRef;
+    fn add_const(&mut self, value: u64) -> Self::ValueRef;
 
     /// Add a new phi node.
-    fn add_phi(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
+    fn add_phi(&mut self, vt: ValueType) -> Self::ValueRef;
 
     /// Add a new undefined node
-    fn add_undefined(&mut self, block: Self::ActionRef, vt: ValueType) -> Self::ValueRef;
+    fn add_undefined(&mut self, vt: ValueType) -> Self::ValueRef;
 
     /// Add a new comment node
     fn add_comment(&mut self,
-                   block: Self::ActionRef,
                    vt: ValueType,
                    msg: String)
                    -> Self::ValueRef;
+    
+    /// Associate a node with index n with a block
+    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, ir::MAddress);
 
     /// Mark the node as selector for the control edges away from the specified basic block
     fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
@@ -230,6 +234,9 @@ pub trait SSAMod: SSA + CFGMod {
     /// Set the index-th argument of the node.
     fn op_use(&mut self, node: Self::ValueRef, index: u8, argument: Self::ValueRef);
 
+    /// Disconnect n1 from n2 (deletes the edge if one exists.
+    fn disconnect(&mut self, &Self::ValueRef, &Self::ValueRef);
+
     /// Replace one node by another within one basic block.
     fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
 
@@ -238,39 +245,24 @@ pub trait SSAMod: SSA + CFGMod {
 
     /// Remove control flow edge. This is a part of SSAMod as this potentially modifies the ssa.
     fn remove_edge(&mut self, i: &Self::CFEdgeRef);
+
+    fn map_registers(&mut self, regs: Vec<String>);
+
+    fn set_addr(&mut self, &Self::ValueRef, ir::MAddress);
 }
 
 /// Extras. TODO
 ///
-/// Design requirement - For a method to be a part of SSAExtras, it __has__ to have a default
+/// Design requirement - For a method to be a part of `SSAExtras`, it __has__ to have a default
 /// implementation that would work out of the box. Since these methods are only extras and do not
 /// add any major functionality, but rather just convinence or display glitter, the user must not
 /// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
 pub trait SSAExtra: SSA {
-    fn mark(&mut self, _: &Self::ValueRef) {
-        ();
-    }
-
-    fn clear_mark(&mut self, &Self::ValueRef) {
-        ();
-    }
-
-    fn set_color(&mut self, _: &Self::ValueRef, _: u8) {
-        ();
-    }
-
-    fn set_comment(&mut self, _: &Self::ValueRef, _: String) {
-        ();
-    }
-
-    fn set_addr(&mut self, _: &Self::ValueRef, _: String) {
-        ();
-    }
-
-    fn add_flag(&mut self, _: &Self::ValueRef, _: String) {
-        ();
-    }
-
+    fn mark(&mut self, _: &Self::ValueRef) { }
+    fn clear_mark(&mut self, &Self::ValueRef) { }
+    fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
+    fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
+    fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false
     }
@@ -290,4 +282,10 @@ pub trait SSAExtra: SSA {
     fn flags(&self, _: &Self::ValueRef) -> Option<String> {
         None
     }
+}
+
+pub trait SSAWalk<I: Iterator<Item=<Self as SSA>::ValueRef>>: SSA {
+    fn bfs_walk(&self) -> I;
+    fn inorder_walk(&self) -> I;
+    fn dfs_walk(&self) -> I;
 }

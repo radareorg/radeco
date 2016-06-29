@@ -7,11 +7,18 @@
 
 //! Components processing data in SSA form.
 
-pub mod cfg;
 pub mod dce;
-pub mod display;
 pub mod dot;
 pub mod ir;
+pub mod ir_writer;
 pub mod phiplacement;
 pub mod regfile;
-pub mod ssa;
+
+pub mod ssa {
+    pub mod cfg_traits;
+    pub mod ssa_traits;
+    pub mod ssastorage;
+    pub mod error;
+    pub mod ssadot;
+    mod bimap;
+}

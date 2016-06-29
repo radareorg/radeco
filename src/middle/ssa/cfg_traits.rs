@@ -42,6 +42,8 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
+use middle::ir::MAddress;
+
 /// Provides __accessors__ to the underlying storage
 pub trait CFG {
 	type ActionRef: Eq + Hash + Clone + Copy + Debug;
@@ -68,15 +70,15 @@ pub trait CFG {
     /// Reference that represents and Invalid block
     fn invalid_action(&self) -> Self::ActionRef;
 
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Edge accessors and helpers
-    /// ////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    //// Edge accessors and helpers
+    ///////////////////////////////////////////////////////////////////////////
 
     /// Reference to all outgoing edges from a block
-    fn edges_of(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
+    fn edges_of(&self, i: &Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
 
     /// Reference to all the incoming edges to a block
-    fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
+    fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
 
     /// Returns (source_block, target_block) for an edge
     fn info(&self, i: &Self::CFEdgeRef) -> (Self::ActionRef, Self::ActionRef);
@@ -105,7 +107,8 @@ pub trait CFG {
 
     /// Reference that represents an Invalid control flow edge.
     fn invalid_edge(&self) -> Self::CFEdgeRef;
-
+    
+    fn address(&self, block: &Self::ActionRef) -> Option<MAddress>;
 }
 
 /// Provides __mutators__ to the underlying storage
@@ -126,6 +129,8 @@ pub trait CFGMod: CFG {
 
     /// Add a control edge between to basic blocks
     fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
+
+    fn remove_control_edge(&mut self, source: Self::CFEdgeRef);
 
     /// Will remove a block and all its associated data from the graph
     fn remove_block(&mut self, node: Self::ActionRef);
