@@ -567,39 +567,6 @@ mod test {
     }
 
     #[test]
-    fn ssa_test_2() {
-        let mut reg_profile = Default::default();
-        let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "instructions2.json");
-        let mut ssa = SSAStorage::new();
-        {
-            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
-            constructor.run(instructions.ops.unwrap());
-        }
-        {
-            dce::collect(&mut ssa);
-        }
-
-        let mut writer: IRWriter = Default::default();
-        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
-
-        let mut ssa = {
-            let mut analyzer = sccp::Analyzer::new(&mut ssa);
-            analyzer.analyze();
-            analyzer.emit_ssa()
-        };
-        {
-            dce::collect(&mut ssa);
-        }
-        let tmp = dot::emit_dot(&ssa);
-        let mut f = File::create("example2.dot").unwrap();
-        f.write_all(tmp.as_bytes()).expect("Write failed");
-
-        let mut writer: IRWriter = Default::default();
-        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
-    }
-
-    #[test]
     fn ssa_bfs_walk() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
