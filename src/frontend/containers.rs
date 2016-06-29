@@ -41,18 +41,19 @@ pub struct CallContext {
     ctx_translate: HashMap<NodeIndex, NodeIndex>,
 }
 
-// TODO: Re-enable if needed. Current members of RadecoFunction have default implementation.
-//impl Default for RadecoFunction {
-    //fn default() -> RadecoFunction {
-        //RadecoFunction {
-            //ssa: SSAStorage::new(),
-            //call_ctx: Vec::new(),
-            //callrefs: BTreeSet::new(),
-            //callxrefs: BTreeSet::new(),
-            //name: String::new(),
-        //}
-    //}
-//}
+// TODO: Re-enable if needed. Current members of RadecoFunction have default
+// implementation.
+// impl Default for RadecoFunction {
+// fn default() -> RadecoFunction {
+// RadecoFunction {
+// ssa: SSAStorage::new(),
+// call_ctx: Vec::new(),
+// callrefs: BTreeSet::new(),
+// callxrefs: BTreeSet::new(),
+// name: String::new(),
+// }
+// }
+// }
 
 // Implementations sepecific to `RadecoFunction`.
 impl RadecoFunction {
@@ -115,7 +116,8 @@ fn ssa_single_fn(f: &FunctionInfo,
     rfn
 }
 
-// MAYBE TODO: Replace `RadecoModule` and `RadecoFunction` by generic `RModule` and `RFunction`.
+// MAYBE TODO: Replace `RadecoModule` and `RadecoFunction` by generic `RModule`
+// and `RFunction`.
 // From trait to construct a module from `Source`.
 // Note that this conversion is expensive as the source is used to construct
 // the SSA for all the function that it holds and perform basic analysis.
@@ -184,16 +186,16 @@ pub trait RModule {
 mod test {
     use super::*;
     use r2pipe::r2::R2;
-    use frontend::source::Source;
+    use frontend::source::{FileSource, Source};
     use middle::ir_writer::IRWriter;
     use std::io;
     use middle::dce;
 
     #[test]
     fn module_test() {
-        let mut r2 = R2::open(Some("./crowell_example.o")).expect("Failed to open r2");
-        r2.init();
-        let mut rmod = RadecoModule::from(&mut r2);
+        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"))
+                              .expect("FileSource not found");
+        let mut rmod = RadecoModule::from(&mut fsource);
         for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
             {
                 dce::collect(&mut rfn.ssa);

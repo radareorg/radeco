@@ -193,13 +193,13 @@ impl From<R2> for FileSource {
         let bin_info = r2.bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
         let separator = path::MAIN_SEPARATOR;
-        let fname = fname.replace(separator, "_");
+        let fname = Path::new(&fname).file_stem().unwrap();
         let mut dir = PathBuf::from(".");
         dir.push(&fname);
         fs::create_dir_all(&dir).expect("Failed to create directory");
         let mut fsource = FileSource {
             dir: dir.to_str().unwrap().to_owned(),
-            base_name: fname,
+            base_name: fname.to_str().unwrap().to_owned(),
         };
 
         {
