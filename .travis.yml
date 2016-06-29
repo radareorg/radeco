@@ -34,9 +34,6 @@ script:
 after_success:
   - travis-cargo --only stable coveralls --no-sudo --verify
   - travis-cargo --only stable doc-upload
-(??)  # measure code coverage and upload to coveralls.io
-(??)  - travis-cargo coveralls --no-sudo
-(??)
 env:
   global:
   - TRAVIS_CARGO_NIGHTLY_FEATURE=""
