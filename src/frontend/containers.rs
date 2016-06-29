@@ -81,8 +81,8 @@ impl CallContext {
     }
 }
 
-// Private function that is run to construct SSA for a single function and fill in the basic
-// information. Note that this function is the function that is run in each thread.
+// Private function to construct SSA for a single function and fill in the basic
+// information. Note: This function is threaded in module-ssa construction.
 fn ssa_single_fn(f: &FunctionInfo,
                  reg_info: &LRegInfo,
                  instructions: Vec<LOpInfo>)

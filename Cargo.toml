@@ -23,8 +23,9 @@ log = "*"
 clippy = {version = "0.0.61", optional = true}
 
 [dependencies.r2pipe]
-#git = "https://github.com/radare/r2pipe.rs"
-path = "../r2pipe.rs"
+git = "https://github.com/radare/r2pipe.rs"
+#path = "../r2pipe.rs"
 
 [dependencies.esil]
-path = "../esil-rs"
+git = "https://github.com/radare/esil-rs"
+#path = "../esil-rs"
