@@ -1072,8 +1072,7 @@ impl SSAWalk<Walker> for SSAStorage {
                 for expr in &exprs {
                     nodes.push_back(*expr);
                 }
-                let mut outgoing = self.edges_of(block);
-                for outedge in outgoing {
+                for outedge in self.edges_of(block) {
                     let target = self.target_of(&outedge.0);
                     let addr = self.address(&target).unwrap();
                     let key = InorderKey::new(addr, target);

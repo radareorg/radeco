@@ -26,6 +26,7 @@ pub mod matcher {
 }
 
 pub mod interproc {
-    pub mod call_summary;
+    pub mod summary;
+    pub mod interproc;
     pub mod transfer;
 }

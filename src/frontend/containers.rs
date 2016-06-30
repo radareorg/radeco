@@ -13,6 +13,7 @@ use petgraph::graph::NodeIndex;
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
 use middle::ssa::ssastorage::SSAStorage;
+use middle::ssa::ssa_traits::{SSA, SSAWalk, SSAMod};
 
 #[derive(Clone, Debug, Default)]
 pub struct RadecoModule {
@@ -168,17 +169,39 @@ impl RadecoModule {
 }
 
 /// Trait that defines a `Function`.
-pub trait RFunction { }
+pub trait RFunction {
+    type I: Iterator<Item=<Self::SSA as SSA>::ValueRef>;
+    type SSA: SSAWalk<Self::I> + SSAMod;
+
+    fn args(&self) -> BTreeSet<<Self::SSA as SSA>::ValueRef>;
+    fn locals(&self) -> BTreeSet<<Self::SSA as SSA>::ValueRef>;
+    fn returns(&self) -> BTreeSet<<Self::SSA as SSA>::ValueRef>;
+    fn modifides(&self) -> BTreeSet<<Self::SSA as SSA>::ValueRef>;
+
+    fn set_args(&mut self, &[<Self::SSA as SSA>::ValueRef]);
+    fn set_locals(&mut self, &[<Self::SSA as SSA>::ValueRef]);
+    fn set_returns(&mut self, &[<Self::SSA as SSA>::ValueRef]);
+    fn set_modifides(&mut self, &[<Self::SSA as SSA>::ValueRef]);
+
+    // Expose the internally contained ssa.
+    fn ssa_ref(&self) -> &Self::SSA;
+    fn ssa_ref_mut(&mut self) -> &mut Self::SSA;
+}
+
+
+
 /// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
 /// all information loaded from the binary. It acts as a container for `Function`s.
 pub trait RModule {
     type FnRef: Copy + Clone + Debug + Hash + Eq;
+    type RFn: RFunction;
 
     fn callees_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
     fn callers_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
     fn functions(&self) -> Vec<Self::FnRef>;
-    fn function_ref(&self, &Self::FnRef) -> &RFunction;
-    fn function_ref_mut(&mut self, &Self::FnRef) -> &mut RFunction;
+
+    fn function_by_ref(&self, &Self::FnRef) -> &Self::RFn;
+    fn function_by_ref_mut(&mut self, &Self::FnRef) -> &mut Self::RFn;
 }
 
 

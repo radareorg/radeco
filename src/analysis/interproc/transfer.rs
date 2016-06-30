@@ -2,10 +2,8 @@
 
 use frontend::containers::{RModule, RFunction};
 
-pub trait Transfer<T: RModule> {
-    fn transfer(&mut T, &T::FnRef);
-}
-
-pub trait Propagate<T: RModule> {
-    fn propagate(&mut T, &T::FnRef);
+pub trait InterProcAnalysis<T: RModule> {
+    fn new() -> Self;
+    fn transfer(&mut self, &mut T, &T::FnRef);
+    fn propagate(&mut self, &mut T, &T::FnRef);
 }

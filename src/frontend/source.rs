@@ -1,11 +1,9 @@
 //! Defines the `Source` Trait.
 
-use std::collections::{BTreeMap, HashMap};
 use std::path::{self, Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 
-use rustc_serialize::json::{DecodeResult, Json, ToJson};
 use rustc_serialize::json;
 
 use r2pipe::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
@@ -192,7 +190,6 @@ impl From<R2> for FileSource {
     fn from(mut r2: R2) -> FileSource {
         let bin_info = r2.bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
-        let separator = path::MAIN_SEPARATOR;
         let fname = Path::new(&fname).file_stem().unwrap();
         let mut dir = PathBuf::from(".");
         dir.push(&fname);

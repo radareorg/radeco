@@ -10,9 +10,9 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::default;
 use petgraph::graph::NodeIndex;
-use middle::ir::{MAddress, MOpcode};
+use middle::ir::{MOpcode};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
-use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType};
+use middle::ssa::ssa_traits::{SSA, SSAWalk, ValueType};
 use middle::ssa::cfg_traits::CFG;
 
 const BLOCK_SEP: &'static str = "{";
@@ -90,7 +90,7 @@ impl default::Default for IRWriter {
 }
 
 impl IRWriter {
-    pub fn parse<T: AsRef<str>>(il: T) -> SSAStorage {
+    pub fn parse<T: AsRef<str>>(_il: T) -> SSAStorage {
         unimplemented!();
     }
 
@@ -243,7 +243,7 @@ impl IRWriter {
 
     fn fmt_indent(by: u64) -> String {
         let mut indent = String::new();
-        for i in 0..by {
+        for _ in 0..by {
             indent.push_str("    ");
         }
         indent
@@ -272,7 +272,7 @@ impl IRWriter {
                                 self.fmt_expression(node, opcode, vt, operands, &ssa))
                     }
                 }
-                NodeData::Phi(vt, ref name) => {
+                NodeData::Phi(_, _) => {
                     let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), &ssa);
                     let next = self.ctr + 1;
                     let result_idx = self.seen.entry(node).or_insert(next);
@@ -288,7 +288,7 @@ impl IRWriter {
                     phi_line.push_str(")");
                     indent!(self.indent, phi_line)
                 }
-                NodeData::Undefined(vt) => {
+                NodeData::Undefined(_) => {
                     "Undefined".to_owned()
                 }
                 NodeData::BasicBlock(addr) => {

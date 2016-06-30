@@ -12,15 +12,12 @@
 //! Example for matching x86 function prologue:
 //!
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::fmt;
 
-use regex::Regex;
-
 use middle::ir::{MAddress, MOpcode};
-use middle::ssa::ssa_traits::{NodeData, NodeType, SSA, SSAMod, SSAWalk, ValueType};
-use middle::ssa::ssastorage::SSAStorage;
+use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk, ValueType};
 
 #[derive(Clone, Debug)]
 struct ParseToken {
@@ -32,10 +29,12 @@ impl ParseToken {
         self.op(0)
     }
 
+    #[allow(dead_code)]
     fn rhs(&self) -> Option<String> {
         self.op(2)
     }
 
+    #[allow(dead_code)]
     fn lhs(&self) -> Option<String> {
         self.op(1)
     }

@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use middle::ssa::ssa_traits::{NodeData, NodeType, SSA, SSAMod, SSAWalk};
-use middle::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ir::MOpcode;
 
 #[derive(Debug)]

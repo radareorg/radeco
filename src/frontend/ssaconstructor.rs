@@ -147,7 +147,7 @@ impl<'a, T> SSAConstruct<'a, T>
         Some(ret)
     }
 
-    fn process_out(&mut self, result: Option<T::ValueRef>, address: MAddress) -> Option<Token> {
+    fn process_out(&mut self, result: Option<T::ValueRef>, _: MAddress) -> Option<Token> {
         // NB 1: Process out is defined for any operation, not only equal as before.
         // Hence, here we should give result a new entry in the "intermediates" table
         // and return a
@@ -295,6 +295,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 (MOpcode::OpMod, ValueType::Integer { width: result_size })
             }
             Token::EPoke(n) => {
+                // TODO: rhs has to be cast to size 'n' if it's size is not already n.
                 let mem = self.phiplacer.read_variable(address, self.mem_id);
                 let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
                                                     address,
