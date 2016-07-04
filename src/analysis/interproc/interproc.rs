@@ -7,8 +7,8 @@ use frontend::containers::{RFunction, RModule};
 
 #[derive(Debug)]
 pub struct InterProcAnalyzer<'a, M, T>
-    where M: 'a + RModule,
-          T: InterProcAnalysis<M>,
+    where M: 'a + RModule<'a>,
+          T: InterProcAnalysis<'a, M>,
 {
     analyzed: HashSet<M::FnRef>,
     rmod: &'a mut M,
@@ -16,8 +16,8 @@ pub struct InterProcAnalyzer<'a, M, T>
 }
 
 impl<'a, M, T> InterProcAnalyzer<'a, M, T>
-    where M: 'a + RModule,
-          T: InterProcAnalysis<M>,
+    where M: 'a + RModule<'a>,
+          T: InterProcAnalysis<'a, M>,
 {
     pub fn new(rmod: &'a mut M) -> InterProcAnalyzer<'a, M, T> {
         InterProcAnalyzer {
@@ -27,7 +27,7 @@ impl<'a, M, T> InterProcAnalyzer<'a, M, T>
         }
     }
 
-    pub fn analyze_module<Y: 'a + RModule, X: InterProcAnalysis<Y>>(ssa: &'a mut Y) {
+    pub fn analyze_module<Y: 'a + RModule<'a>, X: InterProcAnalysis<'a, Y>>(ssa: &'a mut Y) {
         let mut ipa = InterProcAnalyzer::<Y, X>::new(ssa);
         for f in &ipa.rmod.functions() {
             ipa.analyze_function(f)

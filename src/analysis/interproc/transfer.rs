@@ -2,7 +2,7 @@
 
 use frontend::containers::{RModule, RFunction};
 
-pub trait InterProcAnalysis<T: RModule> {
+pub trait InterProcAnalysis<'a, T: RModule<'a>> {
     fn new() -> Self;
     fn transfer(&mut self, &mut T, &T::FnRef);
     fn propagate(&mut self, &mut T, &T::FnRef);

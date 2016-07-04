@@ -9,8 +9,7 @@ use rustc_serialize::json;
 use r2pipe::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
 use r2pipe::r2::R2;
 
-pub trait Source: Sized {
-    fn open(Option<&str>) -> Result<Self, String>;
+pub trait Source {
     fn functions(&mut self) -> Vec<FunctionInfo>;
     fn instructions_at(&mut self, u64) -> Vec<LOpInfo>;
     fn register_profile(&mut self) -> LRegInfo;
@@ -19,7 +18,6 @@ pub trait Source: Sized {
     fn strings(&mut self) -> Vec<LStringInfo>;
 
     // Non essential / functions with default implementation.
-
     fn function_at(&mut self, address: u64) -> Option<FunctionInfo> {
         for f in self.functions() {
             match f.offset {
@@ -72,10 +70,6 @@ pub trait Source: Sized {
 
 // Implementation of `Source` trait for R2.
 impl Source for R2 {
-    fn open(bin: Option<&str>) -> Result<Self, String> {
-        R2::new(bin)
-    }
-
     fn functions(&mut self) -> Vec<FunctionInfo> {
         let fns = self.fn_list();
         fns.expect("Failed to load funtion info from r2")
@@ -149,17 +143,19 @@ mod suffix {
     pub const STRING: &'static str = "strings";
 }
 
-impl Source for FileSource {
-    fn open(f: Option<&str>) -> Result<FileSource, String> {
+impl FileSource {
+    pub fn open(f: Option<&str>) -> FileSource {
         let path = Path::new(f.unwrap());
         let dir = path.parent().unwrap().to_str().unwrap();
         let base_name = path.file_name().unwrap().to_str().unwrap();
-        Ok(FileSource {
+        FileSource {
             dir: dir.to_owned(),
             base_name: base_name.to_owned(),
-        })
+        }
     }
+}
 
+impl Source for FileSource {
     fn functions(&mut self) -> Vec<FunctionInfo> {
         json::decode(&self.read_file(suffix::FUNCTION_INFO)).expect("Failed to decode json")
     }
