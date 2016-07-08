@@ -13,13 +13,14 @@ use petgraph::graph::NodeIndex;
 
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
+use frontend::bindings::Binding;
 use middle::ssa::ssastorage::{SSAStorage, Walker};
 use middle::ssa::ssa_traits::{SSA, SSAWalk, SSAMod};
 
 pub struct RadecoModule<'a> {
-    functions: HashMap<u64, RadecoFunction>,
+    pub functions: HashMap<u64, RadecoFunction>,
     fname: HashMap<String, u64>,
-    src: Option<&'a mut Source>,
+    pub src: Option<&'a mut Source>,
 }
 
 impl<'a> fmt::Debug for RadecoModule<'a> {
@@ -48,12 +49,14 @@ pub struct SSAInfo {
 
 #[derive(Clone, Debug, Default)]
 pub struct RadecoFunction {
-    ssa: SSAStorage,
-    name: String,
+    // TODO: Should not be pub.
+    pub ssa: SSAStorage,
+    pub name: String,
     call_ctx: Vec<CallContext>,
-    callrefs: BTreeSet<u64>,
-    callxrefs: BTreeSet<u64>,
-    locals: Vec<LVarInfo>,
+    callrefs: Vec<u64>,
+    callxrefs: Vec<u64>,
+    bindings: Vec<Binding<NodeIndex>>,
+    pub locals: Vec<LVarInfo>,
     // Var and argument information about the function.
     ssa_info: SSAInfo,
 }
@@ -128,7 +131,9 @@ fn ssa_single_fn(f: &FunctionInfo,
                                    }
                                })
                                .map(|x| x.addr.expect("Invalid address"))
-                               .collect::<BTreeSet<_>>();
+                               .collect::<BTreeSet<_>>()
+                               .into_iter()
+                               .collect();
     }
 
     if let Some(ref callxrefs) = f.codexrefs {
@@ -140,7 +145,9 @@ fn ssa_single_fn(f: &FunctionInfo,
                                      }
                                  })
                                  .map(|x| x.addr.expect("Invalid address"))
-                                 .collect::<BTreeSet<_>>();
+                                 .collect::<BTreeSet<_>>()
+                                 .into_iter()
+                                 .collect();
     }
     rfn
 }

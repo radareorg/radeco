@@ -17,6 +17,8 @@ pub trait Source {
     fn section_map(&mut self) -> Vec<LSectionInfo>;
     fn strings(&mut self) -> Vec<LStringInfo>;
 
+    fn send(&mut self, _: &str) { }
+
     // Non essential / functions with default implementation.
     fn function_at(&mut self, address: u64) -> Option<FunctionInfo> {
         for f in self.functions() {
@@ -97,6 +99,10 @@ impl Source for R2 {
 
     fn strings(&mut self) -> Vec<LStringInfo> {
         self.strings(false).expect("Failed to load strings from r2")
+    }
+
+    fn send(&mut self, s: &str) {
+        self.send(s);
     }
 }
 

@@ -9,6 +9,10 @@ authors = [
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "minidec"
+path = "minidec/main.rs"
+
 [features]
 default = []
 trace_log = []

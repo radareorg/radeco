@@ -2,6 +2,8 @@
 
 use std::collections::HashSet;
 
+use petgraph::graph::NodeIndex;
+
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::containers::{RModule, RFunction};
 use middle::ssa::ssa_traits::{SSA, SSAMod, NodeType};
@@ -17,11 +19,13 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
     }
 
     // Compute fn arguments, modifides and returns lists.
+    // TODO: Add support for memory args and modifides.
     fn transfer(&mut self, rmod: &mut T, fn_ref: &T::FnRef) {
         {
             // fn arguments.
             let mut args = HashSet::new();
-            //let mut modifides = HashSet::new();
+            let mut modifides = HashSet::new();
+            let mut returns = HashSet::new();
             let rfn = rmod.function_by_ref_mut(fn_ref);
             if rfn.is_none() {
                 // Nothing to analyze. This is not a function defined inside the loaded binary. So
@@ -46,7 +50,8 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                         let insert = uses.iter().any(|x| {
                             if let Ok(ref data) = ssa.get_node_data(x) {
                                 match data.nt {
-                                    NodeType::Op(MOpcode::OpLoad) | NodeType::Op(MOpcode::OpStore) => {
+                                    NodeType::Op(MOpcode::OpLoad) |
+                                    NodeType::Op(MOpcode::OpStore) => {
                                         // If the store is to a local variable, then it is still an
                                         // argument. Otherwise, it is part of preservation code and
                                         // must not be considered an argument to the function.
@@ -63,7 +68,32 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                         }
                     }
                 }
+                let exit_block = ssa.exit_node();
+                let rs = ssa.registers_at(&exit_block);
+                for r in &ssa.args_of(rs) {
+                    let (insert_r, insert_m) = if let Ok(ref data) = ssa.get_node_data(r) {
+                        match data.nt {
+                            NodeType::Comment(_) => (false, false),
+                            NodeType::Op(MOpcode::OpLoad) => {
+                                (locals.contains(&r), true)
+                            }
+                            _ => (true, true),
+                        }
+                    } else {
+                        (false, false)
+                    };
+
+                    if insert_m {
+                        modifides.insert(*r);
+                    }
+                    if insert_r {
+                        returns.insert(*r);
+                    }
+                }
             }
+
+            rfn.set_returns(&returns.into_iter().collect::<Vec<_>>());
+            rfn.set_modifides(&modifides.into_iter().collect::<Vec<_>>());
             rfn.set_args(&args.into_iter().collect::<Vec<_>>());
         }
     }
@@ -76,6 +106,16 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
     }
 }
 
+impl CallSummary {
+    fn detect_arguments() -> HashSet<NodeIndex> {
+        unimplemented!()
+    }
 
+    fn detect_modifides() -> HashSet<NodeIndex> {
+        unimplemented!()
+    }
 
-
+    fn detect_locals() -> HashSet<NodeIndex> {
+        unimplemented!()
+    }
+}
