@@ -225,7 +225,7 @@ pub trait RFunction {
 
     // Expose the internally contained ssa.
     fn ssa_ref(&self) -> &Self::SSA;
-    fn ssa_ref_mut(&mut self) -> &mut Self::SSA;
+    fn ssa_mut(&mut self) -> &mut Self::SSA;
 }
 
 pub struct IdxIter<'a, N: 'a> {
@@ -339,7 +339,7 @@ impl RFunction for RadecoFunction {
         &self.ssa
     }
 
-    fn ssa_ref_mut(&mut self) -> &mut Self::SSA {
+    fn ssa_mut(&mut self) -> &mut Self::SSA {
         &mut self.ssa
     }
 }

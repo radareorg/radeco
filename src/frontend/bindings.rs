@@ -2,8 +2,107 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::ops::{Index, IndexMut};
+use std::iter::Filter;
 
 use petgraph::graph::NodeIndex;
+
+pub trait RBind { 
+    type SSARef: fmt::Debug + Clone;
+}
+
+/// Trait that describes variable bindings for a function.
+pub trait RBindings {
+    type BTy: RBind;
+    type Idx: Clone + fmt::Debug;
+
+    fn new() -> Self;
+    fn insert(&mut self, Self::BTy) -> Self::Idx;
+
+    fn binding(&self, &Self::Idx) -> Option<&Self::BTy>;
+    fn binding_mut(&self, &Self::Idx) -> Option<&mut Self::BTy>;
+
+    fn bindings(&self) -> RBinds<Self::BTy>;
+    fn bindings_mut(&mut self) -> RBindsMut<Self::BTy>;
+}
+
+#[derive(Debug)]
+pub struct RBinds<'a, T: 'a + RBind> {
+    binds: ::std::slice::Iter<'a, T>,
+}
+
+impl<'a, T: 'a + RBind> Iterator for RBinds<'a, T> {
+    type Item = &'a T;
+    fn next(&mut self) -> Option<&'a T> {
+        self.binds.next()
+    }
+}
+
+#[derive(Debug)]
+pub struct RBindsMut<'a, T: 'a + RBind> {
+    binds: ::std::slice::IterMut<'a, T>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RadecoBindings<T: RBind> {
+    binds: Vec<T>,
+}
+
+impl<BTy: RBind> Index<usize> for RadecoBindings<BTy> {
+    type Output = BTy;
+    fn index<'a>(&'a self, index: usize) -> &'a Self::Output {
+        self.binding(&index).unwrap()
+    }
+}
+
+
+impl<BTy: RBind> RBindings for RadecoBindings<BTy> {
+    type BTy = BTy;
+    type Idx = usize;
+
+    fn new() -> Self {
+        unimplemented!()
+    }
+
+    fn insert(&mut self, bind: BTy) -> usize {
+        unimplemented!()
+    }
+
+    fn binding(&self, idx: &usize) -> Option<&BTy> {
+        unimplemented!()
+    }
+
+    fn binding_mut(&self, idx: &usize) -> Option<&mut BTy> {
+        unimplemented!()
+    }
+
+    fn bindings(&self) -> RBinds<BTy> {
+        unimplemented!()
+    }
+
+    fn bindings_mut(&mut self) -> RBindsMut<BTy> {
+        unimplemented!()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Binding<T: fmt::Debug + Clone> {
+    // Optional name used to represent this binding.
+    named: Option<String>,
+    // Type of binding.
+    vloc: VarLocation,
+    dty: VarDataType,
+    // Node indices in the function ssa that corresponds to this binding.
+    ssa_refs: Vec<T>,
+    set: HashSet<VarSet>,
+}
+
+impl<'a, T: 'a + RBind> Iterator for RBindsMut<'a, T> {
+    type Item = &'a mut T;
+    fn next(&mut self) -> Option<&'a mut T> {
+        self.binds.next()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum VarLocation {
@@ -40,17 +139,7 @@ enum VarSet {
     Returned,
 }
 
-#[derive(Clone, Debug)]
-pub struct Binding<T: fmt::Debug + Clone> {
-    // Optional name used to represent this binding.
-    named: Option<String>,
-    // Type of binding.
-    vloc: VarLocation,
-    dty: VarDataType,
-    // Node indices in the function ssa that corresponds to this binding.
-    ssa_refs: Vec<T>,
-    set: HashSet<VarSet>,
-}
+
 
 #[derive(Clone, Copy, Debug)]
 pub enum VarDataType {
@@ -155,12 +244,13 @@ impl<T: Clone + fmt::Debug> Binding<T> {
 
     pub fn local_info(&self) -> LocalInfo {
         if let VarLocation::Memory(MemoryRegion::FunctionLocal { base, offset }) = self.vloc {
-            return LocalInfo {
+            LocalInfo {
                 base: base,
                 offset: offset,
-            };
+            }
+        } else {
+            panic!()
         }
-        panic!()
     }
 
     pub fn is_stack(&self) -> bool {
@@ -197,7 +287,7 @@ impl<T: Clone + fmt::Debug> Binding<T> {
     pub fn is_unknown(&self) -> bool {
         match self.vloc {
             VarLocation::Unknown => true,
-            _ => false
+            _ => false,
         }
     }
 
