@@ -3,12 +3,42 @@
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::{Index, IndexMut};
-use std::iter::Filter;
 
-use petgraph::graph::NodeIndex;
-
-pub trait RBind { 
+pub trait RBind {
     type SSARef: fmt::Debug + Clone;
+
+    fn is_argument(&self) -> bool;
+    fn is_local(&self) -> bool;
+    fn is_modified(&self) -> bool;
+    fn is_preserved(&self) -> bool;
+    fn is_return(&self) -> bool;
+
+    fn mark_argument(&mut self);
+    fn mark_local(&mut self);
+    fn mark_modified(&mut self);
+    fn mark_preserved(&mut self);
+    fn mark_return(&mut self);
+
+    fn name(&self) -> String;
+
+    fn is_register(&self) -> bool;
+    fn mark_register(&mut self, String);
+
+    fn is_fn_local(&self) -> bool;
+    fn mark_fn_local(&mut self, usize, i64);
+    fn local_info(&self) -> LocalInfo;
+
+    fn is_stack(&self) -> bool;
+    fn mark_stack(&mut self);
+
+    fn is_global(&self) -> bool;
+    fn mark_global(&mut self, u64);
+    fn global_offset(&self) -> u64;
+
+    fn is_unknown(&self) -> bool;
+
+    fn add_refs(&mut self, Vec<Self::SSARef>);
+    fn refs<'a>(&'a self) -> ::std::slice::Iter<'a, Self::SSARef>;
 }
 
 /// Trait that describes variable bindings for a function.
@@ -20,7 +50,7 @@ pub trait RBindings {
     fn insert(&mut self, Self::BTy) -> Self::Idx;
 
     fn binding(&self, &Self::Idx) -> Option<&Self::BTy>;
-    fn binding_mut(&self, &Self::Idx) -> Option<&mut Self::BTy>;
+    fn binding_mut(&mut self, &Self::Idx) -> Option<&mut Self::BTy>;
 
     fn bindings(&self) -> RBinds<Self::BTy>;
     fn bindings_mut(&mut self) -> RBindsMut<Self::BTy>;
@@ -55,33 +85,33 @@ impl<BTy: RBind> Index<usize> for RadecoBindings<BTy> {
     }
 }
 
-
 impl<BTy: RBind> RBindings for RadecoBindings<BTy> {
     type BTy = BTy;
     type Idx = usize;
 
     fn new() -> Self {
-        unimplemented!()
+        RadecoBindings { binds: Vec::new() }
     }
 
     fn insert(&mut self, bind: BTy) -> usize {
-        unimplemented!()
+        self.binds.push(bind);
+        self.binds.len() - 1
     }
 
     fn binding(&self, idx: &usize) -> Option<&BTy> {
-        unimplemented!()
+        self.binds.get(*idx)
     }
 
-    fn binding_mut(&self, idx: &usize) -> Option<&mut BTy> {
-        unimplemented!()
+    fn binding_mut(&mut self, idx: &usize) -> Option<&mut BTy> {
+        self.binds.get_mut(*idx)
     }
 
     fn bindings(&self) -> RBinds<BTy> {
-        unimplemented!()
+        RBinds { binds: self.binds.iter() }
     }
 
     fn bindings_mut(&mut self) -> RBindsMut<BTy> {
-        unimplemented!()
+        RBindsMut { binds: self.binds.iter_mut() }
     }
 }
 
@@ -172,77 +202,79 @@ impl<T: Clone + fmt::Debug> Default for Binding<T> {
     }
 }
 
-impl<T: Clone + fmt::Debug> Binding<T> {
-    pub fn is_argument(&self) -> bool {
+impl<T: Clone + fmt::Debug> RBind for Binding<T> {
+    type SSARef = T;
+
+    fn is_argument(&self) -> bool {
         self.set.contains(&VarSet::Argument)
     }
 
-    pub fn is_local(&self) -> bool {
+    fn is_local(&self) -> bool {
         self.set.contains(&VarSet::Local)
     }
 
-    pub fn is_modified(&self) -> bool {
+    fn is_modified(&self) -> bool {
         self.set.contains(&VarSet::Modified)
     }
 
-    pub fn is_preserved(&self) -> bool {
+    fn is_preserved(&self) -> bool {
         self.set.contains(&VarSet::Preserved)
     }
 
-    pub fn is_return(&self) -> bool {
+    fn is_return(&self) -> bool {
         self.set.contains(&VarSet::Returned)
     }
 
-    pub fn mark_argument(&mut self) {
+    fn mark_argument(&mut self) {
         self.set.insert(VarSet::Argument);
     }
 
-    pub fn mark_local(&mut self) {
+    fn mark_local(&mut self) {
         self.set.insert(VarSet::Local);
     }
 
-    pub fn mark_modified(&mut self) {
+    fn mark_modified(&mut self) {
         self.set.insert(VarSet::Modified);
     }
 
-    pub fn mark_preserved(&mut self) {
+    fn mark_preserved(&mut self) {
         self.set.insert(VarSet::Preserved);
     }
 
-    pub fn mark_return(&mut self) {
+    fn mark_return(&mut self) {
         self.set.insert(VarSet::Returned);
     }
 
-    pub fn name(&self) -> String {
+    fn name(&self) -> String {
         self.named.clone().unwrap_or_else(String::new)
     }
 
-    pub fn is_register(&self) -> bool {
+    fn is_register(&self) -> bool {
         match self.vloc {
             VarLocation::Register { name: _ } => true,
             _ => false,
         }
     }
 
-    pub fn mark_register(&mut self, name: String) {
+    fn mark_register(&mut self, name: String) {
         self.vloc = VarLocation::Register { name: name };
     }
 
-    pub fn is_fn_local(&self) -> bool {
+    fn is_fn_local(&self) -> bool {
         match self.vloc {
             VarLocation::Memory(MemoryRegion::FunctionLocal { base: _, offset: _ }) => true,
             _ => false,
         }
     }
 
-    pub fn mark_fn_local(&mut self, base: usize, offset: i64) {
+    fn mark_fn_local(&mut self, base: usize, offset: i64) {
         self.vloc = VarLocation::Memory(MemoryRegion::FunctionLocal {
             base: base,
             offset: offset,
         });
     }
 
-    pub fn local_info(&self) -> LocalInfo {
+    fn local_info(&self) -> LocalInfo {
         if let VarLocation::Memory(MemoryRegion::FunctionLocal { base, offset }) = self.vloc {
             LocalInfo {
                 base: base,
@@ -253,7 +285,7 @@ impl<T: Clone + fmt::Debug> Binding<T> {
         }
     }
 
-    pub fn is_stack(&self) -> bool {
+    fn is_stack(&self) -> bool {
         if let VarLocation::Memory(MemoryRegion::Stack) = self.vloc {
             true
         } else {
@@ -261,22 +293,22 @@ impl<T: Clone + fmt::Debug> Binding<T> {
         }
     }
 
-    pub fn mark_stack(&mut self) {
+    fn mark_stack(&mut self) {
         self.vloc = VarLocation::Memory(MemoryRegion::Stack);
     }
 
-    pub fn is_global(&self) -> bool {
+    fn is_global(&self) -> bool {
         match self.vloc {
             VarLocation::Memory(MemoryRegion::Global { offset }) => true,
             _ => false,
         }
     }
 
-    pub fn mark_global(&mut self, offset: u64) {
+    fn mark_global(&mut self, offset: u64) {
         self.vloc = VarLocation::Memory(MemoryRegion::Global { offset: offset });
     }
 
-    pub fn global_offset(&self) -> u64 {
+    fn global_offset(&self) -> u64 {
         if let VarLocation::Memory(MemoryRegion::Global { offset }) = self.vloc {
             offset
         } else {
@@ -284,18 +316,18 @@ impl<T: Clone + fmt::Debug> Binding<T> {
         }
     }
 
-    pub fn is_unknown(&self) -> bool {
+    fn is_unknown(&self) -> bool {
         match self.vloc {
             VarLocation::Unknown => true,
             _ => false,
         }
     }
 
-    pub fn add_refs(&mut self, refs: Vec<T>) {
+    fn add_refs(&mut self, refs: Vec<T>) {
         self.ssa_refs.extend(refs);
     }
 
-    pub fn refs<'a>(&'a self) -> ::std::slice::Iter<'a, T> {
+    fn refs<'a>(&'a self) -> ::std::slice::Iter<'a, T> {
         self.ssa_refs.iter()
     }
 }
