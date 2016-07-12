@@ -13,24 +13,26 @@ use petgraph::graph::NodeIndex;
 
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
-use frontend::bindings::Binding;
+use frontend::bindings::{Binding, RBindings, RadecoBindings};
 use middle::ssa::ssastorage::{SSAStorage, Walker};
 use middle::ssa::ssa_traits::{SSA, SSAWalk, SSAMod};
 
-pub struct RadecoModule<'a> {
-    pub functions: HashMap<u64, RadecoFunction>,
+pub struct RadecoModule<'a, F: RFunction> {
+    pub functions: HashMap<u64, F>,
     fname: HashMap<String, u64>,
     pub src: Option<&'a mut Source>,
 }
 
-impl<'a> fmt::Debug for RadecoModule<'a> {
+type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
+
+impl<'a, F: RFunction + Debug> fmt::Debug for RadecoModule<'a, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RadecoModule {{ functions: {:?}, fname: {:?} }}", self.functions, self.fname)
     }
 }
 
-impl<'a> Default for RadecoModule<'a> {
-    fn default() -> RadecoModule<'a> {
+impl<'a, F: RFunction> Default for RadecoModule<'a, F> {
+    fn default() -> RadecoModule<'a, F> {
         RadecoModule {
             functions: HashMap::new(),
             fname: HashMap::new(),
@@ -47,15 +49,15 @@ pub struct SSAInfo {
     modifides: Vec<NodeIndex>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RadecoFunction {
+#[derive(Clone, Debug)]
+pub struct RadecoFunction<B: RBindings> {
     // TODO: Should not be pub.
     pub ssa: SSAStorage,
     pub name: String,
     call_ctx: Vec<CallContext>,
     callrefs: Vec<u64>,
     callxrefs: Vec<u64>,
-    bindings: Vec<Binding<NodeIndex>>,
+    bindings: B,
     pub locals: Vec<LVarInfo>,
     // Var and argument information about the function.
     ssa_info: SSAInfo,
@@ -88,13 +90,22 @@ pub struct CallContext {
 // }
 
 // Implementations sepecific to `RadecoFunction`.
-impl RadecoFunction {
-    fn new() -> RadecoFunction {
-        RadecoFunction::default()
+impl<B: RBindings> RadecoFunction<B> {
+    fn new() -> RadecoFunction<B> {
+        RadecoFunction {
+            ssa: SSAStorage::new(),
+            name: String::new(),
+            call_ctx: Vec::new(),
+            callrefs: Vec::new(),
+            callxrefs: Vec::new(),
+            bindings: B::new(),
+            locals: Vec::new(),
+            ssa_info: SSAInfo::default(),
+        }
     }
 
-    pub fn construct(reg_profile: &LRegInfo, insts: Vec<LOpInfo>) -> RadecoFunction {
-        let mut rfn = RadecoFunction::default();
+    pub fn construct(reg_profile: &LRegInfo, insts: Vec<LOpInfo>) -> RadecoFunction<B> {
+        let mut rfn = RadecoFunction::new();
         {
             let mut constructor = SSAConstruct::new(&mut rfn.ssa, &reg_profile);
             constructor.run(insts);
@@ -116,10 +127,10 @@ impl CallContext {
 
 // Private function to construct SSA for a single function and fill in the basic
 // information. Note: This function is threaded in module-ssa construction.
-fn ssa_single_fn(f: &FunctionInfo,
+fn ssa_single_fn<B: RBindings>(f: &FunctionInfo,
                  reg_info: &LRegInfo,
                  instructions: Vec<LOpInfo>)
-                 -> RadecoFunction {
+                 -> RadecoFunction<B> {
     let mut rfn = RadecoFunction::construct(reg_info, instructions);
     rfn.name = f.name.as_ref().unwrap().clone();
     if let Some(ref callrefs) = f.callrefs {
@@ -157,8 +168,8 @@ fn ssa_single_fn(f: &FunctionInfo,
 // From trait to construct a module from `Source`.
 // Note that this conversion is expensive as the source is used to construct
 // the SSA for all the function that it holds and perform basic analysis.
-impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a> {
-    fn from(source: &'a mut T) -> RadecoModule<'a> {
+impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
+    fn from(source: &'a mut T) -> RadecoModule<'a, DefaultFnTy> {
         let reg_info = source.register_profile();
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
@@ -201,8 +212,8 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a> {
 }
 
 // Implementations that are specific to `RadecoModule`.
-impl<'a> RadecoModule<'a> {
-    fn construct<S: 'a + Source>(source: &'a mut S) -> RadecoModule<'a> {
+impl<'a> RadecoModule<'a, DefaultFnTy> {
+    fn construct<S: 'a + Source>(source: &'a mut S) -> RadecoModule<'a, DefaultFnTy> {
         RadecoModule::from(source)
     }
 }
@@ -211,6 +222,7 @@ impl<'a> RadecoModule<'a> {
 pub trait RFunction {
     type I: Iterator<Item=<Self::SSA as SSA>::ValueRef>;
     type SSA: SSAWalk<Self::I> + SSAMod;
+    type B: RBindings;
 
     fn args(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef>;
     fn locals(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef>;
@@ -222,6 +234,9 @@ pub trait RFunction {
     fn set_locals(&mut self, &[<Self::SSA as SSA>::ValueRef]);
     fn set_returns(&mut self, &[<Self::SSA as SSA>::ValueRef]);
     fn set_modifides(&mut self, &[<Self::SSA as SSA>::ValueRef]);
+
+    fn callrefs(&self) -> Vec<u64>;
+    fn callxrefs(&self) -> Vec<u64>;
 
     // Expose the internally contained ssa.
     fn ssa_ref(&self) -> &Self::SSA;
@@ -242,7 +257,7 @@ impl<'a, N> Iterator for IdxIter<'a, N> {
 /// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
 /// all information loaded from the binary. It acts as a container for `Function`s.
 pub trait RModule<'b> {
-    type FnRef: Copy + Clone + Debug + Hash + Eq;
+    type FnRef: Copy + Clone + Debug + Hash + Eq + From<u64>;
     type RFn: RFunction;
 
     fn callees_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
@@ -256,22 +271,32 @@ pub trait RModule<'b> {
     fn source(&'b mut self) -> &Option<&'b mut Source>;
 }
 
-impl<'a> RModule<'a> for RadecoModule<'a> {
+#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
+pub struct FIdx(u64);
+
+//unsafe impl From<usize> for u64 {
+    //fn from(other: usize) -> FIdx {
+        //other as u64
+        ////FIdx(other as u64)
+    //}
+//}
+
+impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
     type FnRef = u64;
-    type RFn = RadecoFunction;
+    type RFn = F;
 
     fn callees_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
-        let mut callees = Vec::new();
+        let mut callees = Vec::<Self::FnRef>::new();
         if let Some(ref c) = self.functions.get(fref) {
-            callees.extend(c.callrefs.iter().cloned());
+            callees.extend(c.callrefs().iter().cloned().map(Self::FnRef::from));
         }
         callees
     }
 
     fn callers_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
-        let mut callers = Vec::new();
+        let mut callers = Vec::<Self::FnRef>::new();
         if let Some(ref c) = self.functions.get(fref) {
-            callers.extend(c.callxrefs.iter().cloned());
+            callers.extend(c.callxrefs().iter().cloned().map(Self::FnRef::from));
         }
         callers
     }
@@ -293,9 +318,10 @@ impl<'a> RModule<'a> for RadecoModule<'a> {
     }
 }
 
-impl RFunction for RadecoFunction {
+impl<B: RBindings> RFunction for RadecoFunction<B> {
     type I = Walker;
     type SSA = SSAStorage;
+    type B = B;
 
     fn args(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef> {
         IdxIter { idxs: self.ssa_info.args.iter() }
@@ -341,6 +367,14 @@ impl RFunction for RadecoFunction {
 
     fn ssa_mut(&mut self) -> &mut Self::SSA {
         &mut self.ssa
+    }
+
+    fn callrefs(&self) -> Vec<u64> {
+        self.callrefs.clone()
+    }
+
+    fn callxrefs(&self) -> Vec<u64> {
+        self.callxrefs.clone()
     }
 }
 

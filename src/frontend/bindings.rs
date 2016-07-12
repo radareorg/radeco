@@ -85,6 +85,12 @@ impl<BTy: RBind> Index<usize> for RadecoBindings<BTy> {
     }
 }
 
+impl<BTy: RBind> IndexMut<usize> for RadecoBindings<BTy> {
+    fn index_mut<'a>(&'a mut self, index: usize) -> &'a mut Self::Output {
+        self.binding_mut(&index).unwrap()
+    }
+}
+
 impl<BTy: RBind> RBindings for RadecoBindings<BTy> {
     type BTy = BTy;
     type Idx = usize;
@@ -168,8 +174,6 @@ enum VarSet {
     Preserved,
     Returned,
 }
-
-
 
 #[derive(Clone, Copy, Debug)]
 pub enum VarDataType {
