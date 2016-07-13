@@ -37,15 +37,15 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
             }
             let rfn = rfn.unwrap();
             {
-                let locals = rfn.locals().collect::<HashSet<_>>();
+                let locals = rfn.locals().iter().map(|x| x.0).collect::<HashSet<_>>();
                 let ssa = rfn.ssa_ref();
                 let start_block = ssa.start_node();
                 // Get register state at the start block.
                 let rs = ssa.registers_at(&start_block);
                 // For every register in the starting block.
-                for reg in ssa.args_of(rs) {
+                for (i, reg) in ssa.args_of(rs).iter().enumerate() {
                     // Get the uses of the register
-                    let uses = ssa.uses_of(reg);
+                    let uses = ssa.uses_of(*reg);
                     if !uses.is_empty() {
                         let insert = uses.iter().any(|x| {
                             if let Ok(ref data) = ssa.get_node_data(x) {
@@ -55,7 +55,7 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                                         // If the store is to a local variable, then it is still an
                                         // argument. Otherwise, it is part of preservation code and
                                         // must not be considered an argument to the function.
-                                        locals.contains(x)
+                                        locals.contains(&i)
                                     },
                                     _ => true,
                                 }
@@ -64,18 +64,18 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                             }
                         });
                         if insert {
-                            args.insert(reg);
+                            args.insert(i);
                         }
                     }
                 }
                 let exit_block = ssa.exit_node();
                 let rs = ssa.registers_at(&exit_block);
-                for r in &ssa.args_of(rs) {
+                for (i, r) in ssa.args_of(rs).iter().enumerate() {
                     let (insert_r, insert_m) = if let Ok(ref data) = ssa.get_node_data(r) {
                         match data.nt {
                             NodeType::Comment(_) => (false, false),
                             NodeType::Op(MOpcode::OpLoad) => {
-                                (locals.contains(&r), true)
+                                (locals.contains(&i), true)
                             }
                             _ => (true, true),
                         }
@@ -84,17 +84,17 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                     };
 
                     if insert_m {
-                        modifides.insert(*r);
+                        modifides.insert(i);
                     }
                     if insert_r {
-                        returns.insert(*r);
+                        returns.insert(i);
                     }
                 }
             }
 
-            rfn.set_returns(&returns.into_iter().collect::<Vec<_>>());
-            rfn.set_modifides(&modifides.into_iter().collect::<Vec<_>>());
-            rfn.set_args(&args.into_iter().collect::<Vec<_>>());
+            rfn.set_returns(&returns.into_iter().map(|x| From::from(x)).collect::<Vec<_>>());
+            rfn.set_modifides(&modifides.into_iter().map(|x| From::from(x)).collect::<Vec<_>>());
+            rfn.set_args(&args.into_iter().map(|x| From::from(x)).collect::<Vec<_>>());
         }
     }
 

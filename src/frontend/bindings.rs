@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::{Index, IndexMut};
+use std::hash::Hash;
 
 pub trait RBind {
     type SSARef: fmt::Debug + Clone;
@@ -14,7 +15,6 @@ pub trait RBind {
     fn is_return(&self) -> bool;
 
     fn mark_argument(&mut self);
-    fn mark_local(&mut self);
     fn mark_modified(&mut self);
     fn mark_preserved(&mut self);
     fn mark_return(&mut self);
@@ -44,7 +44,7 @@ pub trait RBind {
 /// Trait that describes variable bindings for a function.
 pub trait RBindings {
     type BTy: RBind;
-    type Idx: Clone + fmt::Debug;
+    type Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>;
 
     fn new() -> Self;
     fn insert(&mut self, Self::BTy) -> Self::Idx;
@@ -190,8 +190,8 @@ pub enum VarDataType {
 
 #[derive(Clone, Debug)]
 pub struct LocalInfo {
-    base: usize,
-    offset: i64,
+    pub base: usize,
+    pub offset: i64,
 }
 
 impl<T: Clone + fmt::Debug> Default for Binding<T> {
@@ -231,10 +231,6 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
 
     fn mark_argument(&mut self) {
         self.set.insert(VarSet::Argument);
-    }
-
-    fn mark_local(&mut self) {
-        self.set.insert(VarSet::Local);
     }
 
     fn mark_modified(&mut self) {

@@ -6,6 +6,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::thread;
 use std::sync::mpsc;
 use std::fmt;
+use std::iter;
+use std::slice;
 
 use r2pipe::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
 
@@ -13,9 +15,9 @@ use petgraph::graph::NodeIndex;
 
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
-use frontend::bindings::{Binding, RBindings, RadecoBindings};
+use frontend::bindings::{Binding, RBind, RBindings, RadecoBindings, RBinds, LocalInfo};
 use middle::ssa::ssastorage::{SSAStorage, Walker};
-use middle::ssa::ssa_traits::{SSA, SSAWalk, SSAMod};
+use middle::ssa::ssa_traits::{SSA, SSAMod, SSAWalk};
 
 pub struct RadecoModule<'a, F: RFunction> {
     pub functions: HashMap<u64, F>,
@@ -27,7 +29,10 @@ type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
 
 impl<'a, F: RFunction + Debug> fmt::Debug for RadecoModule<'a, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "RadecoModule {{ functions: {:?}, fname: {:?} }}", self.functions, self.fname)
+        write!(f,
+               "RadecoModule {{ functions: {:?}, fname: {:?} }}",
+               self.functions,
+               self.fname)
     }
 }
 
@@ -41,13 +46,13 @@ impl<'a, F: RFunction> Default for RadecoModule<'a, F> {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct SSAInfo {
-    locals: Vec<NodeIndex>,
-    args: Vec<NodeIndex>,
-    returns: Vec<NodeIndex>,
-    modifides: Vec<NodeIndex>,
-}
+// #[derive(Clone, Debug, Default)]
+// pub struct SSAInfo {
+// locals: Vec<NodeIndex>,
+// args: Vec<NodeIndex>,
+// returns: Vec<NodeIndex>,
+// modifides: Vec<NodeIndex>,
+// }
 
 #[derive(Clone, Debug)]
 pub struct RadecoFunction<B: RBindings> {
@@ -58,9 +63,8 @@ pub struct RadecoFunction<B: RBindings> {
     callrefs: Vec<u64>,
     callxrefs: Vec<u64>,
     bindings: B,
-    pub locals: Vec<LVarInfo>,
-    // Var and argument information about the function.
-    ssa_info: SSAInfo,
+    pub locals: Vec<LVarInfo>, /* Var and argument information about the function.
+                                * ssa_info: SSAInfo, */
 }
 
 #[derive(Clone, Debug)]
@@ -100,7 +104,6 @@ impl<B: RBindings> RadecoFunction<B> {
             callxrefs: Vec::new(),
             bindings: B::new(),
             locals: Vec::new(),
-            ssa_info: SSAInfo::default(),
         }
     }
 
@@ -128,9 +131,9 @@ impl CallContext {
 // Private function to construct SSA for a single function and fill in the basic
 // information. Note: This function is threaded in module-ssa construction.
 fn ssa_single_fn<B: RBindings>(f: &FunctionInfo,
-                 reg_info: &LRegInfo,
-                 instructions: Vec<LOpInfo>)
-                 -> RadecoFunction<B> {
+                               reg_info: &LRegInfo,
+                               instructions: Vec<LOpInfo>)
+                               -> RadecoFunction<B> {
     let mut rfn = RadecoFunction::construct(reg_info, instructions);
     rfn.name = f.name.as_ref().unwrap().clone();
     if let Some(ref callrefs) = f.callrefs {
@@ -224,16 +227,17 @@ pub trait RFunction {
     type SSA: SSAWalk<Self::I> + SSAMod;
     type B: RBindings;
 
-    fn args(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef>;
-    fn locals(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef>;
-    fn returns(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef>;
-    fn modifides(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef>;
+    fn args(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
+    fn locals(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
+    fn returns(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
+    fn modifides(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
     fn call_convention(&self) -> String;
 
-    fn set_args(&mut self, &[<Self::SSA as SSA>::ValueRef]);
-    fn set_locals(&mut self, &[<Self::SSA as SSA>::ValueRef]);
-    fn set_returns(&mut self, &[<Self::SSA as SSA>::ValueRef]);
-    fn set_modifides(&mut self, &[<Self::SSA as SSA>::ValueRef]);
+    fn set_args(&mut self, &[<Self::B as RBindings>::Idx]);
+    fn set_locals(&mut self, &[(<Self::B as RBindings>::Idx, LocalInfo)]);
+    fn set_returns(&mut self, &[<Self::B as RBindings>::Idx]);
+    fn set_modifides(&mut self, &[<Self::B as RBindings>::Idx]);
+    fn set_preserved(&mut self, &[<Self::B as RBindings>::Idx]);
 
     fn callrefs(&self) -> Vec<u64>;
     fn callxrefs(&self) -> Vec<u64>;
@@ -243,16 +247,23 @@ pub trait RFunction {
     fn ssa_mut(&mut self) -> &mut Self::SSA;
 }
 
-pub struct IdxIter<'a, N: 'a> {
-    idxs: ::std::slice::Iter<'a, N>,
-}
+//pub struct IdxIter<'a, N: 'a + RBind>
+//{
+    //idxs: iter::Enumerate<RBinds<'a, N>>,
+    //filter_: FnMut(&N) -> bool,
+//}
 
-impl<'a, N> Iterator for IdxIter<'a, N> {
-    type Item = &'a N;
-    fn next(&mut self) -> Option<&'a N> {
-        self.idxs.next()
-    }
-}
+//impl<'a, N: RBind> Iterator for IdxIter<'a, N> {
+    //type Item = &'a N;
+    //fn next(&mut self) -> Option<&'a N> {
+        //while let Some(ref i) = self.idxs.next() {
+            //if self.filter_(i.1) {
+                //return i;
+            //}
+        //}
+        //return None;
+    //}
+//}
 
 /// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
 /// all information loaded from the binary. It acts as a container for `Function`s.
@@ -274,12 +285,12 @@ pub trait RModule<'b> {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct FIdx(u64);
 
-//unsafe impl From<usize> for u64 {
-    //fn from(other: usize) -> FIdx {
-        //other as u64
-        ////FIdx(other as u64)
-    //}
-//}
+// unsafe impl From<usize> for u64 {
+// fn from(other: usize) -> FIdx {
+// other as u64
+// /FIdx(other as u64)
+// }
+// }
 
 impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
     type FnRef = u64;
@@ -323,20 +334,20 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
     type SSA = SSAStorage;
     type B = B;
 
-    fn args(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef> {
-        IdxIter { idxs: self.ssa_info.args.iter() }
+    fn args(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
+        self.bindings.bindings().enumerate().filter({ |x| x.1.is_argument() }).collect()
     }
 
-    fn locals(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef> {
-        IdxIter { idxs: self.ssa_info.locals.iter() }
+    fn locals(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
+        self.bindings.bindings().enumerate().filter({ |x| x.1.is_local() }).collect()
     }
 
-    fn returns(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef> {
-        IdxIter { idxs: self.ssa_info.returns.iter() }
+    fn returns(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
+        self.bindings.bindings().enumerate().filter({ |x| x.1.is_return() }).collect()
     }
 
-    fn modifides(&self) -> IdxIter<<Self::SSA as SSA>::ValueRef> {
-        IdxIter { idxs: self.ssa_info.modifides.iter() }
+    fn modifides(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
+        self.bindings.bindings().enumerate().filter({ |x| x.1.is_modified() }).collect()
     }
 
     fn call_convention(&self) -> String {
@@ -344,20 +355,44 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         "cdecl".to_owned()
     }
 
-    fn set_args(&mut self, args: &[<Self::SSA as SSA>::ValueRef]) {
-        self.ssa_info.args = args.iter().cloned().collect();
+    fn set_args(&mut self, args: &[<Self::B as RBindings>::Idx]) {
+        for arg in args {
+            if let Some(binding) = self.bindings.binding_mut(arg) {
+                binding.mark_argument();
+            }
+        }
     }
 
-    fn set_locals(&mut self, locals: &[<Self::SSA as SSA>::ValueRef]) {
-        self.ssa_info.locals = locals.iter().cloned().collect();
+    fn set_locals(&mut self, locals: &[(<Self::B as RBindings>::Idx, LocalInfo)]) {
+        for &(ref arg, ref info) in locals {
+            if let Some(binding) = self.bindings.binding_mut(&arg) {
+                binding.mark_fn_local(info.base, info.offset);
+            }
+        }
     }
 
-    fn set_returns(&mut self, rets: &[<Self::SSA as SSA>::ValueRef]) {
-        self.ssa_info.returns = rets.iter().cloned().collect();
+    fn set_returns(&mut self, rets: &[<Self::B as RBindings>::Idx]) {
+        for r in rets {
+            if let Some(binding) = self.bindings.binding_mut(r) {
+                binding.mark_return();
+            }
+        }
     }
 
-    fn set_modifides(&mut self, modifides: &[<Self::SSA as SSA>::ValueRef]) {
-        self.ssa_info.modifides = modifides.iter().cloned().collect();
+    fn set_modifides(&mut self, modifides: &[<Self::B as RBindings>::Idx]) {
+        for mod_ in modifides {
+            if let Some(binding) = self.bindings.binding_mut(mod_) {
+                binding.mark_modified();
+            }
+        }
+    }
+
+    fn set_preserved(&mut self, preserved: &[<Self::B as RBindings>::Idx]) {
+        for p in preserved {
+            if let Some(binding) = self.bindings.binding_mut(p) {
+                binding.mark_preserved();
+            }
+        }
     }
 
     // Expose the internally contained ssa.
@@ -390,9 +425,9 @@ mod test {
 
     #[test]
     fn module_test() {
-        //let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
-        //r2.init();
-        //let mut fsource = FileSource::from(r2);
+        // let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
+        // r2.init();
+        // let mut fsource = FileSource::from(r2);
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
         for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {

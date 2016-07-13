@@ -13,21 +13,6 @@ use std::fs::OpenOptions;
 use std::path::Path;
 use std::io::Write;
 
-// Proposed log format.
-// [
-//    {
-//        "event": SSAAddNode(e, i),
-//        "kind": SSA,
-//        "timestamp": 0,
-//    },
-//    {
-//        "event": SSARemoveNode(e, i),
-//        "kind": SSA,
-//        "timestamp": 1,
-//    },
-//    ....
-// ]
-
 pub enum Event<'a, T: 'a + Debug> {
     /// external -> internal
     SSAInsertNode(&'a T, &'a T),
