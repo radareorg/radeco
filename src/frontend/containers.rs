@@ -49,49 +49,45 @@ impl<'a, F: RFunction> Default for RadecoModule<'a, F> {
     }
 }
 
-// #[derive(Clone, Debug, Default)]
-// pub struct SSAInfo {
-// locals: Vec<NodeIndex>,
-// args: Vec<NodeIndex>,
-// returns: Vec<NodeIndex>,
-// modifides: Vec<NodeIndex>,
-// }
-
 #[derive(Clone, Debug)]
 pub struct RadecoFunction<B: RBindings> {
     // TODO: Should not be pub.
     pub ssa: SSAStorage,
     pub name: String,
     pub offset: u64,
-    pub call_ctx: Vec<CallContext<B::Idx>>,
-    callrefs: Vec<u64>,
+    pub call_ctx: Vec<CallContext<B::Idx, NodeIndex>>,
+    // callrefs: Vec<u64>,
     callxrefs: Vec<u64>,
     pub bindings: B,
     pub locals: Vec<LVarInfo>,
 }
 
 #[derive(Clone, Debug)]
-pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>> {
+pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>,
+                       S: fmt::Debug + Clone>
+{
     /// Start offset of caller (uniquely identifies a function).
     pub caller: Option<u64>,
     /// Start offset of callee (uniquely identifies a function).
     pub callee: Option<u64>,
     /// Offset the call. Note that this will belong to the caller function.
     pub call_site: Option<u64>,
+    pub ssa_ref: Option<S>,
     /// Translate a node in callees context into a node in caller's context.
     pub ctx_translate: HashMap<Idx, Idx>,
 }
 
-impl<Idx> CallContext<Idx> where Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize> {
+impl<Idx, S> CallContext<Idx, S> where Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>, S: fmt::Debug + Clone {
     pub fn new(caller: Option<u64>,
                callee: Option<u64>,
                call_site: Option<u64>,
                ctx: &[(Idx, Idx)])
-               -> CallContext<Idx> {
+               -> CallContext<Idx, S> {
         CallContext {
             caller: caller,
             callee: callee,
             call_site: call_site,
+            ssa_ref: None,
             ctx_translate: ctx.into_iter().cloned().collect::<HashMap<_, _>>(),
         }
     }
@@ -105,7 +101,7 @@ impl<B: RBindings> RadecoFunction<B> {
             offset: 0,
             name: String::new(),
             call_ctx: Vec::new(),
-            callrefs: Vec::new(),
+            // callrefs: Vec::new(),
             callxrefs: Vec::new(),
             bindings: B::new(),
             locals: Vec::new(),
@@ -124,20 +120,30 @@ impl<B: RBindings> RadecoFunction<B> {
 
 // Private function to construct SSA for a single function and fill in the basic
 // information. Note: This function is threaded in module-ssa construction.
-fn ssa_single_fn(f: &FunctionInfo, reg_info: &LRegInfo, instructions: Vec<LOpInfo>) -> DefaultFnTy {
+fn ssa_single_fn(f: &FunctionInfo,
+                 reg_info: &LRegInfo,
+                 instructions: Vec<LOpInfo>,
+                 offset: u64)
+                 -> DefaultFnTy {
     let mut rfn = RadecoFunction::construct(reg_info, instructions);
     rfn.name = f.name.as_ref().unwrap().clone();
     if let Some(ref callrefs) = f.callrefs {
-        rfn.callrefs = callrefs.iter()
+        rfn.call_ctx = callrefs.iter()
                                .filter(|x| {
                                    match x.call_type {
                                        Some(ref c) if c == "C" => true,
                                        _ => false,
                                    }
                                })
-                               .map(|x| x.addr.expect("Invalid address"))
-                               .collect::<BTreeSet<_>>()
-                               .into_iter()
+                               .map(|x| {
+                                   let call_site = x.source;
+                                   let callee = x.target;
+                                   let caller = Some(offset);
+                                   CallContext::<usize, NodeIndex>::new(caller,
+                                                                        callee,
+                                                                        call_site,
+                                                                        &[])
+                               })
                                .collect();
     }
 
@@ -149,7 +155,7 @@ fn ssa_single_fn(f: &FunctionInfo, reg_info: &LRegInfo, instructions: Vec<LOpInf
                                          _ => false,
                                      }
                                  })
-                                 .map(|x| x.addr.expect("Invalid address"))
+                                 .map(|x| x.source.expect("Invalid address"))
                                  .collect::<BTreeSet<_>>()
                                  .into_iter()
                                  .collect();
@@ -158,47 +164,31 @@ fn ssa_single_fn(f: &FunctionInfo, reg_info: &LRegInfo, instructions: Vec<LOpInf
 }
 
 fn fix_call_info(rfn: &mut DefaultFnTy) {
-    let mut call_sites = Vec::new();
+    let mut call_info = rfn.call_ctx
+                           .iter()
+                           .cloned()
+                           .map(|x| (x.call_site.unwrap(), x))
+                           .collect::<HashMap<_, _>>();
     {
         let caller = rfn.offset;
         let ssa = rfn.ssa_mut();
         for node in ssa.inorder_walk() {
-            let mut callee = None;
-            let mut call_site = None;
             if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.get_node_data(&node).map(|x| x.nt) {
                 // Fixup the call by converting a comment to a proper argument.
                 let call_node = &node;
-                if let Some(arg_node) = ssa.args_of(node).get(0) {
-                    call_site = Some(ssa.get_address(arg_node).address);
-                    let s = if let Some(NodeType::Comment(ref s_)) = ssa.get_node_data(arg_node)
-                                                                        .ok()
-                                                                        .map(|x| x.nt) {
-                        s_.clone()
-                    } else {
-                        String::new()
-                    };
-                    let sl = s.split(" ").collect::<Vec<&str>>();
-                    if sl.len() > 1 {
-                        if let Ok(t) = u64::from_str_radix(&sl[1][2..], 16) {
-                            let target_node = ssa.add_const(t);
-                            callee = Some(t);
-                            ssa.disconnect(call_node, arg_node);
-                            ssa.op_use(*call_node, 0, target_node);
-                        } else {
-                            radeco_warn!("Unhandled call comment: {}", s);
-                        }
-                    } else {
-                        radeco_warn!("Unhandled call comment: {}", s);
+                let call_site = ssa.get_address(call_node).address;
+                if let Some(info) = call_info.get_mut(&call_site) {
+                    if let Some(arg_node) = ssa.args_of(*call_node).get(0) {
+                        let target_node = ssa.add_const(info.callee.unwrap());
+                        ssa.disconnect(call_node, arg_node);
+                        ssa.op_use(*call_node, 0, target_node);
+                        info.ssa_ref = Some(*call_node);
                     }
-                } else {
-                    radeco_warn!("OpCall({:#?}) has no arguments!", node);
                 }
-                let call_ctx = CallContext::<usize>::new(Some(caller), callee, call_site, &[]);
-                call_sites.push(call_ctx);
             }
         }
     }
-    rfn.call_ctx = call_sites;
+    rfn.call_ctx = call_info.into_iter().map(|x| x.1).collect();
 }
 
 // MAYBE TODO: Replace `RadecoModule` and `RadecoFunction` by generic `RModule`
@@ -222,7 +212,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
             let reg_info = reg_info.clone();
 
             let handle = thread::spawn(move || {
-                let mut rfn = ssa_single_fn(&f, &reg_info, instructions);
+                let mut rfn = ssa_single_fn(&f, &reg_info, instructions, offset);
                 // Attach additional information as necessay from `FunctionInfo`.
                 {
                     // Add all defined registers to bindings.
@@ -485,7 +475,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
     }
 
     fn callrefs(&self) -> Vec<u64> {
-        self.callrefs.clone()
+        self.call_ctx.iter().map(|x| x.callee).filter(|x| x.is_some()).map(|x| x.unwrap()).collect()
     }
 
     fn callxrefs(&self) -> Vec<u64> {
