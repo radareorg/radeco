@@ -5,8 +5,10 @@ use std::collections::HashSet;
 use petgraph::graph::NodeIndex;
 
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::containers::{RModule, RFunction};
-use middle::ssa::ssa_traits::{SSA, SSAMod, NodeType};
+use analysis::matcher::gmatch;
+use frontend::containers::{RModule, RFunction, CallContext};
+use frontend::bindings::RBindings;
+use middle::ssa::ssa_traits::{SSA, SSAMod, NodeType, SSAWalk};
 use middle::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ir::MOpcode;
 
@@ -102,9 +104,15 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
     // callees. i.e. Replace args_list by args_list in the callee and replace modifides by the
     // values the callee actually modifies.
     fn propagate(&mut self, rmod: &mut T, fn_ref: &T::FnRef) {
-        unimplemented!()
+        //println!("Propagate: {:?}", call_sites);
     }
 }
+
+// Converts the operand to call that is currently a simple comment into a proper node.
+//fn parse_call_comment(s: String, ssa: &mut SSAStorage, ni: NodeIndex) {
+    //// TODO: Handle more cases.
+
+//}
 
 impl CallSummary {
     fn detect_arguments() -> HashSet<NodeIndex> {

@@ -2,35 +2,37 @@
 
 use std::collections::HashSet;
 use std::marker::PhantomData;
-use analysis::interproc::transfer::{InterProcAnalysis};
+use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::containers::{RFunction, RModule};
 
 #[derive(Debug)]
-pub struct InterProcAnalyzer<'a, M, T>
-    where M: 'a + RModule<'a>,
-          T: InterProcAnalysis<'a, M>,
+pub struct InterProcAnalyzer<'a, 'b, M, T>
+    where M: 'a + RModule<'b>,
+          T: InterProcAnalysis<'b, M>
 {
     analyzed: HashSet<M::FnRef>,
     rmod: &'a mut M,
     analyzer: T,
 }
 
-impl<'a, M, T> InterProcAnalyzer<'a, M, T>
-    where M: 'a + RModule<'a>,
-          T: InterProcAnalysis<'a, M>,
+pub fn analyze_module<'a, 'b, M, A>(ssa: &'a mut M) 
+where M: RModule<'b>,
+      A: InterProcAnalysis<'b, M> {
+    let mut ipa = InterProcAnalyzer::<M, A>::new(ssa);
+    for f in &ipa.rmod.functions() {
+        ipa.analyze_function(f);
+    }
+}
+
+impl<'a,'b, M, T> InterProcAnalyzer<'a, 'b, M, T>
+    where M: RModule<'b>,
+          T: InterProcAnalysis<'b, M>,
 {
-    pub fn new(rmod: &'a mut M) -> InterProcAnalyzer<'a, M, T> {
+    pub fn new(rmod: &'a mut M) -> InterProcAnalyzer<'a, 'b, M, T> {
         InterProcAnalyzer {
             analyzed: HashSet::new(),
             rmod: rmod,
             analyzer: T::new(),
-        }
-    }
-
-    pub fn analyze_module<Y: 'a + RModule<'a>, X: InterProcAnalysis<'a, Y>>(ssa: &'a mut Y) {
-        let mut ipa = InterProcAnalyzer::<Y, X>::new(ssa);
-        for f in &ipa.rmod.functions() {
-            ipa.analyze_function(f)
         }
     }
 
@@ -58,5 +60,40 @@ impl<'a, M, T> InterProcAnalyzer<'a, M, T>
 
         // Insert the current function into analyzed set.
         self.analyzed.insert(*rfn);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use frontend::source::{FileSource, Source};
+    use frontend::containers::*;
+    use petgraph::graph::NodeIndex;
+    use frontend::bindings::*;
+    use middle::ir_writer::IRWriter;
+    use std::io;
+    use middle::dce;
+    use analysis::interproc::summary;
+
+    #[test]
+    fn ipa_t1() {
+        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
+        let mut rmod = RadecoModule::from(&mut fsource);
+        {
+            analyze_module::<_, summary::CallSummary>(&mut rmod);
+        }
+
+        for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
+            {
+                dce::collect(&mut rfn.ssa);
+            }
+            //println!("Binds: {:?}", rfn.bindings.bindings());
+            println!("Info for: {:#x}", addr);
+            println!("Local Variable info: {:#?}", rfn.locals());
+            println!("Arg info: {:#?}", rfn.args());
+            //println!("Returns info: {:?}", rfn.returns());
+            let mut writer: IRWriter = Default::default();
+            writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut io::stdout());
+        }
     }
 }

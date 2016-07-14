@@ -15,9 +15,12 @@ use petgraph::graph::NodeIndex;
 
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
-use frontend::bindings::{Binding, RBind, RBindings, RadecoBindings, RBinds, LocalInfo};
+use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RBinds, RadecoBindings};
 use middle::ssa::ssastorage::{SSAStorage, Walker};
-use middle::ssa::ssa_traits::{SSA, SSAMod, SSAWalk};
+use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
+use middle::ssa::cfg_traits::CFG;
+use middle::ir::MOpcode;
+
 
 pub struct RadecoModule<'a, F: RFunction> {
     pub functions: HashMap<u64, F>,
@@ -59,45 +62,47 @@ pub struct RadecoFunction<B: RBindings> {
     // TODO: Should not be pub.
     pub ssa: SSAStorage,
     pub name: String,
-    call_ctx: Vec<CallContext>,
+    pub offset: u64,
+    pub call_ctx: Vec<CallContext<B::Idx>>,
     callrefs: Vec<u64>,
     callxrefs: Vec<u64>,
-    bindings: B,
-    pub locals: Vec<LVarInfo>, /* Var and argument information about the function.
-                                * ssa_info: SSAInfo, */
+    pub bindings: B,
+    pub locals: Vec<LVarInfo>,
 }
 
 #[derive(Clone, Debug)]
-pub struct CallContext {
+pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>> {
     /// Start offset of caller (uniquely identifies a function).
-    caller: u64,
+    pub caller: Option<u64>,
     /// Start offset of callee (uniquely identifies a function).
-    callee: u64,
+    pub callee: Option<u64>,
     /// Offset the call. Note that this will belong to the caller function.
-    call_site: u64,
+    pub call_site: Option<u64>,
     /// Translate a node in callees context into a node in caller's context.
-    ctx_translate: HashMap<NodeIndex, NodeIndex>,
+    pub ctx_translate: HashMap<Idx, Idx>,
 }
 
-// TODO: Re-enable if needed. Current members of RadecoFunction have default
-// implementation.
-// impl Default for RadecoFunction {
-// fn default() -> RadecoFunction {
-// RadecoFunction {
-// ssa: SSAStorage::new(),
-// call_ctx: Vec::new(),
-// callrefs: BTreeSet::new(),
-// callxrefs: BTreeSet::new(),
-// name: String::new(),
-// }
-// }
-// }
+impl<Idx> CallContext<Idx> where Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize> {
+    pub fn new(caller: Option<u64>,
+               callee: Option<u64>,
+               call_site: Option<u64>,
+               ctx: &[(Idx, Idx)])
+               -> CallContext<Idx> {
+        CallContext {
+            caller: caller,
+            callee: callee,
+            call_site: call_site,
+            ctx_translate: ctx.into_iter().cloned().collect::<HashMap<_, _>>(),
+        }
+    }
+}
 
 // Implementations sepecific to `RadecoFunction`.
 impl<B: RBindings> RadecoFunction<B> {
     fn new() -> RadecoFunction<B> {
         RadecoFunction {
             ssa: SSAStorage::new(),
+            offset: 0,
             name: String::new(),
             call_ctx: Vec::new(),
             callrefs: Vec::new(),
@@ -117,23 +122,9 @@ impl<B: RBindings> RadecoFunction<B> {
     }
 }
 
-impl CallContext {
-    pub fn new(caller: u64, callee: u64, call_site: u64) -> CallContext {
-        CallContext {
-            caller: caller,
-            callee: callee,
-            call_site: call_site,
-            ctx_translate: HashMap::new(),
-        }
-    }
-}
-
 // Private function to construct SSA for a single function and fill in the basic
 // information. Note: This function is threaded in module-ssa construction.
-fn ssa_single_fn<B: RBindings>(f: &FunctionInfo,
-                               reg_info: &LRegInfo,
-                               instructions: Vec<LOpInfo>)
-                               -> RadecoFunction<B> {
+fn ssa_single_fn(f: &FunctionInfo, reg_info: &LRegInfo, instructions: Vec<LOpInfo>) -> DefaultFnTy {
     let mut rfn = RadecoFunction::construct(reg_info, instructions);
     rfn.name = f.name.as_ref().unwrap().clone();
     if let Some(ref callrefs) = f.callrefs {
@@ -166,6 +157,50 @@ fn ssa_single_fn<B: RBindings>(f: &FunctionInfo,
     rfn
 }
 
+fn fix_call_info(rfn: &mut DefaultFnTy) {
+    let mut call_sites = Vec::new();
+    {
+        let caller = rfn.offset;
+        let ssa = rfn.ssa_mut();
+        for node in ssa.inorder_walk() {
+            let mut callee = None;
+            let mut call_site = None;
+            if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.get_node_data(&node).map(|x| x.nt) {
+                // Fixup the call by converting a comment to a proper argument.
+                let call_node = &node;
+                if let Some(arg_node) = ssa.args_of(node).get(0) {
+                    call_site = Some(ssa.get_address(arg_node).address);
+                    let s = if let Some(NodeType::Comment(ref s_)) = ssa.get_node_data(arg_node)
+                                                                        .ok()
+                                                                        .map(|x| x.nt) {
+                        s_.clone()
+                    } else {
+                        String::new()
+                    };
+                    let sl = s.split(" ").collect::<Vec<&str>>();
+                    if sl.len() > 1 {
+                        if let Ok(t) = u64::from_str_radix(&sl[1][2..], 16) {
+                            let target_node = ssa.add_const(t);
+                            callee = Some(t);
+                            ssa.disconnect(call_node, arg_node);
+                            ssa.op_use(*call_node, 0, target_node);
+                        } else {
+                            radeco_warn!("Unhandled call comment: {}", s);
+                        }
+                    } else {
+                        radeco_warn!("Unhandled call comment: {}", s);
+                    }
+                } else {
+                    radeco_warn!("OpCall({:#?}) has no arguments!", node);
+                }
+                let call_ctx = CallContext::<usize>::new(Some(caller), callee, call_site, &[]);
+                call_sites.push(call_ctx);
+            }
+        }
+    }
+    rfn.call_ctx = call_sites;
+}
+
 // MAYBE TODO: Replace `RadecoModule` and `RadecoFunction` by generic `RModule`
 // and `RFunction`.
 // From trait to construct a module from `Source`.
@@ -189,6 +224,27 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
             let handle = thread::spawn(move || {
                 let mut rfn = ssa_single_fn(&f, &reg_info, instructions);
                 // Attach additional information as necessay from `FunctionInfo`.
+                {
+                    // Add all defined registers to bindings.
+                    let regs = {
+                        let ssa = rfn.ssa_mut();
+                        let start = ssa.start_node();
+                        let rs = ssa.registers_at(&start);
+                        ssa.args_of(rs)
+                    };
+                    for (i, reg) in regs.iter().enumerate() {
+                        let mut bind = Binding::default();
+                        bind.mark_register(rfn.ssa
+                                              .regnames
+                                              .get(i)
+                                              .cloned()
+                                              .unwrap_or_else(String::new));
+                        bind.add_refs(vec![*reg]);
+                        rfn.bindings.insert(bind);
+                    }
+                }
+                rfn.offset = offset;
+                fix_call_info(&mut rfn);
                 rfn.locals = f.locals.unwrap_or_else(Vec::new);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();
             });
@@ -224,7 +280,7 @@ impl<'a> RadecoModule<'a, DefaultFnTy> {
 /// Trait that defines a `Function`.
 pub trait RFunction {
     type I: Iterator<Item=<Self::SSA as SSA>::ValueRef>;
-    type SSA: SSAWalk<Self::I> + SSAMod;
+    type SSA: SSAWalk<Self::I> + SSAMod + SSA;
     type B: RBindings;
 
     fn args(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
@@ -247,23 +303,23 @@ pub trait RFunction {
     fn ssa_mut(&mut self) -> &mut Self::SSA;
 }
 
-//pub struct IdxIter<'a, N: 'a + RBind>
-//{
-    //idxs: iter::Enumerate<RBinds<'a, N>>,
-    //filter_: FnMut(&N) -> bool,
-//}
+// pub struct IdxIter<'a, N: 'a + RBind>
+// {
+// idxs: iter::Enumerate<RBinds<'a, N>>,
+// filter_: FnMut(&N) -> bool,
+// }
 
-//impl<'a, N: RBind> Iterator for IdxIter<'a, N> {
-    //type Item = &'a N;
-    //fn next(&mut self) -> Option<&'a N> {
-        //while let Some(ref i) = self.idxs.next() {
-            //if self.filter_(i.1) {
-                //return i;
-            //}
-        //}
-        //return None;
-    //}
-//}
+// impl<'a, N: RBind> Iterator for IdxIter<'a, N> {
+// type Item = &'a N;
+// fn next(&mut self) -> Option<&'a N> {
+// while let Some(ref i) = self.idxs.next() {
+// if self.filter_(i.1) {
+// return i;
+// }
+// }
+// return None;
+// }
+// }
 
 /// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
 /// all information loaded from the binary. It acts as a container for `Function`s.
@@ -335,19 +391,43 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
     type B = B;
 
     fn args(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
-        self.bindings.bindings().enumerate().filter({ |x| x.1.is_argument() }).collect()
+        self.bindings
+            .bindings()
+            .enumerate()
+            .filter({
+                |x| x.1.is_argument()
+            })
+            .collect()
     }
 
     fn locals(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
-        self.bindings.bindings().enumerate().filter({ |x| x.1.is_local() }).collect()
+        self.bindings
+            .bindings()
+            .enumerate()
+            .filter({
+                |x| x.1.is_local()
+            })
+            .collect()
     }
 
     fn returns(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
-        self.bindings.bindings().enumerate().filter({ |x| x.1.is_return() }).collect()
+        self.bindings
+            .bindings()
+            .enumerate()
+            .filter({
+                |x| x.1.is_return()
+            })
+            .collect()
     }
 
     fn modifides(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
-        self.bindings.bindings().enumerate().filter({ |x| x.1.is_modified() }).collect()
+        self.bindings
+            .bindings()
+            .enumerate()
+            .filter({
+                |x| x.1.is_modified()
+            })
+            .collect()
     }
 
     fn call_convention(&self) -> String {

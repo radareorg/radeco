@@ -124,7 +124,7 @@ impl<BTy: RBind> RBindings for RadecoBindings<BTy> {
 #[derive(Clone, Debug)]
 pub struct Binding<T: fmt::Debug + Clone> {
     // Optional name used to represent this binding.
-    named: Option<String>,
+    pub named: Option<String>,
     // Type of binding.
     vloc: VarLocation,
     dty: VarDataType,

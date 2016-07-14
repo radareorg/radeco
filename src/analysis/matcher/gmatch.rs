@@ -65,9 +65,9 @@ pub struct GraphMatcher<'a, I, S>
 
 #[macro_export]
 macro_rules! grep {
-    ($s: ident, $f: expr) => {
+    ($s: expr, $f: expr) => {
         {
-            let matcher = gmatch::GraphMatcher::new(&mut $s);
+            let matcher = gmatch::GraphMatcher::new($s);
             matcher.grep($f.to_owned())
         }
     };
@@ -474,7 +474,7 @@ mod test {
         ssa.op_use(add, 1, const_2);
         ssa.mark_start_node(&add);
         let _ = ssa.add_op(MOpcode::OpAdd, vt, None);
-        let m = grep!(ssa, "(OpAdd #x1, #x2)");
+        let m = grep!(&mut ssa, "(OpAdd #x1, #x2)");
         assert_eq!(m[0].root.index(), 0);
     }
 
@@ -487,7 +487,7 @@ mod test {
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_1);
         ssa.mark_start_node(&add);
-        let m = grep!(ssa, "(OpXor %1, %1)");
+        let m = grep!(&mut ssa, "(OpXor %1, %1)");
         assert_eq!(m[0].root.index(), 0);
         assert_eq!(m[0].bindings[0].0, "%1");
         assert_eq!(m[0].bindings[0].1.index(), 1);

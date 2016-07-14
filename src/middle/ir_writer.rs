@@ -223,7 +223,7 @@ impl IRWriter {
                                             operands[0]),
             MOpcode::OpCall => {
                 let mem = "mem".to_owned();
-                format!("{}({})",
+                format!("CALL {}({})",
                         operands[0],
                         &operands[1..]
                              .iter()
