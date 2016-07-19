@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::thread;
 use std::sync::mpsc;
 use std::fmt;
@@ -28,7 +28,7 @@ pub struct RadecoModule<'a, F: RFunction> {
     pub src: Option<&'a mut Source>,
 }
 
-type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
+pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
 
 impl<'a, F: RFunction + Debug> fmt::Debug for RadecoModule<'a, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -191,6 +191,89 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
     rfn.call_ctx = call_info.into_iter().map(|x| x.1).collect();
 }
 
+fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
+    let nt = ssa.get_node_data(n).map(|x| x.nt);
+    if nt.is_err() {
+        return String::new();
+    }
+    let nt = nt.unwrap();
+    let mut result = format!("({:?}", nt);
+    let mut args = ssa.args_of(*n);
+    if let NodeType::Op(MOpcode::OpCall) = nt {
+        args.truncate(1);
+    }
+
+    let len = args.len();
+    for (i, arg) in args.iter().enumerate() {
+        if i < len - 1 {
+            result = format!("{}{},", result, hash_subtree(ssa, arg));
+        } else {
+            result = format!("{}{}", result, hash_subtree(ssa, arg));
+        }
+    }
+    result.push_str(")");
+    result
+}
+
+fn analyze_memory(rfn: &mut DefaultFnTy) {
+    let mut hashes = HashMap::<String, NodeIndex>::new();
+    let mut seen_l = HashMap::<NodeIndex, Binding<NodeIndex>>::new();
+    let mut wl;
+    let mut id: u16 = 0;
+    {
+        let ssa = rfn.ssa_mut();
+        let mem = {
+            let start = ssa.start_node();
+            let rs = ssa.registers_at(&start);
+            ssa.args_of(rs).pop()
+        };
+
+        if let Some(mem) = mem {
+            wl = ssa.uses_of(mem);
+            while let Some(node) = wl.pop() {
+                let data = ssa.get_node_data(&node).map(|x| x.nt);
+                match data {
+                    Ok(NodeType::Op(MOpcode::OpLoad)) | Ok(NodeType::Op(MOpcode::OpStore)) => {
+                        let args = ssa.args_of(node);
+                        // If operation is a store it will produce a new memory instance. Hence,
+                        // push
+                        // all uses of new memory to the worklist.
+                        if let Ok(NodeType::Op(MOpcode::OpStore)) = data {
+                            wl.extend(&ssa.uses_of(node));
+                        }
+                        let mem_loc = args.get(1)
+                                          .expect("Load/Store has to have source/destination");
+                        let mut bind = if seen_l.contains_key(mem_loc) {
+                            seen_l.get_mut(mem_loc).expect("")
+                        } else {
+                            let h = hash_subtree(ssa, mem_loc);
+                            if let Some(idx) = hashes.get(&h).cloned() {
+                                seen_l.get_mut(&idx).expect("")
+                            } else {
+                                hashes.insert(h, *mem_loc);
+                                let mut b = Binding::default();
+                                b.mark_memory();
+                                b.named = Some(format!("mem_var_{}", id));
+                                id += 1;
+                                seen_l.insert(*mem_loc, b);
+                                seen_l.get_mut(mem_loc).expect("")
+                            }
+                        };
+                        bind.add_refs(vec![node]);
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            radeco_warn!("No Memory Found!");
+        }
+    }
+
+    for b in seen_l.values().into_iter() {
+        rfn.bindings.insert(b.clone());
+    }
+}
+
 // MAYBE TODO: Replace `RadecoModule` and `RadecoFunction` by generic `RModule`
 // and `RFunction`.
 // From trait to construct a module from `Source`.
@@ -234,6 +317,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                     }
                 }
                 rfn.offset = offset;
+                analyze_memory(&mut rfn);
                 fix_call_info(&mut rfn);
                 rfn.locals = f.locals.unwrap_or_else(Vec::new);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();
@@ -285,6 +369,9 @@ pub trait RFunction {
     fn set_modifides(&mut self, &[<Self::B as RBindings>::Idx]);
     fn set_preserved(&mut self, &[<Self::B as RBindings>::Idx]);
 
+    fn call_sites
+                  (&self)
+                   -> Vec<CallContext<<Self::B as RBindings>::Idx, <Self::SSA as SSA>::ValueRef>>;
     fn callrefs(&self) -> Vec<u64>;
     fn callxrefs(&self) -> Vec<u64>;
 
@@ -474,6 +561,10 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         &mut self.ssa
     }
 
+    fn call_sites(&self) -> Vec<CallContext<B::Idx, NodeIndex>> {
+        self.call_ctx.clone()
+    }
+
     fn callrefs(&self) -> Vec<u64> {
         self.call_ctx.iter().map(|x| x.callee).filter(|x| x.is_some()).map(|x| x.unwrap()).collect()
     }
@@ -505,6 +596,7 @@ mod test {
                 dce::collect(&mut rfn.ssa);
             }
             println!("Local Variable info: {:?}", rfn.locals);
+            println!("Local Variable info: {:?}", rfn.bindings);
             let mut writer: IRWriter = Default::default();
             writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut io::stdout());
         }

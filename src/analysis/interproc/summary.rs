@@ -104,15 +104,20 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
     // callees. i.e. Replace args_list by args_list in the callee and replace modifides by the
     // values the callee actually modifies.
     fn propagate(&mut self, rmod: &mut T, fn_ref: &T::FnRef) {
-        //println!("Propagate: {:?}", call_sites);
+        if let Some(rfn) = rmod.function_by_ref(fn_ref) {
+            for csite in rfn.call_sites() {
+                let callee = csite.callee.expect("Call site cannot have callee as `None`");
+                let args = if let Some(callee) = rmod.function_by_ref(&callee.into()) {
+                    callee.args()
+                } else {
+                    // XXX
+                    // No information is inferable. Load data from r2. For now, we use fake data.
+                    unimplemented!()
+                };
+            }
+        }
     }
 }
-
-// Converts the operand to call that is currently a simple comment into a proper node.
-//fn parse_call_comment(s: String, ssa: &mut SSAStorage, ni: NodeIndex) {
-    //// TODO: Handle more cases.
-
-//}
 
 impl CallSummary {
     fn detect_arguments() -> HashSet<NodeIndex> {

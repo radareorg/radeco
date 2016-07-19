@@ -24,6 +24,11 @@ pub trait RBind {
     fn is_register(&self) -> bool;
     fn mark_register(&mut self, String);
 
+    fn is_memory(&self) -> bool {
+        !self.is_register() && !self.is_unknown()
+    }
+    fn mark_memory(&mut self);
+
     fn is_fn_local(&self) -> bool;
     fn mark_fn_local(&mut self, usize, i64);
     fn local_info(&self) -> LocalInfo;
@@ -258,6 +263,10 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
 
     fn mark_register(&mut self, name: String) {
         self.vloc = VarLocation::Register { name: name };
+    }
+
+    fn mark_memory(&mut self) {
+        self.vloc = VarLocation::Memory(MemoryRegion::Unknown);
     }
 
     fn is_fn_local(&self) -> bool {
