@@ -3,7 +3,7 @@
 use std::fmt;
 use std::collections::HashMap;
 
-use petgraph::graph::{Graph, NodeIndex};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 
 #[derive(Clone, Debug)]
 pub enum RType {
@@ -25,111 +25,150 @@ pub enum RType {
     Int32,
     Int64,
     Bool,
-    Undefined,
     Ptr(Box<RType>),
     Code,
+    Union(Vec<RType>),
+    Intersect(Vec<RType>),
+    Undefined,
 }
 
 impl fmt::Display for RType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let t = if let RType::Ptr(ref ty) = *self {
-            format!("{}*", ty)
+        if let RType::Ptr(ref ty) = *self {
+            write!(f, "{}*", ty)
+        } else if let RType::Union(ref tys) = *self {
+            let mut s = String::from("union(");
+            let len = tys.len();
+            for (i, ty) in tys.iter().enumerate() {
+                s.push_str(&ty.to_string());
+                if i < len - 1 {
+                    s.push_str(", ");
+                }
+            }
+            write!(f, "{})", s)
+        } else if let RType::Intersect(ref tys) = *self {
+            let mut s = String::from("intersect(");
+            let len = tys.len();
+            for (i, ty) in tys.iter().enumerate() {
+                s.push_str(&ty.to_string());
+                if i < len - 1 {
+                    s.push_str(", ");
+                }
+            }
+            write!(f, "{})", s)
         } else {
-            String::new()
-        };
-
-        let s = match *self {
-            RType::Overdefined => "overdefined",
-            RType::Reg8 => "reg8",
-            RType::Reg16 => "reg16",
-            RType::Reg32 => "reg32",
-            RType::Reg64 => "reg64",
-            RType::Num8 => "n8",
-            RType::Num16 => "n16",
-            RType::Num32 => "n32",
-            RType::Num64 => "n64",
-            RType::UInt8 => "u8",
-            RType::UInt16 => "u16",
-            RType::UInt32 => "u32",
-            RType::UInt64 => "u64",
-            RType::Int8 => "i8",
-            RType::Int16 => "i16",
-            RType::Int32 => "i32",
-            RType::Int64 => "i64",
-            RType::Bool => "bool",
-            RType::Undefined => "underdefined",
-            RType::Ptr(_) => t.as_ref(),
-            RType::Code => "code",
-        };
-        write!(f, "{}", s)
+            let s = match *self {
+                RType::Overdefined => "overdefined",
+                RType::Reg8 => "reg8",
+                RType::Reg16 => "reg16",
+                RType::Reg32 => "reg32",
+                RType::Reg64 => "reg64",
+                RType::Num8 => "n8",
+                RType::Num16 => "n16",
+                RType::Num32 => "n32",
+                RType::Num64 => "n64",
+                RType::UInt8 => "u8",
+                RType::UInt16 => "u16",
+                RType::UInt32 => "u32",
+                RType::UInt64 => "u64",
+                RType::Int8 => "i8",
+                RType::Int16 => "i16",
+                RType::Int32 => "i32",
+                RType::Int64 => "i64",
+                RType::Bool => "bool",
+                RType::Undefined => "underdefined",
+                RType::Code => "code",
+                _ => unreachable!(),
+            };
+            write!(f, "{}", s)
+        }
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum ConstraintNode {
     Type(RType),
-    TypeVar(usize),
+    AbstractType,
+    TypeVar,
     DisjunctiveJoin,
     ConjunctiveJoin,
-    Equality,
     Union,
     Intersect,
-    Subtype,
 }
 
 #[derive(Clone, Debug)]
 pub enum ConstraintEdge {
     EdgeIdx(u8),
+    SubType,
+    Equal,
 }
 
 #[derive(Clone, Debug)]
 pub enum SubTypeNode {
-    Tmp
+    // Index in the original constaints set.
+    OrigIdx(NodeIndex),
 }
 
 #[derive(Clone, Debug)]
 pub enum SubTypeEdge {
-    Tmp
+    SubType
 }
 
 #[derive(Clone, Debug)]
 pub struct SubTypeSet {
     g: Graph<SubTypeNode, SubTypeEdge>,
+    // Map from NodeIndex in ConstraintSet to NodeIndex in SubTypeSet.
+    map: HashMap<NodeIndex, NodeIndex>,
 }
 
 impl SubTypeSet {
     pub fn new() -> SubTypeSet {
         SubTypeSet {
             g: Graph::new(),
+            map: HashMap::new(),
         }
+    }
+
+    // Insert LHS <: RHS
+    pub fn insert_relation(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) {
+        unimplemented!()
+    }
+
+    // For all ( alpha <: S ) return alpha
+    pub fn subtypes_of(&self, idx_s: &NodeIndex) -> Vec<NodeIndex> {
+        unimplemented!()
+    }
+
+    // For all ( T <: beta ) return beta
+    pub fn supertypes_of(&self, idx_t: &NodeIndex) -> Vec<NodeIndex> {
+        unimplemented!()
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct ConstraintSet {
     g: Graph<ConstraintNode, ConstraintEdge>,
-    type_vars: Vec<NodeIndex>,
+    type_vars: HashMap<String, NodeIndex>,
+    // S <:
     subty: SubTypeSet,
-    binding_map: HashMap<usize, RType>,
-    upper_bound: HashMap<usize, RType>,
-    lower_bound: HashMap<usize, RType>,
+    // S=
+    binding_map: HashMap<NodeIndex, RType>,
+    // B^
+    upper_bound: HashMap<NodeIndex, RType>,
+    // B_
+    lower_bound: HashMap<NodeIndex, RType>,
 }
 
 impl ConstraintSet {
     pub fn new() -> ConstraintSet {
         ConstraintSet {
             g: Graph::new(),
-            type_vars: Vec::new(),
+            type_vars: HashMap::new(),
             subty: SubTypeSet::new(),
             binding_map: HashMap::new(),
             upper_bound: HashMap::new(),
             lower_bound: HashMap::new(),
         }
-    }
-
-    // Return the constraints contained by the set
-    pub fn constraints(&self) -> ::std::slice::Iter<NodeIndex> {
-        unimplemented!()
     }
 
     pub fn rhs(&self, n: &NodeIndex) -> NodeIndex {
@@ -144,27 +183,55 @@ impl ConstraintSet {
         unimplemented!()
     }
 
-    pub fn insert_type(&mut self, ty: RType) -> NodeIndex {
+    pub fn insert_abstract_type(&mut self) -> NodeIndex {
         unimplemented!()
+    }
+
+    pub fn insert_base_type(&mut self, ty: RType) -> NodeIndex {
+        unimplemented!()
+    }
+
+    pub fn subtype(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) {
+        unimplemented!()
+    }
+
+    pub fn supertype(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) {
+        self.subtype(rhs, lhs)
     }
 
     pub fn disjunctive_join(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) -> NodeIndex {
         unimplemented!()
     }
 
-    pub fn conjunctive_join(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) -> NodeIndex {
+    pub fn conjunctive_join(&mut self, operands: &[NodeIndex]) -> NodeIndex {
         unimplemented!()
     }
 
-    pub fn equal(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) -> NodeIndex {
+    pub fn equal(&mut self, operands: &[NodeIndex]) -> NodeIndex {
         unimplemented!()
     }
 
-    pub fn union(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) -> NodeIndex {
+    pub fn union(&mut self, operands: &[NodeIndex]) -> NodeIndex {
         unimplemented!()
     }
 
-    pub fn intersect(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) -> NodeIndex {
+    pub fn intersect(&mut self, operands: &[NodeIndex]) -> NodeIndex {
+        unimplemented!()
+    }
+
+    pub fn solve(&mut self) {
+        unimplemented!()
+    }
+
+    fn decompose(&mut self, subtype_edge: EdgeIndex) {
+        unimplemented!()
+    }
+
+    fn meet(&mut self, operands: &[RType]) -> RType {
+        unimplemented!()
+    }
+
+    fn join(&mut self, operands: &[RType]) -> RType {
         unimplemented!()
     }
 }
