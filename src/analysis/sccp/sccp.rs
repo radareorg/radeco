@@ -169,6 +169,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             return val;
         };
 
+
         let val = match opcode {
             MOpcode::OpWiden(_) => {
                 // Nothing to do in case of widen as the value cannot change.
@@ -182,6 +183,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             }
             MOpcode::OpNot => {
                 !const_val as u64
+            }
+            MOpcode::OpCall => {
+                return LatticeValue::Bottom;
             }
             _ => unreachable!(),
         };

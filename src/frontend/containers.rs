@@ -59,7 +59,6 @@ pub struct RadecoFunction<B: RBindings> {
     // callrefs: Vec<u64>,
     callxrefs: Vec<u64>,
     pub bindings: B,
-    pub locals: Vec<LVarInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -104,7 +103,6 @@ impl<B: RBindings> RadecoFunction<B> {
             // callrefs: Vec::new(),
             callxrefs: Vec::new(),
             bindings: B::new(),
-            locals: Vec::new(),
         }
     }
 
@@ -236,8 +234,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                     Ok(NodeType::Op(MOpcode::OpLoad)) | Ok(NodeType::Op(MOpcode::OpStore)) => {
                         let args = ssa.args_of(node);
                         // If operation is a store it will produce a new memory instance. Hence,
-                        // push
-                        // all uses of new memory to the worklist.
+                        // push all uses of new memory to the worklist.
                         if let Ok(NodeType::Op(MOpcode::OpStore)) = data {
                             wl.extend(&ssa.uses_of(node));
                         }
@@ -271,6 +268,35 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
 
     for b in seen_l.values().into_iter() {
         rfn.bindings.insert(b.clone());
+    }
+}
+
+fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
+    // TODO
+    if locals.is_none() {
+        return;
+    }
+
+    let locals = locals.expect("This cannot be `None`");
+    for l in locals {
+        let ref_str = l.reference.unwrap();
+        let mut operation = "";
+        let operands = &mut [String::new(), String::new()];
+        let mut i = 0;
+        for c in ref_str.chars() {
+            match c {
+                '+' | '-' => {
+                    if c == '+' {
+                        operation = "OpAdd";
+                    } else {
+                        operation = "OpSub";
+                    }
+                    i += 1;
+                }
+                _ => operands[i].push(c),
+            }
+        }
+        let postfix_str = format!("({}({}),({}))", operation, operands[0], operands[1]);
     }
 }
 
@@ -319,7 +345,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                 rfn.offset = offset;
                 analyze_memory(&mut rfn);
                 fix_call_info(&mut rfn);
-                rfn.locals = f.locals.unwrap_or_else(Vec::new);
+                load_locals(&mut rfn, f.locals);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();
             });
             handles.push(handle);
@@ -595,10 +621,11 @@ mod test {
             {
                 dce::collect(&mut rfn.ssa);
             }
-            println!("Local Variable info: {:?}", rfn.locals);
-            println!("Local Variable info: {:?}", rfn.bindings);
-            let mut writer: IRWriter = Default::default();
-            writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut io::stdout());
+            // println!("Local Variable info: {:?}", rfn.locals);
+            // println!("Local Variable info: {:?}", rfn.bindings);
+            // ir_write!(Some(rfn.name.clone()), &rfn.ssa, "/tmp/module_test.ir");
+            // let mut writer: IRWriter = Default::default();
+            // writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut io::stdout());
         }
     }
 }

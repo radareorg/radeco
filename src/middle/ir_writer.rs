@@ -18,6 +18,29 @@ use middle::ssa::cfg_traits::CFG;
 const BLOCK_SEP: &'static str = "{";
 const CL_BLOCK_SEP: &'static str = "}";
 
+#[macro_export]
+macro_rules! ir_write {
+    ($n: expr, $ssa: expr) => ({
+        {
+            use $crate::middle::ir_writer::IRWriter;
+
+            let mut writer = IRWriter::default();
+            writer.emit_il($n, $ssa, &mut io::stdout());
+        }
+    });
+    ($n: expr, $ssa: expr, $f: expr) => ({
+        {
+            use $crate::middle::ir_writer::IRWriter;
+            use std::fs::File;
+            use std::io::prelude::*;
+
+            let mut writer = IRWriter::default();
+            let mut f = File::create($f).expect("Unable to create file");
+            writer.emit_il($n, $ssa, &mut f);
+        }
+    });
+}
+
 macro_rules! concat_str {
     ($s:expr, $t:expr) => { $s = format!("{}{}", $s, $t); }
 }

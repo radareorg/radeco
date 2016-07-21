@@ -10,7 +10,7 @@
 pub mod dce;
 pub mod dot;
 pub mod ir;
-pub mod ir_writer;
+#[macro_use] pub mod ir_writer;
 pub mod phiplacement;
 pub mod regfile;
 
