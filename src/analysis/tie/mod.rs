@@ -5,4 +5,4 @@
 //! Programs" by Brumley et al.
 
 
-pub mod types;
+pub mod structs;
