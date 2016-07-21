@@ -112,7 +112,8 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                 } else {
                     // XXX
                     // No information is inferable. Load data from r2. For now, we use fake data.
-                    unimplemented!()
+                    //unimplemented!()
+                    Vec::new()
                 };
             }
         }

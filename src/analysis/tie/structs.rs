@@ -1,6 +1,7 @@
 //! Defines valid types.
 
 use std::fmt;
+use std::collections::HashMap;
 
 use petgraph::graph::{Graph, NodeIndex};
 
@@ -96,6 +97,14 @@ pub struct SubTypeSet {
     g: Graph<SubTypeNode, SubTypeEdge>,
 }
 
+impl SubTypeSet {
+    pub fn new() -> SubTypeSet {
+        SubTypeSet {
+            g: Graph::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ConstraintSet {
     g: Graph<ConstraintNode, ConstraintEdge>,
@@ -111,7 +120,7 @@ impl ConstraintSet {
         ConstraintSet {
             g: Graph::new(),
             type_vars: Vec::new(),
-            subty: Graph::new(),
+            subty: SubTypeSet::new(),
             binding_map: HashMap::new(),
             upper_bound: HashMap::new(),
             lower_bound: HashMap::new(),
