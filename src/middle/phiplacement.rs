@@ -444,7 +444,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     pub fn read_register(&mut self, address: &mut MAddress, var: &str) -> T::ValueRef {
         radeco_trace!("phip_read_reg|{}", var);
 
-        let info = self.regfile.get_info(var).unwrap();
+        let info = self.regfile.get_info(var).expect("No register found");
         let id = info.base;
         let mut value = self.read_variable(address, id);
 

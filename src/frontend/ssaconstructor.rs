@@ -120,7 +120,7 @@ impl<'a, T> SSAConstruct<'a, T>
         if var.is_none() {
             return None;
         }
-        let ret = match *var.as_ref().unwrap() {
+        let ret = match *var.as_ref().expect("This cannot be `None`") {
             // Since ESIL has no concept of intermediates, the identifier spotted by parser
             // has to be a register.
             Token::ERegister(ref name) | Token::EIdentifier(ref name) => {
@@ -129,7 +129,7 @@ impl<'a, T> SSAConstruct<'a, T>
             // We arrive at this case only when we have popped an operand that we have pushed
             // into the parser. id refers to the id of the var in our intermediates table.
             Token::EEntry(ref id, _) => {
-                self.intermediates[*id]
+                *self.intermediates.get(*id).expect("This cannot return `None`")
             }
             Token::EConstant(value) => {
                 // Add or retrieve a constant with the value from the table.
@@ -156,13 +156,13 @@ impl<'a, T> SSAConstruct<'a, T>
         // parser stack,
         // this function should return `None`.
         // NB 2: We never write to an intermediate twice as this is an SSA form!
-        if result.is_none() {
-            None
-        } else {
-            self.intermediates.push(result.unwrap());
+        if let Some(ref res) = result {
+            self.intermediates.push(res.clone());
             let result_id = self.intermediates.len() - 1;
-            let out_size = self.phiplacer.operand_width(result.as_ref().unwrap());
+            let out_size = self.phiplacer.operand_width(res);
             Some(Token::EEntry(result_id, Some(out_size as u64)))
+        } else {
+            None
         }
     }
 
@@ -220,7 +220,7 @@ impl<'a, T> SSAConstruct<'a, T>
                         }
                     } else {
                         // We are writing into a register.
-                        self.phiplacer.write_register(address, &name, rhs.unwrap());
+                        self.phiplacer.write_register(address, &name, rhs.expect("rhs for EEq cannot be `None`"));
                     }
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
@@ -228,8 +228,8 @@ impl<'a, T> SSAConstruct<'a, T>
                     let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
                                                         address,
                                                         ValueType::Integer { width: 0 });
-                    self.phiplacer.op_use(&op_node, 0, lhs.as_ref().unwrap());
-                    self.phiplacer.op_use(&op_node, 1, rhs.as_ref().unwrap());
+                    self.phiplacer.op_use(&op_node, 0, lhs.as_ref().expect("lhs of `MemoryWrite` cannot be `None`"));
+                    self.phiplacer.op_use(&op_node, 1, rhs.as_ref().expect("rhs of `MemoryWrite` cannot be `None`"));
                 }
                 return None;
             }
@@ -251,7 +251,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 let true_comment = self.phiplacer.add_comment(*address,
                                                               ValueType::Integer { width: 0 },
                                                               format!("T: {}", true_address));
-                self.phiplacer.op_use(&op_node, 0, lhs.as_ref().unwrap());
+                self.phiplacer.op_use(&op_node, 0, lhs.as_ref().expect("lhs cannot be `None`"));
                 self.phiplacer.op_use(&op_node, 1, &true_comment);
                 return None;
             }
@@ -301,8 +301,8 @@ impl<'a, T> SSAConstruct<'a, T>
                                                     address,
                                                     ValueType::Integer { width: 0 });
                 self.phiplacer.op_use(&op_node, 0, &mem);
-                self.phiplacer.op_use(&op_node, 1, lhs.as_ref().unwrap());
-                self.phiplacer.op_use(&op_node, 2, rhs.as_ref().unwrap());
+                self.phiplacer.op_use(&op_node, 1, lhs.as_ref().expect("lhs cannot be `None`"));
+                self.phiplacer.op_use(&op_node, 2, rhs.as_ref().expect("rhs cannot be `None`"));
 
                 self.phiplacer.write_variable(*address, self.mem_id, op_node);
                 return None;
@@ -313,7 +313,7 @@ impl<'a, T> SSAConstruct<'a, T>
                                                     address,
                                                     ValueType::Integer { width: n as u16 });
                 self.phiplacer.op_use(&op_node, 0, &mem);
-                self.phiplacer.op_use(&op_node, 1, lhs.as_ref().unwrap());
+                self.phiplacer.op_use(&op_node, 1, lhs.as_ref().expect("lhs cannot be `None`"));
                 return Some(op_node);
             }
             Token::EPop => {
@@ -345,18 +345,18 @@ impl<'a, T> SSAConstruct<'a, T>
                     let vt = ValueType::Integer { width: lhs_size };
                     let casted_rhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(lhs_size), address, vt);
-                    self.phiplacer.op_use(&casted_rhs, 0, rhs.as_ref().unwrap());
-                    (lhs.unwrap(), casted_rhs)
+                    self.phiplacer.op_use(&casted_rhs, 0, rhs.as_ref().expect(""));
+                    (lhs.expect("lhs cannot be `None`"), casted_rhs)
                 }
                 Ordering::Less => {
                     let vt = ValueType::Integer { width: rhs_size };
                     let casted_lhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(rhs_size), address, vt);
-                    self.phiplacer.op_use(&casted_lhs, 0, lhs.as_ref().unwrap());
-                    (casted_lhs, rhs.unwrap())
+                    self.phiplacer.op_use(&casted_lhs, 0, lhs.as_ref().expect("lhs cannot be `None`"));
+                    (casted_lhs, rhs.expect(""))
                 }
                 Ordering::Equal => {
-                    (lhs.unwrap(), rhs.unwrap())
+                    (lhs.expect(""), rhs.expect(""))
                 }
             };
             let op_node_ = self.phiplacer.add_op(&op, address, vt);
@@ -366,7 +366,7 @@ impl<'a, T> SSAConstruct<'a, T>
         } else {
             // There is only one operand, that is lhs. No need for cast.
             let op_node_ = self.phiplacer.add_op(&op, address, vt);
-            self.phiplacer.op_use(&op_node_, 0, lhs.as_ref().unwrap());
+            self.phiplacer.op_use(&op_node_, 0, lhs.as_ref().expect(""));
             Some(op_node_)
         }
     }
@@ -381,9 +381,9 @@ impl<'a, T> SSAConstruct<'a, T>
         self.phiplacer.mark_start_node(&start_block);
 
         for (i, name) in self.regfile.whole_names.iter().enumerate() {
-            let reg = self.regfile.whole_registers[i];
+            let reg = self.regfile.whole_registers.get(i).expect("This cannot be `None`");
             // Name the newly created nodes with register names.
-            let argnode = self.phiplacer.add_comment(start_address, reg, name.clone());
+            let argnode = self.phiplacer.add_comment(start_address, *reg, name.clone());
             self.phiplacer.write_variable(start_address, i, argnode);
         }
 
@@ -417,8 +417,17 @@ impl<'a, T> SSAConstruct<'a, T>
             if op.esil.is_none() {
                 continue;
             }
-            let i = op.esil.as_ref().unwrap();
+
             let offset = op.offset.unwrap_or(0);
+
+            // Get ESIL string
+            let esil_str = if let Some(ref esil_str_) = op.esil {
+                esil_str_
+            } else {
+                radeco_warn!("No ESIL string found at: {}", offset);
+                continue;
+            };
+
             // Reset the instruction offset and remake the current_address.
             // TODO: Improve this mechanism.
             self.instruction_offset = 0;
@@ -445,15 +454,16 @@ impl<'a, T> SSAConstruct<'a, T>
                 self.phiplacer.op_use(src_node, 2, &false_comment);
             }
 
-            radeco_trace!("ssa_construct_esil|{}|{:?}", current_address, i);
+            radeco_trace!("ssa_construct_esil|{}|{:?}", current_address, esil_str);
 
             // Handle call separately.
             // NOTE: This is a hack.
             if let Some(ref ty) = op.optype {
                 if ty == "call" {
+                    let unknown_str = "unknown".to_owned();
                     let call_operand = self.phiplacer.add_comment(current_address,
                                                                   ValueType::Integer { width: 0 },
-                                                                  op.opcode.clone().unwrap());
+                                                                  op.opcode.clone().unwrap_or(unknown_str));
                     let op_call = self.phiplacer.add_op(&MOpcode::OpCall,
                                                         &mut current_address,
                                                         ValueType::Integer { width: 0 });
@@ -463,8 +473,8 @@ impl<'a, T> SSAConstruct<'a, T>
                         let rnode = self.phiplacer.read_register(&mut current_address, reg);
                         self.phiplacer.op_use(&op_call, (i + 1) as u8, &rnode);
                         let new_register_comment = format!("{}@{}", reg, current_address);
-                        let width = self.regfile.whole_registers[i];
-                        let comment_node = self.phiplacer.add_comment(current_address, width, new_register_comment);
+                        let width = self.regfile.whole_registers.get(i).expect("Unable to find register with index");
+                        let comment_node = self.phiplacer.add_comment(current_address, *width, new_register_comment);
                         self.phiplacer.write_register(&mut current_address, reg, comment_node);
                         self.phiplacer.op_use(&comment_node, i as u8, &op_call);
                     }
@@ -475,7 +485,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 }
             }
 
-            while let Some(ref token) = p.parse::<_, Tokenizer>(i) {
+            while let Some(ref token) = p.parse::<_, Tokenizer>(esil_str) {
                 radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
                 let (lhs, rhs) = p.fetch_operands(token);
                 // Determine what to do with the operands and get the result.

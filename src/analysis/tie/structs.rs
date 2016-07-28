@@ -96,6 +96,9 @@ pub enum ConstraintNode {
     Intersect,
 }
 
+const EQUAL_EDGE: ConstraintEdge = ConstraintEdge::Equal;
+const SUBTYPE_EDGE: ConstraintEdge = ConstraintEdge::SubType;
+
 #[derive(Clone, Debug)]
 pub enum ConstraintEdge {
     EdgeIdx(u8),
@@ -149,7 +152,7 @@ impl SubTypeSet {
 pub struct ConstraintSet {
     g: Graph<ConstraintNode, ConstraintEdge>,
     type_vars: HashMap<String, NodeIndex>,
-    // S <:
+    // S<:
     subty: SubTypeSet,
     // S=
     binding_map: HashMap<NodeIndex, RType>,
@@ -171,44 +174,51 @@ impl ConstraintSet {
         }
     }
 
-    pub fn rhs(&self, n: &NodeIndex) -> NodeIndex {
+    pub fn operands(&self, n: &NodeIndex) -> Vec<NodeIndex> {
         unimplemented!()
     }
 
-    pub fn lhs(&self, n: &NodeIndex) -> NodeIndex {
-        unimplemented!()
-    }
-
-    pub fn insert_type_var(&mut self) -> NodeIndex {
-        unimplemented!()
+    pub fn insert_type_var(&mut self, named: Option<String>) -> NodeIndex {
+        let var = self.g.add_node(ConstraintNode::TypeVar);
+        let name = named.unwrap_or_else(|| format!("var_{}", self.type_vars.keys().len()));
+        self.type_vars.insert(name, var);
+        var
     }
 
     pub fn insert_abstract_type(&mut self) -> NodeIndex {
-        unimplemented!()
+        self.g.add_node(ConstraintNode::AbstractType)
     }
 
     pub fn insert_base_type(&mut self, ty: RType) -> NodeIndex {
-        unimplemented!()
+        self.g.add_node(ConstraintNode::Type(ty))
     }
 
     pub fn subtype(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) {
-        unimplemented!()
+        self.g.update_edge(*lhs, *rhs, SUBTYPE_EDGE);
     }
 
     pub fn supertype(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) {
         self.subtype(rhs, lhs)
     }
 
-    pub fn disjunctive_join(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) -> NodeIndex {
-        unimplemented!()
+    pub fn disjunctive_join(&mut self, operands: &[NodeIndex]) -> NodeIndex {
+        let disjunction = self.g.add_node(ConstraintNode::DisjunctiveJoin);
+        for (i, idx) in operands.iter().enumerate() {
+            self.g.update_edge(disjunction, *idx, ConstraintEdge::EdgeIdx(i as u8));
+        }
+        disjunction
     }
 
     pub fn conjunctive_join(&mut self, operands: &[NodeIndex]) -> NodeIndex {
-        unimplemented!()
+        let conjunction = self.g.add_node(ConstraintNode::ConjunctiveJoin);
+        for (i, idx) in operands.iter().enumerate() {
+            self.g.update_edge(conjunction, *idx, ConstraintEdge::EdgeIdx(i as u8));
+        }
+        conjunction
     }
 
-    pub fn equal(&mut self, operands: &[NodeIndex]) -> NodeIndex {
-        unimplemented!()
+    pub fn equal(&mut self, operands: &[NodeIndex; 2]) {
+        self.g.update_edge(operands[0], operands[1], EQUAL_EDGE);
     }
 
     pub fn union(&mut self, operands: &[NodeIndex]) -> NodeIndex {
