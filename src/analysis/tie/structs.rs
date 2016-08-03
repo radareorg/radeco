@@ -3,7 +3,8 @@
 use std::fmt;
 use std::collections::HashMap;
 
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
+use petgraph::EdgeDirection;
 
 #[derive(Clone, Debug)]
 pub enum RType {
@@ -89,6 +90,7 @@ impl fmt::Display for RType {
 pub enum ConstraintNode {
     Type(RType),
     AbstractType,
+    Ptr,
     TypeVar,
     DisjunctiveJoin,
     ConjunctiveJoin,
@@ -104,6 +106,7 @@ pub enum ConstraintEdge {
     EdgeIdx(u8),
     SubType,
     Equal,
+    Ptr,
 }
 
 #[derive(Clone, Debug)]
@@ -114,7 +117,7 @@ pub enum SubTypeNode {
 
 #[derive(Clone, Debug)]
 pub enum SubTypeEdge {
-    SubType
+    SubType,
 }
 
 #[derive(Clone, Debug)]
@@ -175,7 +178,14 @@ impl ConstraintSet {
     }
 
     pub fn operands(&self, n: &NodeIndex) -> Vec<NodeIndex> {
-        unimplemented!()
+        let mut result = Vec::new();
+        for (n, e) in self.g.edges_directed(*n, EdgeDirection::Outgoing) {
+            if let ConstraintEdge::EdgeIdx(i) = *e {
+                result.push((i, n));
+            }
+        }
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result.iter().map(|a| a.1).collect()
     }
 
     pub fn insert_type_var(&mut self, named: Option<String>) -> NodeIndex {
@@ -222,19 +232,87 @@ impl ConstraintSet {
     }
 
     pub fn union(&mut self, operands: &[NodeIndex]) -> NodeIndex {
-        unimplemented!()
+        let union = self.g.add_node(ConstraintNode::Union);
+        for (i, idx) in operands.iter().enumerate() {
+            self.g.update_edge(union, *idx, ConstraintEdge::EdgeIdx(i as u8));
+        }
+        union
     }
 
     pub fn intersect(&mut self, operands: &[NodeIndex]) -> NodeIndex {
-        unimplemented!()
+        let intersection = self.g.add_node(ConstraintNode::Intersect);
+        for (i, idx) in operands.iter().enumerate() {
+            self.g.update_edge(intersection, *idx, ConstraintEdge::EdgeIdx(i as u8));
+        }
+        intersection
     }
 
     pub fn solve(&mut self) {
         unimplemented!()
     }
 
-    fn decompose(&mut self, subtype_edge: EdgeIndex) {
-        unimplemented!()
+    fn inner_type(&self, ptr_node: NodeIndex) -> NodeIndex {
+        self.g
+            .edges_directed(ptr_node, EdgeDirection::Outgoing)
+            .find(|x| {
+                match *x.1 {
+                    ConstraintEdge::Ptr => true,
+                    _ => false,
+                }
+            })
+            .expect("Inner type of `Ptr` cannot be `None`")
+            .0
+    }
+
+    // This function decomposes the first node and adds the appropriate edges to
+    // the other node.
+    fn decompose_constraint_node(&mut self, lhs: NodeIndex, rhs: NodeIndex) {
+        let rhs_is_ptr = match self.g[rhs] {
+            ConstraintNode::Intersect => {
+                let operands = self.operands(&rhs);
+                for op in &operands {
+                    self.g.update_edge(lhs, *op, ConstraintEdge::SubType);
+                }
+                false
+            }
+            ConstraintNode::Ptr => true,
+            _ => false,
+        };
+
+        let lhs_is_ptr = match self.g[lhs] {
+            ConstraintNode::Union => {
+                let lhs_operands = self.operands(&lhs);
+                let mut subtype_relations = Vec::new();
+                let mut edges = self.g.neighbors_directed(lhs, EdgeDirection::Incoming).detach();
+                while let Some(edge) = edges.next_edge(&self.g) {
+                    if let ConstraintEdge::SubType = self.g[edge] {
+                        let (_, target) = self.g.edge_endpoints(edge).expect("");
+                        self.g.remove_edge(edge);
+                        subtype_relations.push(target);
+                    }
+                }
+                for rhs_op in subtype_relations {
+                    for lhs_op in &lhs_operands {
+                        self.g.update_edge(*lhs_op, rhs_op, ConstraintEdge::SubType);
+                    }
+                }
+                false
+            }
+            ConstraintNode::Ptr => true,
+            _ => false,
+        };
+
+        if lhs_is_ptr && rhs_is_ptr {
+            let lhs_inner = self.inner_type(lhs);
+            let rhs_inner = self.inner_type(rhs);
+            self.g.update_edge(lhs_inner, rhs_inner, ConstraintEdge::SubType);
+        }
+    }
+
+    fn decompose_subtype_relation(&mut self, subtype_edge: EdgeIndex) {
+        // According to section 6.3.2 - Decomposition Rules.
+        let (lhs, rhs) = self.g.edge_endpoints(subtype_edge).expect("This cannot be None");
+        self.decompose_constraint_node(lhs, rhs);
     }
 
     fn meet(&mut self, operands: &[RType]) -> RType {
