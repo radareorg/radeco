@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
 use petgraph::EdgeDirection;
 
+type TIEResult<T> = Result<T, String>;
+
 #[derive(Clone, Debug)]
 pub enum RType {
     Overdefined,
@@ -137,17 +139,52 @@ impl SubTypeSet {
 
     // Insert LHS <: RHS
     pub fn insert_relation(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) {
-        unimplemented!()
+        let sub_lhs = if let Some(idx) = self.map.get(lhs).cloned() {
+            idx
+        } else {
+            let new_node = self.g.add_node(SubTypeNode::OrigIdx(*lhs));
+            self.map.insert(*lhs, new_node);
+            new_node
+        };
+
+        let sub_rhs = if let Some(idx) = self.map.get(rhs).cloned() {
+            idx
+        } else {
+            let new_node = self.g.add_node(SubTypeNode::OrigIdx(*rhs));
+            self.map.insert(*rhs, new_node);
+            new_node
+        };
+        self.g.add_edge(sub_lhs, sub_rhs, SubTypeEdge::SubType);
     }
 
     // For all ( alpha <: S ) return alpha
     pub fn subtypes_of(&self, idx_s: &NodeIndex) -> Vec<NodeIndex> {
-        unimplemented!()
+        let idx = self.map[idx_s];
+        let mut result = Vec::new();
+        let mut traverse_list = Vec::new();
+        traverse_list.extend(self.g.neighbors_directed(idx, EdgeDirection::Incoming));
+        while let Some(node) = traverse_list.pop() {
+            traverse_list.extend(self.g.neighbors_directed(node, EdgeDirection::Incoming));
+            match self.g[node] {
+                SubTypeNode::OrigIdx(ni) => result.push(ni),
+            }
+        }
+        result
     }
 
     // For all ( T <: beta ) return beta
     pub fn supertypes_of(&self, idx_t: &NodeIndex) -> Vec<NodeIndex> {
-        unimplemented!()
+        let idx = self.map[idx_t];
+        let mut result = Vec::new();
+        let mut traverse_list = Vec::new();
+        traverse_list.extend(self.g.neighbors_directed(idx, EdgeDirection::Outgoing));
+        while let Some(node) = traverse_list.pop() {
+            traverse_list.extend(self.g.neighbors_directed(node, EdgeDirection::Outgoing));
+            match self.g[node] {
+                SubTypeNode::OrigIdx(ni) => result.push(ni),
+            }
+        }
+        result
     }
 }
 
@@ -248,6 +285,14 @@ impl ConstraintSet {
     }
 
     pub fn solve(&mut self) {
+        unimplemented!()
+    }
+
+    fn solve_equality_constraint(&mut self, constraint_edge: &EdgeIndex) -> TIEResult<()> {
+        unimplemented!()
+    }
+
+    fn solve_subtype_constraint(&mut self, constraint_edge: &EdgeIndex) -> TIEResult<()> {
         unimplemented!()
     }
 
