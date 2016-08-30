@@ -382,6 +382,10 @@ pub trait RFunction {
     type SSA: SSAWalk<Self::I> + SSAMod + SSA;
     type B: RBindings;
 
+    fn fn_name(&self) -> String {
+        "Unsupported".to_owned()
+    }
+
     fn args(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
     fn locals(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
     fn returns(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
@@ -405,28 +409,10 @@ pub trait RFunction {
     fn ssa_mut(&mut self) -> &mut Self::SSA;
 }
 
-// pub struct IdxIter<'a, N: 'a + RBind>
-// {
-// idxs: iter::Enumerate<RBinds<'a, N>>,
-// filter_: FnMut(&N) -> bool,
-// }
-
-// impl<'a, N: RBind> Iterator for IdxIter<'a, N> {
-// type Item = &'a N;
-// fn next(&mut self) -> Option<&'a N> {
-// while let Some(ref i) = self.idxs.next() {
-// if self.filter_(i.1) {
-// return i;
-// }
-// }
-// return None;
-// }
-// }
-
 /// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
 /// all information loaded from the binary. It acts as a container for `Function`s.
 pub trait RModule<'b> {
-    type FnRef: Copy + Clone + Debug + Hash + Eq + From<u64>;
+    type FnRef: Copy + Clone + Debug + Hash + Eq + Into<u64> + From<u64>;
     type RFn: RFunction;
 
     fn callees_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
@@ -439,16 +425,6 @@ pub trait RModule<'b> {
     // Expose raw `Source`
     fn source(&'b mut self) -> &Option<&'b mut Source>;
 }
-
-#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
-pub struct FIdx(u64);
-
-// unsafe impl From<usize> for u64 {
-// fn from(other: usize) -> FIdx {
-// other as u64
-// /FIdx(other as u64)
-// }
-// }
 
 impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
     type FnRef = u64;
@@ -491,6 +467,10 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
     type I = Walker;
     type SSA = SSAStorage;
     type B = B;
+
+    fn fn_name(&self) -> String {
+        self.name.clone()
+    }
 
     fn args(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)> {
         self.bindings

@@ -64,7 +64,7 @@ impl default::Default for CAST {
             ast: Graph::new(),
             eidx: 0,
         };
-        ast.ast.add_node(CASTNode::FunctionHeader("Unknown".to_owned()));
+        ast.ast.add_node(CASTNode::FunctionHeader("unknown".to_owned()));
         ast
     }
 }
@@ -78,6 +78,15 @@ fn format_with_indent(string: &str, depth: usize) -> String {
 }
 
 impl CAST {
+    pub fn new(fn_name: String) -> CAST {
+        let mut ast = CAST {
+            ast: Graph::new(),
+            eidx: 0,
+        };
+        ast.ast.add_node(CASTNode::FunctionHeader(fn_name));
+        ast
+    }
+
     fn next_edge_idx(&mut self) -> u64 {
         self.eidx += 1;
         self.eidx - 1
