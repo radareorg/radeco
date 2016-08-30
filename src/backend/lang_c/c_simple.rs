@@ -216,7 +216,7 @@ impl CAST {
                         // Else-If case
                         format_with_indent("\n}} else ", indent) + &fbody
                     } else {
-                        // Plain Else case.
+                        // Else case.
                         format_with_indent("\n}} else {{", indent) + &fbody
                     }
                 } else {
@@ -384,7 +384,6 @@ impl CAST {
         });
 
         for &(ref node, _) in &edges {
-            println!("In loop");
             result.push_str(&(self.emit_c(node, 1) + "\n"));
         }
 

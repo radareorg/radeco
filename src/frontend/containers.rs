@@ -21,7 +21,6 @@ use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
 use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
 
-
 pub struct RadecoModule<'a, F: RFunction> {
     pub functions: HashMap<u64, F>,
     fname: HashMap<String, u64>,
