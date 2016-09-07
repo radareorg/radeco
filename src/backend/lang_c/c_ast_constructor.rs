@@ -1,4 +1,6 @@
 //! Pass to transform the SSA created into the C-AST.
+//!
+//!
 
 use std::io::Write;
 use std::collections::HashMap;
@@ -18,16 +20,16 @@ impl CWriter {
         }
     }
 
-    /// Converts a RFunction to CAST and stores it internally. This can later be retrieved by using
-    /// the address the key.
+    /// Converts a RFunction to CAST and stores it internally.
+    /// This can later be retrieved by using the address the key.
     pub fn rfn_to_c_ast<F: RFunction>(&mut self, rfn: &F, key: u64) {
-        let mut ast = CAST::new(rfn.fn_name());
+        let mut ast = CAST::new(&rfn.fn_name());
         // Insert the newly constructed AST into the HashMap for later use.
         self.c_ast.insert(key, ast);
     }
 
-    /// Converts all the functions inside the current RModule to CAST and stores it internally.
-    /// This can later be emitted.
+    /// Converts all the functions inside the current RModule to CAST and
+    /// stores it internally. This can later be emitted.
     pub fn rmod_to_c_ast<'a, M: RModule<'a>>(&mut self, rmod: &M) {
         for rfn_idx in rmod.functions().iter() {
             if let Some(rfn) = rmod.function_by_ref(rfn_idx) {
@@ -56,4 +58,3 @@ mod test {
     fn test_emit_c() {
     }
 }
-
