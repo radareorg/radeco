@@ -28,6 +28,14 @@ fn main() {
         RadecoModule::from(&mut r2)
     };
 
+    // Main file to contain IRs of all rfns
+    let mut ffm;
+    {
+        let mut fname = PathBuf::from(&dir);
+        fname.push("main");
+        ffm = File::create(&fname).expect("Unable to create file");
+    }
+
     for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
@@ -59,6 +67,7 @@ fn main() {
         //println!("Local Variable info: {:?}", rfn.locals);
         let mut writer: IRWriter = Default::default();
         writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut ff);
+        writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut ffm);
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
     }
 
