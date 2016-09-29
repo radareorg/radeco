@@ -65,6 +65,7 @@ fn main() {
         fname.push("main");
         ffm = File::create(&fname).expect("Unable to create file");
     }
+    let mut res = String::new();
 
     for (addr, _) in matched_func_vec {
 

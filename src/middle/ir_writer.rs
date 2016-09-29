@@ -6,6 +6,7 @@
 //! The text based
 //! representation is inspired from (and probably similar) LLVM IR.
 
+use std::fmt::Write;
 use std::collections::HashMap;
 use std::default;
 use petgraph::graph::NodeIndex;
