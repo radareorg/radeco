@@ -604,7 +604,7 @@ mod test {
             // println!("Local Variable info: {:?}", rfn.bindings);
             // ir_write!(Some(rfn.name.clone()), &rfn.ssa, "/tmp/module_test.ir");
             // let mut writer: IRWriter = Default::default();
-            // writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut io::stdout());
+            //println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
         }
     }
 }
