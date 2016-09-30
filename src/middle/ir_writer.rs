@@ -6,7 +6,6 @@
 //! The text based
 //! representation is inspired from (and probably similar) LLVM IR.
 
-use std::fmt::Write;
 use std::collections::HashMap;
 use std::default;
 use petgraph::graph::NodeIndex;
@@ -272,8 +271,7 @@ impl IRWriter {
         indent
     }
 
-    pub fn emit_il<T>(&mut self, fn_name: Option<String>, ssa: &SSAStorage, sink: &mut T)
-        where T: Write
+    pub fn emit_il(&mut self, fn_name: Option<String>, ssa: &SSAStorage) -> String
     {
         let mut last = None;
         let mut text_il = String::new();
@@ -394,6 +392,6 @@ impl IRWriter {
         }
 
         concat_strln!(text_il, CL_BLOCK_SEP);
-        writeln!(sink, "{}", text_il);
+        text_il
     }
 }

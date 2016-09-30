@@ -97,7 +97,7 @@ mod test {
             println!("Arg info: {:#?}", rfn.args());
             //println!("Returns info: {:?}", rfn.returns());
             let mut writer: IRWriter = Default::default();
-            writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut io::stdout());
+            println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
         }
     }
 }

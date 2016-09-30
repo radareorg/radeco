@@ -36,7 +36,6 @@ fn main() {
         fname.push("main");
         ffm = File::create(&fname).expect("Unable to create file");
     }
-    let mut res = String::new();
 
     for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
@@ -67,9 +66,9 @@ fn main() {
         fname.push(&rfn.name);
         let mut ff = File::create(&fname).expect("Unable to create file");
         let mut writer: IRWriter = Default::default();
-        writer.emit_il(Some(rfn.name.clone()), &rfn.ssa, &mut res);
-	writeln!(ff,  "{}", res).expect("Error writing to file");
-	writeln!(ffm, "{}", res).expect("Error writing to file");
+        let res = writer.emit_il(Some(rfn.name.clone()), &rfn.ssa);
+        writeln!(ff,  "{}", res).expect("Error writing to file");
+        writeln!(ffm, "{}", res).expect("Error writing to file");
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
     }
 

@@ -592,7 +592,7 @@ mod test {
         }
         println!("\nBefore Constant Propagation:");
         let mut writer: IRWriter = Default::default();
-        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+        println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
         let mut ssa = {
             let mut analyzer = sccp::Analyzer::new(&mut ssa);
             analyzer.analyze();
@@ -603,6 +603,6 @@ mod test {
         }
         println!("\nAfter Constant Propagation:");
         let mut writer: IRWriter = Default::default();
-        writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+        println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
     }
 }
