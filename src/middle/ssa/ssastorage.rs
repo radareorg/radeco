@@ -196,8 +196,8 @@ impl SSAStorage {
         let internal_i = self.internal(&i);
         let internal_j = self.internal(&j);
 
-        let mut walk = self.g.walk_edges_directed(internal_i, EdgeDirection::Incoming);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(internal_i, EdgeDirection::Incoming).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             let othernode_e = self.external(&othernode);
             if let EdgeData::Data(d) = self.g[edge] {
                 match self.g[othernode] {
@@ -277,8 +277,8 @@ impl SSAStorage {
                        -> Vec<NodeIndex> {
         let node = self.internal(&i);
         let mut adjacent = Vec::new();
-        let mut walk = self.g.walk_edges_directed(node, direction);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(node, direction).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if data {
                 if let EdgeData::Data(i) = self.g[edge] {
                     adjacent.push((i, self.external(&othernode)))
@@ -339,8 +339,8 @@ impl CFG for SSAStorage {
 
     fn get_unconditional(&self, exi: &Self::ActionRef) -> Self::ActionRef {
         let i = &self.internal(exi);
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Control(2) = self.g[edge] {
                 return self.external(&othernode);
             }
@@ -366,8 +366,8 @@ impl CFG for SSAStorage {
     fn edges_of(&self, exi: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
         let i = &self.internal(exi);
         let mut edges = Vec::new();
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
-        while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, _)) = walk.next(&self.g) {
             if let EdgeData::Control(i) = self.g[edge] {
                 edges.push((edge, i));
             }
@@ -435,8 +435,8 @@ impl CFG for SSAStorage {
     fn incoming_edges(&self, exi: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
         let i = &self.internal(exi);
         let mut edges = Vec::new();
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
-        while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        while let Some((edge, _)) = walk.next(&self.g) {
             if let EdgeData::Control(i) = self.g[edge] {
                 edges.push((edge, i));
             }
@@ -502,8 +502,8 @@ impl CFGMod for SSAStorage {
 
         let node = self.internal(&exi);
         let mut expressions = Vec::<NodeIndex>::new();
-        let mut walk = self.g.walk_edges_directed(node, EdgeDirection::Incoming);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(node, EdgeDirection::Incoming).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
                 expressions.push(self.external(&othernode));
             }
@@ -520,9 +520,9 @@ impl CFGMod for SSAStorage {
         for pred_e in preds {
             if self.succs_of(pred_e).len() == 1 {
                 let pred = self.internal(&pred_e);
-                let mut walk = self.g.walk_edges_directed(pred, EdgeDirection::Incoming);
+                let mut walk = self.g.neighbors_directed(pred, EdgeDirection::Incoming).detach();
                 let mut seledge = None;
-                while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+                while let Some((edge, _)) = walk.next(&self.g) {
                     if let EdgeData::Selector = self.g[edge] {
                         seledge = Some(edge);
                         break;
@@ -564,8 +564,8 @@ impl SSA for SSAStorage {
         }
         let i = &self.internal(exi);
         let mut expressions = Vec::<NodeIndex>::new();
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
                 if let NodeData::Op(_, _) = self.g[othernode] {
                     expressions.push(self.external(&othernode));
@@ -595,8 +595,8 @@ impl SSA for SSAStorage {
         }
         let i = &self.internal(exi);
         let mut phis = Vec::<NodeIndex>::new();
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
                 if let NodeData::Phi(_, _) = self.g[othernode] {
                     phis.push(self.external(&othernode));
@@ -609,8 +609,8 @@ impl SSA for SSAStorage {
     fn get_uses(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
         let i = &self.internal(exi);
         let mut uses = Vec::new();
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Data(_) = self.g[edge] {
                 uses.push(self.external(&othernode));
             }
@@ -620,8 +620,8 @@ impl SSA for SSAStorage {
 
     fn get_block(&self, exi: &NodeIndex) -> NodeIndex {
         let i = &self.internal(exi);
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
                 return self.external(&othernode);
             }
@@ -631,8 +631,8 @@ impl SSA for SSAStorage {
 
     fn selects_for(&self, exi: &NodeIndex) -> NodeIndex {
         let i = &self.internal(exi);
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Selector = self.g[edge] {
                 return self.external(&othernode);
             }
@@ -648,8 +648,8 @@ impl SSA for SSAStorage {
 
         let mut true_branch = NodeIndex::end();
         let mut false_branch = NodeIndex::end();
-        let mut walk = self.g.walk_edges_directed(selects_for, EdgeDirection::Outgoing);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(selects_for, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Control(0) = self.g[edge] {
                 false_branch = self.external(&othernode);
             } else if let EdgeData::Control(1) = self.g[edge] {
@@ -662,8 +662,8 @@ impl SSA for SSAStorage {
     fn registers_at(&self, exi: &NodeIndex) -> NodeIndex {
         assert!(self.is_action(*exi));
         let i = &self.internal(exi);
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::RegisterState = self.g[edge] {
                 return self.external(&othernode);
             }
@@ -680,8 +680,8 @@ impl SSA for SSAStorage {
     fn get_sparse_operands(&self, exi: &NodeIndex) -> Vec<(u8, NodeIndex)> {
         let i = &self.internal(exi);
         let mut args = Vec::new();
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Data(index) = self.g[edge] {
                 args.push((index, self.external(&othernode)));
             }
@@ -721,8 +721,8 @@ impl SSA for SSAStorage {
 
     fn is_selector(&self, exi: &Self::ValueRef) -> bool {
         let i = &self.internal(exi);
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Incoming);
-        while let Some((edge, _)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        while let Some((edge, _)) = walk.next(&self.g) {
             if let EdgeData::Selector = self.g[edge] {
                 return true;
             }
@@ -733,8 +733,8 @@ impl SSA for SSAStorage {
 
     fn selector_of(&self, exi: &Self::ActionRef) -> Option<Self::ValueRef> {
         let i = &self.internal(exi);
-        let mut walk = self.g.walk_edges_directed(*i, EdgeDirection::Outgoing);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Selector = self.g[edge] {
                 return Some(self.external(&othernode));
             }
@@ -746,8 +746,8 @@ impl SSA for SSAStorage {
         let cur_block_e = &self.get_block(exi);
         let cur_block = self.internal(cur_block_e);
 
-        let mut walk = self.g.walk_edges_directed(cur_block, EdgeDirection::Outgoing);
-        while let Some((edge, othernode)) = walk.next_neighbor(&self.g) {
+        let mut walk = self.g.neighbors_directed(cur_block, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Control(_) = self.g[edge] {
                 return self.external(&othernode);
             }
