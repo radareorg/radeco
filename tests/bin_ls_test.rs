@@ -76,7 +76,7 @@ fn run_cse(ssa: &mut SSAStorage) -> SSAStorage {
 fn bin_ls_construction() {
     let ssa = run_construction();
     let mut writer: IRWriter = Default::default();
-    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+    println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
 //#[test]
@@ -86,7 +86,7 @@ fn bin_ls_sccp() {
         run_sccp(&mut ssa_)
     };
     let mut writer: IRWriter = Default::default();
-    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+    println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
 //#[test]
@@ -96,7 +96,7 @@ fn bin_ls_cse() {
         run_cse(&mut ssa_)
     };
     let mut writer: IRWriter = Default::default();
-    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+    println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
 //#[test]
@@ -109,7 +109,7 @@ fn bin_ls_cse_sccp() {
         run_sccp(&mut ssa_)
     };
     let mut writer: IRWriter = Default::default();
-    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+    println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
 //#[test]
@@ -128,7 +128,7 @@ fn bin_ls_grep_replace() {
         run_sccp(&mut ssa_)
     };
     let mut writer: IRWriter = Default::default();
-    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+    println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
 //#[test]
@@ -141,5 +141,5 @@ fn bin_ls_x86_idioms() {
         dce::collect(&mut ssa);
     }
     let mut writer: IRWriter = Default::default();
-    writer.emit_il(Some("main".to_owned()), &ssa, &mut io::stdout());
+    println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
