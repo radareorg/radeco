@@ -222,7 +222,7 @@ impl ConstraintSet {
             }
         }
         result.sort_by(|a, b| a.0.cmp(&b.0));
-        result.iter().map(|a| a.1).collect()
+        result.iter().map(|a| *a.1).collect()
     }
 
     pub fn insert_type_var(&mut self, named: Option<String>) -> NodeIndex {
