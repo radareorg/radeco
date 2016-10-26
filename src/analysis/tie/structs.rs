@@ -3,7 +3,7 @@
 use std::fmt;
 use std::collections::HashMap;
 
-use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
+use petgraph::graph::{EdgeIndex, Graph, NodeIndex, EdgeReference};
 use petgraph::EdgeDirection;
 
 type TIEResult<T> = Result<T, String>;
@@ -216,8 +216,8 @@ impl ConstraintSet {
 
     pub fn operands(&self, n: &NodeIndex) -> Vec<NodeIndex> {
         let mut result = Vec::new();
-        for (n, e) in self.g.edges_directed(*n, EdgeDirection::Outgoing) {
-            if let ConstraintEdge::EdgeIdx(i) = *e {
+        for edge in self.g.edges_directed(*n, EdgeDirection::Outgoing) {
+            if let EdgeReference{index: i, ..} = edge {
                 result.push((i, n));
             }
         }
