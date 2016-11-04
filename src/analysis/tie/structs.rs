@@ -4,6 +4,7 @@ use std::fmt;
 use std::collections::HashMap;
 
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex, EdgeReference};
+use petgraph::visit::{EdgeRef};
 use petgraph::EdgeDirection;
 
 type TIEResult<T> = Result<T, String>;
@@ -217,9 +218,7 @@ impl ConstraintSet {
     pub fn operands(&self, n: &NodeIndex) -> Vec<NodeIndex> {
         let mut result = Vec::new();
         for edge in self.g.edges_directed(*n, EdgeDirection::Outgoing) {
-            if let EdgeReference{index: i, ..} = edge {
-                result.push((i, n));
-            }
+            result.push ((edge.id(), n));
         }
         result.sort_by(|a, b| a.0.cmp(&b.0));
         result.iter().map(|a| *a.1).collect()
@@ -300,13 +299,13 @@ impl ConstraintSet {
         self.g
             .edges_directed(ptr_node, EdgeDirection::Outgoing)
             .find(|x| {
-                match *x.1 {
+                match self.g[x.id()] {
                     ConstraintEdge::Ptr => true,
                     _ => false,
                 }
             })
             .expect("Inner type of `Ptr` cannot be `None`")
-            .0
+            .source() // TODO .source() or .target() ?
     }
 
     // This function decomposes the first node and adds the appropriate edges to
