@@ -8,7 +8,8 @@ use std::default;
 use std::iter;
 use std::fmt;
 
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex, EdgeReference};
+use petgraph::visit::{EdgeRef};
 use petgraph::EdgeDirection;
 
 //////////////////////////////////////////////////////////////////////////////
@@ -214,13 +215,13 @@ impl CAST {
             })
             .collect::<Vec<_>>();
         args.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::OpOrd(idx) = *a.1 {
+            let idx1 = if let CASTEdge::OpOrd(idx) = self.ast[a.id()] {
                 idx
             } else {
                 u8::max_value()
             };
 
-            let idx2 = if let CASTEdge::OpOrd(idx) = *b.1 {
+            let idx2 = if let CASTEdge::OpOrd(idx) = self.ast[b.id()] {
                 idx
             } else {
                 u8::max_value()
@@ -228,7 +229,8 @@ impl CAST {
 
             idx1.cmp(&idx2)
         });
-        args.iter().map(|x| x.0).collect()
+
+        args.iter().map(|x| x.source()).collect() // TODO really x.source() ? - x.target() ?
     }
 
     pub fn expr(&mut self, operator: Expr, operands: &[NodeIndex]) -> NodeIndex {
@@ -367,8 +369,8 @@ impl CAST {
             CASTNode::Declaration(ref ty) => {
                 let mut ty = format_with_indent(&ty.to_string(), indent);
                 let mut vars = String::new();
-                for (ref op, _) in self.ast.edges_directed(*node, EdgeDirection::Outgoing) {
-                    if let CASTNode::Var(ref name) = self.ast[*op] {
+                for op in self.ast.edges_directed(*node, EdgeDirection::Outgoing) {
+                    if let CASTNode::Var(ref name) = self.ast[op.source()] { // TODO op.source()? op.target()?
                         if vars.is_empty() {
                             vars = vars + name;
                         } else {
@@ -496,13 +498,13 @@ impl CAST {
                             })
                             .collect::<Vec<_>>();
         edges.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::StatementOrd(idx) = *a.1 {
+            let idx1 = if let CASTEdge::StatementOrd(idx) = self.ast[a.id()] {
                 idx
             } else {
                 u64::max_value()
             };
 
-            let idx2 = if let CASTEdge::StatementOrd(idx) = *b.1 {
+            let idx2 = if let CASTEdge::StatementOrd(idx) = self.ast[b.id()] {
                 idx
             } else {
                 u64::max_value()
@@ -511,8 +513,8 @@ impl CAST {
             idx1.cmp(&idx2)
         });
 
-        for &(ref node, _) in &edges {
-            result.push_str(&(self.emit_c(node, 1) + "\n"));
+        for edge in &edges {
+            result.push_str(&(self.emit_c(&edge.source(), 1) + "\n")); // TODO edge.source()? edge.target()?
         }
 
         result.push_str("}");
