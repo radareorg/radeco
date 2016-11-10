@@ -229,7 +229,6 @@ impl CAST {
 
             idx1.cmp(&idx2)
         });
-
         args.iter().map(|x| x.source()).collect() // TODO really x.source() ? - x.target() ?
     }
 
