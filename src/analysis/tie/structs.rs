@@ -299,7 +299,7 @@ impl ConstraintSet {
         self.g
             .edges_directed(ptr_node, EdgeDirection::Outgoing)
             .find(|x| {
-                match self.g[x.id()] {
+                match *x.weight() {
                     ConstraintEdge::Ptr => true,
                     _ => false,
                 }

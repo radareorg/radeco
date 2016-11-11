@@ -210,13 +210,13 @@ impl CAST {
             .edges_directed(*node, EdgeDirection::Outgoing)
             .collect::<Vec<_>>();
         args.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::OpOrd(idx) = self.ast[a.id()] {
+            let idx1 = if let CASTEdge::OpOrd(idx) = *a.weight() {
                 idx
             } else {
                 u8::max_value()
             };
 
-            let idx2 = if let CASTEdge::OpOrd(idx) = self.ast[b.id()] {
+            let idx2 = if let CASTEdge::OpOrd(idx) = *b.weight() {
                 idx
             } else {
                 u8::max_value()
@@ -459,13 +459,13 @@ impl CAST {
                             .edges_directed(self.fn_head, EdgeDirection::Outgoing)
                             .collect::<Vec<_>>();
         edges.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::StatementOrd(idx) = self.ast[a.id()] {
+            let idx1 = if let CASTEdge::StatementOrd(idx) = *a.weight() {
                 idx
             } else {
                 u64::max_value()
             };
 
-            let idx2 = if let CASTEdge::StatementOrd(idx) = self.ast[b.id()] {
+            let idx2 = if let CASTEdge::StatementOrd(idx) = *b.weight() {
                 idx
             } else {
                 u64::max_value()
