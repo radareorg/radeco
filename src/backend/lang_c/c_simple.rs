@@ -208,7 +208,7 @@ impl CAST {
     fn get_args_ordered(&self, node: &NodeIndex) -> Vec<NodeIndex> {
         let mut args = self.ast
             .edges_directed(*node, EdgeDirection::Outgoing)
-            .filter(|x| if let CASTEdge::OpOrd(_) = *x.1 {
+            .filter(|x| if let CASTEdge::OpOrd(_) = *x.weight() {
                 true
             } else {
                 false
@@ -475,8 +475,8 @@ impl CAST {
             for arg in args {
                 let mut arg_s = String::new();
                 if let CASTNode::Declaration(ref ty) = self.ast[arg] {
-                    for (ref op, _) in self.ast.edges_directed(arg, EdgeDirection::Outgoing) {
-                        if let CASTNode::Var(ref name) = self.ast[*op] {
+                    for op in self.ast.edges_directed(arg, EdgeDirection::Outgoing) {
+                        if let CASTNode::Var(ref name) = self.ast[op.target()] { // TODO .target()? .source()?
                             arg_s = format!("{} {}", ty.to_string(), name);
                         }
                     }
@@ -490,7 +490,7 @@ impl CAST {
         }
         let mut edges = self.ast
                             .edges_directed(self.fn_head, EdgeDirection::Outgoing)
-                            .filter(|x| if let CASTEdge::StatementOrd(_) = *x.1 {
+                            .filter(|x| if let CASTEdge::StatementOrd(_) = *x.weight() {
                                 true
                             } else {
                                 false
