@@ -229,7 +229,7 @@ impl CAST {
 
             idx1.cmp(&idx2)
         });
-        args.iter().map(|x| x.source()).collect() // TODO really x.source() ? - x.target() ?
+        args.iter().map(|x| x.target()).collect()
     }
 
     pub fn expr(&mut self, operator: Expr, operands: &[NodeIndex]) -> NodeIndex {
@@ -369,7 +369,7 @@ impl CAST {
                 let mut ty = format_with_indent(&ty.to_string(), indent);
                 let mut vars = String::new();
                 for op in self.ast.edges_directed(*node, EdgeDirection::Outgoing) {
-                    if let CASTNode::Var(ref name) = self.ast[op.source()] { // TODO op.source()? op.target()?
+                    if let CASTNode::Var(ref name) = self.ast[op.target()] {
                         if vars.is_empty() {
                             vars = vars + name;
                         } else {
@@ -476,7 +476,7 @@ impl CAST {
                 let mut arg_s = String::new();
                 if let CASTNode::Declaration(ref ty) = self.ast[arg] {
                     for op in self.ast.edges_directed(arg, EdgeDirection::Outgoing) {
-                        if let CASTNode::Var(ref name) = self.ast[op.target()] { // TODO .target()? .source()?
+                        if let CASTNode::Var(ref name) = self.ast[op.target()] {
                             arg_s = format!("{} {}", ty.to_string(), name);
                         }
                     }
@@ -513,7 +513,7 @@ impl CAST {
         });
 
         for edge in &edges {
-            result.push_str(&(self.emit_c(&edge.source(), 1) + "\n")); // TODO edge.source()? edge.target()?
+            result.push_str(&(self.emit_c(&edge.target(), 1) + "\n"));
         }
 
         result.push_str("}");
