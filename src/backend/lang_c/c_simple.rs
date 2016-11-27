@@ -8,7 +8,8 @@ use std::default;
 use std::iter;
 use std::fmt;
 
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex, EdgeReference};
+use petgraph::visit::{EdgeRef};
 use petgraph::EdgeDirection;
 
 //////////////////////////////////////////////////////////////////////////////
@@ -68,7 +69,7 @@ impl fmt::Display for Ty {
         }
 
         if self.signed {
-            result = format!("signed {}", result);
+            result = format!("{}", result);
         } else {
             result = format!("unsigned {}", result);
         }
@@ -207,15 +208,20 @@ impl CAST {
     fn get_args_ordered(&self, node: &NodeIndex) -> Vec<NodeIndex> {
         let mut args = self.ast
             .edges_directed(*node, EdgeDirection::Outgoing)
+            .filter(|x| if let CASTEdge::OpOrd(_) = *x.weight() {
+                true
+            } else {
+                false
+            })
             .collect::<Vec<_>>();
         args.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::OpOrd(idx) = *a.1 {
+            let idx1 = if let CASTEdge::OpOrd(idx) = *a.weight() {
                 idx
             } else {
                 u8::max_value()
             };
 
-            let idx2 = if let CASTEdge::OpOrd(idx) = *b.1 {
+            let idx2 = if let CASTEdge::OpOrd(idx) = *b.weight() {
                 idx
             } else {
                 u8::max_value()
@@ -223,8 +229,7 @@ impl CAST {
 
             idx1.cmp(&idx2)
         });
-
-        args.iter().map(|x| x.0).collect()
+        args.iter().map(|x| x.target()).collect()
     }
 
     pub fn expr(&mut self, operator: Expr, operands: &[NodeIndex]) -> NodeIndex {
@@ -303,17 +308,29 @@ impl CAST {
         self.ast.add_edge(self.fn_head, break_n, CASTEdge::StatementOrd(idx));
     }
 
-    pub fn declare_vars(&mut self, ty: Ty, vars: &[&str]) -> Vec<NodeIndex> {
+    pub fn declare_vars(&mut self, ty: Ty, vars: &[String]) -> Vec<NodeIndex> {
         let decl = self.ast.add_node(CASTNode::Declaration(ty));
         let mut var_decls = Vec::new();
         for (i, v) in vars.iter().enumerate() {
-            let vn = self.ast.add_node(CASTNode::Var(String::from(*v)));
+            let vn = self.ast.add_node(CASTNode::Var((v.clone())));
             self.ast.add_edge(decl, vn, CASTEdge::OpOrd(i as u8));
             var_decls.push(vn);
         }
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, decl, CASTEdge::StatementOrd(idx));
         var_decls
+    }
+
+    pub fn function_args(&mut self, args: &[(Ty, String)]) -> Vec<NodeIndex> {
+        let mut arg_nodes = Vec::new();
+        for (i, &(ref t, ref named)) in args.iter().enumerate() {
+            let decl = self.ast.add_node(CASTNode::Declaration(t.clone()));
+            self.ast.add_edge(self.fn_head, decl, CASTEdge::OpOrd(i as u8));
+            let arg_node = self.ast.add_node(CASTNode::Var(named.clone()));
+            self.ast.add_edge(decl, arg_node, CASTEdge::OpOrd(0));
+            arg_nodes.push(arg_node);
+        }
+        arg_nodes
     }
 
     fn emit_c(&self, node: &NodeIndex, indent: usize) -> String {
@@ -351,8 +368,8 @@ impl CAST {
             CASTNode::Declaration(ref ty) => {
                 let mut ty = format_with_indent(&ty.to_string(), indent);
                 let mut vars = String::new();
-                for (ref op, _) in self.ast.edges_directed(*node, EdgeDirection::Outgoing) {
-                    if let CASTNode::Var(ref name) = self.ast[*op] {
+                for op in self.ast.edges_directed(*node, EdgeDirection::Outgoing) {
+                    if let CASTNode::Var(ref name) = self.ast[op.target()] {
                         if vars.is_empty() {
                             vars = vars + name;
                         } else {
@@ -453,19 +470,40 @@ impl CAST {
         // Traverse the subtree and print out accordingly.
         let mut result = String::new();
         if let CASTNode::FunctionHeader(ref named) = self.ast[self.fn_head] {
-            result.push_str(&format!("fn {} {{\n", named));
+            let args = self.get_args_ordered(&self.fn_head);
+            let mut args_string = String::new();
+            for arg in args {
+                let mut arg_s = String::new();
+                if let CASTNode::Declaration(ref ty) = self.ast[arg] {
+                    for op in self.ast.edges_directed(arg, EdgeDirection::Outgoing) {
+                        if let CASTNode::Var(ref name) = self.ast[op.target()] {
+                            arg_s = format!("{} {}", ty.to_string(), name);
+                        }
+                    }
+                }
+                if !args_string.is_empty() {
+                    args_string.push_str(", ");
+                }
+                args_string = format!("{}{}", args_string, arg_s);
+            }
+            result.push_str(&format!("fn {} ({}) {{\n", named, args_string));
         }
         let mut edges = self.ast
                             .edges_directed(self.fn_head, EdgeDirection::Outgoing)
+                            .filter(|x| if let CASTEdge::StatementOrd(_) = *x.weight() {
+                                true
+                            } else {
+                                false
+                            })
                             .collect::<Vec<_>>();
         edges.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::StatementOrd(idx) = *a.1 {
+            let idx1 = if let CASTEdge::StatementOrd(idx) = *a.weight() {
                 idx
             } else {
                 u64::max_value()
             };
 
-            let idx2 = if let CASTEdge::StatementOrd(idx) = *b.1 {
+            let idx2 = if let CASTEdge::StatementOrd(idx) = *b.weight() {
                 idx
             } else {
                 u64::max_value()
@@ -474,8 +512,8 @@ impl CAST {
             idx1.cmp(&idx2)
         });
 
-        for &(ref node, _) in &edges {
-            result.push_str(&(self.emit_c(node, 1) + "\n"));
+        for edge in &edges {
+            result.push_str(&(self.emit_c(&edge.target(), 1) + "\n"));
         }
 
         result.push_str("}");
@@ -491,7 +529,8 @@ mod test {
     #[test]
     fn c_ast_basic_test() {
         let mut c_ast = CAST::new("main");
-        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i", "j"]);
+        c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
         let cmp = c_ast.expr(Expr::Cmp, &vars);
         let increment = c_ast.expr(Expr::Add, &vars);
         let assignment = c_ast.expr(Expr::Eq, &[vars[0], increment]);
