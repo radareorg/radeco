@@ -12,7 +12,10 @@ use std::hash::Hash;
 use std::cmp::Eq;
 use std::fmt::Debug;
 
+use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::graph::NodeIndex;
+
+
 
 macro_rules! add_strings {
 	( $( $x: expr ),* ) => {
@@ -101,7 +104,7 @@ pub trait GraphDot {
     fn node_count(&self) -> usize;
     fn edge_count(&self) -> usize;
     fn nodes(&self) -> Vec<Self::NodeIndex>;
-    // fn edges(&self) -> Vec<Self::EdgeType>;
+    fn edges(&self) -> Vec<Self::EdgeIndex>;
     // fn get_node(&self, n: usize) -> Option<&Self::NodeType>;
 
     /// Nodes with the same node_cluster return value will be put in the same
@@ -151,12 +154,11 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
     }
 
     // Connect nodes by edges.
-    for i in 0..g.edge_count() {
-        let edge_i = &T::edge_index_new(i);
-        if g.edge_skip(edge_i) {
+    for edge_i in g.edges() {
+        if g.edge_skip(&edge_i) {
             continue;
         }
-        result.push_str(g.edge_attrs(edge_i).bake());
+        result.push_str(g.edge_attrs(&edge_i).bake());
     }
 
     result.push_str("\n}\n");

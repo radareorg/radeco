@@ -8,6 +8,7 @@
 //! Implements the `GraphDot` trait for `SSAStorage`
 
 use petgraph::graph;
+use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 
 use middle::ir::MOpcode;
 use middle::dot::{DotAttrBlock, GraphDot};
@@ -33,6 +34,10 @@ impl GraphDot for SSAStorage {
         self.valid_nodes()
     }
 
+    fn edges(&self) -> Vec<Self::EdgeIndex> {
+        self.g.edge_references().map(|x| x.id()).collect()
+    }
+
     fn node_count(&self) -> usize {
         self.g.node_count()
     }
@@ -49,35 +54,32 @@ impl GraphDot for SSAStorage {
         graph::EdgeIndex::new(i)
     }
 
-    fn node_cluster(&self, exi: &Self::NodeIndex) -> Option<usize> {
-        let i = &self.internal(exi);
+    fn node_cluster(&self, i: &Self::NodeIndex) -> Option<usize> {
         match self.g.node_weight(*i) {
-            Some(&NodeData::BasicBlock(_)) | Some(&NodeData::DynamicAction) => Some(exi.index()),
-            _ => Some(self.get_block(exi).index()),
+            Some(&NodeData::BasicBlock(_)) | Some(&NodeData::DynamicAction) => Some(i.index()),
+            _ => Some(self.get_block(i).index()),
         }
     }
 
     fn edge_source(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
-        let edge = &self.g.raw_edges()[i.index()];
-        let xi = match edge.weight {
+        let edge = &self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
+        match *edge.weight() {
             EdgeData::Data(_) => edge.target(),
             _ => edge.source(),
-        };
-        self.external(&xi)
+        }
     }
 
     fn edge_target(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
-        let edge = &self.g.raw_edges()[i.index()];
-        let xi = match edge.weight {
+        let edge = &self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
+         match *edge.weight() {
             EdgeData::Data(_) => edge.source(),
             _ => edge.target(),
-        };
-        self.external(&xi)
+        }
     }
 
     fn edge_skip(&self, i: &Self::EdgeIndex) -> bool {
-        let edge = &self.g.raw_edges()[i.index()];
-        match edge.weight {
+        let edge = &self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
+        match *edge.weight() {
             EdgeData::ContainedInBB | EdgeData::RegisterState => true,
             _ => false,
         }
@@ -88,27 +90,27 @@ impl GraphDot for SSAStorage {
     // cases.
     fn edge_attrs(&self, i: &Self::EdgeIndex) -> DotAttrBlock {
         // TODO: Error Handling
-        let edge = &self.g.raw_edges()[i.index()];
+        let edge = self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
         let mut prefix = String::new();
         let src = edge.source();
         let target = edge.target();
 
         prefix.push_str(&format!("n{} -> n{}",
-                                 self.external(&src).index(),
-                                 self.external(&target).index()));
+                                 src.index(),
+                                 target.index()));
         let target_is_bb = if let NodeData::BasicBlock(_) = self.g[edge.target()] {
             true
         } else {
             false
         };
-        let attr = match edge.weight {
+        let attr = match *edge.weight() {
             EdgeData::Control(_) if !target_is_bb => {
                 vec![("color".to_string(), "red".to_string())]
             }
             EdgeData::Control(i) => {
                 // Determine the source and destination clusters.
-                let source_cluster = self.external(&edge.source()).index();
-                let dst_cluster = self.external(&edge.target()).index();
+                let source_cluster = edge.source().index();
+                let dst_cluster = edge.target().index();
                 let (color, label) = match i {
                     0 => ("red", "F"),
                     1 => ("green", "T"),
@@ -140,17 +142,16 @@ impl GraphDot for SSAStorage {
         DotAttrBlock::Hybrid(prefix, attr)
     }
 
-    fn node_attrs(&self, exi: &Self::NodeIndex) -> DotAttrBlock {
-        let i = &self.internal(exi);
+    fn node_attrs(&self, i: &Self::NodeIndex) -> DotAttrBlock {
         let node = &self.g[*i];
         let mut prefix = String::new();
-        prefix.push_str(&format!("n{}", exi.index()));
+        prefix.push_str(&format!("n{}", i.index()));
 
         let attr = match *node {
             NodeData::Op(opc, ValueType::Integer{width: w}) => {
                 let mut attrs = Vec::new();
                 let mut r = String::new();
-                let addr = self.addr(exi);
+                let addr = self.addr(i);
                 if addr.is_some() {
                     r.push_str(&format!("<<font color=\"grey50\">{}: </font>",
                                         addr.as_ref().unwrap()))
@@ -166,7 +167,7 @@ impl GraphDot for SSAStorage {
                     attrs.push(("fillcolor".to_owned(), "yellow".to_owned()));
                 }
 
-                if self.is_marked(exi) {
+                if self.is_marked(i) {
                     attrs.push(("label".to_string(), r));
                     attrs.push(("style".to_owned(), "filled".to_owned()));
                     attrs.push(("color".to_owned(), "black".to_owned()));
@@ -181,7 +182,7 @@ impl GraphDot for SSAStorage {
                                          Information<br/>Start Address: {}</font>>",
                                         addr);
                 let mut attrs = Vec::new();
-                if self.start_node() == *exi {
+                if self.start_node() == *i {
                     attrs.push(("rank".to_string(), "min".to_string()));
                 }
 
@@ -205,11 +206,11 @@ impl GraphDot for SSAStorage {
                 let mut label = format!("{:?}", node);
                 label = label.replace("\"", "\\\"");
                 label = format!("\"{}\"", label);
-                if let Some(addr) = self.addr(exi) {
+                if let Some(addr) = self.addr(i) {
                     label = format!("<<font color=\"grey50\">{}: </font> {}>", addr, label);
                 }
                 attrs.push(("label".to_string(), label));
-                if self.is_marked(exi) {
+                if self.is_marked(i) {
                     attrs.push(("style".to_owned(), "filled".to_owned()));
                     attrs.push(("color".to_owned(), "black".to_owned()));
                     attrs.push(("fillcolor".to_owned(), "green".to_owned()));

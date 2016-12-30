@@ -516,24 +516,21 @@ mod test {
         let args = ssa.args_of(sub_node);
 
         assert!({
-            let sub_nodei = ssa.internal(&sub_node);
-            match ssa.g[sub_nodei] {
+            match ssa.g[sub_node] {
                 NodeData::Op(MOpcode::OpSub, _) => true,
                 _ => false,
             }
         });
 
         assert!({
-            let nodei = ssa.internal(&args[0]);
-            match ssa.g[nodei] {
+            match ssa.g[args[0]] {
                 NodeData::Op(MOpcode::OpConst(1), _) => true,
                 _ => false,
             }
         });
 
         assert!({
-            let nodei = ssa.internal(&args[1]);
-            match ssa.g[nodei] {
+            match ssa.g[args[1]] {
                 NodeData::Op(MOpcode::OpConst(2), _) => true,
                 _ => false,
             }

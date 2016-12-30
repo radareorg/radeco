@@ -20,5 +20,4 @@ pub mod ssa {
     pub mod ssastorage;
     pub mod error;
     pub mod ssadot;
-    mod bimap;
 }

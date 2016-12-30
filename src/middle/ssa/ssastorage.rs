@@ -11,15 +11,16 @@ use std::fmt::Debug;
 use std::collections::{HashMap, VecDeque, HashSet, BinaryHeap};
 use std::default;
 use std::cmp::{PartialOrd, PartialEq, Ordering};
+use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::EdgeDirection;
-use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
+use petgraph::stable_graph::StableDiGraph;
+use petgraph::graph::{EdgeIndex,  NodeIndex};
 use middle::ir;
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
-use super::bimap::BiMap;
 use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
@@ -120,23 +121,21 @@ const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
 /// A petgraph based SSA storage.
 #[derive(Debug, Clone)]
 pub struct SSAStorage {
-    pub g: Graph<NodeData, EdgeData>,
+    pub g: StableDiGraph<NodeData, EdgeData>,
     pub start_node: NodeIndex,
     pub exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
     pub regnames: Vec<String>,
-    stablemap: BiMap<NodeIndex, NodeIndex>,
     last_key: usize,
 }
 
 impl default::Default for SSAStorage {
     fn default() -> SSAStorage {
         SSAStorage {
-            g: Graph::new(),
+            g: StableDiGraph::new(),
             start_node: NodeIndex::end(),
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
-            stablemap: BiMap::new(),
             regnames: Vec::new(),
             last_key: 0,
         }
@@ -146,11 +145,10 @@ impl default::Default for SSAStorage {
 impl SSAStorage {
     pub fn new() -> SSAStorage {
         SSAStorage {
-            g: Graph::new(),
+            g: StableDiGraph::new(),
             start_node: NodeIndex::end(),
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
-            stablemap: BiMap::new(),
             regnames: Vec::new(),
             last_key: 0,
         }
@@ -164,48 +162,29 @@ impl SSAStorage {
     // through this API to prevent stablemap from being out of sync.
 
     fn insert_node(&mut self, d: NodeData) -> NodeIndex {
-        let n = self.g.add_node(d);
-        let ret = NodeIndex::new(self.last_key);
-        self.stablemap.insert(ret, n);
-        self.last_key += 1;
-        radeco_trace!(logger::Event::SSAInsertNode(&ret, &n));
-        ret
+        self.g.add_node(d)
+        //radeco_trace!(logger::Event::SSAInsertNode(&ret, &n));
     }
 
     fn remove_node(&mut self, exi: NodeIndex) {
         radeco_trace!(logger::Event::SSARemoveNode(&exi));
         // Remove the current association.
-        let v = self.stablemap.remove_k(&exi);
-        if v.is_none() {
-            return;
-        }
-        self.g.remove_node(v.unwrap());
-        // Get the index of the last node.
-        let n = self.g.node_count();
-        if n > 0 && v.unwrap().index() != n {
-            // Correct the map, i.e. Map the external index of n to v.
-            let ext = self.stablemap.remove_v(&NodeIndex::new(n));
-            self.stablemap.insert(ext.unwrap(), v.unwrap());
-            radeco_trace!("ssa_remapped|{:?}->{:?}", ext, v);
-        }
+        self.g.remove_node(exi);
     }
 
     fn replace_node(&mut self, i: NodeIndex, j: NodeIndex) {
         radeco_trace!(logger::Event::SSAReplaceNode(&i, &j));
         // Before replace, we need to copy over the edges.
-        let internal_i = self.internal(&i);
-        let internal_j = self.internal(&j);
 
-        let mut walk = self.g.neighbors_directed(internal_i, EdgeDirection::Incoming).detach();
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            let othernode_e = self.external(&othernode);
             if let EdgeData::Data(d) = self.g[edge] {
                 match self.g[othernode] {
                     NodeData::Op(_, _) | NodeData::RegisterState => {
-                        self.op_use(othernode_e, d, j);
+                        self.op_use(othernode, d, j);
                     }
                     NodeData::Phi(_, _) => {
-                        self.phi_use(othernode_e, j);
+                        self.phi_use(othernode, j);
                     }
                     _ => {}
                 }
@@ -215,43 +194,26 @@ impl SSAStorage {
             }
         }
 
-        if self.start_node == internal_i {
-            self.start_node = internal_j;
+        if self.start_node == i {
+            self.start_node = j;
         }
 
         self.remove_node(i);
-        self.stablemap.replace(i, j);
-    }
-
-    pub fn internal(&self, e: &NodeIndex) -> NodeIndex {
-        radeco_trace!(logger::Event::SSAQueryInternal(&e));
-        *(self.stablemap.get(e).unwrap())
-    }
-
-    pub fn external(&self, i: &NodeIndex) -> NodeIndex {
-        radeco_trace!(logger::Event::SSAQueryExternal(&i));
-        *(self.stablemap.get_inverse(i).unwrap())
     }
 
     fn insert_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
         radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
-        let i = self.internal(&i);
-        let j = self.internal(&j);
         self.g.add_edge(i, j, e)
     }
 
     #[allow(dead_code)]
     fn update_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
         radeco_trace!(logger::Event::SSAUpdateEdge(&i, &j));
-        let i = self.internal(&i);
-        let j = self.internal(&j);
         self.g.update_edge(i, j, e)
     }
 
     fn delete_edge(&mut self, i: NodeIndex, j: NodeIndex) {
         radeco_trace!(logger::Event::SSARemoveEdge(&i, &j));
-        let i = self.internal(&i);
-        let j = self.internal(&j);
         let e = self.g.find_edge(i, j);
         if let Some(ei) = e {
             self.g.remove_edge(ei);
@@ -259,7 +221,7 @@ impl SSAStorage {
     }
 
     pub fn valid_nodes(&self) -> Vec<NodeIndex> {
-        self.stablemap.keys()
+        self.g.node_indices().collect()
     }
 
     pub fn read_const(&self, ni: NodeIndex) -> Option<u64> {
@@ -271,21 +233,20 @@ impl SSAStorage {
     }
 
     fn gather_adjacent(&self,
-                       i: NodeIndex,
+                       node: NodeIndex,
                        direction: EdgeDirection,
                        data: bool)
                        -> Vec<NodeIndex> {
-        let node = self.internal(&i);
         let mut adjacent = Vec::new();
         let mut walk = self.g.neighbors_directed(node, direction).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if data {
                 if let EdgeData::Data(i) = self.g[edge] {
-                    adjacent.push((i, self.external(&othernode)))
+                    adjacent.push((i, othernode))
                 }
             } else {
                 if let EdgeData::Control(i) = self.g[edge] {
-                    adjacent.push((i, self.external(&othernode)));
+                    adjacent.push((i, othernode));
                 }
             }
         }
@@ -293,8 +254,7 @@ impl SSAStorage {
         adjacent.iter().map(|x| x.1).collect::<Vec<_>>()
     }
 
-    pub fn is_block(&self, i: NodeIndex) -> bool {
-        let node = self.internal(&i);
+    pub fn is_block(&self, node: NodeIndex) -> bool {
         if let NodeData::BasicBlock(_) = self.g[node] {
             true
         } else {
@@ -302,8 +262,7 @@ impl SSAStorage {
         }
     }
 
-    pub fn is_action(&self, i: NodeIndex) -> bool {
-        let action = self.internal(&i);
+    pub fn is_action(&self, action: NodeIndex) -> bool {
         match self.g[action] {
             NodeData::BasicBlock(_) | NodeData::DynamicAction => true,
             _ => false,
@@ -316,33 +275,27 @@ impl CFG for SSAStorage {
 	type CFEdgeRef = EdgeIndex;
 
     fn blocks(&self) -> Vec<NodeIndex> {
-        let len = self.g.node_count();
-        let mut blocks = Vec::<NodeIndex>::new();
-        for i in &(0..len).map(NodeIndex::new).collect::<Vec<NodeIndex>>() {
-            match self.g[*i] {
-                NodeData::BasicBlock(_) => blocks.push(self.external(i)),
-                _ => continue,
-            }
-        }
-        blocks
+        self.g.node_indices().filter(|x| match self.g[*x] {
+            NodeData::BasicBlock(_) => true,
+            _ => false,
+        }).collect()
     }
 
     fn start_node(&self) -> NodeIndex {
         assert!(self.start_node != NodeIndex::end());
-        self.external(&self.start_node)
+        self.start_node
     }
 
     fn exit_node(&self) -> NodeIndex {
         assert!(self.exit_node != NodeIndex::end());
-        self.external(&self.exit_node)
+        self.exit_node
     }
 
-    fn get_unconditional(&self, exi: &Self::ActionRef) -> Self::ActionRef {
-        let i = &self.internal(exi);
+    fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef {
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Control(2) = self.g[edge] {
-                return self.external(&othernode);
+                return othernode;
             }
         }
         NodeIndex::end()
@@ -363,8 +316,7 @@ impl CFG for SSAStorage {
     ///////////////////////////////////////////////////////////////////////////
     //// Edge accessors and helpers
     ///////////////////////////////////////////////////////////////////////////
-    fn edges_of(&self, exi: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
-        let i = &self.internal(exi);
+    fn edges_of(&self, i: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
         let mut edges = Vec::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, _)) = walk.next(&self.g) {
@@ -376,16 +328,12 @@ impl CFG for SSAStorage {
     }
 
     fn info(&self, i: &EdgeIndex) -> (NodeIndex, NodeIndex) {
-        if self.invalid_edge() == *i {
-            return (self.invalid_value(), self.invalid_value());
+        if let Some(edge_data) = self.g.edge_references().find(|x| x.id() == *i) {
+            (edge_data.source(),
+            edge_data.target())
+        } else {
+            (NodeIndex::end(), NodeIndex::end())
         }
-
-        let edge_count = self.g.edge_count();
-        assert!(i.index() < edge_count);
-        let edges = self.g.raw_edges();
-        let edge_data = edges[i.index()].clone();
-        (self.external(&edge_data.source()),
-         self.external(&edge_data.target()))
     }
 
     fn find_edge(&self, source: &NodeIndex, target: &NodeIndex) -> EdgeIndex {
@@ -393,9 +341,7 @@ impl CFG for SSAStorage {
             return self.invalid_edge();
         }
 
-        let si = self.internal(source);
-        let ti = self.internal(target);
-        self.g.find_edge(si, ti).unwrap_or_else(EdgeIndex::end)
+        self.g.find_edge(*source, *target).unwrap_or_else(EdgeIndex::end)
     }
 
     fn true_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
@@ -432,8 +378,7 @@ impl CFG for SSAStorage {
         EdgeIndex::end()
     }
 
-    fn incoming_edges(&self, exi: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
-        let i = &self.internal(exi);
+    fn incoming_edges(&self, i: &NodeIndex) -> Vec<(EdgeIndex, u8)> {
         let mut edges = Vec::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, _)) = walk.next(&self.g) {
@@ -444,11 +389,10 @@ impl CFG for SSAStorage {
         edges
     }
 
-    fn address(&self, block: &Self::ActionRef) -> Option<ir::MAddress> {
-        let si = self.internal(block);
-        if let NodeData::BasicBlock(ref addr) = self.g[si] {
+    fn address(&self, si: &Self::ActionRef) -> Option<ir::MAddress> {
+        if let NodeData::BasicBlock(ref addr) = self.g[*si] {
             Some(*addr)
-        } else if let NodeData::DynamicAction = self.g[si] {
+        } else if let NodeData::DynamicAction = self.g[*si] {
             Some(ir::MAddress::new(0xffffffff, 0))
         } else {
             None
@@ -464,14 +408,12 @@ impl CFGMod for SSAStorage {
 
 	type BBInfo = ir::MAddress;
 
-    fn mark_start_node(&mut self, start: &Self::ActionRef) {
-        let si = self.internal(start);
-        self.start_node = si;
+    fn mark_start_node(&mut self, si: &Self::ActionRef) {
+        self.start_node = *si;
     }
 
-    fn mark_exit_node(&mut self, exit: &Self::ActionRef) {
-        let ei = self.internal(exit);
-        self.exit_node = ei;
+    fn mark_exit_node(&mut self, ei: &Self::ActionRef) {
+        self.exit_node = *ei;
     }
 
     fn add_block(&mut self, info: Self::BBInfo) -> NodeIndex {
@@ -500,12 +442,12 @@ impl CFGMod for SSAStorage {
         let regstate = self.registers_at(&exi);
         self.remove(regstate);
 
-        let node = self.internal(&exi);
+        let node = exi;
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.neighbors_directed(node, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
-                expressions.push(self.external(&othernode));
+                expressions.push(othernode);
             }
         }
 
@@ -519,7 +461,7 @@ impl CFGMod for SSAStorage {
         // block removal can make predecessors lose selectors
         for pred_e in preds {
             if self.succs_of(pred_e).len() == 1 {
-                let pred = self.internal(&pred_e);
+                let pred = pred_e;
                 let mut walk = self.g.neighbors_directed(pred, EdgeDirection::Incoming).detach();
                 let mut seledge = None;
                 while let Some((edge, _)) = walk.next(&self.g) {
@@ -562,13 +504,13 @@ impl SSA for SSAStorage {
         if self.invalid_value() == *exi {
             return Vec::new();
         }
-        let i = &self.internal(exi);
+        let i = exi;
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
                 if let NodeData::Op(_, _) = self.g[othernode] {
-                    expressions.push(self.external(&othernode));
+                    expressions.push(othernode);
                 }
             }
         }
@@ -582,7 +524,7 @@ impl SSA for SSAStorage {
     }
 
     fn is_expr(&self, exi: &NodeIndex) -> bool {
-        let i = &self.internal(exi);
+        let i = exi;
         match self.g[*i] {
             NodeData::Op(_, _) => true,
             _ => false,
@@ -593,48 +535,45 @@ impl SSA for SSAStorage {
         if self.invalid_value() == *exi {
             return Vec::new();
         }
-        let i = &self.internal(exi);
+        let i = exi;
         let mut phis = Vec::<NodeIndex>::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
                 if let NodeData::Phi(_, _) = self.g[othernode] {
-                    phis.push(self.external(&othernode));
+                    phis.push(othernode);
                 }
             }
         }
         phis
     }
 
-    fn get_uses(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
-        let i = &self.internal(exi);
+    fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex> {
         let mut uses = Vec::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Data(_) = self.g[edge] {
-                uses.push(self.external(&othernode));
+                uses.push(othernode);
             }
         }
         uses
     }
 
-    fn get_block(&self, exi: &NodeIndex) -> NodeIndex {
-        let i = &self.internal(exi);
+    fn get_block(&self, i: &NodeIndex) -> NodeIndex {
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB = self.g[edge] {
-                return self.external(&othernode);
+                return othernode;
             }
         }
         NodeIndex::end()
     }
 
-    fn selects_for(&self, exi: &NodeIndex) -> NodeIndex {
-        let i = &self.internal(exi);
+    fn selects_for(&self, i: &NodeIndex) -> NodeIndex {
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Selector = self.g[edge] {
-                return self.external(&othernode);
+                return othernode;
             }
         }
         NodeIndex::end()
@@ -644,16 +583,16 @@ impl SSA for SSAStorage {
         let selects_for_e = self.selects_for(exi);
         // Make sure that we have a block for the selector.
         assert!(selects_for_e != NodeIndex::end());
-        let selects_for = self.internal(&selects_for_e);
+        let selects_for = selects_for_e;
 
         let mut true_branch = NodeIndex::end();
         let mut false_branch = NodeIndex::end();
         let mut walk = self.g.neighbors_directed(selects_for, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Control(0) = self.g[edge] {
-                false_branch = self.external(&othernode);
+                false_branch = othernode;
             } else if let EdgeData::Control(1) = self.g[edge] {
-                true_branch = self.external(&othernode);
+                true_branch = othernode;
             }
         }
         (false_branch, true_branch)
@@ -661,11 +600,11 @@ impl SSA for SSAStorage {
 
     fn registers_at(&self, exi: &NodeIndex) -> NodeIndex {
         assert!(self.is_action(*exi));
-        let i = &self.internal(exi);
+        let i = exi;
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::RegisterState = self.g[edge] {
-                return self.external(&othernode);
+                return othernode;
             }
         }
         NodeIndex::end()
@@ -678,23 +617,19 @@ impl SSA for SSAStorage {
     }
 
     fn get_sparse_operands(&self, exi: &NodeIndex) -> Vec<(u8, NodeIndex)> {
-        let i = &self.internal(exi);
+        let i = exi;
         let mut args = Vec::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Data(index) = self.g[edge] {
-                args.push((index, self.external(&othernode)));
+                args.push((index, othernode));
             }
         }
         args
     }
 
-    fn get_node_data(&self, exi: &NodeIndex) -> Result<TNodeData, Box<Debug>> {
-        let ic = self.internal(exi);
-        if ic == NodeIndex::end() {
-            return Err(Box::new(""));
-        }
-        match self.g[ic] {
+    fn get_node_data(&self, i: &NodeIndex) -> Result<TNodeData, Box<Debug>> {
+        match self.g[*i] {
             NodeData::Op(opc, vt) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Op(opc),
@@ -715,12 +650,12 @@ impl SSA for SSAStorage {
             NodeData::Unreachable |
             NodeData::BasicBlock(_) |
             NodeData::DynamicAction |
-            NodeData::RegisterState => Err(Box::new(self.g[ic].clone())),
+            NodeData::RegisterState => Err(Box::new(self.g[*i].clone())),
         }
     }
 
     fn is_selector(&self, exi: &Self::ValueRef) -> bool {
-        let i = &self.internal(exi);
+        let i = exi;
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, _)) = walk.next(&self.g) {
             if let EdgeData::Selector = self.g[edge] {
@@ -731,25 +666,22 @@ impl SSA for SSAStorage {
     }
 
 
-    fn selector_of(&self, exi: &Self::ActionRef) -> Option<Self::ValueRef> {
-        let i = &self.internal(exi);
+    fn selector_of(&self, i: &Self::ActionRef) -> Option<Self::ValueRef> {
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Selector = self.g[edge] {
-                return Some(self.external(&othernode));
+                return Some(othernode);
             }
         }
         None
     }
 
     fn get_target(&self, exi: &NodeIndex) -> NodeIndex {
-        let cur_block_e = &self.get_block(exi);
-        let cur_block = self.internal(cur_block_e);
-
+        let cur_block = self.get_block(exi);
         let mut walk = self.g.neighbors_directed(cur_block, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Control(_) = self.g[edge] {
-                return self.external(&othernode);
+                return othernode;
             }
         }
         NodeIndex::end()
