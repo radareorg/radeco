@@ -28,6 +28,13 @@ impl MAddress {
             offset: offset,
         }
     }
+
+    pub fn invalid_address() -> MAddress {
+        MAddress {
+            address: u64::max_value(),
+            offset: u64::max_value(),
+        }
+    }
 }
 
 impl fmt::UpperHex for MAddress {
@@ -39,6 +46,15 @@ impl fmt::UpperHex for MAddress {
 impl fmt::Display for MAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:X}", self)
+    }
+}
+
+impl From<u64> for MAddress {
+    fn from(other: u64) -> MAddress {
+        MAddress {
+            address: other,
+            offset: 0,
+        }
     }
 }
 
