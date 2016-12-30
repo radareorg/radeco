@@ -15,7 +15,7 @@ use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
-use middle::ir;
+use middle::ir::{MAddress, MOpcode};
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
@@ -27,7 +27,6 @@ use utils::logger;
 /// SSA
 #[derive(Clone, Debug)]
 pub struct AdditionalData {
-    pub address: Option<ir::MAddress>,
     comments: Option<String>,
     flag: Option<String>,
     mark: bool,
@@ -37,7 +36,6 @@ pub struct AdditionalData {
 impl AdditionalData {
     fn new() -> AdditionalData {
         AdditionalData {
-            address: None,
             comments: None,
             flag: None,
             mark: false,
@@ -49,7 +47,6 @@ impl AdditionalData {
 impl default::Default for AdditionalData {
     fn default() -> AdditionalData {
         AdditionalData {
-            address: None,
             comments: None,
             flag: None,
             mark: false,
@@ -71,7 +68,7 @@ pub type AssociatedData = HashMap<NodeIndex, AdditionalData>;
 #[derive(Clone, Debug)]
 pub enum NodeData {
     /// Represents on operation.
-    Op(ir::MOpcode, ValueType),
+    Op(MOpcode, ValueType),
     /// Represents a phi node.
     Phi(ValueType, String),
     /// Represents an undefined node with a comment.
@@ -83,7 +80,7 @@ pub enum NodeData {
     /// Placeholder for action nodes.
     Unreachable,
     /// Represents a basic block.
-    BasicBlock(ir::MAddress),
+    BasicBlock(MAddress),
     /// Represents an action that doesn't contain any value nodes, described
     /// by its associated RegisterState (which includes the instruction
     /// pointer).
@@ -104,7 +101,7 @@ pub enum EdgeData {
     /// by this edge.
     Data(u8),
     /// Edge from value to BasicBlock.
-    ContainedInBB,
+    ContainedInBB(MAddress),
     /// Edge from BasicBlock to value. Points from a basic block with multiple
     /// successors to a value that decides which branch will be taken.
     Selector,
@@ -115,8 +112,6 @@ pub enum EdgeData {
     /// calling replace() in stable indices mode.
     ReplacedBy,
 }
-
-const CONTEDGE: EdgeData = EdgeData::ContainedInBB;
 
 /// A petgraph based SSA storage.
 #[derive(Debug, Clone)]
@@ -225,7 +220,7 @@ impl SSAStorage {
     }
 
     pub fn read_const(&self, ni: NodeIndex) -> Option<u64> {
-        if let NodeData::Op(ir::MOpcode::OpConst(n), _) = self.g[ni] {
+        if let NodeData::Op(MOpcode::OpConst(n), _) = self.g[ni] {
             Some(n)
         } else {
             None
@@ -344,34 +339,30 @@ impl CFG for SSAStorage {
         self.g.find_edge(*source, *target).unwrap_or_else(EdgeIndex::end)
     }
 
-    fn true_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
-        let edges = self.edges_of(exi);
-        for &(ref edge, _) in &edges {
-            if let EdgeData::Control(1) = self.g[*edge] {
+    fn true_edge_of(&self, i: &NodeIndex) -> EdgeIndex {
+        let edges = self.edges_of(i);
+        for &(ref edge, ety) in &edges {
+            if ety == 1 {
                 return *edge;
             }
         }
         EdgeIndex::end()
     }
 
-    fn false_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
-        let edges = self.edges_of(exi);
-        for &(ref edge, _) in &edges {
-            if let EdgeData::Control(0) = self.g[*edge] {
+    fn false_edge_of(&self, i: &NodeIndex) -> EdgeIndex {
+        let edges = self.edges_of(i);
+        for &(ref edge, ety) in &edges {
+            if ety == 0 {
                 return *edge;
             }
         }
         EdgeIndex::end()
     }
 
-    // TODO: Optimize and add asserts
-    fn next_edge_of(&self, exi: &NodeIndex) -> EdgeIndex {
-        if self.invalid_value() == *exi {
-            return self.invalid_edge();
-        }
-        let edges = self.edges_of(exi);
-        for &(ref edge, _) in &edges {
-            if let EdgeData::Control(2) = self.g[*edge] {
+    fn next_edge_of(&self, i: &NodeIndex) -> EdgeIndex {
+        let edges = self.edges_of(i);
+        for &(ref edge, ety) in &edges {
+            if ety == 2 {
                 return *edge;
             }
         }
@@ -389,11 +380,11 @@ impl CFG for SSAStorage {
         edges
     }
 
-    fn address(&self, si: &Self::ActionRef) -> Option<ir::MAddress> {
+    fn address(&self, si: &Self::ActionRef) -> Option<MAddress> {
         if let NodeData::BasicBlock(ref addr) = self.g[*si] {
             Some(*addr)
         } else if let NodeData::DynamicAction = self.g[*si] {
-            Some(ir::MAddress::new(0xffffffff, 0))
+            Some(MAddress::new(0xffffffff, 0))
         } else {
             None
         }
@@ -406,7 +397,7 @@ impl CFG for SSAStorage {
 
 impl CFGMod for SSAStorage {
 
-	type BBInfo = ir::MAddress;
+	type BBInfo = MAddress;
 
     fn mark_start_node(&mut self, si: &Self::ActionRef) {
         self.start_node = *si;
@@ -420,7 +411,7 @@ impl CFGMod for SSAStorage {
         let bb = self.insert_node(NodeData::BasicBlock(info));
         let rs = self.insert_node(NodeData::RegisterState);
         self.insert_edge(bb, rs, EdgeData::RegisterState);
-        self.insert_edge(rs, bb, CONTEDGE);
+        self.insert_edge(rs, bb, EdgeData::ContainedInBB(info));
         bb
     }
 
@@ -428,7 +419,7 @@ impl CFGMod for SSAStorage {
         let a = self.insert_node(NodeData::DynamicAction);
         let rs = self.insert_node(NodeData::RegisterState);
         self.insert_edge(a, rs, EdgeData::RegisterState);
-        self.insert_edge(rs, a, CONTEDGE);
+        self.insert_edge(rs, a, EdgeData::ContainedInBB(MAddress::invalid_address()));
         a
     }
 
@@ -446,7 +437,7 @@ impl CFGMod for SSAStorage {
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.neighbors_directed(node, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB = self.g[edge] {
+            if let EdgeData::ContainedInBB(_) = self.g[edge] {
                 expressions.push(othernode);
             }
         }
@@ -490,37 +481,32 @@ impl CFGMod for SSAStorage {
 impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;
 
-    fn get_address(&self, ni: &NodeIndex) -> ir::MAddress {
-        let mut address = ir::MAddress::new(0xffffffff, 0xffff);
-        if let Some(data) = self.assoc_data.get(ni) {
-            if let Some(addr) = data.address {
-                address = addr;
+    fn get_address(&self, ni: &NodeIndex) -> MAddress {
+        for edge in self.g.edges(*ni) {
+            if let EdgeData::ContainedInBB(addr) = *edge.weight() {
+                return addr;
             }
         }
-        address
+
+        MAddress::invalid_address()
     }
 
-    fn exprs_in(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
-        if self.invalid_value() == *exi {
-            return Vec::new();
-        }
-        let i = exi;
-        let mut expressions = Vec::<NodeIndex>::new();
+    fn exprs_in(&self, i: &NodeIndex) -> Vec<NodeIndex> {
+        let mut expressions = Vec::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB = self.g[edge] {
+            if let EdgeData::ContainedInBB(addr) = self.g[edge] {
                 if let NodeData::Op(_, _) = self.g[othernode] {
-                    expressions.push(othernode);
+                    expressions.push((othernode, addr));
                 }
             }
         }
+
         expressions.sort_by(|a, b| {
-            let x = AdditionalData::new();
-            let addr_x = self.assoc_data.get(a).unwrap_or(&x).address;
-            let addr_y = self.assoc_data.get(b).unwrap_or(&x).address;
-            addr_x.cmp(&addr_y)
+            a.1.cmp(&b.1)
         });
-        expressions
+
+        expressions.iter().map(|x| x.0).collect()
     }
 
     fn is_expr(&self, exi: &NodeIndex) -> bool {
@@ -539,7 +525,7 @@ impl SSA for SSAStorage {
         let mut phis = Vec::<NodeIndex>::new();
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB = self.g[edge] {
+            if let EdgeData::ContainedInBB(_) = self.g[edge] {
                 if let NodeData::Phi(_, _) = self.g[othernode] {
                     phis.push(othernode);
                 }
@@ -562,7 +548,7 @@ impl SSA for SSAStorage {
     fn get_block(&self, i: &NodeIndex) -> NodeIndex {
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB = self.g[edge] {
+            if let EdgeData::ContainedInBB(_) = self.g[edge] {
                 return othernode;
             }
         }
@@ -719,18 +705,29 @@ impl SSA for SSAStorage {
 }
 
 impl SSAMod for SSAStorage {
-    fn set_addr(&mut self, i: &Self::ValueRef, addr: ir::MAddress) {
-        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
-        data.address = Some(addr);
+    fn set_addr(&mut self, i: &Self::ValueRef, addr: MAddress) {
+        let mut e = None;
+        for edge in self.g.edges(*i) {
+            if let EdgeData::ContainedInBB(_) = *edge.weight() {
+                e = Some(edge.id());
+                break;
+            }
+        }
+
+        if let Some(edge) = e {
+            if let &mut EdgeData::ContainedInBB(ref mut x) = &mut self.g[edge] {
+                *x = addr;
+            }
+        }
     }
 
-    fn add_op(&mut self, opc: ir::MOpcode, vt: ValueType, _: Option<u64>) -> NodeIndex {
+    fn add_op(&mut self, opc: MOpcode, vt: ValueType, _: Option<u64>) -> NodeIndex {
         self.insert_node(NodeData::Op(opc, vt))
     }
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
 
-        let data = NodeData::Op(ir::MOpcode::OpConst(value),
+        let data = NodeData::Op(MOpcode::OpConst(value),
                                 ValueType::Integer { width: 64 });
 
         let i = self.insert_node(data);
@@ -815,10 +812,8 @@ impl SSAMod for SSAStorage {
         self.g.remove_edge(*i);
     }
 
-    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, at: ir::MAddress) {
-        self.insert_edge(node, block, CONTEDGE);
-        let data = self.assoc_data.entry(node).or_insert_with(AdditionalData::new);
-        data.address = Some(at);
+    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, at: MAddress) {
+        self.insert_edge(node, block, EdgeData::ContainedInBB(at));
     }
 
     fn map_registers(&mut self, regs: Vec<String>) {
@@ -870,15 +865,12 @@ impl SSAExtra for SSAStorage {
     }
 
     fn addr(&self, i: &Self::ValueRef) -> Option<String> {
-        if let Some(data) = self.assoc_data.get(i) {
-            if let Some(addr) = data.address {
-                Some(format!("{}", addr))
-            } else {
-                None
+        for edge in self.g.edges(*i) {
+            if let EdgeData::ContainedInBB(addr) = *edge.weight() {
+                return Some(format!("{}", addr))
             }
-        } else {
-            None
         }
+        None
     }
 
     fn flags(&self, i: &Self::ValueRef) -> Option<String> {
@@ -888,12 +880,12 @@ impl SSAExtra for SSAStorage {
 
 #[derive(Clone, Copy, Debug)]
 struct InorderKey {
-    pub address: ir::MAddress,
+    pub address: MAddress,
     pub value: NodeIndex,
 }
 
 impl InorderKey {
-    pub fn new(addr: ir::MAddress, node: NodeIndex) -> InorderKey {
+    pub fn new(addr: MAddress, node: NodeIndex) -> InorderKey {
         InorderKey {
             address: addr,
             value: node,
@@ -958,12 +950,12 @@ impl SSAWalk<Walker> for SSAStorage {
                                     .cloned()
                                     .collect::<Vec<NodeIndex>>();
 
-                exprs.sort_by(|a, b| {
-                    let x = AdditionalData::new();
-                    let addr_x = self.assoc_data.get(a).unwrap_or(&x).address;
-                    let addr_y = self.assoc_data.get(b).unwrap_or(&x).address;
+                exprs.sort_by(|x, y| {
+                    let addr_x = self.get_address(x);
+                    let addr_y = self.get_address(y);
                     addr_x.cmp(&addr_y)
                 });
+
                 for expr in &exprs {
                     nodes.push_back(*expr);
                 }
@@ -980,7 +972,7 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = BinaryHeap::<InorderKey>::new();
-            explorer.push(InorderKey::new(ir::MAddress::new(0, 0), self.start_node()));
+            explorer.push(InorderKey::new(MAddress::new(0, 0), self.start_node()));
             let nodes = &mut walker.nodes;
             while let Some(ref key) = explorer.pop() {
                 let block = &key.value;
@@ -995,10 +987,9 @@ impl SSAWalk<Walker> for SSAStorage {
                                     .cloned()
                                     .collect::<Vec<NodeIndex>>();
 
-                exprs.sort_by(|a, b| {
-                    let x = AdditionalData::new();
-                    let addr_x = self.assoc_data.get(a).unwrap_or(&x).address;
-                    let addr_y = self.assoc_data.get(b).unwrap_or(&x).address;
+                exprs.sort_by(|x, y| {
+                    let addr_x = self.get_address(x);
+                    let addr_y = self.get_address(y);
                     addr_x.cmp(&addr_y)
                 });
                 for expr in &exprs {

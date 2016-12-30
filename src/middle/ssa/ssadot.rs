@@ -80,7 +80,7 @@ impl GraphDot for SSAStorage {
     fn edge_skip(&self, i: &Self::EdgeIndex) -> bool {
         let edge = &self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
         match *edge.weight() {
-            EdgeData::ContainedInBB | EdgeData::RegisterState => true,
+            EdgeData::ContainedInBB(_) | EdgeData::RegisterState => true,
             _ => false,
         }
     }
@@ -127,7 +127,7 @@ impl GraphDot for SSAStorage {
                 vec![("dir".to_string(), "back".to_string()),
                      ("xlabel".to_string(), format!("{}", i))]
             }
-            EdgeData::ContainedInBB => {
+            EdgeData::ContainedInBB(_) => {
                 vec![("color".to_string(), "gray".to_string())]
             }
             EdgeData::Selector => {

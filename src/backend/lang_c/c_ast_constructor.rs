@@ -85,6 +85,8 @@ mod test {
     use r2pipe::r2::R2;
 
     #[test]
+    #[ignore]
+    // Incomplete testcase
     fn test_emit_c() {
         //let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut fsource = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
