@@ -282,20 +282,20 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
         let mut operation = "";
         let operands = &mut [String::new(), String::new()];
         let mut i = 0;
-        for c in ref_str.chars() {
-            match c {
-                '+' | '-' => {
-                    if c == '+' {
-                        operation = "OpAdd";
-                    } else {
-                        operation = "OpSub";
-                    }
-                    i += 1;
-                }
-                _ => operands[i].push(c),
-            }
-        }
-        let postfix_str = format!("({}({}),({}))", operation, operands[0], operands[1]);
+        // for c in ref_str.chars() {
+        //     match c {
+        //         '+' | '-' => {
+        //             if c == '+' {
+        //                 operation = "OpAdd";
+        //             } else {
+        //                 operation = "OpSub";
+        //             }
+        //             i += 1;
+        //         }
+        //         _ => operands[i].push(c),
+        //     }
+        // }
+        // let postfix_str = format!("({}({}),({}))", operation, operands[0], operands[1]);
     }
 }
 
@@ -590,6 +590,7 @@ mod test {
     use middle::dce;
 
     #[test]
+    #[ignore]
     fn module_test() {
         // let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
         // r2.init();

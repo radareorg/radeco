@@ -615,6 +615,13 @@ impl SSA for SSAStorage {
     }
 
     fn get_node_data(&self, i: &NodeIndex) -> Result<TNodeData, Box<Debug>> {
+        if !self.g.contains_node(*i) {
+            println!("- {:?}", i);
+            return Err(Box::new("Node not found"));
+        } else {
+            // println!("+ {:?}", i);
+        }
+
         match self.g[*i] {
             NodeData::Op(opc, vt) => Ok(TNodeData {
                 vt: vt,
