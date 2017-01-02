@@ -324,6 +324,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     }
 
     fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
+        println!("*** Entered! ***");
         let undef = self.ssa.invalid_value();
         // The phi is unreachable or in the start block
         let mut same: T::ValueRef = undef;
@@ -352,13 +353,16 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
         let users = self.ssa.uses_of(phi);
         // Reroute all uses of phi to same and remove phi
+        println!("{:?} {:?}", phi, same);
         self.ssa.replace(phi, same);
         // Try to recursively remove all phi users, which might have become trivial
         for use_ in users {
             if use_ == phi {
                 continue;
             }
-            if let Ok(_) = self.ssa.get_node_data(&use_) {
+            if let Err(e) = self.ssa.get_node_data(&use_) {
+                println!("{:?}", e);
+            } else {
                 self.try_remove_trivial_phi(use_);
             }
         }
