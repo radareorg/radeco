@@ -77,6 +77,7 @@ mod test {
     use r2pipe::r2::R2;
 
     #[test]
+    #[ignore]
     fn ipa_t1() {
         //let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
         //r2.init();

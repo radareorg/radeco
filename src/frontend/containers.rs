@@ -590,6 +590,7 @@ mod test {
     use middle::dce;
 
     #[test]
+    #[ignore]
     fn module_test() {
         // let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
         // r2.init();
