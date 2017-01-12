@@ -278,24 +278,19 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
 
     let locals = locals.expect("This cannot be `None`");
     for l in locals {
-        let ref_str = l.reference.unwrap();
+        let l_ref = l.reference.unwrap();
         let mut operation = "";
-        let operands = &mut [String::new(), String::new()];
-        let mut i = 0;
-        for c in ref_str.chars() {
-            match c {
-                '+' | '-' => {
-                    if c == '+' {
-                        operation = "OpAdd";
-                    } else {
-                        operation = "OpSub";
-                    }
-                    i += 1;
-                }
-                _ => operands[i].push(c),
-            }
+
+        let reg_base = l_ref.base.unwrap();
+        let offset = l_ref.offset.unwrap();
+
+        if offset < 0 {
+            operation = "OpSub";
+        } else {
+            operation = "OpAdd";
         }
-        let postfix_str = format!("({}({}),({}))", operation, operands[0], operands[1]);
+
+        let postfix_str = format!("({}({}),({}))", operation, reg_base, offset);
     }
 }
 
