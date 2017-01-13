@@ -82,10 +82,15 @@ mod test {
     use std::io::prelude::*;
     use analysis::interproc::interproc::analyze_module;
     use analysis::interproc::summary;
+    use r2pipe::r2::R2;
 
     #[test]
+    #[ignore]
+    // Incomplete testcase
     fn test_emit_c() {
-        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
+        //let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
+        let mut fsource = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
+        fsource.init();
         let mut rmod = RadecoModule::from(&mut fsource);
         for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
             dce::collect(&mut rfn.ssa);

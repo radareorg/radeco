@@ -19,7 +19,7 @@ trace_log = []
 
 [dependencies]
 regex = "*"
-petgraph = "*"
+petgraph = "^0.4.0"
 num = "*"
 rustc-serialize = "*"
 lazy_static = "*"

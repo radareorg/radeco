@@ -411,7 +411,13 @@ impl GraphDot for DomTree {
     }
 
     fn nodes(&self) -> Vec<Self::NodeIndex> {
+        // XXX: FIXME
         (0..self.node_count()).map(graph::NodeIndex::new).collect()
+    }
+
+    fn edges(&self) -> Vec<Self::EdgeIndex> {
+        // XXX: FIXME
+        (0..self.edge_count()).map(|i| i as u8).collect()
     }
 
     fn edge_source(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {

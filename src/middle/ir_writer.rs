@@ -119,8 +119,7 @@ impl IRWriter {
     fn fmt_operands(&mut self, operands: &[NodeIndex], ssa: &SSAStorage) -> Vec<String> {
         let mut result = Vec::new();
         for operand in operands {
-            let op_internal = ssa.internal(operand);
-            match ssa.g[op_internal] {
+            match ssa.g[*operand] {
                 NodeData::BasicBlock(addr) => result.push(format!("{}", addr)),
                 NodeData::DynamicAction => result.push("dynamic_action".to_owned()),
                 NodeData::Op(MOpcode::OpConst(ref value), _) => result.push(fmt_const!(value)),
@@ -282,8 +281,7 @@ impl IRWriter {
         };
 
         for node in ssa.inorder_walk() {
-            let intn = ssa.internal(&node);
-            let line = match ssa.g[intn] {
+            let line = match ssa.g[node] {
                 NodeData::Op(opcode, vt) => {
                     if let MOpcode::OpConst(_) = opcode {
                         String::new()
@@ -374,8 +372,7 @@ impl IRWriter {
         let mem_comment = "mem".to_owned();
 
         for (i, reg) in ssa.get_operands(&final_state).iter().enumerate() {
-            let rint = ssa.internal(&reg);
-            let reg_assign = match ssa.g[rint] {
+            let reg_assign = match ssa.g[*reg] {
                 NodeData::Comment(_, _) => String::new(),
                 _ => {
                     format!("{} = {}",
