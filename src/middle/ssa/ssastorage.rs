@@ -7,7 +7,7 @@
 
 //! Module that holds the struct and trait implementations for the ssa form.
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::collections::{HashMap, VecDeque, HashSet, BinaryHeap};
 use std::default;
 use std::cmp::{PartialOrd, PartialEq, Ordering};
@@ -88,6 +88,20 @@ pub enum NodeData {
     /// Represents the state of the register file at the moment of entry into
     /// the associated action node.
     RegisterState,
+}
+
+// Implement display helper for NodeData to make it a little nicer to read prefix notation.
+impl fmt::Display for NodeData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match *self {
+            NodeData::Op(op, _) => format!("{}", op),
+            NodeData::Phi(_, _) => "Phi".to_owned(),
+            NodeData::Comment(_, ref s) => s.clone(),
+            // Don't care about these
+            _ => String::new(),
+        };
+        write!(f, "{}", s)
+    }
 }
 
 /// Edge type for the SSAStorage-internal petgraph.
@@ -781,10 +795,6 @@ impl SSAMod for SSAStorage {
     }
 
     fn remove_edge(&mut self, i: &Self::CFEdgeRef) {
-        if i.index() >= self.g.edge_count() {
-            return;
-        }
-
         let src_node = self.source_of(i);
         if let Some(selector) = self.selector_of(&src_node) {
             self.remove(selector);

@@ -37,7 +37,9 @@ impl CWriter {
             locals.push(format!("locals_{}", i));
         }
         // TODO: Add real type
-        cast.declare_vars(Ty::new(BTy::Int, false, 0), locals.as_ref());
+        if !locals.is_empty() {
+            cast.declare_vars(Ty::new(BTy::Int, false, 0), locals.as_ref());
+        }
     }
 
     /// Converts a RFunction to CAST and stores it internally.
@@ -45,6 +47,7 @@ impl CWriter {
     pub fn rfn_to_c_ast<F: RFunction>(&mut self, rfn: &F, key: u64) {
         let mut ast = CAST::new(&rfn.fn_name());
         self.add_function_arguments(rfn, &mut ast);
+        self.add_locals(rfn, &mut ast);
         self.c_ast.insert(key, ast);
     }
 
@@ -83,6 +86,7 @@ mod test {
     use analysis::interproc::interproc::analyze_module;
     use analysis::interproc::summary;
     use r2pipe::r2::R2;
+    use middle::ir_writer::IRWriter;
 
     #[test]
     #[ignore]
@@ -94,6 +98,8 @@ mod test {
         let mut rmod = RadecoModule::from(&mut fsource);
         for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
             dce::collect(&mut rfn.ssa);
+            //let mut writer: IRWriter = Default::default();
+            //println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
         }
 
         {
