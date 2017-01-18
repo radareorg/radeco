@@ -86,7 +86,6 @@ mod test {
     use analysis::interproc::interproc::analyze_module;
     use analysis::interproc::summary;
     use r2pipe::r2::R2;
-    use middle::ir_writer::IRWriter;
 
     #[test]
     #[ignore]
@@ -98,8 +97,6 @@ mod test {
         let mut rmod = RadecoModule::from(&mut fsource);
         for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
             dce::collect(&mut rfn.ssa);
-            //let mut writer: IRWriter = Default::default();
-            //println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
         }
 
         {

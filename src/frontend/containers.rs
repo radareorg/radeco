@@ -607,8 +607,8 @@ mod test {
 
     #[test]
     fn module_test() {
-        let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
-        r2.init();
+        //let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
+        //r2.init();
         //let mut fsource = FileSource::from(r2);
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
