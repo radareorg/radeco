@@ -5,13 +5,44 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{KnownBits, SIntRange, UIntMultiple, UIntRange, ValueSet};
+use super::{KnownBits, ScannableSet, SIntRange, UIntMultiple, UIntRange, ValueSet};
 use std::cmp::{max, min};
 use std::ops::{BitAnd, BitOr};
 
 impl ValueSet<u64> for SIntRange {
     fn contains(&self, value: u64) -> bool {
         (self.min <= (value as i64)) && ((value as i64) <= self.max)
+    }
+}
+
+impl ScannableSet<u64> for SIntRange {
+    fn scan_up(&self, n: u64) -> Option<u64> {
+        //let io = self.modulus - self.residue;
+        //if n > U64MAX - io {
+        //    return Option::None;
+        //}
+        //let t = (n + io) % self.modulus;
+        //Option::Some(if t == 0 {
+        //    n
+        //} else {
+        //    n + (self.modulus - t)
+        //})
+        if self.contains(n + 1) {
+            Some(n + 1)
+        } else {
+            None
+        }
+    }
+    fn scan_dn(&self, n: u64) -> Option<u64> {
+        //if n < self.residue {
+        //    return Option::None;
+        //}
+        //Option::Some(n - (n - self.residue) % self.modulus)
+        if self.contains(n - 1) {
+            Some(n - 1)
+        } else {
+            None
+        }
     }
 }
 

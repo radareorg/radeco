@@ -1,17 +1,22 @@
 extern crate radeco_lib;
 extern crate r2pipe;
+extern crate env_logger;
 
 mod cli;
+
+use std::env;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use r2pipe::r2::R2;
 use radeco_lib::analysis::cse::CSE;
 use radeco_lib::analysis::sccp;
+use radeco_lib::analysis::valueset::analyzer::FnAnalyzer;
+use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
 
 const USAGE: &'static str = "
 Usage: minidec [-f <names>...]
@@ -21,12 +26,14 @@ Options:
 ";
 
 fn main() {
+    env_logger::init().unwrap();
 
     let mut requested_functions = cli::init_for_args(USAGE);
 
     let mut dir;
     let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
-
+    let mut r2 = R2::new::<String>(env::args().nth(env::args().len() - 1))
+        .expect("Unable to open r2");
     r2.init();
     let mut rmod = {
         let bin_info = r2.bin_info().expect("Failed to load bin_info");
@@ -93,7 +100,22 @@ fn main() {
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
         }
-
+        {
+            // Value Set Analysis
+            if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
+                continue;
+            }
+            println!("  [*] Analyzing Value Sets");
+            let fn_analyzer = FnAnalyzer::from((*rfn).clone());
+            let a_store_fn = fn_analyzer.analyze_rfn();
+            for (a_loc, strided_interval) in a_store_fn.store {
+                if let A_Loc{addr: AbstractAddress::Node{..}, ..} = a_loc {
+                    continue;
+                };
+                println!("{}", a_loc);
+                println!("Strided Interval: {}", strided_interval);
+            };
+        }
         println!("  [*] Writing out IR");
 
         let mut fname = PathBuf::from(&dir);
