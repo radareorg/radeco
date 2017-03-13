@@ -12,7 +12,6 @@ use std::hash::Hash;
 use std::cmp::Eq;
 use std::fmt::Debug;
 
-use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::graph::NodeIndex;
 
 

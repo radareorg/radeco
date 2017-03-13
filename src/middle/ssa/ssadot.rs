@@ -13,7 +13,7 @@ use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use middle::ir::MOpcode;
 use middle::dot::{DotAttrBlock, GraphDot};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
-use super::ssa_traits::{SSA, SSAExtra, SSAMod, ValueType};
+use super::ssa_traits::{SSA, SSAExtra, ValueType};
 use middle::ssa::cfg_traits::CFG;
 
 ///////////////////////////////////////////////////////////////////////////////

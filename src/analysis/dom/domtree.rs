@@ -10,8 +10,7 @@
 use std::default;
 use std::collections::{HashMap, HashSet};
 use petgraph::graph::Graph;
-use petgraph::graph;
-use petgraph::EdgeDirection;
+use petgraph::{graph, EdgeDirection};
 
 use middle::dot::{DotAttrBlock, GraphDot};
 use super::index::InternalIndex;

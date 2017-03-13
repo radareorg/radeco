@@ -5,11 +5,9 @@ use std::collections::HashSet;
 use petgraph::graph::NodeIndex;
 
 use analysis::interproc::transfer::InterProcAnalysis;
-use analysis::matcher::gmatch;
-use frontend::containers::{RModule, RFunction, CallContext};
-use frontend::bindings::RBindings;
-use middle::ssa::ssa_traits::{SSA, SSAMod, NodeType, SSAWalk};
-use middle::ssa::cfg_traits::{CFG, CFGMod};
+use frontend::containers::{RModule, RFunction};
+use middle::ssa::ssa_traits::{SSA, NodeType};
+use middle::ssa::cfg_traits::{CFG};
 use middle::ir::MOpcode;
 
 #[derive(Clone, Debug)]

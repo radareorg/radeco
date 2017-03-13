@@ -1,4 +1,4 @@
-#[macro_use] extern crate radeco_lib;
+extern crate radeco_lib;
 extern crate r2pipe;
 
 use std::path::{Path, PathBuf};

@@ -397,15 +397,11 @@ where I: Iterator<Item=S::ValueRef>,
 #[cfg(test)]
 mod test {
     use super::*;
-    use petgraph::graph::NodeIndex;
     use analysis::matcher::gmatch;
-    use std::io::prelude::*;
-    use std::io;
     use middle::ssa::ssastorage::{SSAStorage, NodeData};
     use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType, SSAWalk};
-    use middle::ssa::cfg_traits::{CFG, CFGMod};
+    use middle::ssa::cfg_traits::{CFGMod};
     use middle::ir::{MOpcode, MAddress};
-    use middle::ir_writer::IRWriter;
 
     #[test]
     fn parse_expr() {

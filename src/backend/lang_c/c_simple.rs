@@ -4,11 +4,9 @@
 //! stages maybe added to
 //! make the decompiled output easier to read and add more sugaring.
 
-use std::default;
-use std::iter;
-use std::fmt;
+use std::{default, iter, fmt};
 
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex, EdgeReference};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use petgraph::visit::{EdgeRef};
 use petgraph::EdgeDirection;
 

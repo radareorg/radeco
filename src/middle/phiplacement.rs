@@ -11,10 +11,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 
-use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType};
+use middle::ssa::ssa_traits::{SSAMod, ValueType};
 use middle::ir::MAddress;
 
-use super::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ssa::ssa_traits::NodeType;
 use middle::regfile::SubRegisterFile;
 use middle::ir::MOpcode;

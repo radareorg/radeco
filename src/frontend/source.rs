@@ -1,6 +1,6 @@
 //! Defines the `Source` Trait.
 
-use std::path::{self, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 

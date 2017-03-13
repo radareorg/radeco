@@ -16,7 +16,6 @@ use std::collections::{HashMap, VecDeque};
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssa_traits::NodeType;
 use middle::ir::{MArity, MOpcode};
-use middle::ssa::cfg_traits::CFG;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum LatticeValue {

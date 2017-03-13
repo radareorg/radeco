@@ -1,13 +1,7 @@
 //! Defines `Module` and `Function` that act as containers.
 
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::thread;
-use std::sync::mpsc;
-use std::fmt;
-use std::iter;
-use std::slice;
+use std::collections::{BTreeSet, HashMap};
+use std::{thread, fmt, sync, hash};
 
 use r2pipe::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
 
@@ -15,7 +9,7 @@ use petgraph::graph::NodeIndex;
 
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
-use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RBinds, RadecoBindings};
+use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
 use middle::ssa::ssastorage::{SSAStorage, Walker};
 use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
 use middle::ssa::cfg_traits::CFG;
@@ -29,7 +23,7 @@ pub struct RadecoModule<'a, F: RFunction> {
 
 pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
 
-impl<'a, F: RFunction + Debug> fmt::Debug for RadecoModule<'a, F> {
+impl<'a, F: RFunction + fmt::Debug> fmt::Debug for RadecoModule<'a, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
                "RadecoModule {{ functions: {:?}, fname: {:?} }}",
@@ -61,7 +55,7 @@ pub struct RadecoFunction<B: RBindings> {
 }
 
 #[derive(Clone, Debug)]
-pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>,
+pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>,
                        S: fmt::Debug + Clone>
 {
     /// Start offset of caller (uniquely identifies a function).
@@ -75,7 +69,7 @@ pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>,
     pub ctx_translate: HashMap<Idx, Idx>,
 }
 
-impl<Idx, S> CallContext<Idx, S> where Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>, S: fmt::Debug + Clone {
+impl<Idx, S> CallContext<Idx, S> where Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>, S: fmt::Debug + Clone {
     pub fn new(caller: Option<u64>,
                callee: Option<u64>,
                call_site: Option<u64>,
@@ -322,7 +316,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
         let reg_info = source.register_profile();
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = sync::mpsc::channel();
         for f in source.functions() {
             if f.name.as_ref().unwrap().contains("sym.imp") {
                 // Do not analyze/construct for imports.
@@ -428,7 +422,7 @@ pub trait RFunction {
 /// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
 /// all information loaded from the binary. It acts as a container for `Function`s.
 pub trait RModule<'b> {
-    type FnRef: Copy + Clone + Debug + Hash + Eq + Into<u64> + From<u64>;
+    type FnRef: Copy + Clone + fmt::Debug + hash::Hash + Eq + Into<u64> + From<u64>;
     type RFn: RFunction;
 
     fn callees_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
@@ -599,10 +593,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use r2pipe::r2::R2;
-    use frontend::source::{FileSource, Source};
-    use middle::ir_writer::IRWriter;
-    use std::io;
+    use frontend::source::FileSource;
     use middle::dce;
 
     #[test]

@@ -3,7 +3,7 @@
 use std::fmt;
 use std::collections::HashMap;
 
-use petgraph::graph::{EdgeIndex, Graph, NodeIndex, EdgeReference};
+use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
 use petgraph::visit::{EdgeRef};
 use petgraph::EdgeDirection;
 
