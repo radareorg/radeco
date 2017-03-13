@@ -7,7 +7,6 @@ extern crate rustc_serialize;
 use std::fs::File;
 use std::io::prelude::*;
 use rustc_serialize::json;
-use std::io;
 
 use r2pipe::structs::{LFunctionInfo, LRegInfo};
 
@@ -56,12 +55,9 @@ fn run_construction() -> SSAStorage {
 }
 
 fn run_sccp(ssa: &mut SSAStorage) -> SSAStorage {
-    let mut ssa = {
-        let mut analyzer = sccp::Analyzer::new(ssa);
-        analyzer.analyze();
-        analyzer.emit_ssa()
-    };
-    ssa
+    let mut analyzer = sccp::Analyzer::new(ssa);
+    analyzer.analyze();
+    analyzer.emit_ssa()
 }
 
 fn run_cse(ssa: &mut SSAStorage) -> SSAStorage {

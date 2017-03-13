@@ -37,7 +37,7 @@ fn main() {
         ffm = File::create(&fname).expect("Unable to create file");
     }
 
-    for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
+    for (addr, ref mut rfn) in rmod.functions {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
             println!("  [*] Eliminating Dead Code");
@@ -72,5 +72,5 @@ fn main() {
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
     }
 
-    rmod.src.as_mut().unwrap().send(&format!("e scr.color=true"))
+    rmod.src.as_mut().unwrap().send("e scr.color=true")
 }

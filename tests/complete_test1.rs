@@ -60,7 +60,6 @@ extern crate rustc_serialize;
 use std::fs::File;
 use std::io::prelude::*;
 use rustc_serialize::json;
-use std::io;
 
 use r2pipe::structs::{LFunctionInfo, LRegInfo};
 
