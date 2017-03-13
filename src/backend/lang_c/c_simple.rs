@@ -366,7 +366,7 @@ impl CAST {
                         format_with_indent("}", indent))
             }
             CASTNode::Declaration(ref ty) => {
-                let mut ty = format_with_indent(&ty.to_string(), indent);
+                let ty = format_with_indent(&ty.to_string(), indent);
                 let mut vars = String::new();
                 for op in self.ast.edges_directed(*node, EdgeDirection::Outgoing) {
                     if let CASTNode::Var(ref name) = self.ast[op.target()] {

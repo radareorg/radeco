@@ -411,7 +411,7 @@ mod test {
     fn parse_expr() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpXor %1, %1)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("OpXor".to_owned()), t.current());
         assert_eq!(Some("%1".to_owned()), t.lhs());
@@ -422,7 +422,7 @@ mod test {
     fn parse_expr1() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(EEq eax, (EAdd eax, (EAdd eax, cf)))".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("EEq".to_owned()), t.current());
         assert_eq!(Some("eax".to_owned()), t.lhs());
@@ -433,7 +433,7 @@ mod test {
     fn parse_expr2() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(EAdd (EAdd eax, of), (EAdd eax, cf))".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("EAdd".to_owned()), t.current());
         assert_eq!(Some("(EAdd eax, of)".to_owned()), t.lhs());
@@ -444,7 +444,7 @@ mod test {
     fn parse_expr_unary() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpNot rax)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("OpNot".to_owned()), t.current());
         assert_eq!(Some("rax".to_owned()), t.lhs());
@@ -455,7 +455,7 @@ mod test {
     fn parse_expr_ternary() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpStore %1, %2, %3)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("OpStore".to_owned()), t.current());
         assert_eq!(Some("%1".to_owned()), t.lhs());
