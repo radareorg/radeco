@@ -54,7 +54,7 @@ impl CWriter {
     /// Converts all the functions inside the current RModule to CAST and
     /// stores it internally. This can later be emitted.
     pub fn rmod_to_c_ast<'a, M: RModule<'a>>(&mut self, rmod: &M) {
-        for rfn_idx in rmod.functions().iter() {
+        for ref rfn_idx in rmod.functions() {
             if let Some(rfn) = rmod.function_by_ref(rfn_idx) {
                 let fn_ref: u64 = (*rfn_idx).into();
                 self.rfn_to_c_ast(rfn, fn_ref);
@@ -69,7 +69,7 @@ impl CWriter {
 
     /// Emit C code for all the functions that the current C-Emitter contains.
     pub fn emit<T>(&self, w: &mut T) where T: Write {
-        for (_, c) in self.c_ast.iter() {
+        for c in self.c_ast.values() {
             write!(w, "{}\n", c.print());
         }
     }

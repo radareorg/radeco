@@ -15,8 +15,8 @@ pub struct InterProcAnalyzer<'a, 'b, M, T>
 }
 
 pub fn analyze_module<'a, 'b, M, A>(ssa: &'a mut M) 
-where M: RModule<'b>,
-      A: InterProcAnalysis<'b, M> {
+    where M: RModule<'b>,
+          A: InterProcAnalysis<'b, M> {
     let mut ipa = InterProcAnalyzer::<M, A>::new(ssa);
     for f in &ipa.rmod.functions() {
         ipa.analyze_function(f);

@@ -60,15 +60,13 @@ impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut result = format!("{}", self.base_type);
 
-        if self.long > 0 {
+        if self.long == 1 {
             result = format!("long {}", result);
         } else if self.long > 1 {
             result = format!("long long {}", result);
         }
 
-        if self.signed {
-            result = format!("{}", result);
-        } else {
+        if !self.signed {
             result = format!("unsigned {}", result);
         }
 
@@ -310,7 +308,7 @@ impl CAST {
         let decl = self.ast.add_node(CASTNode::Declaration(ty));
         let mut var_decls = Vec::new();
         for (i, v) in vars.iter().enumerate() {
-            let vn = self.ast.add_node(CASTNode::Var((v.clone())));
+            let vn = self.ast.add_node(CASTNode::Var(v.clone()));
             self.ast.add_edge(decl, vn, CASTEdge::OpOrd(i as u8));
             var_decls.push(vn);
         }
@@ -339,14 +337,14 @@ impl CAST {
                 let args = self.get_args_ordered(node);
                 let arg1 = args[0];
                 let arg2 = args[1];
-                let arg3 = args.get(2).map(|x| x);
+                let arg3 = args.get(2).cloned();
                 let condition = format!("{} {} {{\n",
                                         format_with_indent("if", indent),
                                         self.emit_c(&arg1, 0));
                 let true_body = self.emit_c(&arg2, indent + 1);
                 let false_body = if let Some(arg3) = arg3 {
                     let fbody = self.emit_c(&arg3, indent + 1);
-                    if let CASTNode::Conditional = self.ast[*arg3] {
+                    if let CASTNode::Conditional = self.ast[arg3] {
                         // Else-If case
                         format_with_indent("\n}} else ", indent) + &fbody
                     } else {
@@ -399,7 +397,7 @@ impl CAST {
             }
             CASTNode::ExpressionNode(ref expr) => {
                 let operands = self.get_args_ordered(node);
-                let op_str = operands.iter().map(|x| self.emit_c(&x, 0)).collect::<Vec<_>>();
+                let op_str = operands.iter().map(|x| self.emit_c(x, 0)).collect::<Vec<_>>();
                 match *expr {
                     Expr::Eq => format!("{} = {}",
                                         format_with_indent(&op_str[0], indent),

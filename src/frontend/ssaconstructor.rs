@@ -102,7 +102,7 @@ impl<'a, T> SSAConstruct<'a, T>
     }
 
     fn mem_id(&self) -> usize {
-        assert!(self.mem_id != 0);
+        assert_ne!(self.mem_id, 0);
         self.mem_id
     }
 
@@ -155,7 +155,7 @@ impl<'a, T> SSAConstruct<'a, T>
         // this function should return `None`.
         // NB 2: We never write to an intermediate twice as this is an SSA form!
         if let Some(ref res) = result {
-            self.intermediates.push(res.clone());
+            self.intermediates.push(*res);
             let result_id = self.intermediates.len() - 1;
             let out_size = self.phiplacer.operand_width(res);
             Some(Token::EEntry(result_id, Some(out_size as u64)))
@@ -218,7 +218,7 @@ impl<'a, T> SSAConstruct<'a, T>
                         }
                     } else {
                         // We are writing into a register.
-                        self.phiplacer.write_register(address, &name, rhs.expect("rhs for EEq cannot be `None`"));
+                        self.phiplacer.write_register(address, name, rhs.expect("rhs for EEq cannot be `None`"));
                     }
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
@@ -509,7 +509,7 @@ mod test {
     use middle::ssa::ssastorage::SSAStorage;
     use middle::ir_writer::IRWriter;
     use middle::{dot, dce};
-    use analysis::sccp::sccp;
+    use analysis::sccp;
 
 
     const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";

@@ -31,7 +31,7 @@ where I: Iterator<Item = S::ValueRef>,
         }
     }
 
-    fn hash_args(&self, args: &Vec<S::ValueRef>) -> String {
+    fn hash_args(&self, args: &[S::ValueRef]) -> String {
         let mut result = String::new();
         for arg in args {
             if let Ok(node_data) = self.ssa.get_node_data(arg) {
@@ -86,7 +86,7 @@ where I: Iterator<Item = S::ValueRef>,
                     // restrict outselves to the case where both the expressions belong to the same
                     // block.
                     for ex_idx in &ex_idxs {
-                        if self.ssa.block_of(&ex_idx) == self.ssa.block_of(&expr) {
+                        if self.ssa.block_of(ex_idx) == self.ssa.block_of(&expr) {
                             self.ssa.replace(expr, *ex_idx);
                             replaced = true;
                             break;
@@ -97,11 +97,11 @@ where I: Iterator<Item = S::ValueRef>,
 
             if !replaced {
                 if let Some(ref hs0) = hashes[0] {
-                    self.exprs.entry(hs0.clone()).or_insert(Vec::new()).push(expr);
+                    self.exprs.entry(hs0.clone()).or_insert_with(Vec::new).push(expr);
                     self.hashed.insert(expr, hs0.clone());
                 }
                 if let Some(ref hs1) = hashes[1] {
-                    self.exprs.entry(hs1.clone()).or_insert(Vec::new()).push(expr);
+                    self.exprs.entry(hs1.clone()).or_insert_with(Vec::new).push(expr);
                 }
             }
         }

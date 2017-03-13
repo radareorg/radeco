@@ -228,7 +228,7 @@ where I: Iterator<Item=S::ValueRef>,
                 }
 
                 let current = t.current().unwrap();
-                if current.starts_with("%") {
+                if current.starts_with('%') {
                     // Match the current subtree to the subtree bound by the variable before. If
                     // they do not match, then report as mismatch.
                     let subtreeh = self.hash_subtree(inner_node);
@@ -251,7 +251,7 @@ where I: Iterator<Item=S::ValueRef>,
                 // All the cases which can cause a mismatch in the node and it's arguments.
                 // Since "%" binds the entire subtree, it will not have any arguments. So we skip
                 // this case.
-                if args.len() != t.len() && !current.starts_with("%") {
+                if args.len() != t.len() && !current.starts_with('%') {
                     viable = false;
                     break;
                 }
@@ -355,7 +355,7 @@ where I: Iterator<Item=S::ValueRef>,
             t_
         };
 
-        let replace_root = if r.current().as_ref().unwrap().starts_with("%") {
+        let replace_root = if r.current().as_ref().unwrap().starts_with('%') {
             *bindings.get(r.current().as_ref().unwrap()).expect("Unknown Binding")
         } else {
             self.map_token_to_node(r.current().as_ref().unwrap(),
@@ -377,7 +377,7 @@ where I: Iterator<Item=S::ValueRef>,
                 t_
             };
             let current = pt.current().unwrap();
-            let inner_node = if current.starts_with("%") {
+            let inner_node = if current.starts_with('%') {
                 *bindings.get(&current).expect("Unknown Binding")
             } else {
                 self.map_token_to_node(&current, &block, &mut address)

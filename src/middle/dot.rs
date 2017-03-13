@@ -44,7 +44,7 @@ impl DotAttrBlock {
     fn bake(&mut self) -> &String {
         let mut r = String::new();
         let attr = if let DotAttrBlock::Hybrid(ref s, ref attr) = *self {
-            r.push_str(&s);
+            r.push_str(s);
             attr.clone()
         } else {
             Vec::new()

@@ -123,7 +123,7 @@ pub enum SubTypeEdge {
     SubType,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SubTypeSet {
     g: Graph<SubTypeNode, SubTypeEdge>,
     // Map from NodeIndex in ConstraintSet to NodeIndex in SubTypeSet.
@@ -131,13 +131,6 @@ pub struct SubTypeSet {
 }
 
 impl SubTypeSet {
-    pub fn new() -> SubTypeSet {
-        SubTypeSet {
-            g: Graph::new(),
-            map: HashMap::new(),
-        }
-    }
-
     // Insert LHS <: RHS
     pub fn insert_relation(&mut self, lhs: &NodeIndex, rhs: &NodeIndex) {
         let sub_lhs = if let Some(idx) = self.map.get(lhs).cloned() {
@@ -189,7 +182,7 @@ impl SubTypeSet {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ConstraintSet {
     g: Graph<ConstraintNode, ConstraintEdge>,
     type_vars: HashMap<String, NodeIndex>,
@@ -204,16 +197,6 @@ pub struct ConstraintSet {
 }
 
 impl ConstraintSet {
-    pub fn new() -> ConstraintSet {
-        ConstraintSet {
-            g: Graph::new(),
-            type_vars: HashMap::new(),
-            subty: SubTypeSet::new(),
-            binding_map: HashMap::new(),
-            upper_bound: HashMap::new(),
-            lower_bound: HashMap::new(),
-        }
-    }
 
     pub fn operands(&self, n: &NodeIndex) -> Vec<NodeIndex> {
         let mut result = Vec::new();

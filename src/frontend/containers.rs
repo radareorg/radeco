@@ -102,7 +102,7 @@ impl<B: RBindings> RadecoFunction<B> {
     pub fn construct(reg_profile: &LRegInfo, insts: Vec<LOpInfo>) -> RadecoFunction<B> {
         let mut rfn = RadecoFunction::new();
         {
-            let mut constructor = SSAConstruct::new(&mut rfn.ssa, &reg_profile);
+            let mut constructor = SSAConstruct::new(&mut rfn.ssa, reg_profile);
             constructor.run(insts);
         }
         rfn
@@ -286,7 +286,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
         }
     }
 
-    for b in seen_l.values().into_iter() {
+    for b in seen_l.values() {
         rfn.bindings.insert(b.clone());
     }
 
@@ -442,7 +442,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
 
     fn callees_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
         let mut callees = Vec::<Self::FnRef>::new();
-        if let Some(ref c) = self.functions.get(fref) {
+        if let Some(c) = self.functions.get(fref) {
             callees.extend(c.callrefs().iter().cloned().map(Self::FnRef::from));
         }
         callees
@@ -450,7 +450,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
 
     fn callers_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
         let mut callers = Vec::<Self::FnRef>::new();
-        if let Some(ref c) = self.functions.get(fref) {
+        if let Some(c) = self.functions.get(fref) {
             callers.extend(c.callxrefs().iter().cloned().map(Self::FnRef::from));
         }
         callers
@@ -537,7 +537,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
 
     fn set_locals(&mut self, locals: &[(<Self::B as RBindings>::Idx, LocalInfo)]) {
         for &(ref arg, ref info) in locals {
-            if let Some(binding) = self.bindings.binding_mut(&arg) {
+            if let Some(binding) = self.bindings.binding_mut(arg) {
                 binding.mark_fn_local(info.base, info.offset);
             }
         }
