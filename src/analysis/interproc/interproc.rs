@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::containers::{RModule};
+use frontend::containers::RModule;
 
 #[derive(Debug)]
 pub struct InterProcAnalyzer<'a, 'b, M, T>

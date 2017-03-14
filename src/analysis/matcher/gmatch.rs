@@ -400,7 +400,7 @@ mod test {
     use analysis::matcher::gmatch;
     use middle::ssa::ssastorage::{SSAStorage, NodeData};
     use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType, SSAWalk};
-    use middle::ssa::cfg_traits::{CFGMod};
+    use middle::ssa::cfg_traits::CFGMod;
     use middle::ir::{MOpcode, MAddress};
 
     #[test]

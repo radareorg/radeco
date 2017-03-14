@@ -7,7 +7,7 @@ use petgraph::graph::NodeIndex;
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::containers::{RModule, RFunction};
 use middle::ssa::ssa_traits::{SSA, NodeType};
-use middle::ssa::cfg_traits::{CFG};
+use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
 
 #[derive(Clone, Debug, Default)]

@@ -10,7 +10,7 @@ use r2pipe::r2::R2;
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::cse::CSE;
-use radeco_lib::middle::{dce};
+use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
 
 fn main() {

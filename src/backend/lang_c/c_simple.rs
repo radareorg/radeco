@@ -7,7 +7,7 @@
 use std::{default, iter, fmt};
 
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
-use petgraph::visit::{EdgeRef};
+use petgraph::visit::EdgeRef;
 use petgraph::EdgeDirection;
 
 //////////////////////////////////////////////////////////////////////////////
