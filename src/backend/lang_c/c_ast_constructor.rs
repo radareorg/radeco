@@ -78,6 +78,8 @@ impl CWriter {
 #[cfg(test)]
 mod test {
     use super::*;
+    // use frontend::containers::RadecoFunction;
+    // use frontend::source::FileSource;
     use frontend::containers::RadecoModule;
     use middle::dce;
     use analysis::interproc::interproc::analyze_module;

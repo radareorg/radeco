@@ -249,8 +249,9 @@ impl SSAStorage {
         let mut adjacent = Vec::new();
         let mut walk = self.g.neighbors_directed(node, direction).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            match self.g[edge] {
-                EdgeData::Data(i) | EdgeData::Control(i) => adjacent.push((i, othernode)),
+            match (data, self.g[edge]) {
+                (true, EdgeData::Data(i)) |
+                (false, EdgeData::Control(i)) => adjacent.push((i, othernode)),
                 _ => {}
             }
         }

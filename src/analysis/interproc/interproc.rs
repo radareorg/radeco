@@ -66,10 +66,12 @@ impl<'a,'b, M, T> InterProcAnalyzer<'a, 'b, M, T>
 mod test {
     use super::*;
     use frontend::source::FileSource;
+    // use frontend::source::Source;
     use frontend::containers::*;
     use middle::ir_writer::IRWriter;
     use middle::dce;
     use analysis::interproc::summary;
+    // use r2pipe::r2::R2;
 
     #[test]
     fn ipa_t1() {
