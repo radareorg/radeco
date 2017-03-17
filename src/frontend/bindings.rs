@@ -43,7 +43,7 @@ pub trait RBind {
     fn is_unknown(&self) -> bool;
 
     fn add_refs(&mut self, Vec<Self::SSARef>);
-    fn refs<'a>(&'a self) -> ::std::slice::Iter<'a, Self::SSARef>;
+    fn refs(&self) -> ::std::slice::Iter<Self::SSARef>;
 }
 
 /// Trait that describes variable bindings for a function.
@@ -85,13 +85,13 @@ pub struct RadecoBindings<T: RBind> {
 
 impl<BTy: RBind> Index<usize> for RadecoBindings<BTy> {
     type Output = BTy;
-    fn index<'a>(&'a self, index: usize) -> &'a Self::Output {
+    fn index(&self, index: usize) -> &Self::Output {
         self.binding(&index).unwrap()
     }
 }
 
 impl<BTy: RBind> IndexMut<usize> for RadecoBindings<BTy> {
-    fn index_mut<'a>(&'a mut self, index: usize) -> &'a mut Self::Output {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.binding_mut(&index).unwrap()
     }
 }
@@ -256,7 +256,7 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
 
     fn is_register(&self) -> bool {
         match self.vloc {
-            VarLocation::Register { name: _ } => true,
+            VarLocation::Register { .. } => true,
             _ => false,
         }
     }
@@ -271,7 +271,7 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
 
     fn is_fn_local(&self) -> bool {
         match self.vloc {
-            VarLocation::Memory(MemoryRegion::FunctionLocal { base: _, offset: _ }) => true,
+            VarLocation::Memory(MemoryRegion::FunctionLocal { .. }) => true,
             _ => false,
         }
     }
@@ -336,7 +336,7 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
         self.ssa_refs.extend(refs);
     }
 
-    fn refs<'a>(&'a self) -> ::std::slice::Iter<'a, T> {
+    fn refs(&self) -> ::std::slice::Iter<T> {
         self.ssa_refs.iter()
     }
 }

@@ -1,6 +1,6 @@
 //! Defines the `Source` Trait.
 
-use std::path::{self, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 
@@ -79,7 +79,7 @@ impl Source for R2 {
 
     fn instructions_at(&mut self, address: u64) -> Vec<LOpInfo> {
         if let Ok(fn_info) = self.function(&format!("{}", address)) {
-            fn_info.ops.unwrap_or(Vec::new())
+            fn_info.ops.unwrap_or_default()
         } else {
             Vec::new()
         }
@@ -135,8 +135,8 @@ impl FileSource {
         let mut path = PathBuf::from(&self.dir);
         path.push(&format!("{}_{}.json", self.base_name, suffix));
         let mut f = File::create(path).expect("Failed to open file");
-        let _ = f.write_all(data.to_string()
-                                .as_bytes()).expect("Failed to read file");
+        f.write_all(data.to_string()
+                        .as_bytes()).expect("Failed to read file");
     }
 }
 

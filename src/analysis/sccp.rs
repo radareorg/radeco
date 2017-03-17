@@ -16,7 +16,6 @@ use std::collections::{HashMap, VecDeque};
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssa_traits::NodeType;
 use middle::ir::{MArity, MOpcode};
-use middle::ssa::cfg_traits::CFG;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum LatticeValue {
@@ -108,8 +107,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
         let parent_block = self.g.get_block(i);
         for op in &operands {
-            let operand_block = self.g.get_block(&op);
-            let op_val = self.get_value(&op);
+            let operand_block = self.g.get_block(op);
+            let op_val = self.get_value(op);
 
             if op_val.is_undefined() {
                 continue;
@@ -452,7 +451,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         if !self.g.is_expr(i) {
             return;
         }
-        let owner_block = self.g.get_block(&i);
+        let owner_block = self.g.get_block(i);
         if self.is_block_executable(&owner_block) {
             self.ssa_worklist.push_back(*i);
         }

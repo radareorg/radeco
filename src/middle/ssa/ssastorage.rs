@@ -249,14 +249,10 @@ impl SSAStorage {
         let mut adjacent = Vec::new();
         let mut walk = self.g.neighbors_directed(node, direction).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if data {
-                if let EdgeData::Data(i) = self.g[edge] {
-                    adjacent.push((i, othernode))
-                }
-            } else {
-                if let EdgeData::Control(i) = self.g[edge] {
-                    adjacent.push((i, othernode));
-                }
+            match (data, self.g[edge]) {
+                (true, EdgeData::Data(i)) |
+                (false, EdgeData::Control(i)) => adjacent.push((i, othernode)),
+                _ => {}
             }
         }
         adjacent.sort_by(|a, b| a.0.cmp(&b.0));
@@ -291,12 +287,12 @@ impl CFG for SSAStorage {
     }
 
     fn start_node(&self) -> NodeIndex {
-        assert!(self.start_node != NodeIndex::end());
+        assert_ne!(self.start_node, NodeIndex::end());
         self.start_node
     }
 
     fn exit_node(&self) -> NodeIndex {
-        assert!(self.exit_node != NodeIndex::end());
+        assert_ne!(self.exit_node, NodeIndex::end());
         self.exit_node
     }
 
@@ -582,7 +578,7 @@ impl SSA for SSAStorage {
     fn get_branches(&self, exi: &NodeIndex) -> (NodeIndex, NodeIndex) {
         let selects_for_e = self.selects_for(exi);
         // Make sure that we have a block for the selector.
-        assert!(selects_for_e != NodeIndex::end());
+        assert_ne!(selects_for_e, NodeIndex::end());
         let selects_for = selects_for_e;
 
         let mut true_branch = NodeIndex::end();
@@ -744,8 +740,7 @@ impl SSAMod for SSAStorage {
         let data = NodeData::Op(MOpcode::OpConst(value),
                                 ValueType::Integer { width: 64 });
 
-        let i = self.insert_node(data);
-        i
+        self.insert_node(data)
     }
 
     fn add_phi(&mut self, vt: ValueType) -> NodeIndex {

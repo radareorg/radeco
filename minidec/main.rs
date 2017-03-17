@@ -1,4 +1,4 @@
-#[macro_use] extern crate radeco_lib;
+extern crate radeco_lib;
 extern crate r2pipe;
 
 use std::path::{Path, PathBuf};
@@ -8,9 +8,9 @@ use std::io::Write;
 use r2pipe::r2::R2;
 
 use radeco_lib::frontend::containers::RadecoModule;
-use radeco_lib::analysis::sccp::sccp;
-use radeco_lib::analysis::cse::cse::CSE;
-use radeco_lib::middle::{dce};
+use radeco_lib::analysis::sccp;
+use radeco_lib::analysis::cse::CSE;
+use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
 
 fn main() {
@@ -37,7 +37,7 @@ fn main() {
         ffm = File::create(&fname).expect("Unable to create file");
     }
 
-    for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
+    for (addr, ref mut rfn) in rmod.functions {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
             println!("  [*] Eliminating Dead Code");
@@ -72,5 +72,5 @@ fn main() {
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
     }
 
-    rmod.src.as_mut().unwrap().send(&format!("e scr.color=true"))
+    rmod.src.as_mut().unwrap().send("e scr.color=true")
 }

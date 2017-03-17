@@ -1,9 +1,8 @@
 //! Fills out the call summary information for `RFunction`
 
 use std::collections::HashSet;
-use std::marker::PhantomData;
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::containers::{RFunction, RModule};
+use frontend::containers::RModule;
 
 #[derive(Debug)]
 pub struct InterProcAnalyzer<'a, 'b, M, T>
@@ -16,8 +15,8 @@ pub struct InterProcAnalyzer<'a, 'b, M, T>
 }
 
 pub fn analyze_module<'a, 'b, M, A>(ssa: &'a mut M) 
-where M: RModule<'b>,
-      A: InterProcAnalysis<'b, M> {
+    where M: RModule<'b>,
+          A: InterProcAnalysis<'b, M> {
     let mut ipa = InterProcAnalyzer::<M, A>::new(ssa);
     for f in &ipa.rmod.functions() {
         ipa.analyze_function(f);
@@ -66,15 +65,13 @@ impl<'a,'b, M, T> InterProcAnalyzer<'a, 'b, M, T>
 #[cfg(test)]
 mod test {
     use super::*;
-    use frontend::source::{FileSource, Source};
+    use frontend::source::FileSource;
+    // use frontend::source::Source;
     use frontend::containers::*;
-    use petgraph::graph::NodeIndex;
-    use frontend::bindings::*;
     use middle::ir_writer::IRWriter;
-    use std::io;
     use middle::dce;
     use analysis::interproc::summary;
-    use r2pipe::r2::R2;
+    // use r2pipe::r2::R2;
 
     #[test]
     fn ipa_t1() {
