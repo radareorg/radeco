@@ -15,7 +15,9 @@ use radeco_lib::middle::ir_writer::IRWriter;
 
 fn main() {
     let mut dir;
-    let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
+    //let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
+    let mut r2 = R2::new::<String>(Some("/home/ahmed/radare2/radeco-lib/ex-bins/simple".to_owned())).
+    expect("Unable to open r2");
     r2.init();
     let mut rmod = {
         let bin_info = r2.bin_info().expect("Failed to load bin_info");
@@ -31,11 +33,10 @@ fn main() {
 
     // Main file to contain IRs of all rfns
     let mut ffm;
-    {
-        let mut fname = PathBuf::from(&dir);
-        fname.push("main");
-        ffm = File::create(&fname).expect("Unable to create file");
-    }
+    let mut fname = PathBuf::from(&dir);
+    fname.push("main");
+    ffm = File::create(&fname).expect("Unable to create file");
+    
 
     for (addr, ref mut rfn) in rmod.functions {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
@@ -62,12 +63,10 @@ fn main() {
             cse.run();
         }
         println!("  [*] Writing out IR");
-        let mut fname = PathBuf::from(&dir);
-        fname.push(&rfn.name);
-        let mut ff = File::create(&fname).expect("Unable to create file");
+        
         let mut writer: IRWriter = Default::default();
         let res = writer.emit_il(Some(rfn.name.clone()), &rfn.ssa);
-        writeln!(ff,  "{}", res).expect("Error writing to file");
+        
         writeln!(ffm, "{}", res).expect("Error writing to file");
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
     }
