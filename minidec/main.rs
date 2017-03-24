@@ -1,20 +1,20 @@
 extern crate radeco_lib;
 extern crate r2pipe;
 
-use std::path::{Path, PathBuf};
-use std::fs::{self, File};
-use std::io::Write;
 
 use r2pipe::r2::R2;
+use radeco_lib::analysis::cse::CSE;
+use radeco_lib::analysis::sccp;
 
 use radeco_lib::frontend::containers::RadecoModule;
-use radeco_lib::analysis::sccp;
-use radeco_lib::analysis::cse::CSE;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 fn main() {
-    
+
     let mut dir;
     let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
 
@@ -36,7 +36,7 @@ fn main() {
     let mut fname = PathBuf::from(&dir);
     fname.push("main");
     ffm = File::create(&fname).expect("Unable to create file");
-    
+
 
     for (addr, ref mut rfn) in rmod.functions {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
@@ -63,10 +63,10 @@ fn main() {
             cse.run();
         }
         println!("  [*] Writing out IR");
-        
+
         let mut writer: IRWriter = Default::default();
         let res = writer.emit_il(Some(rfn.name.clone()), &rfn.ssa);
-        
+
         writeln!(ffm, "{}", res).expect("Error writing to file");
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
     }
