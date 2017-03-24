@@ -15,8 +15,7 @@ use radeco_lib::middle::ir_writer::IRWriter;
 
 fn main() {
     let mut dir;
-    //let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
-    let mut r2 = R2::new::<String>(Some("/home/ahmed/radare2/radeco-lib/ex-bins/simple".to_owned())).
+    let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
     expect("Unable to open r2");
     r2.init();
     let mut rmod = {
