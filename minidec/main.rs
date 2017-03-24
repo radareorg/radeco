@@ -14,9 +14,10 @@ use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
 
 fn main() {
+    
     let mut dir;
     let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
-    expect("Unable to open r2");
+
     r2.init();
     let mut rmod = {
         let bin_info = r2.bin_info().expect("Failed to load bin_info");
