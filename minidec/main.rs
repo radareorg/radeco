@@ -2,18 +2,14 @@ extern crate radeco_lib;
 extern crate r2pipe;
 extern crate clap;
 
-use clap::{Arg, App};
-
 mod cli;
 
 use r2pipe::r2::R2;
 use radeco_lib::analysis::cse::CSE;
 use radeco_lib::analysis::sccp;
-use radeco_lib::frontend::containers::RFunction;
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
-use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -46,7 +42,7 @@ fn main() {
     fname.push("main");
     ffm = File::create(&fname).expect("Unable to create file");
 
-    let mut requested_functions = Vec::new();
+    let mut requested_functions: Vec<String> = Vec::new();
     let output = matches.values_of("functions");
 
     if let Some(params) = output {
@@ -58,25 +54,25 @@ fn main() {
     // ?? : rmod.functions returns (&u64,RFunction) the names from cmd args are matched with the
     // name field in RFunction, the name is then not needed to access the function
     // info, only the u64 address is needed, so the unnecessary info are filtered out
-    let matched_func_vec: Vec<u64> = rmod.functions
+    let matched_func_vec: Vec<(u64, &String)> = rmod.functions
             .iter()
-            .map(|(x, v)| (*x, &v.name)) // Tuple of u64 and &String
-            .filter(|&(_, &ref y): &(u64, &String)| { // Types are kept just for clearence
+            .map(|(fn_addr, rfn)| (*fn_addr, &rfn.name)) // Tuple of u64 and &String
+            .filter(|&(_, &ref fn_name): &(u64, &String)| { // Types are kept just for clearence
                 requested_functions.iter()
-                    .any(|ref z: &String| y == *z)
+                    .any(|ref user_req: &String| fn_name == *user_req)
             })
-            .map(|(addr, _)| addr)  // Drop the un-needed function names
             .collect();
 
-    // Function names found by Radeco, print those incase nothing was matched
-    let all_func_names: Vec<&String> = rmod.functions.values().map(|&ref rfn| &rfn.name).collect();
-
     if requested_functions.len() != 0 {
+        // Function names found by Radeco, print those incase nothing was matched
+        let all_func_names: Vec<&String> =
+            rmod.functions.values().map(|&ref rfn| &rfn.name).collect();
+
         // Print the summary of matched functions
-        cli::print_match_summary(requested_functions.len(), matched_func_vec.len());
+        cli::print_match_summary(&matched_func_vec, &requested_functions, &all_func_names);
     }
 
-    for addr in matched_func_vec {
+    for (addr, _) in matched_func_vec {
 
         let ref mut rfn = rmod.functions.get(&addr).unwrap().clone();
 
