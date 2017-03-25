@@ -19,14 +19,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 fn main() {
-
+    // Creates cmd args settings then gets the matching params
     let matches = cmd_args::create().get_matches();
 
     let mut dir;
-    // TODO: Remove this absolute path
-    let mut r2 = R2::new::<String>(Some("/home/ahmed/radare2/radeco-lib/ex-bins/hello-linux-x86_64"
-            .to_owned()))
-        .expect("Unable to open r2");
+    let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
 
     r2.init();
     let mut rmod = {
