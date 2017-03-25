@@ -38,9 +38,11 @@ fn main() {
 
     // Main file to contain IRs of all rfns
     let mut ffm;
-    let mut fname = PathBuf::from(&dir);
-    fname.push("main");
-    ffm = File::create(&fname).expect("Unable to create file");
+    {
+        let mut fname = PathBuf::from(&dir);
+        fname.push("main");
+        ffm = File::create(&fname).expect("Unable to create file");
+    }
 
     let mut requested_functions: Vec<String> = Vec::new();
     let output = matches.values_of("functions");
@@ -58,17 +60,21 @@ fn main() {
             .iter()
             .map(|(fn_addr, rfn)| (*fn_addr, &rfn.name)) // Tuple of u64 and &String
             .filter(|&(_, &ref fn_name): &(u64, &String)| { // Types are kept just for clearence
+                
+                // The user didn't specify any args, match all
+                if requested_functions.len() == 0{return true;}
+                
                 requested_functions.iter()
                     .any(|ref user_req: &String| fn_name == *user_req)
             })
             .collect();
 
     if requested_functions.len() != 0 {
+        // Print the summary of matched functions
+
         // Function names found by Radeco, print those incase nothing was matched
         let all_func_names: Vec<&String> =
             rmod.functions.values().map(|&ref rfn| &rfn.name).collect();
-
-        // Print the summary of matched functions
         cli::print_match_summary(&matched_func_vec, &requested_functions, &all_func_names);
     }
 
@@ -101,11 +107,17 @@ fn main() {
         }
         println!("  [*] Writing out IR");
 
+        let mut fname = PathBuf::from(&dir);
+        fname.push(&rfn.name);
+        let mut ff = File::create(&fname).expect("Unable to create file");
         let mut writer: IRWriter = Default::default();
         let res = writer.emit_il(Some(rfn.name.clone()), &rfn.ssa);
 
+        writeln!(ff, "{}", res).expect("Error writing to file");
         writeln!(ffm, "{}", res).expect("Error writing to file");
+
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
+
     }
 
     rmod.src.as_mut().unwrap().send("e scr.color=true")
