@@ -1,21 +1,29 @@
 extern crate radeco_lib;
 extern crate r2pipe;
+extern crate clap;
+
+use clap::{Arg, App};
+
+mod cmd_args;
 
 use r2pipe::r2::R2;
 use radeco_lib::analysis::cse::CSE;
 use radeco_lib::analysis::sccp;
-
+use radeco_lib::frontend::containers::RFunction;
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process;
 
 fn main() {
 
+    let matches = cmd_args::create().get_matches();
+
     let mut dir;
+    // TODO: Remove this absolute path
     let mut r2 = R2::new::<String>(Some("/home/ahmed/radare2/radeco-lib/ex-bins/hello-linux-x86_64"
             .to_owned()))
         .expect("Unable to open r2");
@@ -39,8 +47,14 @@ fn main() {
     fname.push("main");
     ffm = File::create(&fname).expect("Unable to create file");
 
-    let mut requested_functions: Vec<String> = Vec::new();
-    requested_functions.push("sym.__libc_csu_fini".to_owned()); // TODO command line args
+    let mut requested_functions = Vec::new();
+    let output = matches.values_of("functions");
+
+    if let Some(params) = output {
+        requested_functions = params.map(|st| st.to_owned()).collect();
+        println!("Params:{:?}", requested_functions);
+        //params
+    }
 
     // Find matches between the provided command line args and what radeco found
     // print the matching function names
@@ -57,31 +71,14 @@ fn main() {
             .map(|(addr, _)| addr)  // Drop the un-needed function names
             .collect();
 
-    for addr in &func_vec {
-        println!("OI:{} {:?}", addr, rmod.functions.get(&addr).unwrap().name);
-    }
-
-    if func_vec.is_empty() {
-        // TODO: Alert the user if no matches are found, and print out the existent ones
-        // and tell them that we'll terminate
-        let func_names: Vec<&String> = rmod.functions.values().map(|&ref rfn| &rfn.name).collect();
-
-        println!("");
-        println!("You got unlucky this time, found:");
-        println!("----------");
-        for name in func_names {
-            println!("{}", name); // Pretty print
-        }
-        println!("----------");
-        println!("Terminated...");
-
-        process::exit(0);
-    }
+    // Function names found by Radeco
+    let func_names: Vec<&String> = rmod.functions.values().map(|&ref rfn| &rfn.name).collect();
+    // Print the summary of matched items from cmd args
+    cmd_args::print_match_summary(&func_names, &requested_functions);
 
     for addr in func_vec {
-        //for (addr, ref mut rfn) in rmod.functions {
+
         let ref mut rfn = rmod.functions.get(&addr).unwrap().clone();
-        //let ref mut rfn = rmod.functions.get(&addr).unwrap();
 
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
