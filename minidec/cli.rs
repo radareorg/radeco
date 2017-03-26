@@ -48,9 +48,4 @@ pub fn print_match_summary(matched_funcs: &Vec<(u64, &String)>,
             println!("{}", *name);
         }
     }
-
-
-    // Function names found by Radeco, print those incase nothing was matched
-    //let all_func_names: Vec<&String> = rmod.functions.values().map(|&ref rfn| &rfn.name).collect();
-
 }

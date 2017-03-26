@@ -19,9 +19,7 @@ fn main() {
     let matches = cli::create_args().get_matches();
 
     let mut dir;
-    let mut r2 = R2::new::<String>(Some("/home/ahmed/radare2/radeco-lib/ex-bins/hello-linux-x86_64"
-            .to_owned()))
-        .expect("Unable to open r2");
+    let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
 
     r2.init();
     let mut rmod = {
@@ -51,32 +49,24 @@ fn main() {
         requested_functions = params.map(|st| st.to_owned()).collect();
     }
 
-    // Find matches between the provided command line args and what radeco found
-    // print the matching function names
-    // ?? : rmod.functions returns (&u64,RFunction) the names from cmd args are matched with the
-    // name field in RFunction, the name is then not needed to access the function
-    // info, only the u64 address is needed, so the unnecessary info are filtered out
-    let matched_func_vec: Vec<(u64, &String)> = rmod.functions
+    // Reduce the complexity of rmod.functions to just a vec of (u64,&String)
+    // for easier extraction and matching
+    //
+    // Extract all exsisting function addresses and names
+    let mut matched_func_vec: Vec<(u64, &String)> = rmod.functions
             .iter()
             .map(|(fn_addr, rfn)| (*fn_addr, &rfn.name)) // Tuple of u64 and &String
-            .filter(|&(_, &ref fn_name): &(u64, &String)| { // Types are kept just for clearence
-                
-                // The user didn't specify any args, match all
-                if requested_functions.len() == 0{return true;}
-                
-                requested_functions.iter()
-                    .any(|ref user_req: &String| fn_name == *user_req)
-            })
             .collect();
 
+    // Filter the data if the user provided some args to be matched upon
     if requested_functions.len() != 0 {
-        // Print the summary of matched functions
+        let all_func_names: Vec<(&String)> =
+            matched_func_vec.iter().map(|&(_, name)| name).collect();
 
-        // Function names found by Radeco, print those incase nothing was matched
-        let all_func_names: Vec<&String> =
-            rmod.functions.values().map(|&ref rfn| &rfn.name).collect();
+        matched_func_vec = filter_with(&matched_func_vec, &requested_functions);
         cli::print_match_summary(&matched_func_vec, &requested_functions, &all_func_names);
     }
+
 
     for (addr, _) in matched_func_vec {
 
@@ -121,4 +111,15 @@ fn main() {
     }
 
     rmod.src.as_mut().unwrap().send("e scr.color=true")
+}
+
+
+fn filter_with<'a>(all_funcs: &Vec<(u64, &'a String)>,
+                   requested: &Vec<String>)
+                   -> Vec<(u64, &'a String)> {
+
+    all_funcs.iter()
+        .filter(|&&(_, name)| requested.iter().any(|user_req: &String| *name == *user_req))
+        .map(|&(addr, name)| (addr, name))
+        .collect()
 }
