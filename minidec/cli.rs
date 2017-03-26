@@ -1,19 +1,18 @@
-use clap::{Arg, App};
+extern crate docopt;
+
 use std::collections::HashSet;
 
-// Creates command line argument settings
-// src: https://kbknapp.github.io/clap-rs/clap/index.html
-pub fn create_args<'a, 'b>() -> App<'a, 'b>
-    where 'a: 'b
-{
-    App::new("Radeco")
-        .arg(Arg::with_name("functions")
-            .short("f")
-            .required(false)
-            .takes_value(true)
-            .multiple(true)
-            .long("functions"))
-        .help("-f --functions Function names to analyze")
+// Create Docopt parser and fetches the CLI arguments as appropriate
+// Returns an empty vector if no args were found
+pub fn init_for_args(usage: &str) -> Vec<String> {
+
+    let args = docopt::Docopt::new(usage).and_then(|d| d.parse());
+
+    let mut arg_vect: Vec<String> = Vec::new();
+    if let Ok(ref arg_map) = args {
+        arg_vect = arg_map.get_vec("<names>").iter().map(|&slice| String::from(slice)).collect()
+    }
+    arg_vect
 }
 
 // Prints summary of the matching if any command line arguments were

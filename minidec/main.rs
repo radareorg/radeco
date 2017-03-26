@@ -1,6 +1,5 @@
 extern crate radeco_lib;
 extern crate r2pipe;
-extern crate clap;
 
 mod cli;
 
@@ -14,12 +13,18 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+const USAGE: &'static str = "
+Usage: minidec [-f <names>...]
+
+Options:
+    -f, --functions  Analayze only some functions
+";
+
 fn main() {
-    // Creates cmd args settings then gets the matching params
-    let matches = cli::create_args().get_matches();
+
+    let mut requested_functions = cli::init_for_args(USAGE);
 
     let mut dir;
-    // TODO: remove the hardcoded string
     let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
 
     r2.init();
@@ -35,20 +40,6 @@ fn main() {
         RadecoModule::from(&mut r2)
     };
 
-    // Main file to contain IRs of all rfns
-    let mut ffm;
-    {
-        let mut fname = PathBuf::from(&dir);
-        fname.push("main");
-        ffm = File::create(&fname).expect("Unable to create file");
-    }
-
-    let mut requested_functions: Vec<String> = Vec::new();
-    let output = matches.values_of("functions");
-
-    if let Some(params) = output {
-        requested_functions = params.map(|st| st.to_owned()).collect();
-    }
 
     // Reduce the complexity of rmod.functions to just a vec of (u64,&String)
     // for easier extraction and matching
@@ -66,6 +57,14 @@ fn main() {
         cli::print_match_summary(&matched_func_vec, &requested_functions, &all_func_names);
     }
 
+
+    // Main file to contain IRs of all rfns
+    let mut ffm;
+    {
+        let mut fname = PathBuf::from(&dir);
+        fname.push("main");
+        ffm = File::create(&fname).expect("Unable to create file");
+    }
 
     for (addr, _) in matched_func_vec {
 
