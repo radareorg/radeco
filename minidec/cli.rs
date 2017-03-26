@@ -16,6 +16,12 @@ pub fn create_args<'a, 'b>() -> App<'a, 'b>
         .help("-f --functions Function names to analyze")
 }
 
+// Prints summary of the matching if any command line arguments were
+// specified,
+//
+// In case of full match, a message will be displayed to the user
+// In case of partial matching, a list of unmatched items will be shown
+// If no matching occurred, all the available results will be displayed
 pub fn print_match_summary(matched_funcs: &Vec<(u64, &String)>,
                            requested_funcs: &Vec<String>,
                            all_func_names: &Vec<&String>) {

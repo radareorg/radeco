@@ -19,6 +19,7 @@ fn main() {
     let matches = cli::create_args().get_matches();
 
     let mut dir;
+    // TODO: remove the hardcoded string
     let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
 
     r2.init();
@@ -53,10 +54,8 @@ fn main() {
     // for easier extraction and matching
     //
     // Extract all exsisting function addresses and names
-    let mut matched_func_vec: Vec<(u64, &String)> = rmod.functions
-            .iter()
-            .map(|(fn_addr, rfn)| (*fn_addr, &rfn.name)) // Tuple of u64 and &String
-            .collect();
+    let mut matched_func_vec: Vec<(u64, &String)> =
+        rmod.functions.iter().map(|(fn_addr, rfn)| (*fn_addr, &rfn.name)).collect();
 
     // Filter the data if the user provided some args to be matched upon
     if requested_functions.len() != 0 {
@@ -95,10 +94,12 @@ fn main() {
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
         }
+
         println!("  [*] Writing out IR");
 
         let mut fname = PathBuf::from(&dir);
         fname.push(&rfn.name);
+
         let mut ff = File::create(&fname).expect("Unable to create file");
         let mut writer: IRWriter = Default::default();
         let res = writer.emit_il(Some(rfn.name.clone()), &rfn.ssa);
@@ -107,13 +108,12 @@ fn main() {
         writeln!(ffm, "{}", res).expect("Error writing to file");
 
         rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
-
     }
 
     rmod.src.as_mut().unwrap().send("e scr.color=true")
 }
 
-
+// Filters the functions that were in Radeco output AND requested by user
 fn filter_with<'a>(all_funcs: &Vec<(u64, &'a String)>,
                    requested: &Vec<String>)
                    -> Vec<(u64, &'a String)> {
