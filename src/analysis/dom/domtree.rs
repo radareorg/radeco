@@ -227,8 +227,8 @@ mod test {
         dom_front_d.insert(e);
 
         assert_eq!(dom_front_d.len(), res.len());
-        // for i in res.iter().zip(dom_front_d) {
-        //     assert_eq!(*i.0 as u32, i.1 as u32);
-        // }
+        for i in res.iter().zip(dom_front_d) {
+            assert_eq!(*i.0, i.1);
+        }
     }
 }
