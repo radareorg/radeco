@@ -20,6 +20,10 @@ use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Iter;
 use std::default;
 
+// TODO: make the functoins work on domintor tree / post dominator tree by passing them
+// an enum i.e call dominators(n, Domination:Pre), dominators(n, Domination:Post) to
+// find the dominators / post dominators of a given node
+
 /// Contains dominance info for a given graph
 /// If you want to find a NodeIndex from a usize value, use the node_map.first_to_second
 #[derive(Clone, Debug)]
@@ -70,6 +74,7 @@ impl<N, E> DomminanceInfo<N, E> {
         }
     }
 
+    /// Store nodes in the node_map table as k,v -> dfs_visit_index, NodeIndex
     fn create_dfs_indexing(g: &Graph<N, E>, start_node: NodeIndex) -> BiMap<usize, NodeIndex> {
 
         let mut node_map: BiMap<usize, NodeIndex> = BiMap::new();
@@ -84,11 +89,13 @@ impl<N, E> DomminanceInfo<N, E> {
         node_map
     }
 
+    /// Returns the immediate dominator of a given node
     fn immediate_dominator(&self, node: graph::NodeIndex) -> Option<NodeIndex> {
         // This is an O(1) operation, no need to keep another hashmap
         self.dominators.immediate_dominator(node)
     }
 
+    /// Returns a vector of dominators for a given node
     fn dominators(&self, node: graph::NodeIndex) -> Option<Vec<NodeIndex>> {
         let dom_iter = self.dominators.dominators(node);
         let mut results: Vec<NodeIndex> = Vec::new();
@@ -97,6 +104,8 @@ impl<N, E> DomminanceInfo<N, E> {
         dom_iter.and_then(|iter| Some(iter.collect::<Vec<NodeIndex>>())).or_else(|| None)
     }
 
+    /// Computes all predecessors for all the nodes in the graph and adds them to
+    /// a hashmap
     fn compute_preds(g: &Graph<N, E>, start_node: NodeIndex) -> HashMap<NodeIndex, Vec<NodeIndex>> {
         // Foreach node n, find all the nodes that point to n
         // Store all that data in a HashMap
@@ -140,6 +149,7 @@ impl<N, E> DomminanceInfo<N, E> {
         }
     }
 
+    /// Returns the dominance frontier for a given node
     fn dominance_frontier(&self, node: graph::NodeIndex) -> Option<&HashSet<NodeIndex>> {
         self.frontier_map.get(&node)
     }
