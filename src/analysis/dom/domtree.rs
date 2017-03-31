@@ -140,7 +140,6 @@ impl<N, E> DomminanceInfo<N, E> {
             for pred in preds {
                 let mut temp = *pred;
 
-                // TODO: does this condition follow the definition ?
                 while temp != self.immediate_dominator(*node_index).unwrap() {
                     self.frontier_map.entry(*pred).or_insert_with(HashSet::new).insert(*node_index);
                     temp = self.immediate_dominator(temp).unwrap();
