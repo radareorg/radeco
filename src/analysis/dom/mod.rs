@@ -8,5 +8,7 @@
 /// Module for computing dominance and post-dominance information
 mod index;
 pub mod domtree;
+pub mod bimap;
 
-pub use self::domtree::DomTree;
+// TODO:clear comment
+// pub use self::domtree::DomTree;
