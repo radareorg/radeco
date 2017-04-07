@@ -43,13 +43,16 @@
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
 
+// #![allow(dead_code)]
+// #![allow(unused_variables)]
+
 extern crate regex;
 extern crate petgraph;
 extern crate rustc_serialize;
 extern crate num;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
-#[macro_use] extern crate r2pipe;
+extern crate r2pipe;
 
 extern crate esil;
 

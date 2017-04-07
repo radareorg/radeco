@@ -5,21 +5,6 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Module that implements analysis and optimizations on radeco IR.
-
-#[allow(dead_code)]
-pub mod valueset;
-// pub mod propagate;
-pub mod dom;
-pub mod sccp;
-pub mod cse;
-
-#[macro_use]
-pub mod matcher {
-    #[macro_use]
-    pub mod gmatch;
-}
-
+pub mod summary;
 pub mod interproc;
-
-pub mod tie;
+pub mod transfer;

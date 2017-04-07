@@ -27,7 +27,7 @@
 //!  `*_use`, `get_node_data` and `replace` methods.
 
 use std::hash::Hash;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
 use middle::ir;
 use super::cfg_traits::{CFG, CFGMod};
@@ -87,6 +87,20 @@ pub enum NodeType {
     /// A node with unknown value.
     Undefined,
     Comment(String),
+}
+
+// Implement display helper for NodeData to make it a little nicer to read prefix notation.
+impl fmt::Display for NodeType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match *self {
+            NodeType::Op(op) => format!("{}", op),
+            NodeType::Phi => "Phi".to_owned(),
+            NodeType::Comment(ref s) => s.clone(),
+            // Don't care about these
+            _ => String::new(),
+        };
+        write!(f, "{}", s)
+    }
 }
 
 /// Value node without operands with `ValueType`

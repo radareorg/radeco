@@ -254,7 +254,7 @@ impl IRWriter {
                                  if !acc.is_empty() {
                                      format!("{}, {}", acc, x)
                                  } else {
-                                     format!("{}", x)
+                                     x
                                  }
                              }))
             }
@@ -286,13 +286,13 @@ impl IRWriter {
                     if let MOpcode::OpConst(_) = opcode {
                         String::new()
                     } else {
-                        let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), &ssa);
+                        let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), ssa);
                         indent!(self.indent,
                                 self.fmt_expression(node, opcode, vt, operands, &ssa))
                     }
                 }
                 NodeData::Phi(_, _) => {
-                    let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), &ssa);
+                    let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), ssa);
                     let next = self.ctr + 1;
                     let result_idx = self.seen.entry(node).or_insert(next);
                     if *result_idx == next {
@@ -321,7 +321,7 @@ impl IRWriter {
                         if outgoing.len() > 1 {
                             let condition = self.fmt_operands(&[ssa.selector_of(prev_block)
                                                                    .unwrap()],
-                                                              &ssa);
+                                                              ssa);
                             jmp_statement = format!("{} IF {}", jmp_statement, condition[0]);
                         }
 
@@ -377,7 +377,7 @@ impl IRWriter {
                 _ => {
                     format!("{} = {}",
                             ssa.regnames.get(i).unwrap_or_else(|| {
-                                assert!(i == ssa.regnames.len());
+                                assert_eq!(i, ssa.regnames.len());
                                 &mem_comment
                             }),
                             self.fmt_operands(&[*reg], &ssa)[0])

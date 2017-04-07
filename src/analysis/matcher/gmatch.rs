@@ -228,7 +228,7 @@ where I: Iterator<Item=S::ValueRef>,
                 }
 
                 let current = t.current().unwrap();
-                if current.starts_with("%") {
+                if current.starts_with('%') {
                     // Match the current subtree to the subtree bound by the variable before. If
                     // they do not match, then report as mismatch.
                     let subtreeh = self.hash_subtree(inner_node);
@@ -251,7 +251,7 @@ where I: Iterator<Item=S::ValueRef>,
                 // All the cases which can cause a mismatch in the node and it's arguments.
                 // Since "%" binds the entire subtree, it will not have any arguments. So we skip
                 // this case.
-                if args.len() != t.len() && !current.starts_with("%") {
+                if args.len() != t.len() && !current.starts_with('%') {
                     viable = false;
                     break;
                 }
@@ -355,7 +355,7 @@ where I: Iterator<Item=S::ValueRef>,
             t_
         };
 
-        let replace_root = if r.current().as_ref().unwrap().starts_with("%") {
+        let replace_root = if r.current().as_ref().unwrap().starts_with('%') {
             *bindings.get(r.current().as_ref().unwrap()).expect("Unknown Binding")
         } else {
             self.map_token_to_node(r.current().as_ref().unwrap(),
@@ -377,7 +377,7 @@ where I: Iterator<Item=S::ValueRef>,
                 t_
             };
             let current = pt.current().unwrap();
-            let inner_node = if current.starts_with("%") {
+            let inner_node = if current.starts_with('%') {
                 *bindings.get(&current).expect("Unknown Binding")
             } else {
                 self.map_token_to_node(&current, &block, &mut address)
@@ -397,21 +397,17 @@ where I: Iterator<Item=S::ValueRef>,
 #[cfg(test)]
 mod test {
     use super::*;
-    use petgraph::graph::NodeIndex;
     use analysis::matcher::gmatch;
-    use std::io::prelude::*;
-    use std::io;
     use middle::ssa::ssastorage::{SSAStorage, NodeData};
     use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType, SSAWalk};
-    use middle::ssa::cfg_traits::{CFG, CFGMod};
+    use middle::ssa::cfg_traits::CFGMod;
     use middle::ir::{MOpcode, MAddress};
-    use middle::ir_writer::IRWriter;
 
     #[test]
     fn parse_expr() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpXor %1, %1)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("OpXor".to_owned()), t.current());
         assert_eq!(Some("%1".to_owned()), t.lhs());
@@ -422,7 +418,7 @@ mod test {
     fn parse_expr1() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(EEq eax, (EAdd eax, (EAdd eax, cf)))".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("EEq".to_owned()), t.current());
         assert_eq!(Some("eax".to_owned()), t.lhs());
@@ -433,7 +429,7 @@ mod test {
     fn parse_expr2() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(EAdd (EAdd eax, of), (EAdd eax, cf))".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("EAdd".to_owned()), t.current());
         assert_eq!(Some("(EAdd eax, of)".to_owned()), t.lhs());
@@ -444,7 +440,7 @@ mod test {
     fn parse_expr_unary() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpNot rax)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("OpNot".to_owned()), t.current());
         assert_eq!(Some("rax".to_owned()), t.lhs());
@@ -455,7 +451,7 @@ mod test {
     fn parse_expr_ternary() {
         let mut ssa = SSAStorage::new();
         let find_pat = "(OpStore %1, %2, %3)".to_owned();
-        let mut matcher = GraphMatcher::new(&mut ssa);
+        let matcher = GraphMatcher::new(&mut ssa);
         let t = matcher.parse_expression(&find_pat);
         assert_eq!(Some("OpStore".to_owned()), t.current());
         assert_eq!(Some("%1".to_owned()), t.lhs());

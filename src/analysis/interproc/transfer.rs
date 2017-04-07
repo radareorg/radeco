@@ -1,6 +1,6 @@
 //! Defines transfer and propagate traits used for interprocess analysis.
 
-use frontend::containers::{RModule, RFunction};
+use frontend::containers::RModule;
 
 pub trait InterProcAnalysis<'a, T: RModule<'a>> {
     fn new() -> Self;

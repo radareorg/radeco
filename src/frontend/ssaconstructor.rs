@@ -14,9 +14,7 @@
 
 use std::collections::HashMap;
 use petgraph::graph::NodeIndex;
-use std::fmt::Debug;
-use std::cmp::Ordering;
-use std::cmp;
+use std::{fmt, cmp};
 
 use r2pipe::structs::{LOpInfo, LRegInfo};
 
@@ -35,7 +33,7 @@ const TRUE_EDGE: u8 = 1;
 const UNCOND_EDGE: u8 = 2;
 
 pub struct SSAConstruct<'a, T>
-    where T: 'a + Clone + Debug + SSAMod<BBInfo = MAddress> + SSAExtra
+    where T: 'a + Clone + fmt::Debug + SSAMod<BBInfo = MAddress> + SSAExtra
 {
     phiplacer: PhiPlacer<'a, T>,
     regfile: SubRegisterFile,
@@ -57,7 +55,7 @@ pub struct SSAConstruct<'a, T>
 
 impl<'a, T> SSAConstruct<'a, T>
     where T: 'a + Clone
-    + Debug
+    + fmt::Debug
     + SSAExtra
     + SSAMod<BBInfo=MAddress, ValueRef=NodeIndex, ActionRef=NodeIndex>
 {
@@ -104,7 +102,7 @@ impl<'a, T> SSAConstruct<'a, T>
     }
 
     fn mem_id(&self) -> usize {
-        assert!(self.mem_id != 0);
+        assert_ne!(self.mem_id, 0);
         self.mem_id
     }
 
@@ -157,7 +155,7 @@ impl<'a, T> SSAConstruct<'a, T>
         // this function should return `None`.
         // NB 2: We never write to an intermediate twice as this is an SSA form!
         if let Some(ref res) = result {
-            self.intermediates.push(res.clone());
+            self.intermediates.push(*res);
             let result_id = self.intermediates.len() - 1;
             let out_size = self.phiplacer.operand_width(res);
             Some(Token::EEntry(result_id, Some(out_size as u64)))
@@ -220,7 +218,7 @@ impl<'a, T> SSAConstruct<'a, T>
                         }
                     } else {
                         // We are writing into a register.
-                        self.phiplacer.write_register(address, &name, rhs.expect("rhs for EEq cannot be `None`"));
+                        self.phiplacer.write_register(address, name, rhs.expect("rhs for EEq cannot be `None`"));
                     }
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
@@ -341,21 +339,21 @@ impl<'a, T> SSAConstruct<'a, T>
         // Insert `widen` cast of the two are not of same size and rhs is_some.
         if rhs.is_some() {
             let (lhs, rhs) = match lhs_size.cmp(&rhs_size) {
-                Ordering::Greater => {
+                cmp::Ordering::Greater => {
                     let vt = ValueType::Integer { width: lhs_size };
                     let casted_rhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(lhs_size), address, vt);
                     self.phiplacer.op_use(&casted_rhs, 0, rhs.as_ref().expect(""));
                     (lhs.expect("lhs cannot be `None`"), casted_rhs)
                 }
-                Ordering::Less => {
+                cmp::Ordering::Less => {
                     let vt = ValueType::Integer { width: rhs_size };
                     let casted_lhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(rhs_size), address, vt);
                     self.phiplacer.op_use(&casted_lhs, 0, lhs.as_ref().expect("lhs cannot be `None`"));
                     (casted_lhs, rhs.expect(""))
                 }
-                Ordering::Equal => {
+                cmp::Ordering::Equal => {
                     (lhs.expect(""), rhs.expect(""))
                 }
             };
@@ -507,15 +505,11 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
     use rustc_serialize::json;
-    use r2pipe::structs::{LAliasInfo, LFunctionInfo, LOpInfo, LRegInfo};
+    use r2pipe::structs::{LFunctionInfo, LRegInfo};
     use middle::ssa::ssastorage::SSAStorage;
-    use middle::ssa::ssa_traits::SSAWalk;
     use middle::ir_writer::IRWriter;
-    use middle::dot;
-    use middle::dce;
-    use utils;
-    use analysis::sccp::sccp;
-    use std::io;
+    use middle::{dot, dce};
+    use analysis::sccp;
 
 
     const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";

@@ -60,7 +60,6 @@ extern crate rustc_serialize;
 use std::fs::File;
 use std::io::prelude::*;
 use rustc_serialize::json;
-use std::io;
 
 use r2pipe::structs::{LFunctionInfo, LRegInfo};
 
@@ -68,8 +67,8 @@ use radeco_lib::frontend::ssaconstructor::SSAConstruct;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
-use radeco_lib::analysis::sccp::sccp;
-use radeco_lib::analysis::cse::cse::CSE;
+use radeco_lib::analysis::sccp;
+use radeco_lib::analysis::cse::CSE;
 
 use radeco_lib::analysis::matcher::gmatch;
 use radeco_lib::backend::x86::x86_idioms;

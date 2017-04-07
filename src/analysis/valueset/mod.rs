@@ -24,9 +24,12 @@ mod uintrange;
 mod sintrange;
 mod uintmultiple;
 mod sintmultiple;
+mod strided_interval;
+pub mod mem_structs;
+pub mod analyzer;
 
 /// Value set of u64 integers with certain bits set/cleared.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub struct KnownBits {
     /// Bits that are cleared
     pub zerobits: u64,
@@ -53,6 +56,46 @@ pub struct UIntRange {
 pub struct SIntRange {
     pub min: i64,
     pub max: i64,
+}
+
+/// Strided Interval (on signd ints) s[l, u] = l <= i <= u, i mod s + offset
+/// In essence the 4-tuple used in
+/// "Analyzing Memory Accesses in x86 Executables"
+/// by Gogul Balakrishnan and Thomas Reps
+// TODO write test cases, check logic
+// make enum to represent unknown values
+#[derive(Clone, Copy, Debug)]
+pub struct StridedInterval {
+    ui_mult : UIntMultiple,
+    si_range: SIntRange,
+}
+
+/// A Strided Interval without undefined value.
+#[derive(Clone, Copy, Debug)]
+pub struct StridedInterval_n {
+    stride: u64,
+    min:    i64,
+    max:    i64,
+}
+
+/// A Strided Interval with undefined value.
+#[derive(Clone, Copy, Debug)]
+pub enum StridedInterval_u {
+    Undefined,
+    StridedInterval(StridedInterval_n),
+    //StridedInterval {
+    //    strided_interval: StridedInterval_n,
+    //}
+}
+
+trait AbstractValue {
+    fn from_const(n: i64) -> Self;
+    //fn new(stride: u64, min: i64, max: i64) -> Self;
+    fn new() -> Self;
+    fn is_subset_of(self, other: Self) -> bool;
+    fn meet(self, other: Self) -> Self;
+    fn join(self, other: Self) -> Self;
+    //fn widen(self) -> Self;
 }
 
 const EMPTY_UINTMULTIPLE: UIntMultiple = UIntMultiple {
@@ -119,7 +162,7 @@ macro_rules! bitand_impl {
     )*)
 }
 
-bitand_impl! { KnownBits UIntMultiple UIntRange SIntRange }
+bitand_impl! { KnownBits UIntMultiple UIntRange SIntRange StridedInterval}
 
 macro_rules! bitor_impl {
     ($($t:ty)*) => ($(
@@ -127,4 +170,4 @@ macro_rules! bitor_impl {
     )*)
 }
 
-bitor_impl! { KnownBits UIntMultiple UIntRange SIntRange }
+bitor_impl! { KnownBits UIntMultiple UIntRange SIntRange StridedInterval}

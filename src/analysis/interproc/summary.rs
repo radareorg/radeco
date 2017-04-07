@@ -5,19 +5,17 @@ use std::collections::HashSet;
 use petgraph::graph::NodeIndex;
 
 use analysis::interproc::transfer::InterProcAnalysis;
-use analysis::matcher::gmatch;
-use frontend::containers::{RModule, RFunction, CallContext};
-use frontend::bindings::RBindings;
-use middle::ssa::ssa_traits::{SSA, SSAMod, NodeType, SSAWalk};
-use middle::ssa::cfg_traits::{CFG, CFGMod};
+use frontend::containers::{RModule, RFunction};
+use middle::ssa::ssa_traits::{SSA, NodeType};
+use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CallSummary { }
 
 impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
     fn new() -> CallSummary {
-        CallSummary { }
+        Default::default()
     }
 
     // Compute fn arguments, modifides and returns lists.
@@ -94,9 +92,9 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                 }
             }
 
-            rfn.set_returns(&returns.into_iter().map(|x| From::from(x)).collect::<Vec<_>>());
-            rfn.set_modifides(&modifides.into_iter().map(|x| From::from(x)).collect::<Vec<_>>());
-            rfn.set_args(&args.into_iter().map(|x| From::from(x)).collect::<Vec<_>>());
+            rfn.set_returns(&returns.into_iter().map(From::from).collect::<Vec<_>>());
+            rfn.set_modifides(&modifides.into_iter().map(From::from).collect::<Vec<_>>());
+            rfn.set_args(&args.into_iter().map(From::from).collect::<Vec<_>>());
         }
     }
 

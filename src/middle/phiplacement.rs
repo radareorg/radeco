@@ -11,10 +11,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 
-use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType};
+use middle::ssa::ssa_traits::{SSAMod, ValueType};
 use middle::ir::MAddress;
 
-use super::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ssa::ssa_traits::NodeType;
 use middle::regfile::SubRegisterFile;
 use middle::ir::MOpcode;
@@ -185,10 +184,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             }
         });
 
-        let mut upper_block = self.ssa.invalid_action();
-        if seen {
-            upper_block = self.block_of(at).unwrap();
-        }
+        let upper_block = if seen {
+            self.block_of(at).unwrap()
+        } else {
+            self.ssa.invalid_action()
+        };
 
         // Create a new block and add the required type of edge.
         let lower_block = self.new_block(at);
@@ -221,7 +221,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                             ];
             for (i, edge) in outgoing.iter().enumerate() {
                 if *edge != self.ssa.invalid_edge() {
-                    let target = self.ssa.target_of(&edge);
+                    let target = self.ssa.target_of(edge);
                     if lower_block != target {
                         self.ssa.add_control_edge(lower_block, target, i as u8);
                         self.ssa.remove_control_edge(*edge);
@@ -358,7 +358,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             if use_ == phi {
                 continue;
             }
-            if let Ok(_) = self.ssa.get_node_data(&use_) {
+            if self.ssa.get_node_data(&use_).is_ok() {
                 self.try_remove_trivial_phi(use_);
             }
         }

@@ -1,13 +1,7 @@
 //! Defines `Module` and `Function` that act as containers.
 
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::thread;
-use std::sync::mpsc;
-use std::fmt;
-use std::iter;
-use std::slice;
+use std::collections::{BTreeSet, HashMap};
+use std::{thread, fmt, sync, hash};
 
 use r2pipe::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
 
@@ -15,7 +9,7 @@ use petgraph::graph::NodeIndex;
 
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
-use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RBinds, RadecoBindings};
+use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
 use middle::ssa::ssastorage::{SSAStorage, Walker};
 use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
 use middle::ssa::cfg_traits::CFG;
@@ -29,7 +23,7 @@ pub struct RadecoModule<'a, F: RFunction> {
 
 pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
 
-impl<'a, F: RFunction + Debug> fmt::Debug for RadecoModule<'a, F> {
+impl<'a, F: RFunction + fmt::Debug> fmt::Debug for RadecoModule<'a, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
                "RadecoModule {{ functions: {:?}, fname: {:?} }}",
@@ -61,7 +55,7 @@ pub struct RadecoFunction<B: RBindings> {
 }
 
 #[derive(Clone, Debug)]
-pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>,
+pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>,
                        S: fmt::Debug + Clone>
 {
     /// Start offset of caller (uniquely identifies a function).
@@ -75,7 +69,7 @@ pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>,
     pub ctx_translate: HashMap<Idx, Idx>,
 }
 
-impl<Idx, S> CallContext<Idx, S> where Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>, S: fmt::Debug + Clone {
+impl<Idx, S> CallContext<Idx, S> where Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>, S: fmt::Debug + Clone {
     pub fn new(caller: Option<u64>,
                callee: Option<u64>,
                call_site: Option<u64>,
@@ -108,7 +102,7 @@ impl<B: RBindings> RadecoFunction<B> {
     pub fn construct(reg_profile: &LRegInfo, insts: Vec<LOpInfo>) -> RadecoFunction<B> {
         let mut rfn = RadecoFunction::new();
         {
-            let mut constructor = SSAConstruct::new(&mut rfn.ssa, &reg_profile);
+            let mut constructor = SSAConstruct::new(&mut rfn.ssa, reg_profile);
             constructor.run(insts);
         }
         rfn
@@ -160,6 +154,13 @@ fn ssa_single_fn(f: &FunctionInfo,
     rfn
 }
 
+// This function fixes up the call information.
+//
+// During SSA construction, call instructions are special cased, i.e. we do not sue the
+// corresponding esil for these instructions as inferring that these were call instructions from
+// the string is additional effort. As a concequence, the call instructions have a comment string
+// as an argument rather than an integer constant (address of the callee). This function iterates
+// through all such call sites and fixes this information.
 fn fix_call_info(rfn: &mut DefaultFnTy) {
     let mut call_info = rfn.call_ctx
                            .iter()
@@ -188,13 +189,15 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
     rfn.call_ctx = call_info.into_iter().map(|x| x.1).collect();
 }
 
+// TODO: Make this a method of SSA Soon to pretty print expression trees.
 fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
     let nt = ssa.get_node_data(n).map(|x| x.nt);
     if nt.is_err() {
         return String::new();
     }
     let nt = nt.unwrap();
-    let mut result = format!("({:?}", nt);
+
+    let mut result = format!("{}", nt);
     let mut args = ssa.args_of(*n);
     if let NodeType::Op(MOpcode::OpCall) = nt {
         args.truncate(1);
@@ -202,26 +205,39 @@ fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
 
     let len = args.len();
     for (i, arg) in args.iter().enumerate() {
+        if i == 0{
+            result.push_str(" ")
+        }
         if i < len - 1 {
-            result = format!("{}{},", result, hash_subtree(ssa, arg));
+            result = format!("{}{}, ", result, hash_subtree(ssa, arg));
         } else {
             result = format!("{}{}", result, hash_subtree(ssa, arg));
         }
     }
-    result.push_str(")");
-    result
+
+    match nt {
+        NodeType::Op(_) | NodeType::Phi => format!("({})", result),
+        _ => result,
+    }
 }
 
+// This function analyzes memory, i.e. all the memory store and load operations.
+//
+// It identifies these loads and stores and makes appropriate bindings for them.
 fn analyze_memory(rfn: &mut DefaultFnTy) {
     let mut hashes = HashMap::<String, NodeIndex>::new();
     let mut seen_l = HashMap::<NodeIndex, Binding<NodeIndex>>::new();
     let mut wl;
     let mut id: u16 = 0;
     {
+        let name = rfn.name.clone();
         let ssa = rfn.ssa_mut();
         let mem = {
             let start = ssa.start_node();
             let rs = ssa.registers_at(&start);
+            // mem is the first argument for the register state.
+            // NOTE: If something changes in the future, the above assumption may no longer be
+            // true. In that case, look here!
             ssa.args_of(rs).pop()
         };
 
@@ -240,12 +256,17 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                         let mem_loc = args.get(1)
                                           .expect("Load/Store has to have source/destination");
                         let mut bind = if seen_l.contains_key(mem_loc) {
-                            seen_l.get_mut(mem_loc).expect("")
+                            seen_l.get_mut(mem_loc).expect("This can never panic")
                         } else {
                             let h = hash_subtree(ssa, mem_loc);
                             if let Some(idx) = hashes.get(&h).cloned() {
+                                // TODO: Maybe redirect the edges and remove the older nodes too as
+                                // they are equivalent?
                                 seen_l.get_mut(&idx).expect("")
                             } else {
+                                if name.clone().contains("main") {
+                                    println!("New hash inserted: {:?}", h);
+                                }
                                 hashes.insert(h, *mem_loc);
                                 let mut b = Binding::default();
                                 b.mark_memory();
@@ -265,32 +286,23 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
         }
     }
 
-    for b in seen_l.values().into_iter() {
+    for b in seen_l.values() {
         rfn.bindings.insert(b.clone());
     }
+
+    //println!("Printing bindings information: {:?}", rfn.bindings);
 }
 
 fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
+    //println!("Locals loaded: {:?}", locals);
     // TODO
     if locals.is_none() {
         return;
     }
-
     let locals = locals.expect("This cannot be `None`");
     for l in locals {
-        let l_ref = l.reference.unwrap();
-        let mut operation = "";
-
-        let reg_base = l_ref.base.unwrap();
-        let offset = l_ref.offset.unwrap();
-
-        if offset < 0 {
-            operation = "OpSub";
-        } else {
-            operation = "OpAdd";
-        }
-
-        let postfix_str = format!("({}({}),({}))", operation, reg_base, offset);
+        let reference = l.reference.unwrap();
+        println!("{:?} {:?}", reference.base, reference.offset);
     }
 }
 
@@ -304,11 +316,14 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
         let reg_info = source.register_profile();
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = sync::mpsc::channel();
         for f in source.functions() {
             if f.name.as_ref().unwrap().contains("sym.imp") {
+                // Do not analyze/construct for imports.
+                // TODO: Still keep track of these functions.
                 continue;
             }
+            println!("Locals of {:?}: {:?}", f.name, f.locals);
             let offset = f.offset.expect("Invalid offset");
             let instructions = source.instructions_at(offset);
             let tx = tx.clone();
@@ -337,9 +352,9 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                     }
                 }
                 rfn.offset = offset;
-                analyze_memory(&mut rfn);
                 fix_call_info(&mut rfn);
                 load_locals(&mut rfn, f.locals);
+                analyze_memory(&mut rfn);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();
             });
             handles.push(handle);
@@ -407,7 +422,7 @@ pub trait RFunction {
 /// Trait that defines a `Module`. `RModule` is to be implemented on the struct that encompasses
 /// all information loaded from the binary. It acts as a container for `Function`s.
 pub trait RModule<'b> {
-    type FnRef: Copy + Clone + Debug + Hash + Eq + Into<u64> + From<u64>;
+    type FnRef: Copy + Clone + fmt::Debug + hash::Hash + Eq + Into<u64> + From<u64>;
     type RFn: RFunction;
 
     fn callees_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
@@ -427,7 +442,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
 
     fn callees_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
         let mut callees = Vec::<Self::FnRef>::new();
-        if let Some(ref c) = self.functions.get(fref) {
+        if let Some(c) = self.functions.get(fref) {
             callees.extend(c.callrefs().iter().cloned().map(Self::FnRef::from));
         }
         callees
@@ -435,7 +450,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
 
     fn callers_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
         let mut callers = Vec::<Self::FnRef>::new();
-        if let Some(ref c) = self.functions.get(fref) {
+        if let Some(c) = self.functions.get(fref) {
             callers.extend(c.callxrefs().iter().cloned().map(Self::FnRef::from));
         }
         callers
@@ -522,7 +537,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
 
     fn set_locals(&mut self, locals: &[(<Self::B as RBindings>::Idx, LocalInfo)]) {
         for &(ref arg, ref info) in locals {
-            if let Some(binding) = self.bindings.binding_mut(&arg) {
+            if let Some(binding) = self.bindings.binding_mut(arg) {
                 binding.mark_fn_local(info.base, info.offset);
             }
         }
@@ -578,17 +593,14 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use r2pipe::r2::R2;
-    use frontend::source::{FileSource, Source};
-    use middle::ir_writer::IRWriter;
-    use std::io;
+    use frontend::source::FileSource;
     use middle::dce;
 
     #[test]
     fn module_test() {
-        // let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
-        // r2.init();
-        // let mut fsource = FileSource::from(r2);
+        //let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
+        //r2.init();
+        //let mut fsource = FileSource::from(r2);
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
         for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {

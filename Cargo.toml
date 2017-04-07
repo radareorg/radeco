@@ -24,6 +24,8 @@ num = "*"
 rustc-serialize = "*"
 lazy_static = "*"
 log = "*"
+docopt = "*"
+env_logger = "*"
 clippy = {version = "0.0.61", optional = true}
 
 [dependencies.r2pipe]

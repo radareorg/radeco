@@ -10,8 +10,7 @@
 use std::default;
 use std::collections::{HashMap, HashSet};
 use petgraph::graph::Graph;
-use petgraph::graph;
-use petgraph::EdgeDirection;
+use petgraph::{graph, EdgeDirection};
 
 use middle::dot::{DotAttrBlock, GraphDot};
 use super::index::InternalIndex;
@@ -216,8 +215,8 @@ impl DomTree {
                 "Call to DomTree::doms before 
 									  DomTree::build_dom_tree.");
 
-        let internal_index = self.rmap.get(&i).unwrap();
-        let mut idom = *internal_index;
+        let internal_index = self.rmap[&i];
+        let mut idom = internal_index;
         let mut doms = Vec::<InternalIndex>::new();
         while idom != self.idom[idom] {
             doms.push(idom);
@@ -233,8 +232,8 @@ impl DomTree {
                 "Call to DomTree::idom before 
 				DomTree::build_dom_tree.");
 
-        let internal_index = self.rmap.get(&i).unwrap();
-        let internal_node = self.idom[*internal_index];
+        let internal_index = self.rmap[&i];
+        let internal_node = self.idom[internal_index];
         internal_node.external()
     }
 
@@ -268,9 +267,9 @@ impl DomTree {
             let node_count = g.node_count();
 
             // compute postorder numbering.
-            v.dfs(&g, start_node);
+            v.dfs(g, start_node);
             for i in 0..node_count {
-                v.dfs(&g, graph::NodeIndex::new(i));
+                v.dfs(g, graph::NodeIndex::new(i));
             }
 
             // Tuple of (graph::NodeIndex, post-order numbering).
@@ -313,7 +312,7 @@ impl DomTree {
                     let preds_iter = g.neighbors_directed(node, EdgeDirection::Incoming)
                                       .map(|x| rmap.get(&x).unwrap());
                     let preds = preds_map.entry(node)
-                                         .or_insert(preds_iter.cloned().collect::<Vec<_>>());
+                                         .or_insert_with(|| preds_iter.cloned().collect::<Vec<_>>());
                     let mut new_idom = invalid_index;
                     for p in preds.iter() {
                         if idom[*p] < invalid_index {
@@ -322,10 +321,10 @@ impl DomTree {
                         }
                     }
                     // Make sure we found a node.
-                    assert!(new_idom != invalid_index);
+                    assert_ne!(new_idom, invalid_index);
                     for p in preds.iter() {
                         if idom[*p] != invalid_index {
-                            new_idom = DomTree::intersect(&idom, &new_idom, p);
+                            new_idom = DomTree::intersect(idom, &new_idom, p);
                         }
                     }
                     if idom[n.1] != new_idom {
@@ -355,8 +354,8 @@ impl DomTree {
         let node_count = self.idom.len();
         let mut frontier_map = HashMap::<graph::NodeIndex, HashSet<graph::NodeIndex>>::new();
         for node in (0..node_count).map(graph::NodeIndex::new) {
-            let internal_index = self.rmap.get(&node).unwrap();
-            let preds = self.preds_map.get(&node).unwrap();
+            let internal_index = self.rmap[&node];
+            let preds = &self.preds_map[&node];
 
             if preds.len() < 2 {
                 continue;
@@ -364,7 +363,7 @@ impl DomTree {
 
             for p in preds {
                 let mut runner = *p;
-                while runner != self.idom[*internal_index] {
+                while runner != self.idom[internal_index] {
                     let runner_index = runner.external();
                     frontier_map.entry(runner_index).or_insert_with(HashSet::new).insert(node);
 
@@ -377,8 +376,8 @@ impl DomTree {
     }
 
     pub fn dom_frontier(&self, n: graph::NodeIndex) -> HashSet<graph::NodeIndex> {
-        assert!(self.dom_frontier != None, "Uninitialized dom_frontier.");
-        self.dom_frontier.clone().unwrap().get(&n).unwrap().clone()
+        assert_ne!(self.dom_frontier, None, "Uninitialized dom_frontier.");
+        self.dom_frontier.clone().unwrap()[&n].clone()
     }
 }
 
