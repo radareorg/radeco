@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use r2pipe::r2::R2;
 use radeco_lib::analysis::cse::CSE;
 use radeco_lib::analysis::sccp;
-use radeco_lib::analysis::valueset::analyzer::FnAnalyzer;
+use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
 use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
@@ -31,7 +31,6 @@ fn main() {
     let mut requested_functions = cli::init_for_args(USAGE);
 
     let mut dir;
-    let mut r2 = R2::new::<String>(None).expect("Unable to open r2");
     let mut r2 = R2::new::<String>(env::args().nth(env::args().len() - 1))
         .expect("Unable to open r2");
     r2.init();
