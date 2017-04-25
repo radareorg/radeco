@@ -46,11 +46,11 @@ struct DomminanceInfo<N, E> {
 
 impl<N, E> DomminanceInfo<N, E> {
     /// Computes info about dominance relation in a given graph
-    pub fn new(g: &Graph<N, E>, start_node: graph::NodeIndex) -> DomminanceInfo<N, E>
+    pub fn new(store: &SSAStorage, start_node: graph::NodeIndex) -> DomminanceInfo<N, E>
         where E: Clone,
               N: Clone
     {
-
+        let g: &Graph<N, E> = &DomminanceInfo::create_graph(store);
         let mut node_map = DomminanceInfo::create_dfs_indexing(g, start_node);
 
         // Computes the dominators
@@ -158,7 +158,7 @@ impl<N, E> DomminanceInfo<N, E> {
 
     /// Traversal is made on the directed graph to get an undirected graph
     /// elements of the undirected graph will be prefixed by g_
-    fn create_graph(ssa_store: SSAStorage) -> Graph<N, E> {
+    fn create_graph(ssa_store: &SSAStorage) -> Graph<N, E> {
         let ssa_digraph = &ssa_store.g;
 
         let mut g: Graph<NodeData, EdgeData> = Graph::new();
