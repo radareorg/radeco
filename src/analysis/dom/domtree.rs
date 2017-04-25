@@ -9,6 +9,8 @@
 
 use super::bimap::BiMap;
 use middle::dot::{DotAttrBlock, GraphDot};
+use middle::ssa::cfg_traits::CFG;
+use middle::ssa::ssastorage::*;
 use petgraph::{graph, EdgeDirection};
 use petgraph::algo::dominators;
 use petgraph::algo::dominators::{Dominators, DominatorsIter};
@@ -16,7 +18,8 @@ use petgraph::graph::Graph;
 use petgraph::graph::NodeIndex;
 
 use petgraph::visit::{Dfs, Bfs, Walker};
-use std::collections::{HashMap, HashSet};
+use petgraph::visit::EdgeRef;
+use std::collections::{HashMap, HashSet, LinkedList, VecDeque};
 use std::collections::hash_map::Iter;
 use std::default;
 
@@ -43,7 +46,7 @@ struct DomminanceInfo<N, E> {
 
 impl<N, E> DomminanceInfo<N, E> {
     /// Computes info about dominance relation in a given graph
-    fn new(g: &Graph<N, E>, start_node: graph::NodeIndex) -> DomminanceInfo<N, E>
+    pub fn new(g: &Graph<N, E>, start_node: graph::NodeIndex) -> DomminanceInfo<N, E>
         where E: Clone,
               N: Clone
     {
@@ -151,6 +154,34 @@ impl<N, E> DomminanceInfo<N, E> {
     /// Returns the dominance frontier for a given node
     fn dominance_frontier(&self, node: graph::NodeIndex) -> Option<&HashSet<NodeIndex>> {
         self.frontier_map.get(&node)
+    }
+
+    /// Traversal is made on the directed graph to get an undirected graph
+    /// elements of the undirected graph will be prefixed by g_
+    fn create_graph(ssa_store: SSAStorage) -> Graph<N, E> {
+        let ssa_digraph = &ssa_store.g;
+
+        let mut g: Graph<NodeData, EdgeData> = Graph::new();
+
+        // Keep track of the old -> new indexes
+        let mut g_node_indexes: HashMap<NodeIndex, NodeIndex> = HashMap::new();
+
+        // Add all the blocks to the new grap
+        for block in ssa_store.blocks() {
+            let g_node_index = g.add_node(ssa_digraph[block].clone());
+            g_node_indexes.insert(block, g_node_index);
+        }
+
+        for block in ssa_store.blocks() {
+            let g_node_index = g_node_indexes.get(&block).unwrap().clone();
+
+            for e in ssa_digraph.edges(block) {
+                let g_to_index = g_node_indexes.get(&e.target()).unwrap().clone();
+                g.add_edge(g_node_index, g_to_index, *e.weight());
+            }
+        }
+
+        unimplemented!()
     }
 }
 
