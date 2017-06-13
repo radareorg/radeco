@@ -55,11 +55,10 @@
 
 #[macro_use] extern crate radeco_lib;
 extern crate r2pipe;
-extern crate rustc_serialize;
+extern crate serde_json;
 
 use std::fs::File;
 use std::io::prelude::*;
-use rustc_serialize::json;
 
 use r2pipe::structs::{LFunctionInfo, LRegInfo};
 
@@ -80,11 +79,11 @@ fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, fro
     let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
     let mut s = String::new();
     register_profile.read_to_string(&mut s).unwrap();
-    *reg_profile = json::decode(&*s).unwrap();
+    *reg_profile = serde_json::from_str(&*s).unwrap();
     let mut instruction_file = File::open(from).unwrap();
     let mut s = String::new();
     instruction_file.read_to_string(&mut s).unwrap();
-    *instructions = json::decode(&*s).unwrap();
+    *instructions = serde_json::from_str(&*s).unwrap();
 }
 
 fn run_construction() -> SSAStorage {

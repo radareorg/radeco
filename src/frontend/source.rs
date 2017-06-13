@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 
-use rustc_serialize::json;
+use serde_json;
 
 use r2pipe::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
 use r2pipe::r2::R2;
@@ -163,28 +163,28 @@ impl FileSource {
 
 impl Source for FileSource {
     fn functions(&mut self) -> Vec<FunctionInfo> {
-        json::decode(&self.read_file(suffix::FUNCTION_INFO)).expect("Failed to decode json")
+        serde_json::from_str(&self.read_file(suffix::FUNCTION_INFO)).expect("Failed to decode json")
     }
 
     fn instructions_at(&mut self, address: u64) -> Vec<LOpInfo> {
         let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, address);
-        json::decode(&self.read_file(&suffix)).expect("Failed to decode json")
+        serde_json::from_str(&self.read_file(&suffix)).expect("Failed to decode json")
     }
 
     fn register_profile(&mut self) -> LRegInfo {
-        json::decode(&self.read_file(suffix::REGISTER)).expect("Failed to decode json")
+        serde_json::from_str(&self.read_file(suffix::REGISTER)).expect("Failed to decode json")
     }
 
     fn flags(&mut self) -> Vec<LFlagInfo> {
-        json::decode(&self.read_file(suffix::FLAG)).expect("Failed to decode json")
+        serde_json::from_str(&self.read_file(suffix::FLAG)).expect("Failed to decode json")
     }
 
     fn section_map(&mut self) -> Vec<LSectionInfo> {
-        json::decode(&self.read_file(suffix::SECTION)).expect("Failed to decode json")
+        serde_json::from_str(&self.read_file(suffix::SECTION)).expect("Failed to decode json")
     }
 
     fn strings(&mut self) -> Vec<LStringInfo> {
-        json::decode(&self.read_file(suffix::STRING)).expect("Failed to decode json")
+        serde_json::from_str(&self.read_file(suffix::STRING)).expect("Failed to decode json")
     }
 }
 
@@ -204,38 +204,38 @@ impl From<R2> for FileSource {
         {
             let fns = r2.functions();
             { 
-                let json_str = json::encode(&fns).expect("Failed to encode to json");
+                let json_str = serde_json::to_string(&fns).expect("Failed to encode to json");
                 fsource.write_file(suffix::FUNCTION_INFO, &json_str);
             }
 
             for f in fns {
                 let result = r2.instructions_at(f.offset.unwrap());
-                let json_str = json::encode(&result).expect("Failed to encode to json");
+                let json_str = serde_json::to_string(&result).expect("Failed to encode to json");
                 let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, f.offset.unwrap());
                 fsource.write_file(&suffix, &json_str)
             }
 
             {
                 let reg = r2.register_profile();
-                let json_str = json::encode(&reg).expect("Failed to encode to json");
+                let json_str = serde_json::to_string(&reg).expect("Failed to encode to json");
                 fsource.write_file(suffix::REGISTER, &json_str);
             }
             
             {
                 let flags = r2.flags();
-                let json_str = json::encode(&flags).expect("Failed to encode to json");
+                let json_str = serde_json::to_string(&flags).expect("Failed to encode to json");
                 fsource.write_file(suffix::FLAG, &json_str);
             }
 
             {
                 let sections = r2.section_map();
-                let json_str = json::encode(&sections).expect("Failed to encode to json");
+                let json_str = serde_json::to_string(&sections).expect("Failed to encode to json");
                 fsource.write_file(suffix::SECTION, &json_str);
             }
 
             {
                 let strings = r2.strings(false).expect("Unable to load String info from r2");
-                let json_str = json::encode(&strings).expect("Failed to encode to json");
+                let json_str = serde_json::to_string(&strings).expect("Failed to encode to json");
                 fsource.write_file(suffix::STRING, &json_str);
             }
         }

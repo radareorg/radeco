@@ -48,7 +48,7 @@
 
 extern crate regex;
 extern crate petgraph;
-extern crate rustc_serialize;
+extern crate serde_json;
 extern crate num;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
