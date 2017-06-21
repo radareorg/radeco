@@ -318,7 +318,7 @@ impl IRWriter {
                                           .map(|x| (ssa.target_of(&x.0), x.1))
                                           .collect::<Vec<_>>();
                         // This is a conditional jump.
-                        if outgoing.len() > 1 {
+                        if ssa.is_selector(&prev_block) && outgoing.len() > 1 {
                             let condition = self.fmt_operands(&[ssa.selector_of(prev_block)
                                                                    .unwrap()],
                                                               ssa);
