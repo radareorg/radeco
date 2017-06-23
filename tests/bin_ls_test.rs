@@ -67,14 +67,14 @@ fn run_cse(ssa: &mut SSAStorage) -> SSAStorage {
     ssa.clone()
 }
 
-//#[test]
+#[test]
 fn bin_ls_construction() {
     let ssa = run_construction();
     let mut writer: IRWriter = Default::default();
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
-//#[test]
+#[test]
 fn bin_ls_sccp() {
     let ssa = {
         let mut ssa_ = run_construction();
@@ -84,7 +84,7 @@ fn bin_ls_sccp() {
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
-//#[test]
+#[test]
 fn bin_ls_cse() {
     let ssa = {
         let mut ssa_ = run_construction();
@@ -94,7 +94,7 @@ fn bin_ls_cse() {
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
-//#[test]
+#[test]
 fn bin_ls_cse_sccp() {
     let ssa = {
         let mut ssa_ = run_construction();
@@ -107,7 +107,7 @@ fn bin_ls_cse_sccp() {
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
-//#[test]
+#[test]
 fn bin_ls_grep_replace() {
     let ssa = {
         let mut ssa_ = run_construction();
@@ -126,7 +126,7 @@ fn bin_ls_grep_replace() {
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
 
-//#[test]
+#[test]
 fn bin_ls_x86_idioms() {
     let mut ssa = run_construction();
     {
