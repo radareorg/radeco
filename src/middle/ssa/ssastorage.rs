@@ -171,8 +171,9 @@ impl SSAStorage {
     // through this API to prevent stablemap from being out of sync.
 
     fn insert_node(&mut self, d: NodeData) -> NodeIndex {
-        self.g.add_node(d)
-        //radeco_trace!(logger::Event::SSAInsertNode(&ret, &n));
+        let ret = self.g.add_node(d);
+        radeco_trace!(logger::Event::SSAInsertNode(&ret));
+        ret
     }
 
     fn remove_node(&mut self, exi: NodeIndex) {
@@ -201,6 +202,7 @@ impl SSAStorage {
                 let bb = self.block_of(&i);
                 self.mark_selector(j, bb);
             }
+            self.g.remove_edge(edge); // TODO: Need suggestion. Remove edges? if not, there might be an operation to get successor on the preds(i) which would result in access to this deleted node
         }
 
         if self.start_node == i {
@@ -779,10 +781,11 @@ impl SSAMod for SSAStorage {
     }
 
     fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
-        self.replace_node(node, replacement);
-        if let Some(adata) = self.assoc_data.get(&node).cloned() {
-            self.assoc_data.insert(replacement, adata.clone());
+        //self.replace_node(node, replacement);
+        if let Some(adata) = self.assoc_data.remove(&node) {
+            self.assoc_data.insert(replacement, adata);
         }
+        self.replace_node(node, replacement);
     }
 
     fn remove(&mut self, node: NodeIndex) {
