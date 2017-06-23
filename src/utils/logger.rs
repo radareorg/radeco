@@ -74,11 +74,11 @@ impl<'a, T: Debug> ToString for Event<'a, T> {
 
 #[macro_export]
 macro_rules! radeco_trace {
-	($t: expr) => ({
-		if cfg!(feature = "trace_log") {
-			trace!("{}", $t.to_string());
-		}
-	});
+    ($t: expr) => ({
+        if cfg!(feature = "trace_log") {
+            trace!("{}", $t.to_string());
+        }
+    });
     ($fmt:expr, $($arg:tt)*) => ({
         if cfg!(feature = "trace_log") {
             trace!("{}", format_args!($fmt, $($arg)*));

@@ -205,6 +205,11 @@ impl SSAStorage {
             self.g.remove_edge(edge); // TODO: Need suggestion. Remove edges? if not, there might be an operation to get successor on the preds(i) which would result in access to this deleted node
         }
 
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
+            self.g.remove_edge(edge);
+        }
+
         if self.start_node == i {
             self.start_node = j;
         }
@@ -213,8 +218,38 @@ impl SSAStorage {
     }
 
     fn insert_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
-        radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
-        self.g.add_edge(i, j, e)
+        //Don't insert a duplicate edge between i and j with same EdgeData
+        let edge = self.find_edge(&i, &j);
+        let mut flag = false;
+        if edge != self.invalid_edge() {
+            flag = match (self.g[edge], e) {
+                (EdgeData::Control(i), EdgeData::Control(j)) |
+                (EdgeData::Data(i), EdgeData::Data(j)) => {
+                    if i == j {
+                        true
+                    } else {
+                        false
+                    }
+                },
+                (EdgeData::ContainedInBB(i), EdgeData::ContainedInBB(j)) => {
+                    if i == j {
+                        true
+                    } else {
+                        false
+                    }
+                },
+                (EdgeData::Selector, EdgeData::Selector) => true,
+                (EdgeData::RegisterState, EdgeData::RegisterState) => true,
+                (EdgeData::ReplacedBy, EdgeData::ReplacedBy) => true,
+                _ => false,
+            }
+        }
+        if flag {
+            edge
+        } else {
+            radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
+            self.g.add_edge(i, j, e)
+        }
     }
 
     #[allow(dead_code)]

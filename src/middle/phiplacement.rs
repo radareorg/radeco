@@ -376,14 +376,20 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             same = self.add_undefined(block_addr, valtype);
         }
 
-        let users = self.ssa.uses_of(phi);
+        //let users = self.ssa.uses_of(phi); //This works too instead of the code below.
+        let mut users: Vec<T::ValueRef> = Vec::new(); //I feel this is better is there is no comparison with phi value that is being replaced.
+        for uses in self.ssa.uses_of(phi) {
+            if !users.contains(&uses) {
+                users.push(uses);
+            }
+        }
         // Reroute all uses of phi to same and remove phi
         self.ssa.replace(phi, same);
         // Try to recursively remove all phi users, which might have become trivial
         for use_ in users {
-            if use_ == phi {
-                continue;
-            }
+            //if use_ == phi {
+            //    continue;
+            //}
             if true || false { //TODO: Need suggestion
                 match self.ssa.get_node_data(&use_) {
                     Ok(NodeData {vt: _, nt: NodeType::Phi}) => {
@@ -391,7 +397,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
                     },
                     _ => {}
                 }
-            } else {
+            } else { //XXX: Remove this?
                 if self.ssa.get_node_data(&use_).is_ok() {
                     self.try_remove_trivial_phi(use_);
                 }
