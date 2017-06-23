@@ -15,7 +15,7 @@ use std::io::Write;
 
 pub enum Event<'a, T: 'a + Debug> {
     /// external -> internal
-    SSAInsertNode(&'a T, &'a T),
+    SSAInsertNode(&'a T),
     /// external
     SSARemoveNode(&'a T),
     /// external, external
@@ -37,8 +37,8 @@ pub enum Event<'a, T: 'a + Debug> {
 impl<'a, T: Debug> ToString for Event<'a, T> {
     fn to_string(&self) -> String {
         match *self {
-            Event::SSAInsertNode(i, j) => {
-                format!("{}|{:?}|{:?}", "ssa_insert_node", i, j)
+            Event::SSAInsertNode(i) => {
+                format!("{}|{:?}", "ssa_insert_node", i)
             }
             Event::SSARemoveNode(i) => {
                 format!("{}|{:?}", "ssa_remove_node", i)

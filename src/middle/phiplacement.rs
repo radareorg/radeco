@@ -14,7 +14,7 @@ use std::cmp::Ordering;
 use middle::ssa::ssa_traits::{SSAMod, ValueType};
 use middle::ir::MAddress;
 
-use middle::ssa::ssa_traits::NodeType;
+use middle::ssa::ssa_traits::{NodeType, NodeData};
 use middle::regfile::SubRegisterFile;
 use middle::ir::MOpcode;
 
@@ -296,7 +296,33 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         let block_addr = self.addr_of(&block);
         let inc = self.incomplete_phis[&block_addr].clone();
         for (variable, node) in inc {
-            self.add_phi_operands(block, variable, node);
+            let z = node;//.clone();
+            let nx = self.add_phi_operands(block, variable, node);
+
+
+            if let Some(t) = self.incomplete_phis.get_mut(&block_addr) {
+                t.insert(variable, nx);
+            }
+
+            {
+                let tmp_incomplete_phis = self.incomplete_phis.clone();
+                for (blkaddr, var) in tmp_incomplete_phis {
+                    for (variable, tmp_node) in var {
+                        if tmp_node.eq(&z) {
+                            if let Some(t) = self.incomplete_phis.get_mut(&blkaddr) {
+                                t.insert(variable, nx);
+                            }
+                        }
+                    }
+                }
+
+                let zz = self.current_def[variable].clone();
+                for (key, value) in zz {
+                    if value.eq(&node) {
+                        self.current_def[variable].insert(key, nx);
+                    }
+                }
+            }
         }
         self.sealed_blocks.insert(block);
     }
@@ -358,8 +384,17 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             if use_ == phi {
                 continue;
             }
-            if self.ssa.get_node_data(&use_).is_ok() {
-                self.try_remove_trivial_phi(use_);
+            if true || false { //TODO: Need suggestion
+                match self.ssa.get_node_data(&use_) {
+                    Ok(NodeData {vt: _, nt: NodeType::Phi}) => {
+                        self.try_remove_trivial_phi(use_);
+                    },
+                    _ => {}
+                }
+            } else {
+                if self.ssa.get_node_data(&use_).is_ok() {
+                    self.try_remove_trivial_phi(use_);
+                }
             }
         }
         same
