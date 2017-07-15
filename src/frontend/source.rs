@@ -6,8 +6,9 @@ use std::io::{Read, Write};
 
 use serde_json;
 
-use r2pipe::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
+use r2api::api_trait::R2Api;
 use r2pipe::r2::R2;
+use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
 
 pub trait Source {
     fn functions(&mut self) -> Vec<FunctionInfo>;
@@ -15,7 +16,6 @@ pub trait Source {
     fn register_profile(&mut self) -> LRegInfo;
     fn flags(&mut self) -> Vec<LFlagInfo>;
     fn section_map(&mut self) -> Vec<LSectionInfo>;
-    fn strings(&mut self) -> Vec<LStringInfo>;
 
     fn send(&mut self, _: &str) { }
 
@@ -71,7 +71,7 @@ pub trait Source {
 }
 
 // Implementation of `Source` trait for R2.
-impl Source for R2 {
+impl Source for R2 where R2: R2Api {
     fn functions(&mut self) -> Vec<FunctionInfo> {
         let fns = self.fn_list();
         fns.expect("Failed to load funtion info from r2")
@@ -95,10 +95,6 @@ impl Source for R2 {
 
     fn section_map(&mut self) -> Vec<LSectionInfo> {
         self.sections().expect("Failed to get section info from r2")
-    }
-
-    fn strings(&mut self) -> Vec<LStringInfo> {
-        self.strings(false).expect("Failed to load strings from r2")
     }
 
     fn send(&mut self, s: &str) {
@@ -159,6 +155,10 @@ impl FileSource {
             base_name: base_name.to_owned(),
         }
     }
+
+    pub fn strings(&mut self) -> Vec<LStringInfo> {
+        serde_json::from_str(&self.read_file(suffix::STRING)).expect("Failed to decode json")
+    }
 }
 
 impl Source for FileSource {
@@ -181,10 +181,6 @@ impl Source for FileSource {
 
     fn section_map(&mut self) -> Vec<LSectionInfo> {
         serde_json::from_str(&self.read_file(suffix::SECTION)).expect("Failed to decode json")
-    }
-
-    fn strings(&mut self) -> Vec<LStringInfo> {
-        serde_json::from_str(&self.read_file(suffix::STRING)).expect("Failed to decode json")
     }
 }
 

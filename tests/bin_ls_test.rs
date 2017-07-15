@@ -7,7 +7,7 @@ extern crate serde_json;
 use std::fs::File;
 use std::io::prelude::*;
 
-use r2pipe::structs::{LFunctionInfo, LRegInfo};
+use r2api::structs::{LFunctionInfo, LRegInfo};
 
 use radeco_lib::frontend::ssaconstructor::SSAConstruct;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;

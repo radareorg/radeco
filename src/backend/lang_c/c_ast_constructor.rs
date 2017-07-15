@@ -85,6 +85,7 @@ mod test {
     use analysis::interproc::interproc::analyze_module;
     use analysis::interproc::summary;
     use r2pipe::r2::R2;
+    use r2api::api_trait::R2Api;
 
     #[test]
     #[ignore]

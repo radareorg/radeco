@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::{thread, fmt, sync, hash};
 
-use r2pipe::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
+use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
 
 use petgraph::graph::NodeIndex;
 
