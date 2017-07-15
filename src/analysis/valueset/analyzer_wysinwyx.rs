@@ -28,7 +28,7 @@ use middle::ssa::ssastorage::{NodeData,SSAStorage};
 use middle::ir::{MOpcode,MAddress,MArity};
 use middle::ir_writer::{IRWriter};
 
-use r2pipe::structs::{LRegInfo};
+use r2api::structs::{LRegInfo};
 
 //use esil::parser::{Parse, Parser};
 //use esil::lexer::{Token, Tokenizer};

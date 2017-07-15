@@ -30,8 +30,9 @@ clippy = {version = "0.0.61", optional = true}
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"
-#path = "../r2pipe.rs"
+
+[dependencies.r2api]
+git = "https://github.com/radare/radare2-r2pipe-api"
 
 [dependencies.esil]
 git = "https://github.com/radare/esil-rs"
-#path = "../esil-rs"

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use petgraph::graph::NodeIndex;
 use std::{fmt, cmp};
 
-use r2pipe::structs::{LOpInfo, LRegInfo};
+use r2api::structs::{LOpInfo, LRegInfo};
 
 use esil::parser::{Parse, Parser};
 use esil::lexer::{Token, Tokenizer};
@@ -505,7 +505,7 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
     use serde_json;
-    use r2pipe::structs::{LFunctionInfo, LRegInfo};
+    use r2api::structs::{LFunctionInfo, LRegInfo};
     use middle::ssa::ssastorage::SSAStorage;
     use middle::ir_writer::IRWriter;
     use middle::{dot, dce};

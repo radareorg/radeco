@@ -12,7 +12,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::From;
 
-use r2pipe::structs::LRegInfo;
+use r2api::structs::LRegInfo;
 
 use middle::ssa::ssa_traits::ValueType;
 

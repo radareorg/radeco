@@ -1,5 +1,6 @@
 extern crate radeco_lib;
 extern crate r2pipe;
+extern crate r2api;
 extern crate env_logger;
 
 mod cli;
@@ -10,6 +11,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use r2pipe::r2::R2;
+use r2api::api_trait::R2Api;
 use radeco_lib::analysis::cse::CSE;
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
