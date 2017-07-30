@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate radeco_lib;
 extern crate r2pipe;
+extern crate r2api;
 extern crate serde_json;
 
 use std::fs::File;
