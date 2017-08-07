@@ -1,6 +1,11 @@
 //! Common Subexpression Elimination (CSE)
 //!
 //! This module implements methods and structs to perform CSE.
+//! However, this implement doesn't consider much about commutative 
+//! opcodes. One the other hand, considering too much will cause
+//! a huge memory consume. Thus, a balanced solution should be 
+//! improved.
+
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -35,11 +40,20 @@ where I: Iterator<Item = S::ValueRef>,
         let mut result = String::new();
         for arg in args {
             if let Ok(node_data) = self.ssa.get_node_data(arg) {
-                if let NodeType::Op(opc) = node_data.nt {
-                    match opc {
-                        MOpcode::OpConst(val) => result.push_str(&format!("{}", val)),
-                        _ => result.push_str(self.hashed.get(arg).expect("Hash value not found!")),
+                match node_data.nt {
+                    NodeType::Op(opc) => {
+                        match opc {
+                            MOpcode::OpConst(val) => result.push_str(&format!("{}", val)),
+                            _ => result.push_str(self.hashed.get(arg).expect("Hash value not found!")),
+                        }
                     }
+                    NodeType::Phi => {
+                        // NOTE: Phi functions should be considered, otherwise, CSE will replace 
+                        // different op node, which only use phi functions as operands, causing 
+                        // wrong analysis.
+                        result.push_str(&format!("{:?}", arg));
+                    }
+                    _ => {}
                 }
             }
         }

@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
+use std::u64;
 
 use middle::ssa::ssa_traits::{SSAMod, ValueType};
 use middle::ir::MAddress;
@@ -31,7 +32,7 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + 'a> {
     regfile: SubRegisterFile,
     pub blocks: BTreeMap<MAddress, T::ActionRef>,
     pub index_to_addr: HashMap<T::ValueRef, MAddress>,
-    addr_to_index: BTreeMap<MAddress, T::ValueRef>,
+    // addr_to_index: BTreeMap<MAddress, T::ValueRef>,
     outputs: HashMap<T::ValueRef, VarId>,
 }
 
@@ -46,7 +47,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             regfile: regfile,
             blocks: BTreeMap::new(),
             index_to_addr: HashMap::new(),
-            addr_to_index: BTreeMap::new(),
+            // No need for addr_to_index
+            // addr_to_index: BTreeMap::new(),
             outputs: HashMap::new(),
         }
     }
@@ -232,7 +234,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
             self.ssa.add_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
-            for (addr, ni) in self.addr_to_index.clone() {
+            // for (addr, ni) in self.addr_to_index.clone() {
+            // For there is no assignment to addr_to_index, the original code will
+            // skip the loop below, causing losing necessary phi functions
+            for (ni, addr) in self.index_to_addr.clone() {
                 if addr < at {
                     continue;
                 }
@@ -408,7 +413,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
     pub fn add_dynamic(&mut self) -> T::ActionRef {
         let action = self.ssa.add_dynamic();
-        let dyn_addr = MAddress::new(0xffffffff, 0);
+        let dyn_addr = MAddress::new(u64::MAX, 0);
         self.blocks.insert(dyn_addr, action);
         self.incomplete_phis.insert(dyn_addr, HashMap::new());
         self.sync_register_state(action);

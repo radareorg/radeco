@@ -9,7 +9,7 @@
 
 use std::fmt::{self, Debug};
 use std::collections::{HashMap, VecDeque, HashSet, BinaryHeap};
-use std::default;
+use std::{default, u64};
 use std::cmp::{PartialOrd, PartialEq, Ordering};
 use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::EdgeDirection;
@@ -431,7 +431,7 @@ impl CFG for SSAStorage {
         if let NodeData::BasicBlock(ref addr) = self.g[*si] {
             Some(*addr)
         } else if let NodeData::DynamicAction = self.g[*si] {
-            Some(MAddress::new(0xffffffff, 0))
+            Some(MAddress::new(u64::MAX, 0))
         } else {
             None
         }

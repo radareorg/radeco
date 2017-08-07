@@ -114,14 +114,17 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 continue;
             }
 
-            if op_val.is_overdefined() {
-                return LatticeValue::Bottom;
-            }
+            //if op_val.is_overdefined() {
+            //    return LatticeValue::Bottom;
+            //}
+            // Only operand which could be executable will be considered.
+            // Even these operands are overdefined.
 
             let edge = self.g.find_edge(&operand_block, &parent_block);
             if !self.is_executable(&edge) && edge != self.g.invalid_edge() {
                 continue;
             }
+            //TODO: Not sure what to do when the edge is invalid
 
             phi_val = meet(&phi_val, &op_val);
         }

@@ -49,6 +49,8 @@ pub struct RadecoFunction<B: RBindings> {
     pub name: String,
     pub offset: u64,
     pub call_ctx: Vec<CallContext<B::Idx, NodeIndex>>,
+    pub locals: Option<Vec<LVarInfo>>,
+    pub datarefs: Option<Vec<u64>>,
     // callrefs: Vec<u64>,
     callxrefs: Vec<u64>,
     pub bindings: B,
@@ -96,6 +98,8 @@ impl<B: RBindings> RadecoFunction<B> {
             // callrefs: Vec::new(),
             callxrefs: Vec::new(),
             bindings: B::new(),
+            locals: None,
+            datarefs: None,
         }
     }
 
@@ -187,6 +191,7 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
         }
     }
     rfn.call_ctx = call_info.into_iter().map(|x| x.1).collect();
+    println!("{:?}", rfn.call_ctx);
 }
 
 // TODO: Make this a method of SSA Soon to pretty print expression trees.
@@ -265,7 +270,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                                 seen_l.get_mut(&idx).expect("")
                             } else {
                                 if name.clone().contains("main") {
-                                    println!("New hash inserted: {:?}", h);
+                                    radeco_trace!("New hash inserted: {:?}", h);
                                 }
                                 hashes.insert(h, *mem_loc);
                                 let mut b = Binding::default();
@@ -293,16 +298,29 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
     //println!("Printing bindings information: {:?}", rfn.bindings);
 }
 
+fn load_datarefs(rfn: &mut DefaultFnTy, datarefs: Option<Vec<u64>>) {
+    if datarefs.is_none() {
+        return;
+    }
+    rfn.datarefs = datarefs.clone();
+    let datarefs = datarefs.expect("This cannot be 'None'");
+    for dataref in datarefs {
+        radeco_trace!("{:?}", dataref);
+    }
+}
+
 fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
     //println!("Locals loaded: {:?}", locals);
     // TODO
     if locals.is_none() {
         return;
     }
+    rfn.locals = locals.clone();
     let locals = locals.expect("This cannot be `None`");
     for l in locals {
+        //println!("[z] Local loaded: {:?}", l);
         let reference = l.reference.unwrap();
-        println!("{:?} {:?}", reference.base, reference.offset);
+        radeco_trace!("{:?} {:?}", reference.base, reference.offset);
     }
 }
 
@@ -323,7 +341,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                 // TODO: Still keep track of these functions.
                 continue;
             }
-            println!("Locals of {:?}: {:?}", f.name, f.locals);
+            radeco_trace!("Locals of {:?}: {:?}", f.name, f.locals);
             let offset = f.offset.expect("Invalid offset");
             let instructions = source.instructions_at(offset);
             let tx = tx.clone();
@@ -353,6 +371,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                 }
                 rfn.offset = offset;
                 fix_call_info(&mut rfn);
+                load_datarefs(&mut rfn, f.datarefs);
                 load_locals(&mut rfn, f.locals);
                 analyze_memory(&mut rfn);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();

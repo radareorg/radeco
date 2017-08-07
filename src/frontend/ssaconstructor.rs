@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use petgraph::graph::NodeIndex;
-use std::{fmt, cmp};
+use std::{fmt, cmp, u64};
 
 use r2api::structs::{LOpInfo, LRegInfo};
 
@@ -494,7 +494,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 current_address.offset += 1;
             }
         }
-        self.phiplacer.add_edge(current_address, MAddress::new(0xffffffff, 0), UNCOND_EDGE);
+        self.phiplacer.add_edge(current_address, MAddress::new(u64::MAX, 0), UNCOND_EDGE);
         self.phiplacer.finish();
     }
 } // end impl SSAConstruct

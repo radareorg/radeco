@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use r2pipe::r2::R2;
 use r2api::api_trait::R2Api;
-use radeco_lib::analysis::cse::CSE;
+use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
 use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
@@ -21,7 +21,7 @@ use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
 
 const USAGE: &'static str = "
-Usage: minidec [-f <names>...]
+Usage: minidec [-f <names>...] <target>
 
 Options:
     -f, --functions  Analayze only some functions
@@ -30,7 +30,7 @@ Options:
 fn main() {
     env_logger::init().unwrap();
 
-    let mut requested_functions = cli::init_for_args(USAGE);
+    let requested_functions = cli::init_for_args(USAGE);
 
     let mut dir;
     let mut r2 = R2::new::<String>(env::args().nth(env::args().len() - 1))
@@ -101,8 +101,7 @@ fn main() {
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
         }
-        {
-            // Value Set Analysis
+        if false {
             if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
                 continue;
             }
