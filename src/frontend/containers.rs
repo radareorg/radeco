@@ -191,7 +191,7 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
         }
     }
     rfn.call_ctx = call_info.into_iter().map(|x| x.1).collect();
-    println!("{:?}", rfn.call_ctx);
+    radeco_trace!("{:?}", rfn.call_ctx);
 }
 
 // TODO: Make this a method of SSA Soon to pretty print expression trees.
@@ -299,6 +299,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
 }
 
 fn load_datarefs(rfn: &mut DefaultFnTy, datarefs: Option<Vec<u64>>) {
+    //println!("Datarefs loaded: {:?}", datarefs);
     if datarefs.is_none() {
         return;
     }

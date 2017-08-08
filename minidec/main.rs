@@ -19,6 +19,7 @@ use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
+use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 
 const USAGE: &'static str = "
 Usage: minidec [-f <names>...] <target>
@@ -101,6 +102,16 @@ fn main() {
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
         }
+        let mut memory_ssa = {
+            // Generate MemorySSA
+            println!("  [*] Generating Memory SSA");
+            let mut mssa = MemorySSA::new(&rfn.ssa);
+            mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
+                    &Some(rfn.call_ctx.iter().cloned()
+                          .map(|x| x.ssa_ref.unwrap()).collect()));
+            mssa.run();
+            mssa
+        };
         if false {
             if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
                 continue;
