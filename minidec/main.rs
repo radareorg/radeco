@@ -12,16 +12,17 @@ use std::path::{Path, PathBuf};
 
 use r2pipe::r2::R2;
 use r2api::api_trait::R2Api;
-use radeco_lib::analysis::cse::CSE;
+use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
 use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
+use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 
 const USAGE: &'static str = "
-Usage: minidec [-f <names>...]
+Usage: minidec [-f <names>...] <target>
 
 Options:
     -f, --functions  Analayze only some functions
@@ -30,7 +31,7 @@ Options:
 fn main() {
     env_logger::init().unwrap();
 
-    let mut requested_functions = cli::init_for_args(USAGE);
+    let requested_functions = cli::init_for_args(USAGE);
 
     let mut dir;
     let mut r2 = R2::new::<String>(env::args().nth(env::args().len() - 1))
@@ -101,8 +102,17 @@ fn main() {
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
         }
-        {
-            // Value Set Analysis
+        let mut memory_ssa = {
+            // Generate MemorySSA
+            println!("  [*] Generating Memory SSA");
+            let mut mssa = MemorySSA::new(&rfn.ssa);
+            mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
+                    &Some(rfn.call_ctx.iter().cloned()
+                          .map(|x| x.ssa_ref.unwrap()).collect()));
+            mssa.run();
+            mssa
+        };
+        if false {
             if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
                 continue;
             }

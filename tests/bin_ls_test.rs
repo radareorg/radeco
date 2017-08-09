@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate radeco_lib;
 extern crate r2pipe;
+extern crate r2api;
 extern crate serde_json;
 
 use std::fs::File;
@@ -14,7 +15,7 @@ use radeco_lib::middle::ssa::ssastorage::SSAStorage;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp;
-use radeco_lib::analysis::cse::CSE;
+use radeco_lib::analysis::cse::cse::CSE;
 
 use radeco_lib::analysis::matcher::gmatch;
 use radeco_lib::backend::x86::x86_idioms;

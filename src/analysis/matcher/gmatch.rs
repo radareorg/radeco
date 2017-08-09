@@ -60,6 +60,7 @@ pub struct GraphMatcher<'a, I, S>
 {
     ssa: &'a mut S,
     seen: HashMap<String, ParseToken>,
+    hash_subtrees: HashMap<S::ValueRef, String>,
     foo: PhantomData<I>,
 }
 
@@ -67,7 +68,7 @@ pub struct GraphMatcher<'a, I, S>
 macro_rules! grep {
     ($s: expr, $f: expr) => {
         {
-            let matcher = gmatch::GraphMatcher::new($s);
+            let mut matcher = gmatch::GraphMatcher::new($s);
             matcher.grep($f.to_owned())
         }
     };
@@ -93,6 +94,7 @@ where I: Iterator<Item=S::ValueRef>,
         GraphMatcher {
             ssa: ssa,
             seen: HashMap::new(),
+            hash_subtrees: HashMap::new(),
             foo: PhantomData,
         }
     }
@@ -126,20 +128,43 @@ where I: Iterator<Item=S::ValueRef>,
         }
     }
 
-    fn hash_subtree(&self, root: S::ValueRef) -> String {
+    // Warning: This function uses too much time when the fucntion is huge,
+    // especially when there are too many call statements. Because call 
+    // statements use all the registers for safety.
+    //
+    // Also, An important point is that this recursion should stop at Phi 
+    // nodes, otherwise, if a phi node uses a node after itself, it will 
+    // cause infinite loop.
+    fn hash_subtree(&mut self, root: S::ValueRef) -> String {
+        // Read Cache.
+        if self.hash_subtrees.contains_key(&root) {
+            return self.hash_subtrees.get(&root).expect("No hash_subtree found!").clone();
+        }
+
+        // Only Opcode should be considered its argument.
         let mut argh = String::new();
-        for arg in self.ssa.args_of(root) {
-            if !argh.is_empty() {
-                argh.push_str(", ");
+        if let Ok(node_data) = self.ssa.get_node_data(&root) {
+            if let NodeType::Op(_) = node_data.nt {
+                for arg in self.ssa.args_of(root) {
+                    if !argh.is_empty() {
+                        argh.push_str(", ");
+                    }
+                    argh = format!("{}{}", argh, self.hash_subtree(arg));
+                }
             }
-            argh = format!("{}{}", argh, self.hash_subtree(arg));
         }
+
         let node_h = self.hash_data(root);
+        let mut result: String;
         if !argh.is_empty() {
-            format!("({} {})", node_h, argh)
+            result = format!("({} {})", node_h, argh);
         } else {
-            node_h
+            result = node_h;
         }
+
+        // Cache the result.
+        self.hash_subtrees.insert(root, result.clone());
+        return result;
     }
 
     fn hash_data(&self, ni: S::ValueRef) -> String {
@@ -171,7 +196,7 @@ where I: Iterator<Item=S::ValueRef>,
                 });
             } else if let NodeType::Comment(s) = node_data.nt {
                 result.push_str(&s);
-            }
+            } 
         }
         result
     }
@@ -179,7 +204,7 @@ where I: Iterator<Item=S::ValueRef>,
     /// Returns the root of the subtree that matches the given `find` expression.
     // TODO:
     //   - Handle commutativity
-    pub fn grep(&self, find: String) -> Vec<Match<S::ValueRef>> {
+    pub fn grep(&mut self, find: String) -> Vec<Match<S::ValueRef>> {
         let mut worklist = Vec::<(S::ValueRef, Option<String>)>::new();
         let mut bindings = HashMap::new();
         let mut seen_exprs = HashMap::new();

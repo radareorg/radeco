@@ -12,7 +12,10 @@ pub mod valueset;
 // pub mod propagate;
 pub mod dom;
 pub mod sccp;
-pub mod cse;
+pub mod cse {
+    pub mod cse;
+    pub mod ssasort;
+}
 
 #[macro_use]
 pub mod matcher {
