@@ -382,7 +382,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         }
 
         //let users = self.ssa.uses_of(phi); //This works too instead of the code below.
-        let mut users: Vec<T::ValueRef> = Vec::new(); //I feel this is better is there is no comparison with phi value that is being replaced.
+        let mut users: Vec<T::ValueRef> = Vec::new(); 
+        //I feel this is better is there is no comparison with phi value that is being replaced.
+        // Better not, when get_node_data called for the phi node, it has been removed, so raise
+        // an error.
         for uses in self.ssa.uses_of(phi) {
             if !users.contains(&uses) {
                 users.push(uses);
@@ -392,9 +395,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
         self.ssa.replace(phi, same);
         // Try to recursively remove all phi users, which might have become trivial
         for use_ in users {
-            //if use_ == phi {
-            //    continue;
-            //}
+            if use_ == phi {
+                continue;
+            }
             if true || false { //TODO: Need suggestion
                 match self.ssa.get_node_data(&use_) {
                     Ok(NodeData {vt: _, nt: NodeType::Phi}) => {

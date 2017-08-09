@@ -570,7 +570,12 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         }
 
         radeco_trace!("Remove phi node: {:?}", phi);
-        let users = self.get_uses(phi);
+        let mut users: Vec<NodeIndex> = Vec::new();
+        for user in self.get_uses(phi) {
+            if !users.contains(&user) {
+                users.push(user);
+            }
+        }
         self.replace(phi, &same);
         self.phi_nodes.remove(&phi);
         // Disconnect the phi node with var.
