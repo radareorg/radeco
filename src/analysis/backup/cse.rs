@@ -47,12 +47,6 @@ where I: Iterator<Item = S::ValueRef>,
                             _ => result.push_str(self.hashed.get(arg).expect("Hash value not found!")),
                         }
                     }
-                    NodeType::Phi => {
-                        // NOTE: Phi functions should be considered, otherwise, CSE will replace 
-                        // different op node, which only use phi functions as operands, causing 
-                        // wrong analysis.
-                        result.push_str(&format!("{:?}", arg));
-                    }
                     _ => {}
                 }
             }

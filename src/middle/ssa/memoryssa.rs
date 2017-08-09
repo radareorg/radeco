@@ -314,7 +314,6 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         // if involve_local and involve_global is both true or both false, 
         // it should involve_all. 
 
-
         for i in 0..self.variables.len() {
             match self.variables[i] {
                 VariableType::Extra(_) => {
@@ -352,9 +351,11 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
         // TODO: There is a problem in this implement:
         //      if a phi node uses some node behind it, this will fail in 
-        //      propagating node type. Something must be done! My idea is 
-        //      using bfs from node which have been regared as variable 
-        //      address to propagate node type. I will try to do it later.
+        //      propagating node type. But it's not urgent, because there must
+        //      be at least one argument of phi node having been visited.
+        //      My idea is using bfs from node which have been regared as 
+        //      variable address to propagate node type. 
+        //      I will try to do it later.
         for expr in self.ssa.inorder_walk() {
             if let Ok(ndata) = self.ssa.get_node_data(&expr) {
                 let operands = self.ssa.get_operands(&expr);
@@ -362,8 +363,12 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                     NodeType::Op(opc) => {
                         match opc {
                             MOpcode::OpLoad | MOpcode::OpStore => {
-                                self.calculate_may_alias(&expr, &operands[0]);
+                                // TODO: Token::EEq will cause OpStore uses the first
+                                // argument as memory address, although it's impossible
+                                // to happen in normal situation.
+                                self.calculate_may_alias(&expr, &operands[1]);
                             }
+
                             _ => {
                                 self.propagate_nodes_type(&expr, &operands);
                             }
