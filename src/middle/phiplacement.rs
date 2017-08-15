@@ -11,6 +11,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 use std::u64;
+use std::io::{self, Write};
+use std::process;
 
 use middle::ssa::ssa_traits::{SSAMod, ValueType};
 use middle::ir::MAddress;
@@ -493,7 +495,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
     pub fn read_register(&mut self, address: &mut MAddress, var: &str) -> T::ValueRef {
         radeco_trace!("phip_read_reg|{}", var);
 
-        let info = self.regfile.get_info(var).expect("No register found");
+        let info = match self.regfile.get_info(var) {
+            Some(reg) => reg,
+            None => {
+                writeln!(io::stderr(), "Error: Radeco haven't supported float nowadays");
+                process::exit(1);
+            }
+        };
         let id = info.base;
         let mut value = self.read_variable(address, id);
 
