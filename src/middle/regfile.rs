@@ -48,14 +48,25 @@ pub struct SubRegisterFile {
     /// Contains the respective names for the registers described in `whole_registers`
     pub whole_names: Vec<String>,
     named_registers: HashMap<String, SubRegister>,
+    /// Contains the alias information for some registers.
+    pub alias_info: HashMap<String, String>,
+    /// Contains the type information for every registers.
+    pub type_info: HashMap<String, String>,
 }
 
 impl SubRegisterFile {
     /// Creates a new SubRegisterFile based on a provided register profile.
     pub fn new(reg_info: &LRegInfo) -> SubRegisterFile {
+        let mut aliases: HashMap<String, String> = HashMap::new();
+        for reg in &reg_info.alias_info {
+            aliases.insert(reg.reg.clone(), reg.role_str.clone());
+        }
+
         let mut slices = HashMap::new();
         let mut events: Vec<SubRegister> = Vec::new();
+        let mut types: HashMap<String, String> = HashMap::new();
         for (i, reg) in reg_info.reg_info.iter().enumerate() {
+            types.insert(reg.name.clone(), reg.type_str.clone());
             if reg.type_str == "fpu" {
                 continue;
             } // st7 from "fpu" overlaps with zf from "gpr" (r2 bug?)
@@ -101,6 +112,8 @@ impl SubRegisterFile {
             whole_registers: whole,
             named_registers: slices,
             whole_names: names,
+            alias_info: aliases,
+            type_info: types,
         }
     }
 
