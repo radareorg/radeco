@@ -31,6 +31,7 @@ pub struct AdditionalData {
     flag: Option<String>,
     mark: bool,
     color: Option<u8>,
+    register: Option<String>,
 }
 
 impl AdditionalData {
@@ -40,6 +41,7 @@ impl AdditionalData {
             flag: None,
             mark: false,
             color: None,
+            register: None,
         }
     }
 }
@@ -51,6 +53,7 @@ impl default::Default for AdditionalData {
             flag: None,
             mark: false,
             color: None,
+            register: None,
         }
     }
 }
@@ -824,6 +827,7 @@ impl SSAMod for SSAStorage {
     }
 
     fn remove(&mut self, node: NodeIndex) {
+        self.assoc_data.remove(&node);
         self.remove_node(node);
     }
 
@@ -888,6 +892,11 @@ impl SSAExtra for SSAStorage {
         data.comments = Some(comment);
     }
 
+    fn set_register(&mut self, i: &Self::ValueRef, regname: String) {
+        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
+        data.register = Some(regname);
+    }
+
 
 
     fn add_flag(&mut self, i: &Self::ValueRef, f: String) {
@@ -905,6 +914,10 @@ impl SSAExtra for SSAStorage {
 
     fn comments(&self, i: &Self::ValueRef) -> Option<String> {
         self.assoc_data.get(i).and_then(|data| data.comments.clone())
+    }
+
+    fn register(&self, i: &Self::ValueRef) -> Option<String> {
+        self.assoc_data.get(i).and_then(|data| data.register.clone())
     }
 
     fn addr(&self, i: &Self::ValueRef) -> Option<String> {
