@@ -14,7 +14,7 @@ use std::u64;
 use std::io::{self, Write};
 use std::process;
 
-use middle::ssa::ssa_traits::{SSAMod, ValueType};
+use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueType};
 use middle::ir::MAddress;
 
 use middle::ssa::ssa_traits::{NodeType, NodeData};
@@ -25,7 +25,7 @@ pub type VarId = usize;
 
 const UNCOND_EDGE: u8 = 2;
 
-pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + 'a> {
+pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
     ssa: &'a mut T,
     pub variable_types: Vec<ValueType>,
     sealed_blocks: HashSet<T::ActionRef>,
@@ -38,7 +38,7 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + 'a> {
     outputs: HashMap<T::ValueRef, VarId>,
 }
 
-impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
+impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn new(ssa: &'a mut T, regfile: SubRegisterFile) -> PhiPlacer<'a, T> {
         PhiPlacer {
             ssa: ssa,
@@ -535,6 +535,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + 'a> PhiPlacer<'a, T> {
 
         let info = self.regfile.get_info(var).unwrap();
         let id = info.base;
+
+        self.ssa.set_register(&value, self.regfile.get_name(id).unwrap());
 
         let width = match self.variable_types[id] {
             ValueType::Integer { width } => width,

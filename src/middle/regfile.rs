@@ -108,6 +108,10 @@ impl SubRegisterFile {
         self.named_registers.get(name).cloned()
     }
 
+    pub fn get_name(&self, id: usize) -> Option<String> {
+        Some(self.whole_names[id].clone())
+    }
+
     // Emit code for setting the specified register to the specified value.
     // Will automatically insert code for shifting and masking in case of subregisters.
     // This implies that it also tries to read the old value of the whole register.

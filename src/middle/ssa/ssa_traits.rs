@@ -276,6 +276,7 @@ pub trait SSAExtra: SSA {
     fn clear_mark(&mut self, &Self::ValueRef) { }
     fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
     fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
+    fn set_register(&mut self, _: &Self::ValueRef, _: String) {  }
     fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false
@@ -290,6 +291,10 @@ pub trait SSAExtra: SSA {
     }
 
     fn addr(&self, _: &Self::ValueRef) -> Option<String> {
+        None
+    }
+
+    fn register(&self, _: &Self::ValueRef) -> Option<String> {
         None
     }
 
