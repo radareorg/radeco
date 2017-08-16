@@ -27,6 +27,7 @@ mod sintmultiple;
 mod strided_interval;
 pub mod mem_structs;
 pub mod analyzer_wysinwyx;
+pub mod fixcall;
 
 /// Value set of u64 integers with certain bits set/cleared.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
