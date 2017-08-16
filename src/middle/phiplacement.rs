@@ -470,7 +470,18 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     }
 
     pub fn add_comment(&mut self, address: MAddress, vt: ValueType, msg: String) -> T::ValueRef {
-        let i = self.ssa.add_comment(vt, msg);
+        let i = self.ssa.add_comment(vt, msg.clone());
+        
+        // Add register information into comment;
+        for id in 0..self.regfile.whole_names.len() {
+            let reg_name = self.regfile.get_name(id).unwrap();
+            let name = reg_name.as_str();
+            if msg.starts_with(name) {
+                let regfile = self.regfile.get_reginfo(id).unwrap();
+                self.ssa.set_register(&i, regfile);
+            }
+        }
+
         self.index_to_addr.insert(i, address);
         i
     }
@@ -639,6 +650,16 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn associate_block(&mut self, node: &T::ValueRef, addr: MAddress) {
         let block = self.block_of(addr);
         self.ssa.add_to_block(*node, block.unwrap(), addr);
+    }
+
+    // Copy the reginfo from operand into expr, especially for OpWiden
+    pub fn propagate_reginfo(&mut self, node: &T::ValueRef) {
+        let args = self.ssa.args_of(*node);
+        assert_eq!(args.len(), 1);
+        let regfile = self.ssa.register(&args[0]);
+        if regfile.is_some() {
+            self.ssa.set_register(node, regfile.unwrap().clone());
+        }
     }
 
     // Performs SSA finish operation such as assigning the blocks in the final
