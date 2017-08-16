@@ -656,5 +656,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         for block in self.ssa.blocks() {
             self.seal_block(&block);
         }
+
+        radeco_trace!("Memory SSA Graph: {:?}", self.g);
     }
 }
