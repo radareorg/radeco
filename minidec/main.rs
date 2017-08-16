@@ -54,8 +54,9 @@ fn main() {
     // for easier extraction and matching
     //
     // Extract all exsisting function addresses and names
+    let functions = rmod.functions.clone();
     let mut matched_func_vec: Vec<(u64, &String)> =
-        rmod.functions.iter().map(|(fn_addr, rfn)| (*fn_addr, &rfn.name)).collect();
+        functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
 
     // Filter the data if the user provided some args to be matched upon
     if requested_functions.len() != 0 {
@@ -77,7 +78,8 @@ fn main() {
 
     for (addr, _) in matched_func_vec {
 
-        let ref mut rfn = rmod.functions.get(&addr).unwrap().clone();
+        let ref mut rfn = rmod.functions.get_mut(&addr).unwrap();
+
 
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
