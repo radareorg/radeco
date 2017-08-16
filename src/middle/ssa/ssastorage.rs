@@ -690,6 +690,30 @@ impl SSA for SSAStorage {
         }
     }
 
+    fn get_comment(&self, i: &NodeIndex) -> Option<String> {
+        if let Ok(ndata) = self.get_node_data(i) {
+            if let TNodeType::Comment(s) = ndata.nt {
+                Some(s.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn get_opcode(&self, i: &NodeIndex) -> Option<MOpcode> {
+        if let Ok(ndata) = self.get_node_data(i) {
+            if let TNodeType::Op(opc) = ndata.nt {
+                Some(opc.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     fn is_selector(&self, exi: &Self::ValueRef) -> bool {
         let i = exi;
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();

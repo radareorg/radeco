@@ -156,6 +156,13 @@ pub trait SSA: CFG {
     /// Get the actual NodeData.
     fn get_node_data(&self, i: &Self::ValueRef) -> Result<NodeData, Box<Debug>>;
 
+    /// Get comment information, as a pack of get_node_data on a Comment data.
+    fn get_comment(&self, i: &Self::ValueRef) -> Option<String>;
+
+    /// Get OpCode information, as a pack of get_node_data on a Comment data.
+    fn get_opcode(&self, i: &Self::ValueRef) -> Option<ir::MOpcode>;
+
+
     /// Returns true if the expression acts as a `Selector` for control flow.
     fn is_selector(&self, i: &Self::ValueRef) -> bool;
 
