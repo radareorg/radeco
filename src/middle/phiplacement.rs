@@ -458,9 +458,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     }
 
     // Constants need not belong to any block. They are stored as a separate table.
-    pub fn add_const(&mut self, value: u64) -> T::ValueRef {
+    // BUG: But constants could be used as operands, which will cause panic in add_block
+    pub fn add_const(&mut self, address: MAddress, value: u64) -> T::ValueRef {
         // All consts are assumed to be 64 bit wide.
-        self.ssa.add_const(value)
+        let i = self.ssa.add_const(value);
+        self.index_to_addr.insert(i, address);
+        i
     }
 
     pub fn add_undefined(&mut self, address: MAddress, vt: ValueType) -> T::ValueRef {
@@ -491,10 +494,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
     pub fn add_op(&mut self, op: &MOpcode, address: &mut MAddress, vt: ValueType) -> T::ValueRef {
         let i = self.ssa.add_op(*op, vt, None);
-        match *op {
-            MOpcode::OpConst(_) => { },
-            _ => { self.index_to_addr.insert(i, *address); },
-        }
+        self.index_to_addr.insert(i, *address); 
         address.offset += 1;
         i
     }
@@ -519,7 +519,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let width = self.operand_width(&value);
 
         if info.shift > 0 {
-            let shift_amount_node = self.add_const(info.shift as u64);
+            let shift_amount_node = self.add_const(*address, info.shift as u64);
             let opcode = MOpcode::OpLsr;
             let vtype = From::from(width);
             let op_node = self.add_op(&opcode, address, vtype);
@@ -569,7 +569,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         if info.shift > 0 {
-            let shift_amount_node = self.add_const(info.shift as u64);
+            let shift_amount_node = self.add_const(*address, info.shift as u64);
             let opcode_node = self.add_op(&MOpcode::OpLsl, address, vt);
             self.op_use(&opcode_node, 0, &value);
             self.op_use(&opcode_node, 1, &shift_amount_node);
@@ -585,7 +585,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         let mut ov = self.read_variable(address, id);
-        let maskvalue_node = self.add_const(maskval);
+        let maskvalue_node = self.add_const(*address, maskval);
 
         let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
         self.op_use(&op_and, 0, &ov);
