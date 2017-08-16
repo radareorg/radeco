@@ -271,12 +271,20 @@ pub trait SSAMod: SSA + CFGMod {
 /// implementation that would work out of the box. Since these methods are only extras and do not
 /// add any major functionality, but rather just convinence or display glitter, the user must not
 /// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
+
+#[derive(Clone, Debug, Default)]
+pub struct RegInfo {
+    pub name: String,
+    pub type_info: Option<String>,
+    pub alias_info: Option<String>,
+}
+
 pub trait SSAExtra: SSA {
     fn mark(&mut self, _: &Self::ValueRef) { }
     fn clear_mark(&mut self, &Self::ValueRef) { }
     fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
     fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
-    fn set_register(&mut self, _: &Self::ValueRef, _: String) {  }
+    fn set_register(&mut self, _: &Self::ValueRef, _: RegInfo) {  }
     fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false
@@ -294,7 +302,7 @@ pub trait SSAExtra: SSA {
         None
     }
 
-    fn register(&self, _: &Self::ValueRef) -> Option<String> {
+    fn register(&self, _: &Self::ValueRef) -> Option<RegInfo> {
         None
     }
 
