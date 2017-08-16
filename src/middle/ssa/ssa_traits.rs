@@ -128,6 +128,9 @@ pub trait SSA: CFG {
     /// Check if the node at the given index is a expression or not.
     fn is_expr(&self, i: &Self::ValueRef) -> bool;
 
+    /// Check if the node at the given index is a phi node or not.
+    fn is_phi(&self, i: &Self::ValueRef) -> bool;
+
     /// Get all phis in the BasicBlock with index 'i'.
     fn get_phis(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 

@@ -351,7 +351,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                           variable,
                           self.regfile.whole_names.get(variable),
                           datasource);
-            self.ssa.phi_use(phi, datasource)
+            self.ssa.phi_use(phi, datasource);
+            if self.ssa.register(&phi).is_none() {
+                self.propagate_reginfo(&phi);
+            }
         }
         self.try_remove_trivial_phi(phi)
     }
@@ -653,10 +656,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         self.ssa.add_to_block(*node, block.unwrap(), addr);
     }
 
-    // Copy the reginfo from operand into expr, especially for OpWiden/OpNarrow
+    // Copy the reginfo from operand into expr, especially for OpWiden/OpNarrow,
+    // alse, Phi nodes
     pub fn propagate_reginfo(&mut self, node: &T::ValueRef) {
         let args = self.ssa.args_of(*node);
-        assert_eq!(args.len(), 1);
+        // For OpWiden/OpNarrow, they only have one operation;
+        // For Phi node, their operations have the same reginfo;
+        // Thus, choosing the first operand is enough. 
         let regfile = self.ssa.register(&args[0]);
         if regfile.is_some() {
             self.ssa.set_register(node, regfile.unwrap().clone());
