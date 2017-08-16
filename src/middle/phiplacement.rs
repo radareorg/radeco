@@ -533,6 +533,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             let vtype = From::from(info.width);
             let op_node = self.add_op(&opcode, address, vtype);
             self.op_use(&op_node, 0, &value);
+            self.propagate_reginfo(&op_node);
             value = op_node;
         }
 
@@ -652,7 +653,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         self.ssa.add_to_block(*node, block.unwrap(), addr);
     }
 
-    // Copy the reginfo from operand into expr, especially for OpWiden
+    // Copy the reginfo from operand into expr, especially for OpWiden/OpNarrow
     pub fn propagate_reginfo(&mut self, node: &T::ValueRef) {
         let args = self.ssa.args_of(*node);
         assert_eq!(args.len(), 1);
