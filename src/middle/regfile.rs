@@ -14,7 +14,7 @@ use std::convert::From;
 
 use r2api::structs::LRegInfo;
 
-use middle::ssa::ssa_traits::ValueType;
+use middle::ssa::ssa_traits::{ValueType, RegInfo};
 
 #[derive(Clone, Copy, Debug)]
 pub struct SubRegister {
@@ -123,6 +123,18 @@ impl SubRegisterFile {
 
     pub fn get_name(&self, id: usize) -> Option<String> {
         Some(self.whole_names[id].clone())
+    }
+
+    pub fn get_reginfo(&self, id: usize) -> Option<RegInfo> {
+        if let Some(name) = self.get_name(id) {
+            Some(RegInfo {
+                name: name.clone(),
+                type_info: self.type_info.get(&name).cloned(),
+                alias_info: self.alias_info.get(&name).cloned(),
+            })
+        } else {
+            None
+        }
     }
 
     // Emit code for setting the specified register to the specified value.

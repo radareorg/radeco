@@ -45,6 +45,7 @@ impl<'a, F: RFunction> Default for RadecoModule<'a, F> {
 #[derive(Clone, Debug)]
 pub struct RadecoFunction<B: RBindings> {
     // TODO: Should not be pub.
+    // TODO: Too many members.
     pub ssa: SSAStorage,
     pub name: String,
     pub offset: u64,

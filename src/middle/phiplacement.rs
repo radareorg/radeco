@@ -536,7 +536,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let info = self.regfile.get_info(var).unwrap();
         let id = info.base;
 
-        self.ssa.set_register(&value, self.regfile.get_name(id).unwrap());
+        self.ssa.set_register(&value, self.regfile.get_reginfo(id).unwrap());
 
         let width = match self.variable_types[id] {
             ValueType::Integer { width } => width,

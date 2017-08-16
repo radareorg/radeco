@@ -19,7 +19,7 @@ use middle::ir::{MAddress, MOpcode};
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
-use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType};
+use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType, RegInfo};
 use super::cfg_traits::{CFG, CFGMod};
 use utils::logger;
 
@@ -31,7 +31,7 @@ pub struct AdditionalData {
     flag: Option<String>,
     mark: bool,
     color: Option<u8>,
-    register: Option<String>,
+    register: Option<RegInfo>,
 }
 
 impl AdditionalData {
@@ -892,7 +892,7 @@ impl SSAExtra for SSAStorage {
         data.comments = Some(comment);
     }
 
-    fn set_register(&mut self, i: &Self::ValueRef, regname: String) {
+    fn set_register(&mut self, i: &Self::ValueRef, regname: RegInfo) {
         let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
         data.register = Some(regname);
     }
@@ -916,7 +916,7 @@ impl SSAExtra for SSAStorage {
         self.assoc_data.get(i).and_then(|data| data.comments.clone())
     }
 
-    fn register(&self, i: &Self::ValueRef) -> Option<String> {
+    fn register(&self, i: &Self::ValueRef) -> Option<RegInfo> {
         self.assoc_data.get(i).and_then(|data| data.register.clone())
     }
 
