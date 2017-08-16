@@ -567,6 +567,14 @@ impl SSA for SSAStorage {
         }
     }
 
+    fn is_phi(&self, exi: &NodeIndex) -> bool {
+        let i = exi;
+        match self.g[*i] {
+            NodeData::Phi(_, _) => true,
+            _ => false,
+        }
+    }
+
     fn get_phis(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
         if self.invalid_value() == *exi {
             return Vec::new();
