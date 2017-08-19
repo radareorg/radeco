@@ -36,6 +36,7 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
     pub index_to_addr: HashMap<T::ValueRef, MAddress>,
     // addr_to_index: BTreeMap<MAddress, T::ValueRef>,
     outputs: HashMap<T::ValueRef, VarId>,
+    incomplete_propagation: HashSet<T::ValueRef>,
 }
 
 impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
@@ -52,6 +53,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             // No need for addr_to_index
             // addr_to_index: BTreeMap::new(),
             outputs: HashMap::new(),
+            incomplete_propagation: HashSet::new(),
         }
     }
 
@@ -529,6 +531,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             self.op_use(&op_node, 0, &value);
             self.op_use(&op_node, 1, &shift_amount_node);
             value = op_node;
+            self.propagate_reginfo(&value);
         }
 
         if info.width < width as usize {
@@ -536,8 +539,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             let vtype = From::from(info.width);
             let op_node = self.add_op(&opcode, address, vtype);
             self.op_use(&op_node, 0, &value);
-            self.propagate_reginfo(&op_node);
             value = op_node;
+            self.propagate_reginfo(&value);
         }
 
         radeco_trace!("phip_read_reg|{:?}", value);
@@ -551,7 +554,6 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let info = self.regfile.get_subregister(var).unwrap();
         let id = info.base;
 
-        self.ssa.set_register(&value, self.regfile.get_reginfo(id).unwrap());
 
         let width = match self.variable_types[id] {
             ValueType::Integer { width } => width,
@@ -559,6 +561,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
         if info.width >= width as usize {
             self.write_variable(*address, id, value);
+            self.ssa.set_register(&value, self.regfile.get_reginfo(id).unwrap());
             return;
         }
 
@@ -569,6 +572,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             let opcode_node = self.add_op(&opcode, address, vt);
             self.op_use(&opcode_node, 0, &value);
             value = opcode_node;
+            self.propagate_reginfo(&value);
         }
 
         if info.shift > 0 {
@@ -577,6 +581,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             self.op_use(&opcode_node, 0, &value);
             self.op_use(&opcode_node, 1, &shift_amount_node);
             value = shift_amount_node;
+            self.propagate_reginfo(&value);
         }
 
         let fullval: u64 = !((!1u64) << (width - 1));
@@ -593,6 +598,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
         self.op_use(&op_and, 0, &ov);
         self.op_use(&op_and, 1, &maskvalue_node);
+        self.propagate_reginfo(&op_and);
 
         ov = op_and;
         let op_or = self.add_op(&MOpcode::OpOr, address, vt);
@@ -600,6 +606,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         self.op_use(&op_or, 1, &ov);
         value = op_or;
         self.write_variable(*address, id, value);
+        self.propagate_reginfo(&value);
     }
 
     pub fn op_use(&mut self, op: &T::ValueRef, index: u8, arg: &T::ValueRef) {
@@ -657,15 +664,30 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     }
 
     // Copy the reginfo from operand into expr, especially for OpWiden/OpNarrow,
-    // alse, Phi nodes
+    // OpAnd/OpOr, OpLsl, which are used in width change, also, for Phi nodes.
     pub fn propagate_reginfo(&mut self, node: &T::ValueRef) {
-        let args = self.ssa.args_of(*node);
+        let args = self.ssa.get_operands(node);
         // For OpWiden/OpNarrow, they only have one operation;
+        // For OpAnd/OpOr, OpLsl, only their first operand coule be register;
         // For Phi node, their operations have the same reginfo;
         // Thus, choosing the first operand is enough. 
         let regfile = self.ssa.register(&args[0]);
         if regfile.is_some() {
             self.ssa.set_register(node, regfile.unwrap().clone());
+            // Check whether its child nodes are incomplete 
+            let users = self.ssa.get_uses(node);
+            for user in users {
+                if let Some(victim) = self.incomplete_propagation.take(&user) {
+                    self.propagate_reginfo(&victim);
+                }            
+            }
+        } else {
+            // Wait its parent node to be propagated.
+            self.incomplete_propagation.insert(*node);
+            radeco_trace!("Fail in propagate_reginfo: {:?} with {:?}"
+                          , node, self.ssa.get_node_data(&node));
+            radeco_trace!("First operand is {:?} with {:?}", args[0]
+                          , self.ssa.get_node_data(&args[0]));
         }
     }
 
