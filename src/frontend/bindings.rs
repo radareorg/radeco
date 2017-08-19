@@ -20,6 +20,7 @@ pub trait RBind {
     fn mark_return(&mut self);
 
     fn name(&self) -> String;
+    fn set_name(&mut self, String);
 
     fn is_register(&self) -> bool;
     fn mark_register(&mut self, String);
@@ -252,6 +253,10 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
 
     fn name(&self) -> String {
         self.named.clone().unwrap_or_else(String::new)
+    }
+
+    fn set_name(&mut self, name: String) {
+        self.named = Some(name);
     }
 
     fn is_register(&self) -> bool {
