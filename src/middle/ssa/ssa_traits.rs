@@ -287,6 +287,7 @@ pub struct RegInfo {
     pub name: String,
     pub type_info: Option<String>,
     pub alias_info: Option<String>,
+    pub width: Option<usize>,
 }
 
 pub trait SSAExtra: SSA {
