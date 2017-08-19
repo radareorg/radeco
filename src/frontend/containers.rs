@@ -10,6 +10,7 @@ use petgraph::graph::NodeIndex;
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
 use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
+use middle::regfile::SubRegisterFile;
 use middle::ssa::ssastorage::{SSAStorage, Walker};
 use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
 use middle::ssa::cfg_traits::CFG;
@@ -19,6 +20,7 @@ pub struct RadecoModule<'a, F: RFunction> {
     pub functions: HashMap<u64, F>,
     fname: HashMap<String, u64>,
     pub src: Option<&'a mut Source>,
+    pub regfile: Option<SubRegisterFile>,
 }
 
 pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
@@ -38,6 +40,7 @@ impl<'a, F: RFunction> Default for RadecoModule<'a, F> {
             functions: HashMap::new(),
             fname: HashMap::new(),
             src: None,
+            regfile: None,
         }
     }
 }
@@ -276,7 +279,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                                 hashes.insert(h, *mem_loc);
                                 let mut b = Binding::default();
                                 b.mark_memory();
-                                b.named = Some(format!("mem_var_{}", id));
+                                b.set_name(format!("mem_var_{}", id));
                                 id += 1;
                                 seen_l.insert(*mem_loc, b);
                                 seen_l.get_mut(mem_loc).expect("")
@@ -336,6 +339,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
         let reg_info = source.register_profile();
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
+        rmod.regfile = Some(SubRegisterFile::new(&reg_info));
         let (tx, rx) = sync::mpsc::channel();
         for f in source.functions() {
             if f.name.as_ref().unwrap().contains("sym.imp") {
@@ -368,6 +372,12 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                                               .cloned()
                                               .unwrap_or_else(String::new));
                         bind.add_refs(vec![*reg]);
+                        // Set the initial bind as register name, which may be 
+                        // changed after analyzed.
+                        bind.set_name(rfn.ssa.regnames
+                                             .get(i)
+                                             .cloned()
+                                             .unwrap_or_else(String::new));
                         rfn.bindings.insert(bind);
                     }
                 }

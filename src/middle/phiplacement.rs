@@ -509,7 +509,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn read_register(&mut self, address: &mut MAddress, var: &str) -> T::ValueRef {
         radeco_trace!("phip_read_reg|{}", var);
 
-        let info = match self.regfile.get_info(var) {
+        let info = match self.regfile.get_subregister(var) {
             Some(reg) => reg,
             None => {
                 writeln!(io::stderr(), "Error: Radeco haven't supported float nowadays");
@@ -548,7 +548,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
         radeco_trace!("phip_write_reg|{}<-{:?}", var, value);
 
-        let info = self.regfile.get_info(var).unwrap();
+        let info = self.regfile.get_subregister(var).unwrap();
         let id = info.base;
 
         self.ssa.set_register(&value, self.regfile.get_reginfo(id).unwrap());

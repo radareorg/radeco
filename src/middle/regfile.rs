@@ -117,12 +117,29 @@ impl SubRegisterFile {
         }
     }
 
-    pub fn get_info(&self, name: &str) -> Option<SubRegister> {
+    // API for Sub Reigster.
+    pub fn get_subregister(&self, name: &str) -> Option<SubRegister> {
         self.named_registers.get(name).cloned()
     }
 
+    
+    // API for whole register.
+    
+    // Get information by id.
     pub fn get_name(&self, id: usize) -> Option<String> {
         Some(self.whole_names[id].clone())
+    }
+
+    pub fn get_width(&self, id: usize) -> Option<usize> {
+        if let Some(name) = self.get_name(id) {
+            if let Some(subreg) = self.named_registers.get(&name) {
+                Some(subreg.width)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     pub fn get_reginfo(&self, id: usize) -> Option<RegInfo> {
@@ -131,10 +148,24 @@ impl SubRegisterFile {
                 name: name.clone(),
                 type_info: self.type_info.get(&name).cloned(),
                 alias_info: self.alias_info.get(&name).cloned(),
+                width: self.get_width(id),
             })
         } else {
             None
         }
+    }
+
+
+    // Get information by other way. 
+    pub fn get_name_by_alias(&self, alias: &String) -> Option<String> {
+        for id in 0..self.whole_names.len() {
+            if let Some(name) = self.get_name(id) {
+                if self.alias_info.get(&name) == Some(alias) {
+                    return Some(name);
+                }
+            }
+        }
+        None
     }
 
     // Emit code for setting the specified register to the specified value.
