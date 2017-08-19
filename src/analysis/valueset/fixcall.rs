@@ -27,7 +27,7 @@ use frontend::containers::CallContext;
 use middle::ir::MOpcode;
 use middle::dot::emit_dot;
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, SSAMod, SSAExtra};
+use middle::ssa::ssa_traits::{SSA, SSAMod, SSAExtra, SSAWalk};
 use middle::ssa::ssa_traits::{NodeType, RegInfo};
 use middle::ssa::ssastorage::SSAStorage;
 
@@ -41,6 +41,7 @@ pub struct CallFixer<'a, 'b: 'a, B>
 {
     rmod: &'a mut RadecoModule<'b, RadecoFunction<RadecoBindings<B>>>,
     SP_offsets: HashMap<u64, Option<i64>>,
+    SP_name: Option<String>,
     BP_name: Option<String>,
 }
 
@@ -52,6 +53,8 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             CallFixer {
                 BP_name: rmod.regfile.clone()
                     .unwrap().get_name_by_alias(&"BP".to_string()),
+                SP_name: rmod.regfile.clone()
+                    .unwrap().get_name_by_alias(&"SP".to_string()),
                 rmod: rmod,
                 SP_offsets: HashMap::new(),
             }
@@ -60,19 +63,73 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     // Make a ROUNDED analyze for the RadecoModule. 
     pub fn rounded_analysis(&mut self) {
         let functions = self.rmod.functions.clone();
-        let mut matched_func_vec: Vec<(u64, &String)> =
-            functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
+        let mut matched_func_vec: Vec<u64> =
+            functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
         // Do the first analysis.
-        for func in &matched_func_vec {
-            self.analysis(&func.0);
+        for fn_addr in &matched_func_vec {
+            self.analysis(fn_addr);
         }
         // Do basic fix.
-        for func in &matched_func_vec {
-            //if !func.1.starts_with("sym.leave") {
-            //    continue;
-            //}
-            self.fix(&func.0);
+        for fn_addr in &matched_func_vec {
+            self.fix(fn_addr);
         }
+        // Do the second analysis.
+        for fn_addr in &matched_func_vec {
+            self.reanalysis(fn_addr);
+        }
+        // Redo fix.
+        for fn_addr in &matched_func_vec {
+            self.fix(fn_addr);
+        }
+    }
+
+
+    // Second analysis, at this point, we have at least BP for every callee, now, we could
+    // do a global search for all the nodes' stack offset. Then, we could make a more accurate
+    // preserved fix.
+    pub fn reanalysis(&mut self, rfn_addr: &u64) {
+        // Sort operands for commutative opcode first.
+        {
+            let rfn = self.rmod.functions.get_mut(rfn_addr)
+                            .expect("RadecoFunction Not Found!");
+            radeco_trace!("RadecoFunction: {:?}", rfn.name);
+            let ssa = rfn.ssa_mut();
+            let mut sorter = Sorter::new(ssa);
+            sorter.run();
+        }
+
+        let (entry_store, exit_load) = {
+            let rfn = self.rmod.functions.get(rfn_addr)
+                                .expect("RadecoFunction Not Found!");
+            let ssa = rfn.ssa_ref();
+            let stack_offset = self.analysis_entry_offset(ssa, true);
+            // Here, we check the assumption we made in first analysis.
+            // If the SP is not balanced, we will throw a WARN or PANIC.
+            // TODO: if the SP is not balanced, please UNDO the fix.
+            radeco_trace!("Global stack_offset: {:?}", stack_offset);
+            if let &Some(SP_offset) = self.SP_offsets.get(rfn_addr).unwrap() {
+                let mut max_offset: i64 = 0;
+                // The last SP offset should be the biggest
+                for offset in &stack_offset {
+                    radeco_trace!("{:?} with {:?}: {}", offset.0,
+                             ssa.get_node_data(offset.0), offset.1);
+                    if offset.1 > &max_offset {
+                        max_offset = *offset.1;
+                    }
+                }
+                if max_offset != SP_offset {
+                    radeco_warn!("Stack is not Balanced!");
+                }
+            }
+            (
+                self.analysis_entry_store(ssa, stack_offset.clone()),
+                self.analysis_exit_load(ssa, stack_offset)
+            )
+        };  
+        radeco_trace!("Entry_store {:?}", entry_store);
+        radeco_trace!("Exit_load {:?}", exit_load);
+
+        self.mark_preserved(rfn_addr, entry_store, exit_load);
     }
 
     // First analysis, only based on the assumption the SP is balanced.
@@ -101,7 +158,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 
                 // analysis entry block
             let entry_store = { 
-                let entry_offset = self.analysis_entry_offset(ssa);
+                let entry_offset = self.analysis_entry_offset(ssa, false);
                 self.analysis_entry_store(ssa, entry_offset)
             };
 
@@ -113,14 +170,81 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             (entry_store, exit_load)
         };
 
-        // Before we calcluate, we have to finger out the SP offset between entry node 
-        // and exit bode. The reason cause this difference is that in SSA form, we didn't
-        // split OpCall into STORE PC stage and JMP stage, but we split RET statements
-        // into LOAD PC stage and JMP stage. That means, SP at exit point will be higher 
-        // than SP at entry point.
-        // TODO: We could not finger whether the STORE PC stage in Call use a PUSH stack or
-        // MOV register. Thus, we will do a probable estimation in analysis function and 
-        // the it in the reanalysis stage.
+        let SP_offset = self.mark_preserved(rfn_addr, entry_store, exit_load);
+        self.SP_offsets.insert(*rfn_addr, SP_offset);
+    }
+
+    // Fix the call_site with the callees' preserved register,
+    // which will make later analysis much easier.
+    pub fn fix(&mut self, rfn_addr: &u64) {
+        let call_info: Vec<(LValueRef, Vec<String>)> = {
+            let rfn = self.rmod.functions.get(rfn_addr)
+                            .expect("RadecoFunction Not Found!");
+            radeco_trace!("RadecoFunction: {:?}", rfn.name);
+
+            // calcluate call_info into preserved registers and OpCall node
+            self.preserves_for_call_context(rfn.call_sites())
+        };
+        radeco_trace!("Call site: {:?}", call_info);
+
+        // Edit OpCalls' arguments and uses, by preserved registers
+        {
+            let rfn = self.rmod.functions.get_mut(rfn_addr)
+                            .expect("RadecoFunction Not Found!");
+            let ssa = rfn.ssa_mut();
+
+            for (node, mut regs) in call_info {
+                // Add SP for every function.
+                if let Some(ref name) = self.SP_name {
+                    regs.push(name.clone());
+                }
+                radeco_trace!("Reserved registers are {:?}", regs);
+                // Consider every register
+                radeco_trace!("Consider {:?} with {:?}", node, ssa.get_node_data(&node));
+                radeco_trace!("Callee is {:?}", 
+                         ssa.get_node_data(&ssa.get_operands(&node)[0]));
+                for reg in regs {
+                    // Calculate replacement and replacer together
+                    let node_sets = vec![ssa.get_operands(&node), ssa.get_uses(&node)];
+                    let mut replace_pair: Vec<LValueRef> = Vec::with_capacity(2);
+                    for node_set in node_sets {
+                        for sub_node in node_set {
+                            if let Some(sub_reg) = ssa.register(&sub_node) {
+                                if sub_reg.name == reg {
+                                    replace_pair.push(sub_node);
+                                    break
+                                }
+                            }
+                        }
+                    }
+
+                    // We have to get a complete replacement pair
+                    if replace_pair.len() != 2 {
+                        radeco_trace!("{:?} with {:?} Not Found!", node, reg);
+                        radeco_trace!("Foudn replace_pair {:?}", replace_pair);
+                        continue;
+                    }
+                    radeco_trace!("{:?} with {:?} Found {:?}", node, reg, replace_pair);
+
+                    ssa.replace(replace_pair[1], replace_pair[0]);
+                }
+            }
+        }
+    }
+
+
+    /// Below is helper function.
+
+    // Before we calcluate, we have to finger out the SP offset between entry node 
+    // and exit bode. The reason cause this difference is that in SSA form, we didn't
+    // split OpCall into STORE PC stage and JMP stage, but we split RET statements
+    // into LOAD PC stage and JMP stage. That means, SP at exit point will be higher 
+    // than SP at entry point.
+    // TODO: We could not finger whether the STORE PC stage in Call use a PUSH stack or
+    // MOV register. Thus, we will do a probable estimation in analysis function and 
+    // check it in the reanalysis stage.
+    fn mark_preserved(&mut self, rfn_addr: &u64, entry_store: HashMap<String, i64>,
+                            exit_load: HashMap<String, i64>) -> Option<i64> {
         let (preserves, SP_offset) = { 
             let mut SP_offset: Option<i64> = None;
             let mut preserves: HashSet<String> = HashSet::new();
@@ -160,10 +284,11 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 radeco_trace!("Bind: {:?}", bind);
             }
         }
-
-        self.SP_offsets.insert(*rfn_addr, SP_offset);
+        
+        SP_offset
     }
 
+    
 
     // Analyze exit block's load for preserved registers
     fn analysis_exit_load(&self, ssa: &SSAStorage, 
@@ -372,40 +497,54 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     }
 
     // Analyze stack offset of the first basic block
-    fn analysis_entry_offset(&self, ssa: &SSAStorage) 
+    // This function could also be used as global offset search in reanalysis.
+    fn analysis_entry_offset(&self, ssa: &SSAStorage, is_global: bool) 
             -> HashMap<LValueRef, i64> {
         let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
-        let blocks = ssa.succs_of(ssa.start_node());
-        assert_eq!(blocks.len(), 1);
-        radeco_trace!("Found: {:?}", blocks);
 
         // At the entry of a function, SP should decrease first, thus initial
         // SP will in the comment node
-        let reg_state = ssa.registers_at(&ssa.start_node());
-        let nodes = ssa.args_of(reg_state);
-        for node in &nodes {
-            if ssa.get_comment(node).is_none() {
-                continue;
-            }
-            radeco_trace!("Comment Node {:?}: {:?}", node, ssa.get_node_data(node));
-            if ssa.register(node).is_none() {
-                continue;
-            }
-
-            if ssa.register(node).unwrap().alias_info
-                != Some(String::from("SP")) {
+        {
+            let reg_state = ssa.registers_at(&ssa.start_node());
+            let nodes = ssa.args_of(reg_state);
+            for node in &nodes {
+                if ssa.get_comment(node).is_none() {
                     continue;
+                }
+                radeco_trace!("Comment Node {:?}: {:?}", node, ssa.get_node_data(node));
+                if ssa.register(node).is_none() {
+                    continue;
+                }
+
+                if ssa.register(node).unwrap().alias_info
+                    != Some(String::from("SP")) {
+                        continue;
+                }
+                radeco_trace!("Initial data is {:?}\n", ssa.get_node_data(node));
+                stack_offset.insert(*node, 0);
+                break;
             }
-            radeco_trace!("Initial data is {:?}\n", ssa.get_node_data(node));
-            stack_offset.insert(*node, 0);
-            break;
         }
 
-        let nodes = ssa.exprs_in(&blocks[0]);
+        let nodes = if is_global {
+            let mut nodes: Vec<LValueRef> = Vec::new();
+            let mut walker = ssa.bfs_walk().nodes;    
+            while let Some(node) = walker.pop_front() {
+                nodes.push(node);
+            }
+            nodes
+        } else {
+            let blocks = ssa.succs_of(ssa.start_node());
+            assert_eq!(blocks.len(), 1);
+            radeco_trace!("Found: {:?}", blocks);
+            ssa.exprs_in(&blocks[0])
+        };
+
         for node in &nodes {
             if let Some(opc) = ssa.get_opcode(node) {
                 // We should stop digging stack offset when me met a call.
-                if opc == MOpcode::OpCall {
+                // BUT if we are doing a global search, we could not stop.
+                if opc == MOpcode::OpCall && !is_global {
                     break;
                 }
 
@@ -503,63 +642,28 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 }
                 radeco_warn!("No SP/BP algorithm Found!");
             }
-        }
-        radeco_trace!("Stack_offset: {:?}", stack_offset);
-        stack_offset
-    }
-
-    
-    // Fix the call_site with the callees' preserved register,
-    // which will make later analysis much easier.
-    pub fn fix(&mut self, rfn_addr: &u64) {
-        let call_info: Vec<(LValueRef, Vec<String>)> = {
-            let rfn = self.rmod.functions.get(rfn_addr)
-                            .expect("RadecoFunction Not Found!");
-            radeco_trace!("RadecoFunction: {:?}", rfn.name);
-
-            // calcluate call_info into preserved registers and OpCall node
-            self.preserves_for_call_context(rfn.call_sites())
-        };
-        radeco_trace!("Call site: {:?}", call_info);
-
-        // Edit OpCalls' arguments and uses, by preserved registers
-        {
-            let rfn = self.rmod.functions.get_mut(rfn_addr)
-                            .expect("RadecoFunction Not Found!");
-            let ssa = rfn.ssa_mut();
-
-            for (node, regs) in call_info {
-                // Consider every register
-                radeco_trace!("Consider {:?} with {:?}", node, ssa.get_node_data(&node));
-                radeco_trace!("Callee is {:?}", 
-                         ssa.get_node_data(&ssa.get_operands(&node)[0]));
-                for reg in regs {
-                    // Calculate replacement and replacer together
-                    let node_sets = vec![ssa.get_operands(&node), ssa.get_uses(&node)];
-                    let mut replace_pair: Vec<LValueRef> = Vec::with_capacity(2);
-                    for node_set in node_sets {
-                        for sub_node in node_set {
-                            if let Some(sub_reg) = ssa.register(&sub_node) {
-                                if sub_reg.name == reg {
-                                    replace_pair.push(sub_node);
-                                    break
-                                }
-                            }
+            // If we are doing a global search, we should consider phi node.
+            if ssa.is_phi(node) && is_global {
+                let args = ssa.get_operands(node);
+                let mut nums: Vec<i64> = Vec::new();
+                for arg in &args {
+                    if stack_offset.contains_key(arg) {
+                        let num = stack_offset.get(arg).unwrap().clone();
+                        // If one phi for SP/BP should have only one offset.
+                        if !nums.contains(&num) {
+                            nums.push(num);
                         }
                     }
-
-                    // We have to get a complete replacement pair
-                    if replace_pair.len() != 2 {
-                        radeco_trace!("{:?} with {:?} Not Found!", node, reg);
-                        radeco_trace!("Foudn replace_pair {:?}", replace_pair);
-                        continue;
-                    }
-                    radeco_trace!("{:?} with {:?} Found {:?}", node, reg, replace_pair);
-
-                    ssa.replace(replace_pair[1], replace_pair[0]);
+                }
+                if nums.len() == 1 {
+                    stack_offset.insert(*node, nums[0]);
+                } else {
+                    radeco_warn!("Stace Phi nodes' operands are not the same offset");
                 }
             }
         }
+        radeco_trace!("Stack_offset: {:?}", stack_offset);
+        stack_offset
     }
 
 
@@ -571,9 +675,14 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let mut result: Vec<(LValueRef, Vec<String>)> = Vec::new(); 
 
         for con in call_context {
-            // We only analyze the call context which have callee and ssa node.
-            if con.callee.is_none() || con.ssa_ref.is_none() {
+            // We only analyze the call context which have ssa node.
+            if con.ssa_ref.is_none() {
                 continue;
+            }
+            // If callee is not certain
+            if con.callee.is_none() {
+                result.push((con.ssa_ref.unwrap()
+                        , vec![self.SP_name.clone().unwrap_or(String::new())]));
             }
             let mut preserves: Vec<String> = Vec::new();
             if let Some(rfn) = self.rmod.functions.get(con.callee.as_ref().unwrap()) {
@@ -587,7 +696,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 result.push((con.ssa_ref.unwrap(), preserves));
             } else {
                 result.push((con.ssa_ref.unwrap()
-                        , vec![self.BP_name.clone().unwrap_or(String::new())]))
+                        , vec![self.BP_name.clone().unwrap_or(String::new())]));
             }
         }
 
@@ -598,7 +707,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     // Function used to see graph start from node id.
     // If we have a fast graph generation, this could be removed.
     #[allow(dead_code)]
-    fn println(&self, start: usize, mut number: i64, ssa: &SSAStorage) {
+    fn debug(&self, start: usize, mut number: i64, ssa: &SSAStorage) {
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
         let mut visited: HashSet<LValueRef> = HashSet::new();
         let id = NodeIndex::new(start);
@@ -690,6 +799,44 @@ mod test {
             for func in &matched_func_vec {
                 callfixer.fix(&func.0);
             }    
+        }
+    }
+
+    #[test]
+    fn reanalysis_test() {
+        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
+        let mut rmod = RadecoModule::from(&mut fsource);
+        let functions = rmod.functions.clone();
+        let mut matched_func_vec: Vec<(u64, &String)> =
+            functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
+
+        // Analyze preserved for all functions.
+        {
+            let mut callfixer = CallFixer::new(&mut rmod);
+            for func in &matched_func_vec {
+                callfixer.analysis(&func.0);
+            }    
+            for func in &matched_func_vec {
+                callfixer.fix(&func.0);
+            }    
+            for func in &matched_func_vec {
+                callfixer.reanalysis(&func.0);
+            }    
+        }
+    }
+
+    #[test]
+    fn rounded_analysis_test() {
+        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
+        let mut rmod = RadecoModule::from(&mut fsource);
+        let functions = rmod.functions.clone();
+        let mut matched_func_vec: Vec<(u64, &String)> =
+            functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
+
+        // Analyze preserved for all functions.
+        {
+            let mut callfixer = CallFixer::new(&mut rmod);
+            callfixer.rounded_analysis();
         }
     }
 }
