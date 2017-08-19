@@ -31,6 +31,8 @@ pub struct AdditionalData {
     flag: Option<String>,
     mark: bool,
     color: Option<u8>,
+    // Phi nodes and Opcode node which EEq into registers and directly 
+    // influence registers' width will have register AdditionalData.
     register: Option<RegInfo>,
 }
 
