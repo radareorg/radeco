@@ -62,9 +62,7 @@ fn main() {
     // Analyze preserved for all functions.
     {
         let mut callfixer = CallFixer::new(&mut rmod);
-        for func in &matched_func_vec {
-            callfixer.analysis(&func.0);
-        }
+        callfixer.rounded_analysis();
     }
 
     // Filter the data if the user provided some args to be matched upon
