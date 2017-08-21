@@ -61,7 +61,7 @@ fn main() {
 
     // Analyze preserved for all functions.
     {
-        println!("  [*] Fixing Callee Information");
+        println!("[*] Fixing Callee Information");
         let mut callfixer = CallFixer::new(&mut rmod);
         callfixer.rounded_analysis();
     }

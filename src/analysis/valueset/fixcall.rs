@@ -859,8 +859,6 @@ mod test {
         //let mut fsource = FileSource::from(r2);
         let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
         let mut rmod = RadecoModule::from(&mut fsource);
-
-        // Analyze preserved for all functions.
         {
             let mut callfixer = CallFixer::new(&mut rmod);
             callfixer.rounded_analysis();
