@@ -853,7 +853,7 @@ mod test {
     }
 
     #[test]
-    fn bin_ls_rounded_analysis_test() {
+    fn bin_file_rounded_analysis_test() {
         //let mut r2 = R2::new(Some("./test_files/bin_file")).expect("Failed to open r2");
         //r2.init();
         //let mut fsource = FileSource::from(r2);
