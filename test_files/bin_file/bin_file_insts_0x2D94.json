@@ -1,0 +1,1 @@
+[{"esil":"8,rsp,-=,$o,of,=,$s,sf,=,$z,zf,=,$p,pf,=,$b8,cf,=","offset":11668,"opcode":"sub rsp, 8","type":"sub","size":4},{"esil":"8,rsp,+=,$o,of,=,$s,sf,=,$z,zf,=,$c63,cf,=,$p,pf,=","offset":11672,"opcode":"add rsp, 8","type":"add","size":4},{"esil":"rsp,[8],rip,=,8,rsp,+=","offset":11676,"opcode":"ret","type":"ret","size":1}]

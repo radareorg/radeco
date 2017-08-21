@@ -1,0 +1,1 @@
+[{"esil":"1,0x28,rsp,+,=[4]","offset":8031,"opcode":"mov dword [rsp + 0x28], 1","type":"mov","size":8},{"esil":"0x1a5f,rip,=","offset":8039,"opcode":"jmp loc.00001a5f","type":"jmp","size":5}]

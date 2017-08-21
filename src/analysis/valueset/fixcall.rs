@@ -683,6 +683,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             if con.callee.is_none() {
                 result.push((con.ssa_ref.unwrap()
                         , vec![self.SP_name.clone().unwrap_or(String::new())]));
+                continue;
             }
             let mut preserves: Vec<String> = Vec::new();
             if let Some(rfn) = self.rmod.functions.get(con.callee.as_ref().unwrap()) {
@@ -695,6 +696,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 }
                 result.push((con.ssa_ref.unwrap(), preserves));
             } else {
+                // Callee is library function
                 result.push((con.ssa_ref.unwrap()
                         , vec![self.BP_name.clone().unwrap_or(String::new())]));
             }
@@ -762,6 +764,9 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 #[cfg(test)]
 mod test {
     use super::*;
+    use r2api::api_trait::R2Api;
+    use r2pipe::r2::R2;
+    use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
     use frontend::source::FileSource;
     use frontend::containers::RadecoModule;
 
@@ -829,9 +834,6 @@ mod test {
     fn rounded_analysis_test() {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
-        let functions = rmod.functions.clone();
-        let mut matched_func_vec: Vec<(u64, &String)> =
-            functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
 
         // Analyze preserved for all functions.
         {
@@ -839,4 +841,19 @@ mod test {
             callfixer.rounded_analysis();
         }
     }
+
+    #[test]
+    fn bin_ls_rounded_analysis_test() {
+        //let mut r2 = R2::new(Some("./test_files/bin_file")).expect("Failed to open r2");
+        //r2.init();
+        //let mut fsource = FileSource::from(r2);
+        let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
+        let mut rmod = RadecoModule::from(&mut fsource);
+
+        // Analyze preserved for all functions.
+        {
+            //let mut callfixer = CallFixer::new(&mut rmod);
+            //callfixer.rounded_analysis();
+        }
+    } 
 }
