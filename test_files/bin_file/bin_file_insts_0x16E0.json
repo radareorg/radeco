@@ -1,0 +1,1 @@
+[{"esil":"0x20399a,rip,+,[8],rip,=","offset":5856,"opcode":"jmp qword [reloc.getopt_long_128]","type":"ujmp","size":6},{"esil":"13,8,rsp,-=,rsp,=[8]","offset":5862,"opcode":"push 0xd","type":"push","size":5},{"esil":"0x1600,rip,=","offset":5867,"opcode":"jmp 0x1600","type":"jmp","size":5}]
