@@ -89,7 +89,7 @@ fn bin_file_construction() {
     let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
     let mut rmod = RadecoModule::from(&mut fsource);
 
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn bin_file_dce() {
     let mut rmod = RadecoModule::from(&mut fsource);
 
     run_dce(&mut rmod);
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn bin_file_dce_sccp() {
 
     run_dce(&mut rmod);
     run_sccp(&mut rmod);
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn bin_file_dce_cse() {
 
     run_dce(&mut rmod);
     run_cse(&mut rmod);
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn bin_file_dce_cse_sccp() {
     run_dce(&mut rmod);
     run_cse(&mut rmod);
     run_sccp(&mut rmod);
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn bin_file_dce_fix() {
         let mut callfixer = CallFixer::new(&mut rmod);
         callfixer.rounded_analysis();
     }
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -156,7 +156,7 @@ fn bin_file_dce_fix_sccp() {
         callfixer.rounded_analysis();
     }
     run_sccp(&mut rmod);
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn bin_file_dce_fix_cse() {
         callfixer.rounded_analysis();
     }
     run_cse(&mut rmod);
-    //run_write(&rmod);
+    run_write(&rmod);
 }
 
 #[test]
@@ -185,5 +185,5 @@ fn bin_file_dce_fix_cse_sccp() {
     }
     run_cse(&mut rmod);
     run_sccp(&mut rmod);
-    //run_write(&rmod);
+    run_write(&rmod);
 }
