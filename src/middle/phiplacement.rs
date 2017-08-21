@@ -399,15 +399,18 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             }
         }
         // Reroute all uses of phi to same and remove phi
+        self.index_to_addr.remove(&phi);
         self.ssa.replace(phi, same);
         // TODO: There is a deep-hidden bug: when phi is some variables' residence, we should replace 
         // these variables' residences from phi to same. Otherwise, later when we call read_variable,
         // the function will return a deleted node, and cause panic in futher work.
-        let phi_addr = self.index_to_addr.get(&phi).cloned().unwrap();
-        let block = self.block_of(phi_addr).unwrap();
         for variable in 0..self.variable_types.len() {
-            if Some(&phi) == self.current_def_in_block(variable, phi_addr.clone()) {
-                self.current_def[variable].entry(phi_addr).or_insert(same);
+            let cur_def = self.current_def[variable].clone();
+            let mut pairs = cur_def.iter();
+            while let Some(pair) = pairs.next() {
+                if pair.1 == &phi {
+                    self.current_def[variable].insert(*pair.0, same);
+                }
             }
         }
         // Try to recursively remove all phi users, which might have become trivial
