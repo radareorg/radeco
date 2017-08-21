@@ -66,18 +66,22 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let mut matched_func_vec: Vec<u64> =
             functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
         // Do the first analysis.
+        radeco_trace!("Do the first analysis.");
         for fn_addr in &matched_func_vec {
             self.analysis(fn_addr);
         }
         // Do basic fix.
+        radeco_trace!("Do the basic fix.");
         for fn_addr in &matched_func_vec {
             self.fix(fn_addr);
         }
         // Do the second analysis.
+        radeco_trace!("Do the second analysis.");
         for fn_addr in &matched_func_vec {
             self.reanalysis(fn_addr);
         }
         // Redo fix.
+        radeco_trace!("Redo fix.");
         for fn_addr in &matched_func_vec {
             self.fix(fn_addr);
         }
@@ -296,6 +300,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             -> HashMap<String, i64> {
         let mut exit_load: HashMap<String, i64> = HashMap::new();
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
+        let mut visited: HashSet<LValueRef> = HashSet::new();
 
 
         // Initialize worklist with the register state of exit_node.
@@ -303,6 +308,11 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         worklist.push_back(reg_state);
         
         while let Some(node) = worklist.pop_front() {
+            if !visited.contains(&node) {
+                visited.insert(node);
+            } else {
+                continue;
+            }
             radeco_trace!("Pop {:?} with {:?}", node, ssa.get_node_data(&node));
             radeco_trace!("Register is {:?}", ssa.register(&node));
             let args = ssa.args_of(node);
@@ -852,8 +862,8 @@ mod test {
 
         // Analyze preserved for all functions.
         {
-            //let mut callfixer = CallFixer::new(&mut rmod);
-            //callfixer.rounded_analysis();
+            let mut callfixer = CallFixer::new(&mut rmod);
+            callfixer.rounded_analysis();
         }
     } 
 }

@@ -385,7 +385,9 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                 fix_call_info(&mut rfn);
                 load_datarefs(&mut rfn, f.datarefs);
                 load_locals(&mut rfn, f.locals);
-                analyze_memory(&mut rfn);
+                // Actually, analyze_memory should be done after VSA
+                //analyze_memory(&mut rfn);
+                radeco_trace!("Finished analysis of {:?}.", f.name);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();
             });
             handles.push(handle);
