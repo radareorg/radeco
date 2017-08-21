@@ -22,6 +22,7 @@ use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::cse::cse::CSE;
+use radeco_lib::analysis::valueset::fixcall::CallFixer;
 
 
 pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
@@ -131,3 +132,58 @@ fn bin_file_dce_cse_sccp() {
     //run_write(&rmod);
 }
 
+#[test]
+fn bin_file_dce_fix() {
+    let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
+    let mut rmod = RadecoModule::from(&mut fsource);
+
+    run_dce(&mut rmod);
+    {
+        let mut callfixer = CallFixer::new(&mut rmod);
+        callfixer.rounded_analysis();
+    }
+    //run_write(&rmod);
+}
+
+#[test]
+fn bin_file_dce_fix_sccp() {
+    let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
+    let mut rmod = RadecoModule::from(&mut fsource);
+
+    run_dce(&mut rmod);
+    {
+        let mut callfixer = CallFixer::new(&mut rmod);
+        callfixer.rounded_analysis();
+    }
+    run_sccp(&mut rmod);
+    //run_write(&rmod);
+}
+
+#[test]
+fn bin_file_dce_fix_cse() {
+    let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
+    let mut rmod = RadecoModule::from(&mut fsource);
+
+    run_dce(&mut rmod);
+    {
+        let mut callfixer = CallFixer::new(&mut rmod);
+        callfixer.rounded_analysis();
+    }
+    run_cse(&mut rmod);
+    //run_write(&rmod);
+}
+
+#[test]
+fn bin_file_dce_fix_cse_sccp() {
+    let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
+    let mut rmod = RadecoModule::from(&mut fsource);
+
+    run_dce(&mut rmod);
+    {
+        let mut callfixer = CallFixer::new(&mut rmod);
+        callfixer.rounded_analysis();
+    }
+    run_cse(&mut rmod);
+    run_sccp(&mut rmod);
+    //run_write(&rmod);
+}

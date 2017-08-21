@@ -194,6 +194,10 @@ impl SSAStorage {
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Data(d) = self.g[edge] {
+                if othernode == j {
+                    // Avoid recursion use
+                    continue;
+                }
                 match self.g[othernode] {
                     NodeData::Op(_, _) | NodeData::RegisterState => {
                         self.op_use(othernode, d, j);
