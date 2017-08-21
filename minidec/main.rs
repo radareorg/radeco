@@ -2,6 +2,7 @@ extern crate radeco_lib;
 extern crate r2pipe;
 extern crate r2api;
 extern crate env_logger;
+extern crate petgraph;
 
 mod cli;
 
@@ -9,6 +10,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use petgraph::graph::{EdgeIndex,  NodeIndex};
 
 use r2pipe::r2::R2;
 use r2api::api_trait::R2Api;
@@ -112,16 +114,19 @@ fn main() {
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
         }
-        //let mut memory_ssa = {
-        //    // Generate MemorySSA
-        //    println!("  [*] Generating Memory SSA");
-        //    let mut mssa = MemorySSA::new(&rfn.ssa);
-        //    mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
-        //            &Some(rfn.call_ctx.iter().cloned()
-        //                  .map(|x| x.ssa_ref.unwrap()).collect()));
-        //    mssa.run();
-        //    mssa
-        //};
+        let mut memory_ssa = {
+            // Generate MemorySSA
+            println!("  [*] Generating Memory SSA");
+            let mut mssa = MemorySSA::new(&rfn.ssa);
+            mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
+                    &Some(rfn.call_ctx.iter().cloned()
+                          .map(|x| if x.ssa_ref.is_some() {
+                              x.ssa_ref.unwrap() } else {
+                                NodeIndex::end()
+                              }).collect()));
+            mssa.run();
+            mssa
+        };
         if false {
             if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
                 continue;
