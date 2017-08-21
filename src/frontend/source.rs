@@ -230,7 +230,7 @@ impl From<R2> for FileSource {
             }
 
             {
-                let strings = r2.strings(true).expect("Unable to load String info from r2");
+                let strings = r2.strings(false).expect("Unable to load String info from r2");
                 let json_str = serde_json::to_string(&strings).expect("Failed to encode to json");
                 fsource.write_file(suffix::STRING, &json_str);
             }
