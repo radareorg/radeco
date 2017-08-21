@@ -514,8 +514,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let info = match self.regfile.get_subregister(var) {
             Some(reg) => reg,
             None => {
-                writeln!(io::stderr(), "Error: Radeco haven't supported float nowadays");
-                process::exit(1);
+                //writeln!(io::stderr(), "Error: Radeco haven't supported float nowadays");
+                //process::exit(1);
+                radeco_warn!("Nowadays, radeco could not support float operation");
+                let vt = ValueType::Integer{ width: 0 };
+                let node = self.add_undefined(address.to_owned(), vt);
+                return node;
             }
         };
         let id = info.base;
@@ -551,7 +555,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
         radeco_trace!("phip_write_reg|{}<-{:?}", var, value);
 
-        let info = self.regfile.get_subregister(var).unwrap();
+        let info = match self.regfile.get_subregister(var) {
+            Some(reg) => reg,
+            None => {
+                radeco_warn!("Nowadays, radeco could not support float operation");
+                return;
+            }
+        };
         let id = info.base;
 
 
