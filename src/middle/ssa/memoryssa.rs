@@ -137,9 +137,11 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         self.gather_may_aliases();
         radeco_trace!("May_alias Set: {:?}", self.may_aliases);
         // Gather may_alias sets.
+        radeco_trace!("Gather may_alias done!");
 
         self.generate();
         // Calculate MemorySSA.
+        radeco_trace!("generate done!");
     }
 
     // Gather variables in following rules:
@@ -515,6 +517,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // This function will only be called when the current block doesn't have var's define.
     fn read_variable_recursive(&mut self, var: VarId, block: &T::ActionRef) -> NodeIndex {
         radeco_trace!("Call read_variable_recursive: {:?} {:?}", var, block);
+        radeco_trace!("Pred Block information {:?}", self.ssa.preds_of(block.clone()));
         let mut val: NodeIndex;
 
         if !self.sealed_blocks.contains(block) {
@@ -523,7 +526,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         } else {
             let preds = self.ssa.preds_of(block.clone());
             if preds.len() == 1 {
-                val = self.read_variable(var, block);
+                val = self.read_variable(var, &preds[0]);
             } else {
                 val = self.add_phi(var, block);
                 self.write_variable(var, block, &val);
@@ -577,6 +580,16 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             }
         }
         self.replace(phi, &same);
+        for variable in 0..self.variables.len() {
+            let tmp: HashMap<T::ActionRef, NodeIndex> = self.current_def[variable].iter()
+                                        .map(|(block, target)| 
+                                                    if target == phi {
+                                                        (*block, same)
+                                                    } else {
+                                                        (*block, *target)
+                                                    }).collect();
+            self.current_def[variable] = tmp;
+        }
         self.phi_nodes.remove(&phi);
         // Disconnect the phi node with var.
 
