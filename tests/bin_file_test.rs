@@ -18,6 +18,7 @@ use radeco_lib::frontend::containers::{RadecoFunction, RFunction};
 use radeco_lib::frontend::containers::{RadecoModule, RModule};
 use radeco_lib::frontend::source::FileSource;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
+use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp;
@@ -67,6 +68,28 @@ fn run_cse(rmod: &mut RadecoModule<DefaultFnTy>)
         let ssa = rfn.ssa_mut();
         let mut cse = CSE::new(ssa);
         cse.run();
+    }
+}
+
+fn run_memory_ssa(rmod: &RadecoModule<DefaultFnTy>) 
+{
+    let functions = rmod.functions.clone();
+    let mut matched_func_vec: Vec<u64> =
+        functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
+    for fn_addr in &matched_func_vec {
+        let rfn = rmod.functions.get(fn_addr)
+                        .expect("RadecoFunction Not Found!");
+        let mut memory_ssa = {
+            let mut mssa = MemorySSA::new(&rfn.ssa);
+            mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
+                    &Some(rfn.call_ctx.iter().cloned()
+                          .map(|x| if x.ssa_ref.is_some() {
+                              x.ssa_ref.unwrap() } else {
+                                NodeIndex::end()
+                              }).collect()));
+            mssa.run();
+            mssa
+        };
     }
 }
 
@@ -186,4 +209,22 @@ fn bin_file_dce_fix_cse_sccp() {
     run_cse(&mut rmod);
     run_sccp(&mut rmod);
     run_write(&rmod);
+}
+
+#[test]
+fn bin_file_MemorySSA() {
+    let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
+    let mut rmod = RadecoModule::from(&mut fsource);
+
+    run_dce(&mut rmod);
+    {
+        let mut callfixer = CallFixer::new(&mut rmod);
+        callfixer.rounded_analysis();
+    }
+    run_cse(&mut rmod);
+    run_dce(&mut rmod);
+    run_sccp(&mut rmod);
+    run_dce(&mut rmod);
+    run_write(&rmod);
+    run_memory_ssa(&rmod);
 }
