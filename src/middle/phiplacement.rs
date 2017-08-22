@@ -133,9 +133,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             }
         } else {
             // Incomplete CFG
+            // Actually, the incomplete_phis should not have the variable key.
             let val_ = self.add_phi(address, valtype);
             let block_addr = self.addr_of(&block);
             if let Some(hash) = self.incomplete_phis.get_mut(&block_addr) {
+                assert!(hash.get(&variable).is_none(), "Double phi nodes for a same variable in\
+                 same block!");
                 match hash.get(&variable).cloned() {
                     Some(v) => v,
                     None => {
@@ -273,10 +276,22 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                         //   - Connect the edge.
                         // The above two steps can easily be accomplished by doing a read_variable
                         // and adding an operand edge.
+                        // BUG: Not all operands are the register residences.
+                        // For example, OpWiden for 32-bit register. If we want to add a 32-bit register
+                        // with a constant, our algorithm will add an Opwiden(64) node for the register,
+                        // then add the OpWiden node with an Opconst. In this situation, OpWiden
+                        // node isn't a residence for any register. 
+                        if !self.outputs.contains_key(&operand) {
+                            continue;
+                        }
                         self.ssa.disconnect(&ni, &operand);
                         let output_varid = self.outputs[&operand];
                         let mut at_ = at;
-                        let replacement_phi = self.read_variable(&mut at_, output_varid);
+                        // BUG: if current define is ni itself, this code may cause ni use itself
+                        // as operand. So we have to do some check.
+                        // A tricky way to solve the bug is to call read_variable_recursive, rather
+                        // than read_variable, this will force the code generate a phi node.
+                        let replacement_phi = self.read_variable_recursive(output_varid, &mut at_);
                         self.ssa.op_use(ni, i, replacement_phi);
                     }
                 }
