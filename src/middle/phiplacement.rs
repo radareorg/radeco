@@ -256,6 +256,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                 // operands edge, add a new phi and connect the edge from phi to ni.
                 for operand_ in &operands {
                     let (i, operand) = *operand_;
+                    // If operand is const, it cannot belong to any block.
+                    match self.ssa.get_opcode(&operand) {
+                        Some(MOpcode::OpConst(_)) => { continue; }
+                        _ => {  }
+                    }
                     let operand_addr = self.index_to_addr[&operand];
                     let operand_block = self.block_of(operand_addr).unwrap();
                     if operand_block == upper_block {
@@ -403,7 +408,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         self.ssa.replace(phi, same);
         // TODO: There is a deep-hidden bug: when phi is some variables' residence, we should replace 
         // these variables' residences from phi to same. Otherwise, later when we call read_variable,
-        // the function will return a deleted node, and cause panic in futher work.
+        // the function will return a deleted node, and cause panic in future work.
+        if let Some(VarId) = self.outputs.remove(&phi) {
+            self.outputs.insert(same, VarId);
+        }
         for variable in 0..self.variable_types.len() {
             let cur_def = self.current_def[variable].clone();
             let mut pairs = cur_def.iter();
@@ -480,7 +488,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn add_const(&mut self, address: MAddress, value: u64) -> T::ValueRef {
         // All consts are assumed to be 64 bit wide.
         let i = self.ssa.add_const(value);
-        self.index_to_addr.insert(i, address);
+        // Need suggestion: In logic, OpConst sould not belongs to any block, but in future
+        // analysis, it's common to treat OpConst as normal opcode.
+        //self.index_to_addr.insert(i, address);
         i
     }
 
