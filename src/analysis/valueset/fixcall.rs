@@ -122,7 +122,12 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                     }
                 }
                 if max_offset != SP_offset {
-                    radeco_warn!("Stack is not Balanced!");
+                    radeco_warn!("Stack is not Balanced in fn_addr {:?}! \
+                                 First analysis {:?} with seconde analysis {:?}",
+                                rfn_addr, SP_offset, max_offset);
+                    println!("  [*] WARN: Stack is not Balanced in function @ {:#}! Output \
+                             analysis may be not accurate",
+                             rfn_addr);
                 }
             }
             (
@@ -202,7 +207,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 if let Some(ref name) = self.SP_name {
                     regs.push(name.clone());
                 }
-                radeco_trace!("Reserved registers are {:?}", regs);
+                radeco_trace!("Preeserved registers are {:?}", regs);
                 // Consider every register
                 radeco_trace!("Consider {:?} with {:?}", node, ssa.get_node_data(&node));
                 radeco_trace!("Callee is {:?}", 
@@ -551,6 +556,15 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         };
 
         for node in &nodes {
+            //if let Some(reg) = ssa.register(&node) {
+            //    if let Some(aname) = reg.alias_info {
+            //        if aname == String::from("SP") {
+            //            println!("\nNode {:?} with {:?}", node, ssa.get_node_data(node));
+            //            println!("\tOperands: {:?}", ssa.get_operands(node));
+            //            println!("\tUsers: {:?}\n", ssa.get_uses(node));
+            //        }
+            //    }
+            //}
             if let Some(opc) = ssa.get_opcode(node) {
                 // We should stop digging stack offset when me met a call.
                 // BUT if we are doing a global search, we could not stop.
@@ -625,14 +639,17 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                     }
                 }
                 if ssa.get_opcode(&args[opcode_arg as usize]).is_some() || 
-                        ssa.get_comment(&args[opcode_arg as usize]).is_some() {
+                    ssa.get_comment(&args[opcode_arg as usize]).is_some() ||
+                    (ssa.is_phi(&args[opcode_arg as usize]) && is_global) {
                     if let Some(MOpcode::OpConst(num)) = 
                                 ssa.get_opcode(&args[const_arg as usize]) {
                         radeco_trace!("SP/BP operation found {:?}, with {:?}", node,
                                  ssa.register(node));
                         radeco_trace!("Node data is {:?}", ssa.get_node_data(&node));
-                        radeco_trace!("Equal to {:?} +/- {:?}", 
+                        radeco_trace!("Equal to {:?} {:?} +/- {:?} {:?}",
+                                 args[0],
                                  ssa.get_node_data(&args[0]),
+                                 args[1],
                                  ssa.get_node_data(&args[1]));
                         // TODO: Some special cases may by not consided
                         if !stack_offset.contains_key(&args[opcode_arg as usize]) {
@@ -667,8 +684,9 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 }
                 if nums.len() == 1 {
                     stack_offset.insert(*node, nums[0]);
+                    radeco_trace!("New offset for it: {:?}", nums[0]); 
                 } else {
-                    radeco_warn!("Stace Phi nodes' operands are not the same offset");
+                    radeco_trace!("Phi's information: {:?}", ssa.register(&node));
                 }
             }
         }
