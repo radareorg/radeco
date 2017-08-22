@@ -849,6 +849,8 @@ impl SSAMod for SSAStorage {
         if argument == NodeIndex::end() {
             return;
         }
+        // A node cannot use itself.
+        assert_ne!(node, argument);
         self.insert_edge(node, argument, EdgeData::Data(index));
     }
 

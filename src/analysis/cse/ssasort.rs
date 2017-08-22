@@ -213,6 +213,7 @@ impl<'a, I, T> Sorter<'a, I, T>
                     // Operands' length must be 2, for only commutative opcode 
                     // could get in this function, while commutative opcodes 
                     // always have two operands.
+                    assert_eq!(operands.len(), 2);
                     if self.compare(operands[0], operands[1]) == Ordering::Less {
                         self.ssa.disconnect(&idx, &operands[0]);
                         self.ssa.disconnect(&idx, &operands[1]);
