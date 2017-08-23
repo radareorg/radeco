@@ -23,6 +23,7 @@ use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
+use radeco_lib::middle::ssa::verifier;
 
 const USAGE: &'static str = "
 Usage: minidec [-f <names>...] <target>
@@ -90,7 +91,6 @@ fn main() {
 
         let ref mut rfn = rmod.functions.get_mut(&addr).unwrap();
 
-
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
             println!("  [*] Eliminating Dead Code");
@@ -113,6 +113,14 @@ fn main() {
             println!("  [*] Eliminating Common SubExpressions");
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
+        }
+        {
+            // Verify SSA 
+            println!("  [*] Verifying SSA's Validity");
+            match verifier::verify(&rfn.ssa) {
+                Ok(_) => { println!("  [*] PASS"); }
+                Err(e) => { panic!(e); }
+            }
         }
         let mut memory_ssa = {
             // Generate MemorySSA
