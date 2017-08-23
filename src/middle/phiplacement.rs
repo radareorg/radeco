@@ -204,6 +204,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         if let Some(e) = edge_type {
             if let Some(addr) = current_addr {
                 let current_block = self.block_of(addr).unwrap();
+                radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
+                              current_block, e, lower_block);
                 self.ssa.add_control_edge(current_block, lower_block, e);
             }
         }
@@ -211,6 +213,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         if upper_block == lower_block {
             return upper_block;
         }
+
 
         if seen {
             // Details on performing the split up.
@@ -232,12 +235,16 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                 if *edge != self.ssa.invalid_edge() {
                     let target = self.ssa.target_of(edge);
                     if lower_block != target {
+                        radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
+                                      lower_block, i, target);
                         self.ssa.add_control_edge(lower_block, target, i as u8);
                         self.ssa.remove_control_edge(*edge);
                     }
                 }
             }
 
+            radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", upper_block, 
+                          UNCOND_EDGE, lower_block);
             self.ssa.add_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
@@ -305,6 +312,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
         let source_block = self.block_of(source).unwrap();
         let target_block = self.block_of(target).unwrap();
+        radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, cftype, target_block);
         radeco_trace!("phip_add_edge|{} --{}--> {}", source, cftype, target);
         self.ssa.add_control_edge(source_block, target_block, cftype);
     }
@@ -316,6 +324,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             let target_block = self.block_of(target).unwrap();
             if target_block != source_block {
                 radeco_trace!("phip_add_edge|{} --{}--> {}", source, UNCOND_EDGE, target);
+                radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, UNCOND_EDGE, 
+                              target_block);
                 self.ssa.add_control_edge(source_block, target_block, UNCOND_EDGE);
             }
         }
@@ -736,6 +746,23 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                           , node, self.ssa.get_node_data(&node));
             radeco_trace!("First operand is {:?} with {:?}", args[0]
                           , self.ssa.get_node_data(&args[0]));
+        }
+    }
+
+
+    // Visit all the blocks, find the exits of this function, and link these basic
+    // with exit_node
+    pub fn gather_exits(&mut self) {
+        let blocks = self.ssa.blocks();
+        let mut exits: Vec<T::ActionRef> = Vec::new();
+        for block in blocks {
+            if self.ssa.succs_of(block).len() == 0 {
+                exits.push(block);
+            }
+        } 
+        let exit_node = self.ssa.exit_node();
+        for exit in exits {
+            self.ssa.add_control_edge(exit, exit_node, UNCOND_EDGE);
         }
     }
 
