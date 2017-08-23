@@ -272,7 +272,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
         // We should consider width.
         let ndata = self.g.get_node_data(i).unwrap();
-        let ValueType::Integer{ width: w } = ndata.vt;
+        let w = match ndata.vt {
+            ValueType::Integer { width } => width,
+        };
         if w != 64 {
             val = val & ((1 << (w)) - 1);
         }
@@ -387,7 +389,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 // BUG: Width may be changed just using a simple replace.
                 let const_node = self.g.add_const(val);
                 let ndata = self.g.get_node_data(k).unwrap();
-                let ValueType::Integer{ width: w } = ndata.vt;
+                let w = match ndata.vt {
+                    ValueType::Integer { width } => width,
+                };
                 let new_node = if w == 64 {
                     const_node
                 } else {
