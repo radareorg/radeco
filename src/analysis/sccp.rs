@@ -14,7 +14,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use middle::ssa::ssa_traits::{SSA, SSAMod};
-use middle::ssa::ssa_traits::NodeType;
+use middle::ssa::ssa_traits::{NodeType, ValueType};
 use middle::ir::{MArity, MOpcode};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -370,8 +370,25 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     pub fn emit_ssa(&mut self) -> T {
         for (k, v) in &self.expr_val {
             if let LatticeValue::Const(val) = *v {
-                let newnode = self.g.add_const(val);
-                self.g.replace(*k, newnode);
+                radeco_trace!("{:?} with {:?} --> Const {:#}", 
+                              k, self.g.get_node_data(k), val);
+                // BUG: Width may be changed just using a simple replace.
+                let const_node = self.g.add_const(val);
+                let ndata = self.g.get_node_data(k).unwrap();
+                let ValueType::Integer{ width: w } = ndata.vt;
+                let new_node = if w == 64 {
+                    const_node
+                } else {
+                    // val should not be larger than the k node could be.  
+                    assert!(w < 64 && val < (1 << (w)));
+                    let address = self.g.get_address(k);
+                    let opcode = MOpcode::OpNarrow(w as u16);
+                    let new_node = self.g.add_op(opcode, ndata.vt, None);
+                    self.g.set_addr(&new_node, address);
+                    self.g.op_use(new_node, 0, const_node);
+                    new_node
+                };
+                self.g.replace(*k, new_node);
             }
         }
         let blocks = self.g.blocks();
