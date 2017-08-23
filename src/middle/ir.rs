@@ -170,7 +170,7 @@ impl MOpcode {
             MOpcode::OpLsr => ("OpLsr".to_owned(), MArity::Binary),
             MOpcode::OpIf => ("OpIf".to_owned(), MArity::Unary),
             MOpcode::OpLoad => ("OpLoad".to_owned(), MArity::Binary),
-            MOpcode::OpStore => ("OpStore".to_owned(), MArity::Ternary),
+            MOpcode::OpStore => ("OpStore".to_owned(), MArity::Binary),
             MOpcode::OpNarrow(_) => ("OpNarrow".to_owned(), MArity::Unary),
             MOpcode::OpWiden(_) => ("OpWiden".to_owned(), MArity::Unary),
             MOpcode::OpJmp => ("OpJmp".to_owned(), MArity::Unary),
