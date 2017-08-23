@@ -184,7 +184,12 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 const_val & mask
             }
             MOpcode::OpNot => {
-                !const_val as u64
+                // BUG: !0 = 18446744073709551615, whose width is not 1
+                if const_val == 0 {
+                    1
+                } else {
+                    0
+                }
             }
             MOpcode::OpCall => {
                 return LatticeValue::Bottom;
@@ -218,7 +223,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             return rhs;
         };
 
-        let val = match opcode {
+        let mut val: u64 = match opcode {
             MOpcode::OpAdd => {
                 lhs_val + rhs_val
             }
@@ -264,6 +269,13 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             }
             _ => unreachable!(),
         };
+
+        // We should consider width.
+        let ndata = self.g.get_node_data(i).unwrap();
+        let ValueType::Integer{ width: w } = ndata.vt;
+        if w != 64 {
+            val = val & ((1 << (w)) - 1);
+        }
 
         LatticeValue::Const(val)
     }
@@ -370,7 +382,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     pub fn emit_ssa(&mut self) -> T {
         for (k, v) in &self.expr_val {
             if let LatticeValue::Const(val) = *v {
-                radeco_trace!("{:?} with {:?} --> Const {:#}", 
+                println!("{:?} with {:?} --> Const {:#}", 
                               k, self.g.get_node_data(k), val);
                 // BUG: Width may be changed just using a simple replace.
                 let const_node = self.g.add_const(val);
@@ -380,6 +392,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                     const_node
                 } else {
                     // val should not be larger than the k node could be.  
+                    println!("w is {:#}", w);
                     assert!(w < 64 && val < (1 << (w)));
                     let address = self.g.get_address(k);
                     let opcode = MOpcode::OpNarrow(w as u16);
