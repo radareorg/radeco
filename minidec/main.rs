@@ -117,10 +117,7 @@ fn main() {
         {
             // Verify SSA 
             println!("  [*] Verifying SSA's Validity");
-            match verifier::verify(&rfn.ssa) {
-                Ok(_) => { println!("  [*] PASS"); }
-                Err(e) => { panic!(e); }
-            }
+            verifier::verify(&rfn.ssa).unwrap();
         }
         let mut memory_ssa = {
             // Generate MemorySSA

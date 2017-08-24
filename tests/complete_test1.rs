@@ -65,6 +65,7 @@ use r2api::structs::{LFunctionInfo, LRegInfo};
 
 use radeco_lib::frontend::ssaconstructor::SSAConstruct;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
+use radeco_lib::middle::ssa::verifier;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp;
@@ -130,6 +131,7 @@ fn run_cse(ssa: &mut SSAStorage) -> SSAStorage {
 #[test]
 fn ct1_construction() {
     let ssa = run_construction();
+    verifier::verify(&ssa).unwrap();
     let mut writer: IRWriter = Default::default();
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
@@ -140,6 +142,7 @@ fn ct1_sccp() {
         let mut ssa_ = run_construction();
         run_sccp(&mut ssa_)
     };
+    verifier::verify(&ssa).unwrap();
     let mut writer: IRWriter = Default::default();
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
@@ -150,6 +153,7 @@ fn ct1_cse() {
         let mut ssa_ = run_construction();
         run_cse(&mut ssa_)
     };
+    verifier::verify(&ssa).unwrap();
     let mut writer: IRWriter = Default::default();
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
@@ -163,6 +167,7 @@ fn ct1_cse_sccp() {
         }
         run_sccp(&mut ssa_)
     };
+    verifier::verify(&ssa).unwrap();
     let mut writer: IRWriter = Default::default();
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }

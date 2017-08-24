@@ -128,7 +128,6 @@ fn bin_ls_grep_replace() {
         grep_and_replace!(&mut ssa_, "(OpStore mem, (OpSub rsp, #x8), rbp)" => "mem'");
         run_sccp(&mut ssa_)
     };
-    verifier::verify(&ssa).unwrap();
     let mut writer: IRWriter = Default::default();
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
@@ -142,7 +141,6 @@ fn bin_ls_x86_idioms() {
     {
         dce::collect(&mut ssa);
     }
-    verifier::verify(&ssa).unwrap();
     let mut writer: IRWriter = Default::default();
     println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
 }
