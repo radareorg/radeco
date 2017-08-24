@@ -10,6 +10,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
 
 use r2pipe::r2::R2;
@@ -117,7 +118,14 @@ fn main() {
         {
             // Verify SSA 
             println!("  [*] Verifying SSA's Validity");
-            verifier::verify(&rfn.ssa).unwrap();
+            match verifier::verify(&rfn.ssa) {
+                Err(e) => {
+                    println!("  [*] Found Error: {}", e);
+                    process::exit(255);
+                }
+                Ok(_) => {  }
+                _ => unreachable!()
+            }
         }
         let mut memory_ssa = {
             // Generate MemorySSA

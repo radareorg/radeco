@@ -9,6 +9,9 @@
 //! valid.
 //!
 //! This is only for verification and to catch potential mistakes.
+use std::result;
+use std::fmt::Debug;
+use std::collections::{HashMap, VecDeque};
 use petgraph::graph::NodeIndex;
 
 use super::cfg_traits::CFG;
@@ -18,50 +21,56 @@ use super::ssastorage::NodeData;
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::error::SSAErr;
-
 use super::ssastorage::SSAStorage;
+
 use middle::ir::{MArity, MOpcode};
-use std::result;
-use std::fmt::Debug;
 
 pub type VResult<T> = result::Result<(), SSAErr<T>>;
 
 pub trait Verify: SSA + Sized + Debug {
     fn verify_block(&self, i: &Self::ActionRef) -> VResult<Self>;
     fn verify_expr(&self, i: &Self::ValueRef) -> VResult<Self>;
+    fn verify_SCC(
+                    &self, _: &Self::ValueRef, 
+                    _: &mut u64, 
+                    _: &mut HashMap<NodeIndex, u64>, 
+                    _: &mut HashMap<NodeIndex, u64>, 
+                    _: &mut VecDeque<NodeIndex>
+                 ) -> VResult<Self>;
 }
 
-pub trait VerifiedAdd: SSAMod {
-    fn verified_add_op(&mut self,
-                       block: Self::ActionRef,
-                       opc: MOpcode,
-                       vt: ValueType,
-                       args: &[Self::ValueRef],
-                       addr: Option<u64>)
-                       -> Self::ValueRef;
-}
-
-impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
-    fn verified_add_op(&mut self,
-                       block: Self::ActionRef,
-                       opc: MOpcode,
-                       vt: ValueType,
-                       args: &[Self::ValueRef],
-                       addr: Option<u64>)
-                       -> Self::ValueRef {
-        assert!(opc.allowed_in_ssa());
-        // XXX
-        let op = self.add_op(opc, vt, addr);
-        for (i, arg) in args.iter().enumerate() {
-            self.op_use(op, i as u8, *arg);
-        }
-        let q = self.verify_expr(&op);
-        if let Err(ref e) = q {
-            panic!(format!("{:?}", e));
-        }
-        op
-    }
-}
+// TODO: Implement verified_add_op and use it in construction process.
+//pub trait VerifiedAdd: SSAMod {
+//    fn verified_add_op(&mut self,
+//                       block: Self::ActionRef,
+//                       opc: MOpcode,
+//                       vt: ValueType,
+//                       args: &[Self::ValueRef],
+//                       addr: Option<u64>)
+//                       -> Self::ValueRef;
+//}
+//
+//impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
+//    fn verified_add_op(&mut self,
+//                       block: Self::ActionRef,
+//                       opc: MOpcode,
+//                       vt: ValueType,
+//                       args: &[Self::ValueRef],
+//                       addr: Option<u64>)
+//                       -> Self::ValueRef {
+//        assert!(opc.allowed_in_ssa());
+//        // XXX
+//        let op = self.add_op(opc, vt, addr);
+//        for (i, arg) in args.iter().enumerate() {
+//            self.op_use(op, i as u8, *arg);
+//        }
+//        let q = self.verify_expr(&op);
+//        if let Err(ref e) = q {
+//            panic!(format!("{:?}", e));
+//        }
+//        op
+//    }
+//}
 
 macro_rules! check {
 	($cond: expr, $ssaerr: expr) => (
@@ -193,7 +202,7 @@ impl Verify for SSAStorage {
                         check!(op_len == n, SSAErr::WrongNumOperands(*exi, n, op_len));
                     }
 
-                    // TODO: We do not consider OpStore and OpLoad's width.
+                    // TODO: We do not consider OpStore and OpLoad's width now.
                     operands.retain(&opfilter);
 
                     if n == 0 || operands.len() == 0 {
@@ -235,6 +244,83 @@ impl Verify for SSAStorage {
             Err(SSAErr::InvalidExpr(*exi))
         } 
     }
+
+    // Use tarjan algorithm to calculate SCC in SSA.
+    // It will find following wrong situation:
+    //      * Opcode node use itself
+    //      * Opcode node has a back edge use
+    //      * Phi SCC is not reachable
+    fn verify_SCC(
+                    &self, 
+                    exi: &Self::ValueRef, 
+                    timestamp: &mut u64, 
+                    DFN: &mut HashMap<NodeIndex, u64>, 
+                    LOW: &mut HashMap<NodeIndex, u64>, 
+                    stack: &mut VecDeque<NodeIndex>
+                 ) -> VResult<Self> {
+        // Handle exi itself.
+        DFN.insert(*exi, *timestamp);
+        LOW.insert(*exi, *timestamp);
+        *timestamp += 1;
+        stack.push_back(*exi);
+
+        // DFS with its operands.
+        let operands = self.get_operands(exi);
+        for op in &operands {
+            check!(op != exi || self.is_phi(exi), SSAErr::BackUse(*exi, *op));
+            let low_exi = LOW.get(exi).cloned().unwrap();
+            if !DFN.contains_key(op) {
+                try!(self.verify_SCC(op, timestamp, DFN, LOW, stack));
+                let low_op = LOW.get(op).cloned().unwrap();
+                if low_op < low_exi {
+                    LOW.insert(*exi, low_op);
+                } else if stack.contains(op) {
+                    radeco_trace!("Verify_SCC_BackUse| {:?} with {:?} --> {:?} with {:?}",
+                                exi, self.get_node_data(exi), op, self.get_node_data(op));
+                    check!(self.is_phi(exi), SSAErr::BackUse(*exi, *op));
+                    let dfn_op = DFN.get(op).cloned().unwrap();
+                    if dfn_op < low_exi {
+                        LOW.insert(*exi, dfn_op);
+                    } 
+                }
+            }
+        }
+        
+        let mut SCC: Vec<Self::ValueRef> = Vec::new();
+
+        // Why no do-while loop in Rust, wanna cry
+        let mut dfn = DFN.get(exi).unwrap();
+        let mut low = LOW.get(exi).unwrap();
+        radeco_trace!("Verify_SCC| {:?} | DFN: {} | LOW: {}", exi, dfn, low);
+        if dfn == low {
+            while let Some(node) = stack.pop_back() {
+                SCC.push(node);
+                if *exi == node {
+                    break;
+                }
+            }    
+            let mut reachable = false;
+            // That will be caused by phi nodes.
+            for node in &SCC {
+                let operands = self.get_operands(node);
+                radeco_trace!("Verify_SCC_PhiSCC|{:?} with {:?}", node, self.get_node_data(node));
+                radeco_trace!("Verify_SCC_PhiScc|\tOperands: {:?}", operands);
+                for op in &operands {
+                    if !SCC.contains(op) {
+                        reachable = true;
+                        break;
+                    }
+                }
+                if reachable {
+                    break;
+                }
+            }
+            // if it's a multi-node SCC, it must be reachable, or it's just a node.
+            check!(reachable || SCC.len() == 1, SSAErr::UnreachablePhiSCC(SCC));
+        }
+
+        Ok(())
+    }
 }
 
 pub fn verify<T>(ssa: &T) -> VResult<T>
@@ -250,5 +336,16 @@ pub fn verify<T>(ssa: &T) -> VResult<T>
             try!(ssa.verify_expr(expr));
         }
     }
+
+    let mut DFN: HashMap<NodeIndex, u64> = HashMap::new();
+    let mut LOW: HashMap<NodeIndex, u64> = HashMap::new();
+    let mut stack: VecDeque<NodeIndex> = VecDeque::new();
+    let mut timestamp: u64 = 0;
+
+    // Find the start point. RegisterState for exit_node could be the best choose.
+    // Because it could reach all the nodes in SSA.
+    let exi = ssa.exit_node();
+    let register = ssa.registers_at(&exi);
+    try!(ssa.verify_SCC(&register, &mut timestamp, &mut DFN, &mut LOW, &mut stack));
     Ok(())
 }
