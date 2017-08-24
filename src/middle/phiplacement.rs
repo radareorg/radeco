@@ -133,12 +133,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             }
         } else {
             // Incomplete CFG
-            // Actually, the incomplete_phis should not have the variable key.
             let val_ = self.add_phi(address, valtype);
             let block_addr = self.addr_of(&block);
             if let Some(hash) = self.incomplete_phis.get_mut(&block_addr) {
-                assert!(hash.get(&variable).is_none(), "Double phi nodes for a same variable in\
-                 same block!");
                 match hash.get(&variable).cloned() {
                     Some(v) => v,
                     None => {
