@@ -172,7 +172,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         };
 
 
-        let val = match opcode {
+        let mut val: u64 = match opcode {
             MOpcode::OpWiden(_) => {
                 // Nothing to do in case of widen as the value cannot change.
                 const_val
@@ -184,18 +184,23 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 const_val & mask
             }
             MOpcode::OpNot => {
-                // BUG: !0 = 18446744073709551615, whose width is not 1
-                if const_val == 0 {
-                    1
-                } else {
-                    0
-                }
+                // Attention: !0 = 18446744073709551615, whose width is not 1
+                !const_val as u64
             }
             MOpcode::OpCall => {
                 return LatticeValue::Bottom;
             }
             _ => unreachable!(),
         };
+
+        // We should consider width.
+        let ndata = self.g.get_node_data(i).unwrap();
+        let w = match ndata.vt {
+            ValueType::Integer { width } => width,
+        };
+        if w < 64 {
+            val = val & ((1 << (w)) - 1);
+        }
 
         LatticeValue::Const(val)
     }
@@ -275,7 +280,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         let w = match ndata.vt {
             ValueType::Integer { width } => width,
         };
-        if w != 64 {
+        if w < 64 {
             val = val & ((1 << (w)) - 1);
         }
 
