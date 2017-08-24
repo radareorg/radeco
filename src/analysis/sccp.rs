@@ -230,7 +230,14 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
         let mut val: u64 = match opcode {
             MOpcode::OpAdd => {
-                lhs_val + rhs_val
+                // lhs_val + rhs_val
+                // we should avoid integer overflow panic
+                let remained: u64 = u64::MAX - lhs_val;
+                if remained >= rhs_val {
+                    lhs_val + rhs_val
+                } else {
+                    (rhs_val - remained - 1) as u64
+                }
             }
             MOpcode::OpSub => {
                 if lhs_val >= rhs_val {
@@ -242,6 +249,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 }
             }
             MOpcode::OpMul => {
+                // TODO: how to handle integer overflow.
                 lhs_val * rhs_val
             }
             MOpcode::OpDiv => {

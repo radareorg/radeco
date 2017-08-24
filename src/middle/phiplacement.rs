@@ -508,6 +508,27 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         i
     }
 
+
+    // Some constants are generated to operate with other OpCode, which shoud be careful
+    // about its width. Because we treat all consts are 64 bit.
+    fn add_narrow_const(&mut self, address: &mut MAddress, value: u64, vt: ValueType) -> T::ValueRef {
+        let width = match vt {
+            ValueType::Integer{ width: w } => { w }
+        };
+        if width < 64 {
+            let val: u64 = value & (1 << (width) - 1);
+            let const_node = self.add_const(*address, val);
+            let opcode = MOpcode::OpNarrow(width as u16);
+            let narrow_node = self.add_op(&opcode, address, vt);
+            self.op_use(&narrow_node, 0, &const_node);
+            narrow_node
+        } else {
+            let const_node = self.add_const(*address, value);
+            const_node
+        }
+    }
+
+
     // Constants need not belong to any block. They are stored as a separate table.
     // BUG: But constants could be used as operands, which will cause panic in add_block
     pub fn add_const(&mut self, address: MAddress, value: u64) -> T::ValueRef {
@@ -566,7 +587,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                 //process::exit(1);
                 radeco_warn!("Nowadays, radeco could not support float operation");
                 let vt = ValueType::Integer{ width: 0 };
-                let node = self.add_undefined(address.to_owned(), vt);
+                let node = self.add_undefined(*address, vt);
                 return node;
             }
         };
@@ -575,10 +596,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
         let width = self.operand_width(&value);
 
+        // BUG: If width is not 64, every operation with OpConst will make
+        // unbalanced width.
+
         if info.shift > 0 {
-            let shift_amount_node = self.add_const(*address, info.shift as u64);
-            let opcode = MOpcode::OpLsr;
             let vtype = From::from(width);
+            let shift_amount_node = self.add_narrow_const(address, info.shift as u64, vtype);
+            let opcode = MOpcode::OpLsr;
             let op_node = self.add_op(&opcode, address, vtype);
             self.op_use(&op_node, 0, &value);
             self.op_use(&op_node, 1, &shift_amount_node);
@@ -613,17 +637,36 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let id = info.base;
 
 
-        let width = match self.variable_types[id] {
+        let width: u16 = match self.variable_types[id] {
             ValueType::Integer { width } => width,
         };
+        let vt = From::from(width);
 
         if info.width >= width as usize {
+            // Register width should be corresponding with its residence's width.
+            value = match width.cmp(&self.operand_width(&value)) {
+                Ordering::Equal => value,
+                Ordering::Less => {
+                    let opcode = MOpcode::OpNarrow(width);
+                    let narrow_node = self.add_op(&opcode, address, vt);
+                    self.op_use(&narrow_node, 0, &value);
+                    narrow_node
+                }
+                Ordering::Greater => {
+                    let opcode = MOpcode::OpWiden(width);
+                    let width_node = self.add_op(&opcode, address, vt);
+                    self.op_use(&width_node, 0, &value);
+                    width_node
+                }
+                _ => unreachable!()
+            };
             self.write_variable(*address, id, value);
             self.ssa.set_register(&value, self.regfile.get_reginfo(id).unwrap());
             return;
         }
 
-        let vt = From::from(width);
+        // BUG: If width is not 64, every operation with OpConst will make
+        // unbalanced width.
         let opcode = MOpcode::OpWiden(width as u16);
 
         if self.operand_width(&value) < width {
@@ -634,7 +677,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         if info.shift > 0 {
-            let shift_amount_node = self.add_const(*address, info.shift as u64);
+            let shift_amount_node = self.add_narrow_const(address, info.shift as u64, vt);
             let opcode_node = self.add_op(&MOpcode::OpLsl, address, vt);
             self.op_use(&opcode_node, 0, &value);
             self.op_use(&opcode_node, 1, &shift_amount_node);
@@ -651,7 +694,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         let mut ov = self.read_variable(address, id);
-        let maskvalue_node = self.add_const(*address, maskval);
+        let maskvalue_node = self.add_narrow_const(address, maskval, vt);
 
         let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
         self.op_use(&op_and, 0, &ov);
