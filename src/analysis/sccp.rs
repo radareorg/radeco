@@ -13,6 +13,7 @@
 //!
 
 use std::collections::{HashMap, VecDeque};
+use std::u64;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssa_traits::{NodeType, ValueType};
 use middle::ir::{MArity, MOpcode};
@@ -184,7 +185,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 const_val & mask
             }
             MOpcode::OpNot => {
-                // Attention: !0 = 18446744073709551615, whose width is not 1
                 !const_val as u64
             }
             MOpcode::OpCall => {
@@ -233,10 +233,12 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 lhs_val + rhs_val
             }
             MOpcode::OpSub => {
-                if lhs_val > rhs_val {
+                if lhs_val >= rhs_val {
                     lhs_val - rhs_val
                 } else {
-                    rhs_val - lhs_val
+                    // rhs_val - lhs_val
+                    // This will never integer overflow 
+                    (u64::MAX - rhs_val + lhs_val + 1) as u64
                 }
             }
             MOpcode::OpMul => {
