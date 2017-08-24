@@ -135,13 +135,13 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     /// Run to generate MemorySSA.
     pub fn run(&mut self) {
         self.gather_may_aliases();
-        radeco_trace!("May_alias Set: {:?}", self.may_aliases);
+        radeco_trace!("MemorrySSA|May_alias Set: {:?}", self.may_aliases);
         // Gather may_alias sets.
-        radeco_trace!("Gather may_alias done!");
+        radeco_trace!("MemorrySSA|Gather may_alias done!");
 
         self.generate();
         // Calculate MemorySSA.
-        radeco_trace!("generate done!");
+        radeco_trace!("MemorrySSA|generate done!");
     }
 
     // Gather variables in following rules:
@@ -153,7 +153,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                         datafers: &Option<Vec<u64>>,
                         locals: &Option<Vec<LVarInfo>>,
                         callrefs: &Option<Vec<NodeIndex>>) {
-        radeco_trace!("Get datafers: {:?}", datafers);
+        radeco_trace!("MemorrySSA|Get datafers: {:?}", datafers);
         // datafers is coming from RadecoFunctoin::datafers
         if !datafers.is_none() {
             let mut gvars: Vec<VariableType> 
@@ -165,7 +165,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             self.variables.append(&mut gvars);
         }
 
-        radeco_trace!("Get locals: {:?}", locals);
+        radeco_trace!("MemorrySSA|Get locals: {:?}", locals);
         // locals is coming from RadecoFunctoin::locals
         if !locals.is_none() {
             let mut lvars: Vec<VariableType>
@@ -177,7 +177,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             self.variables.append(&mut lvars);
         }
 
-        radeco_trace!("Get callrefs: {:?}", callrefs);
+        radeco_trace!("MemorrySSA|Get callrefs: {:?}", callrefs);
         // callrefs is coming from RadecoFunctoin::call_ctx::ssa_ref
         if !callrefs.is_none() {
             let mut evars: Vec<VariableType>
@@ -189,7 +189,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             self.variables.append(&mut evars);
         }
 
-        radeco_trace!("Gather variables: {:?}", self.variables);
+        radeco_trace!("MemorrySSA|Gather variables: {:?}", self.variables);
 
         // Resize associated data structures
         for i in 0..self.variables.len() {
@@ -200,11 +200,11 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
     // Check addr could be regared as a global variable's address or not
     fn check_global(&self, addr: u64) -> bool {
-        radeco_trace!("New const added into test: {:?}", addr);
+        radeco_trace!("MemorrySSA|New const added into test: {:?}", addr);
         for var in &self.variables {
             if let VariableType::Global(target) = *var {
                 if addr == target {
-                    radeco_trace!("New global address found: {:?}", addr);
+                    radeco_trace!("MemorrySSA|New global address found: {:?}", addr);
                     return true;
                 }
             }
@@ -214,7 +214,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
     // Check reg is a BP/SP register or not
     fn check_local(&self, mut comment: String) -> bool {
-        radeco_trace!("New comment added into test: {:?}", &comment);
+        radeco_trace!("MemorrySSA|New comment added into test: {:?}", &comment);
         for var in &self.variables {
             if let VariableType::Local(lvarinfo) = var.clone() {
                 let reg = lvarinfo.reference.unwrap().base.unwrap().clone();
@@ -226,7 +226,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                 // Attition: Comment may be in format as: reg@address.offset
 
                 if comment == reg {
-                    radeco_trace!("New BP/SP register found: {:?}", comment);
+                    radeco_trace!("MemorrySSA|New BP/SP register found: {:?}", comment);
                     return true;
                 }
             } 
@@ -264,8 +264,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                 }
             }
         }
-        radeco_trace!("Find local variable address: {:?}", self.local_nodes);
-        radeco_trace!("Find global variable address: {:?}", self.global_nodes);
+        radeco_trace!("MemorrySSA|Find local variable address: {:?}", self.local_nodes);
+        radeco_trace!("MemorrySSA|Find global variable address: {:?}", self.global_nodes);
     }
     
     // If idx's operands include local addresses or global addresses, it could
@@ -286,13 +286,13 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
         match (involve_local, involve_global) {
             (true, false) => { 
-                radeco_trace!("Find new local variable address node: {:?}", idx);
+                radeco_trace!("MemorrySSA|Find new local variable address node: {:?}", idx);
                 self.local_nodes.insert(*idx); 
-                radeco_trace!("Local variable address: {:?}", self.local_nodes);
+                radeco_trace!("MemorrySSA|Local variable address: {:?}", self.local_nodes);
             }
             (false, true) => { 
-                radeco_trace!("Find new global variable address node: {:?}", idx);
-                radeco_trace!("Global variable address: {:?}", self.global_nodes);
+                radeco_trace!("MemorrySSA|Find new global variable address node: {:?}", idx);
+                radeco_trace!("MemorrySSA|Global variable address: {:?}", self.global_nodes);
                 self.global_nodes.insert(*idx); 
             }
             _ => {}
@@ -340,7 +340,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             } 
         }
 
-        radeco_trace!("New may_alias set {:?} for {:?}", may_alias, idx);
+        radeco_trace!("MemorrySSA|New may_alias set {:?} for {:?}", may_alias, idx);
         self.may_aliases.entry(*idx).or_insert(may_alias);
     }
 
@@ -463,7 +463,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     }
 
     fn replace(&mut self, origin: &NodeIndex, replacement: &NodeIndex) {
-        radeco_trace!("Replace {:?} with {:?}", origin, replacement);
+        radeco_trace!("MemorrySSA|Replace {:?} with {:?}", origin, replacement);
         let users = self.get_uses(origin);
         let operands = self.get_operands(origin);
 
@@ -496,7 +496,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
     // Recode the current define of variable var. 
     fn write_variable(&mut self, var: VarId, block: &T::ActionRef, mem_node: &NodeIndex) {
-        radeco_trace!("Write variable ({:?}) in block ({:?}) at mem node ({:?})", 
+        radeco_trace!("MemorrySSA|Write variable ({:?}) in block ({:?}) at mem node ({:?})", 
                     var, 
                     block, 
                     mem_node);
@@ -506,7 +506,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // Get the reachable define for var, if it doesn't exist in this block, call
     // read_variable_recursive to visit block's predecessors.
     fn read_variable(&mut self, var: VarId, block: &T::ActionRef) -> NodeIndex {
-        radeco_trace!("Read variable ({:?}) in block ({:?})", var, block);
+        radeco_trace!("MemorrySSA|Read variable ({:?}) in block ({:?})", var, block);
         if let Some(node) = self.current_def[var].get(block) {
             return node.clone()
         }
@@ -516,8 +516,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // Add phi nodes in the basic block, and visit its predecessors.
     // This function will only be called when the current block doesn't have var's define.
     fn read_variable_recursive(&mut self, var: VarId, block: &T::ActionRef) -> NodeIndex {
-        radeco_trace!("Call read_variable_recursive: {:?} {:?}", var, block);
-        radeco_trace!("Pred Block information {:?}", self.ssa.preds_of(block.clone()));
+        radeco_trace!("MemorrySSA|Call read_variable_recursive: {:?} {:?}", var, block);
+        radeco_trace!("MemorrySSA|Pred Block information {:?}", self.ssa.preds_of(block.clone()));
         let mut val: NodeIndex;
 
         if !self.sealed_blocks.contains(block) {
@@ -572,7 +572,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             // This phi node only uses itself.
         }
 
-        radeco_trace!("Remove phi node: {:?}", phi);
+        radeco_trace!("MemorrySSA|Remove phi node: {:?}", phi);
         let mut users: Vec<NodeIndex> = Vec::new();
         for user in self.get_uses(phi) {
             if !users.contains(&user) {
@@ -628,7 +628,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
         for expr in self.ssa.inorder_walk() {
             if let Ok(ndata) = self.ssa.get_node_data(&expr) {
-                radeco_trace!("Deal with node: {:?}", expr);
+                radeco_trace!("MemorrySSA|Deal with node: {:?}", expr);
 
                 match ndata.nt {
                     NodeType::Op(MOpcode::OpLoad) => {
@@ -670,6 +670,6 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             self.seal_block(&block);
         }
 
-        radeco_trace!("Memory SSA Graph: {:?}", self.g);
+        radeco_trace!("MemorrySSA|Memory SSA Graph: {:?}", self.g);
     }
 }

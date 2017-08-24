@@ -399,7 +399,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     pub fn emit_ssa(&mut self) -> T {
         for (k, v) in &self.expr_val {
             if let LatticeValue::Const(val) = *v {
-                println!("{:?} with {:?} --> Const {:#}", 
+                radeco_trace!("{:?} with {:?} --> Const {:#}", 
                               k, self.g.get_node_data(k), val);
                 // BUG: Width may be changed just using a simple replace.
                 let const_node = self.g.add_const(val);
@@ -411,7 +411,6 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                     const_node
                 } else {
                     // val should not be larger than the k node could be.  
-                    println!("w is {:#}", w);
                     assert!(w < 64 && val < (1 << (w)));
                     let address = self.g.get_address(k);
                     let opcode = MOpcode::OpNarrow(w as u16);

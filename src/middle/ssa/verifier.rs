@@ -75,8 +75,8 @@ impl Verify for SSAStorage {
 
         let edges = self.edges_of(block);
 
-        println!("Block {:?}", block);
-        println!("Edges {:?}", edges);
+        radeco_trace!("ssa verify|Block {:?}", block);
+        radeco_trace!("ssa verify|Edges {:?}", edges);
 
         // Every BB can have a maximum of 2 Outgoing CFG Edges.
         // TODO: Relax this assumption when we have support for switch.
@@ -153,10 +153,10 @@ impl Verify for SSAStorage {
     }
 
     fn verify_expr(&self, exi: &NodeIndex) -> VResult<Self> {
-        println!("Node {:?} with {:?}", exi, self.get_node_data(exi));
-        println!("Args: {:?}", self.get_operands(exi));
+        radeco_trace!("ssa verify|Node {:?} with {:?}", exi, self.get_node_data(exi));
+        radeco_trace!("ssa verify|Args: {:?}", self.get_operands(exi));
         for arg in &self.get_operands(exi) {
-            println!("\targ: {:?} with {:?}", arg, self.get_node_data(arg));
+            radeco_trace!("ssa verify|\targ: {:?} with {:?}", arg, self.get_node_data(arg));
         }
         if let Ok(ndata) = self.get_node_data(exi) { 
             match (ndata.nt, ndata.vt) {
@@ -241,9 +241,6 @@ pub fn verify<T>(ssa: &T) -> VResult<T>
     where T: Verify + Debug
 {
     let blocks = ssa.blocks();
-    for block in &blocks {
-        println!("Block {:?} is in {:#}", block, ssa.address(block).unwrap());
-    }
     for block in blocks.iter() {
         // assert the qualities of the block first.
         try!(ssa.verify_block(block));
