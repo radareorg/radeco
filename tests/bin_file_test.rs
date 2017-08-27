@@ -17,8 +17,9 @@ use radeco_lib::frontend::bindings::{RadecoBindings, RBind, RBindings, Binding};
 use radeco_lib::frontend::containers::{RadecoFunction, RFunction};
 use radeco_lib::frontend::containers::{RadecoModule, RModule};
 use radeco_lib::frontend::source::FileSource;
-use radeco_lib::middle::ssa::ssastorage::SSAStorage;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
+use radeco_lib::middle::ssa::ssastorage::SSAStorage;
+use radeco_lib::middle::ssa::verifier;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp;
@@ -38,6 +39,7 @@ fn run_dce(rmod: &mut RadecoModule<DefaultFnTy>)
                         .expect("RadecoFunction Not Found!");
         let ssa = rfn.ssa_mut();
         dce::collect(ssa);
+        verifier::verify(ssa).unwrap()
     }
 }
 
@@ -54,6 +56,7 @@ fn run_sccp(rmod: &mut RadecoModule<DefaultFnTy>)
         let mut analyzer = sccp::Analyzer::new(&mut ssa);
         analyzer.analyze();
         rfn.ssa = analyzer.emit_ssa();
+        verifier::verify(&rfn.ssa).unwrap();
     }
 }
 
@@ -66,8 +69,11 @@ fn run_cse(rmod: &mut RadecoModule<DefaultFnTy>)
         let rfn = rmod.functions.get_mut(fn_addr)
                         .expect("RadecoFunction Not Found!");
         let ssa = rfn.ssa_mut();
-        let mut cse = CSE::new(ssa);
-        cse.run();
+        {
+            let mut cse = CSE::new(ssa);
+            cse.run();
+        }
+        verifier::verify(ssa).unwrap();
     }
 }
 

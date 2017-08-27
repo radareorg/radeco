@@ -21,4 +21,5 @@ pub mod ssa {
     pub mod error;
     pub mod ssadot;
     pub mod memoryssa;
+    pub mod verifier;
 }

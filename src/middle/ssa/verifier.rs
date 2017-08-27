@@ -9,6 +9,9 @@
 //! valid.
 //!
 //! This is only for verification and to catch potential mistakes.
+use std::result;
+use std::fmt::Debug;
+use std::collections::{HashMap, VecDeque};
 use petgraph::graph::NodeIndex;
 
 use super::cfg_traits::CFG;
@@ -16,51 +19,58 @@ use super::ssa_traits::{SSA, SSAMod, ValueType};
 use super::ssastorage::EdgeData;
 use super::ssastorage::NodeData;
 use super::ssa_traits::NodeData as TNodeData;
+use super::ssa_traits::NodeType as TNodeType;
 use super::error::SSAErr;
-
 use super::ssastorage::SSAStorage;
+
 use middle::ir::{MArity, MOpcode};
-use std::result;
-use std::fmt::Debug;
 
 pub type VResult<T> = result::Result<(), SSAErr<T>>;
 
 pub trait Verify: SSA + Sized + Debug {
     fn verify_block(&self, i: &Self::ActionRef) -> VResult<Self>;
     fn verify_expr(&self, i: &Self::ValueRef) -> VResult<Self>;
+    fn verify_SCC(
+                    &self, _: &Self::ValueRef, 
+                    _: &mut u64, 
+                    _: &mut HashMap<NodeIndex, u64>, 
+                    _: &mut HashMap<NodeIndex, u64>, 
+                    _: &mut VecDeque<NodeIndex>
+                 ) -> VResult<Self>;
 }
 
-pub trait VerifiedAdd: SSAMod {
-    fn verified_add_op(&mut self,
-                       block: Self::ActionRef,
-                       opc: MOpcode,
-                       vt: ValueType,
-                       args: &[Self::ValueRef],
-                       addr: Option<u64>)
-                       -> Self::ValueRef;
-}
-
-impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
-    fn verified_add_op(&mut self,
-                       block: Self::ActionRef,
-                       opc: MOpcode,
-                       vt: ValueType,
-                       args: &[Self::ValueRef],
-                       addr: Option<u64>)
-                       -> Self::ValueRef {
-        assert!(opc.allowed_in_ssa());
-        // XXX
-        let op = self.add_op(opc, vt, addr);
-        for (i, arg) in args.iter().enumerate() {
-            self.op_use(op, i as u8, *arg);
-        }
-        let q = self.verify_expr(&op);
-        if let Err(ref e) = q {
-            panic!(format!("{:?}", e));
-        }
-        op
-    }
-}
+// TODO: Implement verified_add_op and use it in construction process.
+//pub trait VerifiedAdd: SSAMod {
+//    fn verified_add_op(&mut self,
+//                       block: Self::ActionRef,
+//                       opc: MOpcode,
+//                       vt: ValueType,
+//                       args: &[Self::ValueRef],
+//                       addr: Option<u64>)
+//                       -> Self::ValueRef;
+//}
+//
+//impl<T: Verify + SSAMod + Debug> VerifiedAdd for T {
+//    fn verified_add_op(&mut self,
+//                       block: Self::ActionRef,
+//                       opc: MOpcode,
+//                       vt: ValueType,
+//                       args: &[Self::ValueRef],
+//                       addr: Option<u64>)
+//                       -> Self::ValueRef {
+//        assert!(opc.allowed_in_ssa());
+//        // XXX
+//        let op = self.add_op(opc, vt, addr);
+//        for (i, arg) in args.iter().enumerate() {
+//            self.op_use(op, i as u8, *arg);
+//        }
+//        let q = self.verify_expr(&op);
+//        if let Err(ref e) = q {
+//            panic!(format!("{:?}", e));
+//        }
+//        op
+//    }
+//}
 
 macro_rules! check {
 	($cond: expr, $ssaerr: expr) => (
@@ -74,6 +84,9 @@ impl Verify for SSAStorage {
 
         let edges = self.edges_of(block);
 
+        radeco_trace!("ssa verify|Block {:?}", block);
+        radeco_trace!("ssa verify|Edges {:?}", edges);
+
         // Every BB can have a maximum of 2 Outgoing CFG Edges.
         // TODO: Relax this assumption when we have support for switch.
         check!(edges.len() < 3,
@@ -82,46 +95,41 @@ impl Verify for SSAStorage {
         let mut edgecases = [false; 256];
 
         for edge in edges.iter() {
-            match self.g[*edge] {
-                EdgeData::Control(i) => {
-                    let target = self.target_of(edge);
-                    check!(self.is_action(target),
-                           SSAErr::InvalidType("Block".to_owned()));
-                    check!(!edgecases[i as usize],
-                           SSAErr::InvalidControl(*block, *edge));
-                    edgecases[i as usize] = true;
-                }
-                _ => (),
-            }
+            let target = self.target_of(&edge.0);
+            check!(self.is_action(target),
+                   SSAErr::InvalidType("Block".to_owned()));
+            check!(!edgecases[edge.1 as usize],
+                   SSAErr::InvalidControl(*block, edge.0));
+            edgecases[edge.1 as usize] = true;
         }
 
         for edge in edges.iter() {
-            match self.g[*edge] {
-                EdgeData::Control(i) if i < 2 => {
+            match edge.1 {
+                0 | 1 => {
                     // Things to lookout for:
                     //  * There must be a minimum of two edges.
                     //  * There _must_ be a selector.
                     //  * The jump targets must not be the same block.
                     check!(edges.len() == 2,
                            SSAErr::WrongNumEdges(*block, 2, edges.len()));
-                    let other_edge = match i {
+                    let other_edge = match edge.1 {
                         0 => self.true_edge_of(block),
                         1 => self.false_edge_of(block),
                         _ => unreachable!(),
                     };
-                    let target_1 = self.target_of(edge);
+                    let target_1 = self.target_of(&edge.0);
                     let target_2 = self.target_of(&other_edge);
-                    check!(target_1 != target_2, SSAErr::InvalidControl(*block, *edge));
+                    check!(target_1 != target_2, SSAErr::InvalidControl(*block, edge.0));
                     // No need to test the next edge.
                     break;
                 }
-                EdgeData::Control(2) => {
+                2 => {
                     // Things to lookout for:
                     //  * There can be only one Unconditional Edge.
                     //  * There can be no selector.
                     //  * Make sure we have not introduced an unconditional jump
                     //    which self-loops.
-                    let _ = self.target_of(edge);
+                    let _ = self.target_of(&edge.0);
                     check!(edges.len() == 1,
                            SSAErr::WrongNumEdges(*block, 1, edges.len()));
 
@@ -149,67 +157,168 @@ impl Verify for SSAStorage {
         // TODO: Re-enable this after DCE. Make this Non-Fatal.
         // let incoming = self.incoming_edges(block);
         // check!((incoming.len() > 0) || *block == self.start_node(),
-        // SSAErr::UnreachableBlock(*block));
+        //     SSAErr::UnreachableBlock(*block));
         Ok(())
     }
 
     fn verify_expr(&self, exi: &NodeIndex) -> VResult<Self> {
-        let i = &self.internal(exi);
-        let node_data = &self.g[*i];
-        match *node_data {
-            NodeData::Op(opcode, ValueType::Integer { width: w }) => {
-                let extract = |x: TNodeData| -> u16 {
-                    match x.vt {
-                        ValueType::Integer { width: w } => w,
-                    }
-                };
+        radeco_trace!("ssa verify|Node {:?} with {:?}", exi, self.get_node_data(exi));
+        radeco_trace!("ssa verify|Args: {:?}", self.get_operands(exi));
+        for arg in &self.get_operands(exi) {
+            radeco_trace!("ssa verify|\targ: {:?} with {:?}", arg, self.get_node_data(arg));
+        }
+        if let Ok(ndata) = self.get_node_data(exi) { 
+            match (ndata.nt, ndata.vt) {
+                (TNodeType::Op(opcode), ValueType::Integer { width: w }) => { 
+                    let extract_width = |x: TNodeData| -> u16 {
+                        match x.vt {
+                            ValueType::Integer { width: w } => w,
+                        }
+                    };
 
-                let operands = self.get_operands(exi);
-                let op_len = operands.len();
-                let n = match opcode.arity() {
-                    MArity::Zero => 0,
-                    MArity::Unary => 1,
-                    MArity::Binary => 2,
-                    _ => unreachable!(),
-                };
+                    let opfilter = |&x: &NodeIndex| -> bool {
+                        if let Some(op) = self.get_opcode(&x) {
+                            match op {
+                                MOpcode::OpLoad | MOpcode::OpStore => false,
+                                _ => true,
+                            }
+                        } else {
+                            true
+                        }
+                    };
 
-                {
-                    check!(op_len == n, SSAErr::WrongNumOperands(*i, n, op_len));
-                }
+                    let mut operands = self.get_operands(exi);
+                    let op_len = operands.len();
+                    let n = match opcode.arity() {
+                        MArity::Zero => 0,
+                        MArity::Unary => 1,
+                        MArity::Binary => 2,
+                        _ => unreachable!(),
+                    };
 
-                if n == 0 {
-                    return Ok(());
-                }
-                match opcode {
-                    MOpcode::OpNarrow(w0) => {
-                        let opw = self.get_node_data(&operands[0]).map(&extract).unwrap();
-                        check!(opw > w0, SSAErr::IncompatibleWidth(*i, opw, w0));
-                        check!(w == w0, SSAErr::IncompatibleWidth(*i, w, w0));
+                    // TODO: OpStore is unclear that it could be binary or ternary.
+                    if opcode != MOpcode::OpStore &&
+                        opcode != MOpcode::OpCall {
+                        check!(op_len == n, SSAErr::WrongNumOperands(*exi, n, op_len));
                     }
-                    MOpcode::OpWiden(w0) => {
-                        let opw = self.get_node_data(&operands[0]).map(&extract).unwrap();
-                        check!(opw < w0, SSAErr::IncompatibleWidth(*i, opw, w0));
-                        check!(w == w0, SSAErr::IncompatibleWidth(*i, w, w0));
+
+                    // TODO: We do not consider OpStore and OpLoad's width now.
+                    operands.retain(&opfilter);
+
+                    if n == 0 || operands.len() == 0 {
+                        return Ok(());
                     }
-                    MOpcode::OpCmp |
-                    MOpcode::OpGt |
-                    MOpcode::OpLt => {
-                        check!(w == 1, SSAErr::IncompatibleWidth(*i, 1, w));
-                    }
-                    MOpcode::OpCall | MOpcode::OpStore => {}
-                    _ => {
-                        // All operands to an expr must have the same width.
-                        let w0 = self.get_node_data(&operands[0]).map(&extract).unwrap();
-                        check!(w0 == w, SSAErr::IncompatibleWidth(*i, w, w0));
-                        for op in operands.iter() {
-                            let w1 = self.get_node_data(op).map(&extract).unwrap();
-                            check!(w == w1, SSAErr::IncompatibleWidth(*i, w, w1));
+                    match opcode {
+                        MOpcode::OpNarrow(w0) => {
+                            let opw = self.get_node_data(&operands[0]).map(&extract_width).unwrap();
+                            check!(opw > w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
+                            check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
+                        }
+                        MOpcode::OpWiden(w0) => {
+                            let opw = self.get_node_data(&operands[0]).map(&extract_width).unwrap();
+                            check!(opw < w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
+                            check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
+                        }
+                        MOpcode::OpCmp |
+                        MOpcode::OpGt |
+                        MOpcode::OpLt => {
+                            check!(w == 1, SSAErr::IncompatibleWidth(*exi, 1, w));
+                        }
+                        // TODO: Width of OpStore and OpLoad now is not certain.
+                        MOpcode::OpCall | MOpcode::OpStore | MOpcode::OpLoad => {}
+                        _ => {
+                            // All operands to an expr must have the same width.
+                            let w0 = self.get_node_data(&operands[0]).map(&extract_width).unwrap();
+                            check!(w0 == w, SSAErr::IncompatibleWidth(*exi, w, w0));
+                            for op in operands.iter() {
+                                let w1 = self.get_node_data(op).map(&extract_width).unwrap();
+                                check!(w == w1, SSAErr::IncompatibleWidth(*exi, w, w1));
+                            }
                         }
                     }
                 }
+                _ => check!(false, SSAErr::InvalidExpr(*exi)),
             }
-            _ => check!(false, SSAErr::InvalidExpr(*i)),
+            Ok(())
+        } else {
+            Err(SSAErr::InvalidExpr(*exi))
+        } 
+    }
+
+    // Use tarjan algorithm to calculate SCC in SSA.
+    // It will find following wrong situation:
+    //      * Opcode node use itself
+    //      * Opcode node has a back edge use
+    //      * Phi SCC is not reachable
+    fn verify_SCC(
+                    &self, 
+                    exi: &Self::ValueRef, 
+                    timestamp: &mut u64, 
+                    DFN: &mut HashMap<NodeIndex, u64>, 
+                    LOW: &mut HashMap<NodeIndex, u64>, 
+                    stack: &mut VecDeque<NodeIndex>
+                 ) -> VResult<Self> {
+        // Handle exi itself.
+        DFN.insert(*exi, *timestamp);
+        LOW.insert(*exi, *timestamp);
+        *timestamp += 1;
+        stack.push_back(*exi);
+
+        // DFS with its operands.
+        let operands = self.get_operands(exi);
+        for op in &operands {
+            check!(op != exi || self.is_phi(exi), SSAErr::BackUse(*exi, *op));
+            let low_exi = LOW.get(exi).cloned().unwrap();
+            if !DFN.contains_key(op) {
+                try!(self.verify_SCC(op, timestamp, DFN, LOW, stack));
+                let low_op = LOW.get(op).cloned().unwrap();
+                if low_op < low_exi {
+                    LOW.insert(*exi, low_op);
+                } else if stack.contains(op) {
+                    radeco_trace!("Verify_SCC_BackUse| {:?} with {:?} --> {:?} with {:?}",
+                                exi, self.get_node_data(exi), op, self.get_node_data(op));
+                    check!(self.is_phi(exi), SSAErr::BackUse(*exi, *op));
+                    let dfn_op = DFN.get(op).cloned().unwrap();
+                    if dfn_op < low_exi {
+                        LOW.insert(*exi, dfn_op);
+                    } 
+                }
+            }
         }
+        
+        let mut SCC: Vec<Self::ValueRef> = Vec::new();
+
+        // Why no do-while loop in Rust, wanna cry
+        let mut dfn = DFN.get(exi).unwrap();
+        let mut low = LOW.get(exi).unwrap();
+        radeco_trace!("Verify_SCC| {:?} | DFN: {} | LOW: {}", exi, dfn, low);
+        if dfn == low {
+            while let Some(node) = stack.pop_back() {
+                SCC.push(node);
+                if *exi == node {
+                    break;
+                }
+            }    
+            let mut reachable = false;
+            // That will be caused by phi nodes.
+            for node in &SCC {
+                let operands = self.get_operands(node);
+                radeco_trace!("Verify_SCC_PhiSCC|{:?} with {:?}", node, self.get_node_data(node));
+                radeco_trace!("Verify_SCC_PhiScc|\tOperands: {:?}", operands);
+                for op in &operands {
+                    if !SCC.contains(op) {
+                        reachable = true;
+                        break;
+                    }
+                }
+                if reachable {
+                    break;
+                }
+            }
+            // if it's a multi-node SCC, it must be reachable, or it's just a node.
+            check!(reachable || SCC.len() == 1, SSAErr::UnreachablePhiSCC(SCC));
+        }
+
         Ok(())
     }
 }
@@ -227,5 +336,16 @@ pub fn verify<T>(ssa: &T) -> VResult<T>
             try!(ssa.verify_expr(expr));
         }
     }
+
+    let mut DFN: HashMap<NodeIndex, u64> = HashMap::new();
+    let mut LOW: HashMap<NodeIndex, u64> = HashMap::new();
+    let mut stack: VecDeque<NodeIndex> = VecDeque::new();
+    let mut timestamp: u64 = 0;
+
+    // Find the start point. RegisterState for exit_node could be the best choose.
+    // Because it could reach all the nodes in SSA.
+    let exi = ssa.exit_node();
+    let register = ssa.registers_at(&exi);
+    try!(ssa.verify_SCC(&register, &mut timestamp, &mut DFN, &mut LOW, &mut stack));
     Ok(())
 }

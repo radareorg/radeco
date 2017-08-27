@@ -13,8 +13,9 @@
 //!
 
 use std::collections::{HashMap, VecDeque};
+use std::u64;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
-use middle::ssa::ssa_traits::NodeType;
+use middle::ssa::ssa_traits::{NodeType, ValueType};
 use middle::ir::{MArity, MOpcode};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -172,7 +173,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         };
 
 
-        let val = match opcode {
+        let mut val: u64 = match opcode {
             MOpcode::OpWiden(_) => {
                 // Nothing to do in case of widen as the value cannot change.
                 const_val
@@ -191,6 +192,15 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             }
             _ => unreachable!(),
         };
+
+        // We should consider width.
+        let ndata = self.g.get_node_data(i).unwrap();
+        let w = match ndata.vt {
+            ValueType::Integer { width } => width,
+        };
+        if w < 64 {
+            val = val & ((1 << (w)) - 1);
+        }
 
         LatticeValue::Const(val)
     }
@@ -218,18 +228,28 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             return rhs;
         };
 
-        let val = match opcode {
+        let mut val: u64 = match opcode {
             MOpcode::OpAdd => {
-                lhs_val + rhs_val
+                // lhs_val + rhs_val
+                // we should avoid integer overflow panic
+                let remained: u64 = u64::MAX - lhs_val;
+                if remained >= rhs_val {
+                    lhs_val + rhs_val
+                } else {
+                    (rhs_val - remained - 1) as u64
+                }
             }
             MOpcode::OpSub => {
-                if lhs_val > rhs_val {
+                if lhs_val >= rhs_val {
                     lhs_val - rhs_val
                 } else {
-                    rhs_val - lhs_val
+                    // rhs_val - lhs_val
+                    // This will never integer overflow 
+                    (u64::MAX - rhs_val + lhs_val + 1) as u64
                 }
             }
             MOpcode::OpMul => {
+                // TODO: how to handle integer overflow.
                 lhs_val * rhs_val
             }
             MOpcode::OpDiv => {
@@ -264,6 +284,15 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             }
             _ => unreachable!(),
         };
+
+        // We should consider width.
+        let ndata = self.g.get_node_data(i).unwrap();
+        let w = match ndata.vt {
+            ValueType::Integer { width } => width,
+        };
+        if w < 64 {
+            val = val & ((1 << (w)) - 1);
+        }
 
         LatticeValue::Const(val)
     }
@@ -370,8 +399,27 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     pub fn emit_ssa(&mut self) -> T {
         for (k, v) in &self.expr_val {
             if let LatticeValue::Const(val) = *v {
-                let newnode = self.g.add_const(val);
-                self.g.replace(*k, newnode);
+                radeco_trace!("{:?} with {:?} --> Const {:#}", 
+                              k, self.g.get_node_data(k), val);
+                // BUG: Width may be changed just using a simple replace.
+                let const_node = self.g.add_const(val);
+                let ndata = self.g.get_node_data(k).unwrap();
+                let w = match ndata.vt {
+                    ValueType::Integer { width } => width,
+                };
+                let new_node = if w == 64 {
+                    const_node
+                } else {
+                    // val should not be larger than the k node could be.  
+                    assert!(w < 64 && val < (1 << (w)));
+                    let address = self.g.get_address(k);
+                    let opcode = MOpcode::OpNarrow(w as u16);
+                    let new_node = self.g.add_op(opcode, ndata.vt, None);
+                    self.g.set_addr(&new_node, address);
+                    self.g.op_use(new_node, 0, const_node);
+                    new_node
+                };
+                self.g.replace(*k, new_node);
             }
         }
         let blocks = self.g.blocks();

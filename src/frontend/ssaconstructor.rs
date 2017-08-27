@@ -223,6 +223,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
                     // OpStore operation.
+                    radeco_warn!("Memory Write happends!");
                     let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
                                                         address,
                                                         ValueType::Integer { width: 0 });
@@ -496,7 +497,10 @@ impl<'a, T> SSAConstruct<'a, T>
                 current_address.offset += 1;
             }
         }
-        self.phiplacer.add_edge(current_address, MAddress::new(u64::MAX, 0), UNCOND_EDGE);
+        // BUG: The last block may not have the biggest address, which means current_address 
+        // may be not in the last basic block
+        // self.phiplacer.add_edge(current_address, MAddress::new(u64::MAX, 0), UNCOND_EDGE);
+        self.phiplacer.gather_exits();
         self.phiplacer.finish();
     }
 } // end impl SSAConstruct

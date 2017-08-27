@@ -133,12 +133,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             }
         } else {
             // Incomplete CFG
-            // Actually, the incomplete_phis should not have the variable key.
             let val_ = self.add_phi(address, valtype);
             let block_addr = self.addr_of(&block);
             if let Some(hash) = self.incomplete_phis.get_mut(&block_addr) {
-                assert!(hash.get(&variable).is_none(), "Double phi nodes for a same variable in\
-                 same block!");
                 match hash.get(&variable).cloned() {
                     Some(v) => v,
                     None => {
@@ -204,6 +201,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         if let Some(e) = edge_type {
             if let Some(addr) = current_addr {
                 let current_block = self.block_of(addr).unwrap();
+                radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
+                              current_block, e, lower_block);
                 self.ssa.add_control_edge(current_block, lower_block, e);
             }
         }
@@ -211,6 +210,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         if upper_block == lower_block {
             return upper_block;
         }
+
 
         if seen {
             // Details on performing the split up.
@@ -232,12 +232,16 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                 if *edge != self.ssa.invalid_edge() {
                     let target = self.ssa.target_of(edge);
                     if lower_block != target {
+                        radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
+                                      lower_block, i, target);
                         self.ssa.add_control_edge(lower_block, target, i as u8);
                         self.ssa.remove_control_edge(*edge);
                     }
                 }
             }
 
+            radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", upper_block, 
+                          UNCOND_EDGE, lower_block);
             self.ssa.add_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
@@ -305,6 +309,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
         let source_block = self.block_of(source).unwrap();
         let target_block = self.block_of(target).unwrap();
+        radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, cftype, target_block);
         radeco_trace!("phip_add_edge|{} --{}--> {}", source, cftype, target);
         self.ssa.add_control_edge(source_block, target_block, cftype);
     }
@@ -316,6 +321,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             let target_block = self.block_of(target).unwrap();
             if target_block != source_block {
                 radeco_trace!("phip_add_edge|{} --{}--> {}", source, UNCOND_EDGE, target);
+                radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, UNCOND_EDGE, 
+                              target_block);
                 self.ssa.add_control_edge(source_block, target_block, UNCOND_EDGE);
             }
         }
@@ -498,6 +505,27 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         i
     }
 
+
+    // Some constants are generated to operate with other OpCode, which shoud be careful
+    // about its width. Because we treat all consts are 64 bit.
+    fn add_narrow_const(&mut self, address: &mut MAddress, value: u64, vt: ValueType) -> T::ValueRef {
+        let width = match vt {
+            ValueType::Integer{ width: w } => { w }
+        };
+        if width < 64 {
+            let val: u64 = value & (1 << (width) - 1);
+            let const_node = self.add_const(*address, val);
+            let opcode = MOpcode::OpNarrow(width as u16);
+            let narrow_node = self.add_op(&opcode, address, vt);
+            self.op_use(&narrow_node, 0, &const_node);
+            narrow_node
+        } else {
+            let const_node = self.add_const(*address, value);
+            const_node
+        }
+    }
+
+
     // Constants need not belong to any block. They are stored as a separate table.
     // BUG: But constants could be used as operands, which will cause panic in add_block
     pub fn add_const(&mut self, address: MAddress, value: u64) -> T::ValueRef {
@@ -556,7 +584,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                 //process::exit(1);
                 radeco_warn!("Nowadays, radeco could not support float operation");
                 let vt = ValueType::Integer{ width: 0 };
-                let node = self.add_undefined(address.to_owned(), vt);
+                let node = self.add_undefined(*address, vt);
                 return node;
             }
         };
@@ -565,10 +593,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
         let width = self.operand_width(&value);
 
+        // BUG: If width is not 64, every operation with OpConst will make
+        // unbalanced width.
+
         if info.shift > 0 {
-            let shift_amount_node = self.add_const(*address, info.shift as u64);
-            let opcode = MOpcode::OpLsr;
             let vtype = From::from(width);
+            let shift_amount_node = self.add_narrow_const(address, info.shift as u64, vtype);
+            let opcode = MOpcode::OpLsr;
             let op_node = self.add_op(&opcode, address, vtype);
             self.op_use(&op_node, 0, &value);
             self.op_use(&op_node, 1, &shift_amount_node);
@@ -603,17 +634,36 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let id = info.base;
 
 
-        let width = match self.variable_types[id] {
+        let width: u16 = match self.variable_types[id] {
             ValueType::Integer { width } => width,
         };
+        let vt = From::from(width);
 
         if info.width >= width as usize {
+            // Register width should be corresponding with its residence's width.
+            value = match width.cmp(&self.operand_width(&value)) {
+                Ordering::Equal => value,
+                Ordering::Less => {
+                    let opcode = MOpcode::OpNarrow(width);
+                    let narrow_node = self.add_op(&opcode, address, vt);
+                    self.op_use(&narrow_node, 0, &value);
+                    narrow_node
+                }
+                Ordering::Greater => {
+                    let opcode = MOpcode::OpWiden(width);
+                    let width_node = self.add_op(&opcode, address, vt);
+                    self.op_use(&width_node, 0, &value);
+                    width_node
+                }
+                _ => unreachable!()
+            };
             self.write_variable(*address, id, value);
             self.ssa.set_register(&value, self.regfile.get_reginfo(id).unwrap());
             return;
         }
 
-        let vt = From::from(width);
+        // BUG: If width is not 64, every operation with OpConst will make
+        // unbalanced width.
         let opcode = MOpcode::OpWiden(width as u16);
 
         if self.operand_width(&value) < width {
@@ -624,7 +674,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         if info.shift > 0 {
-            let shift_amount_node = self.add_const(*address, info.shift as u64);
+            let shift_amount_node = self.add_narrow_const(address, info.shift as u64, vt);
             let opcode_node = self.add_op(&MOpcode::OpLsl, address, vt);
             self.op_use(&opcode_node, 0, &value);
             self.op_use(&opcode_node, 1, &shift_amount_node);
@@ -641,7 +691,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         let mut ov = self.read_variable(address, id);
-        let maskvalue_node = self.add_const(*address, maskval);
+        let maskvalue_node = self.add_narrow_const(address, maskval, vt);
 
         let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
         self.op_use(&op_and, 0, &ov);
@@ -736,6 +786,23 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                           , node, self.ssa.get_node_data(&node));
             radeco_trace!("First operand is {:?} with {:?}", args[0]
                           , self.ssa.get_node_data(&args[0]));
+        }
+    }
+
+
+    // Visit all the blocks, find the exits of this function, and link these basic
+    // with exit_node
+    pub fn gather_exits(&mut self) {
+        let blocks = self.ssa.blocks();
+        let mut exits: Vec<T::ActionRef> = Vec::new();
+        for block in blocks {
+            if self.ssa.succs_of(block).len() == 0 {
+                exits.push(block);
+            }
+        } 
+        let exit_node = self.ssa.exit_node();
+        for exit in exits {
+            self.ssa.add_control_edge(exit, exit_node, UNCOND_EDGE);
         }
     }
 

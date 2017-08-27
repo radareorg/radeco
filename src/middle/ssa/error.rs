@@ -23,6 +23,8 @@ pub enum SSAErr<T: SSA + Debug> {
     UnreachableBlock(T::ActionRef),
     InvalidExpr(T::ValueRef),
     IncompatibleWidth(T::ValueRef, u16, u16),
+    BackUse(T::ValueRef, T::ValueRef),
+    UnreachablePhiSCC(Vec<T::ValueRef>),
 }
 
 impl fmt::Display for SSAErr<SSAStorage> {
@@ -63,6 +65,12 @@ impl fmt::Display for SSAErr<SSAStorage> {
             }
             SSAErr::IncompatibleWidth(ni, e, f) => {
                 format!("{:?} expected with to be {}, found width: {}", ni, e, f)
+            }
+            SSAErr::BackUse(ref i, ref j) => {
+                format!("Found back use from {:?} to {:?}", i, j)
+            }
+            SSAErr::UnreachablePhiSCC(ref nodes) => {
+                format!("Found Use-Def chains become a loop: {:?}", nodes)
             }
         };
         write!(f, "{}.", err)

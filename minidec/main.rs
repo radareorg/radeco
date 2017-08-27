@@ -10,6 +10,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
 
 use r2pipe::r2::R2;
@@ -23,6 +24,7 @@ use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
+use radeco_lib::middle::ssa::verifier;
 
 const USAGE: &'static str = "
 Usage: minidec [-f <names>...] <target>
@@ -90,7 +92,6 @@ fn main() {
 
         let ref mut rfn = rmod.functions.get_mut(&addr).unwrap();
 
-
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
             println!("  [*] Eliminating Dead Code");
@@ -113,6 +114,18 @@ fn main() {
             println!("  [*] Eliminating Common SubExpressions");
             let mut cse = CSE::new(&mut rfn.ssa);
             cse.run();
+        }
+        {
+            // Verify SSA 
+            println!("  [*] Verifying SSA's Validity");
+            match verifier::verify(&rfn.ssa) {
+                Err(e) => {
+                    println!("  [*] Found Error: {}", e);
+                    process::exit(255);
+                }
+                Ok(_) => {  }
+                _ => unreachable!()
+            }
         }
         let mut memory_ssa = {
             // Generate MemorySSA
