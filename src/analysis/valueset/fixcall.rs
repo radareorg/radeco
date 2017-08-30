@@ -28,7 +28,7 @@ use middle::ir::MOpcode;
 use middle::dot::emit_dot;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAMod, SSAExtra, SSAWalk};
-use middle::ssa::ssa_traits::{NodeType, RegInfo};
+use middle::ssa::ssa_traits::{NodeType};
 use middle::ssa::ssastorage::SSAStorage;
 
 type LValueRef = <SSAStorage as SSA>::ValueRef;
@@ -189,14 +189,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let call_info: Vec<(LValueRef, Vec<String>)> = {
             let rfn = self.rmod.functions.get(rfn_addr)
                             .expect("RadecoFunction Not Found!");
-            radeco_trace!("CallFixer|RadecoFunction: {:?}", rfn.name);
-
-            // calcluate call_info into preserved registers and OpCall node
             self.preserves_for_call_context(rfn.call_sites())
         };
         radeco_trace!("CallFixer|Call site: {:?}", call_info);
 
-        // Edit OpCalls' arguments and uses, by preserved registers
         {
             let rfn = self.rmod.functions.get_mut(rfn_addr)
                             .expect("RadecoFunction Not Found!");
@@ -207,33 +203,23 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 if let Some(ref name) = self.SP_name {
                     regs.push(name.clone());
                 }
-                radeco_trace!("CallFixer|Preeserved registers are {:?}", regs);
-                // Consider every register
-                radeco_trace!("CallFixer|Consider {:?} with {:?}", node, ssa.get_node_data(&node));
-                radeco_trace!("CallFixer|Callee is {:?}", 
-                         ssa.get_node_data(&ssa.get_operands(&node)[0]));
                 for reg in regs {
-                    // Calculate replacement and replacer together
                     let node_sets = vec![ssa.get_operands(&node), ssa.get_uses(&node)];
                     let mut replace_pair: Vec<LValueRef> = Vec::with_capacity(2);
                     for node_set in node_sets {
                         for sub_node in node_set {
-                            if let Some(sub_reg) = ssa.register(&sub_node) {
-                                if sub_reg.name == reg {
-                                    replace_pair.push(sub_node);
-                                    break
-                                }
+                            if ssa.get_register(&sub_node).contains(&reg) {
+                                replace_pair.push(sub_node);
+                                break
                             }
                         }
                     }
 
-                    // We have to get a complete replacement pair
                     if replace_pair.len() != 2 {
                         radeco_trace!("CallFixer|{:?} with {:?} Not Found!", node, reg);
                         radeco_trace!("CallFixer|Foudn replace_pair {:?}", replace_pair);
                         continue;
                     }
-                    radeco_trace!("CallFixer|{:?} with {:?} Found {:?}", node, reg, replace_pair);
 
                     ssa.replace(replace_pair[1], replace_pair[0]);
                 }
@@ -307,8 +293,6 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
         let mut visited: HashSet<LValueRef> = HashSet::new();
 
-
-        // Initialize worklist with the register state of exit_node.
         let reg_state = ssa.registers_at(&ssa.exit_node());
         worklist.push_back(reg_state);
         
@@ -319,14 +303,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 continue;
             }
             radeco_trace!("CallFixer|Pop {:?} with {:?}", node, ssa.get_node_data(&node));
-            radeco_trace!("CallFixer|Register is {:?}", ssa.register(&node));
+            radeco_trace!("CallFixer|Register is {:?}", ssa.get_register(&node));
             let args = ssa.args_of(node);
             for arg in args {
-                radeco_trace!("CallFixer|Arg: {:?} with {:?}", arg, ssa.get_node_data(&arg));
-                radeco_trace!("CallFixer|Register is {:?}", ssa.register(&arg));
-
-                // We only consider registers.
-                if ssa.register(&arg).is_none() {
+                if ssa.get_register(&arg).is_empty() {
                     continue;
                 }
 
@@ -342,27 +322,19 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                     }
                     Some(MOpcode::OpLoad) => {
                         let operands = ssa.get_operands(&arg);
-                        // Seconde operand will be the target address.
-                        radeco_trace!("CallFixer|OpLoad {:?} with {:?}", arg,
-                                    ssa.get_node_data(&arg));
-                        radeco_trace!("CallFixer|Register: {:?}", ssa.register(&arg));
-                        radeco_trace!("CallFixer|Target {:?} with {:?}", operands[1],
-                                    ssa.get_node_data(&operands[1]));
-                        radeco_trace!("CallFixer|Target's register: {:?}", ssa.register(&operands[1]));
-                        
-                        // Consider the target address
                         if !exit_offset.contains_key(&operands[1]) {
                             continue;
                         }
 
                         let base = exit_offset.get(&operands[1]).unwrap().clone();
-                        let name = ssa.register(&arg).unwrap().name;
-                        radeco_trace!("CallFixer|Found {:?} with {:?}", name, base);
-                        // We store the nearest OpLoad
-                        if exit_load.contains_key(&name) {
-                            continue;
+                        let names = ssa.get_register(&arg);
+                        for name in names {
+                            radeco_trace!("CallFixer|Found {:?} with {:?}", name, base);
+                            if exit_load.contains_key(&name) {
+                                continue;
+                            }
+                            exit_load.insert(name, base);
                         }
-                        exit_load.insert(name, base);
                     }
                     _ => {  }   
                 }
@@ -380,31 +352,25 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             -> HashMap<String, i64> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
-        // reg_state's operands is initial registers
         let reg_state = ssa.registers_at(&ssa.start_node());
         let nodes = ssa.args_of(reg_state);
         for node in &nodes {
             if ssa.get_comment(node).is_none(){
                 continue;
             }
-            radeco_trace!("CallFixer|Comment Node: {:?}", ssa.get_node_data(node));
-            if ssa.register(node).is_none() {
+            if ssa.get_register(node).is_empty() {
                 continue;
             }
-            let reg_name = ssa.register(node).unwrap().name;
-            radeco_trace!("CallFixer|Register's name: {:?}", reg_name);
-            
+            let reg_names = ssa.get_register(node);
             let users = ssa.get_uses(node);
-            radeco_trace!("CallFixer|Uses: {:?} with {:?}", users, ssa.get_node_data(&users[0]));
-
-            for user in &users {
-                if Some(MOpcode::OpStore) == ssa.get_opcode(user) {
-                    let args = ssa.get_operands(user);
-                    radeco_trace!("CallFixer|OpStore's operands {:?}", args);
-                    // OpStore is not commutative, thus the second operand will be the address
-                    if entry_offset.contains_key(&args[1]) {
-                        let num = entry_offset.get(&args[1]).unwrap();
-                        entry_store.insert(reg_name.clone(), *num);
+            for reg_name in reg_names {
+                for user in &users {
+                    if Some(MOpcode::OpStore) == ssa.get_opcode(user) {
+                        let args = ssa.get_operands(user);
+                        if entry_offset.contains_key(&args[1]) {
+                            let num = entry_offset.get(&args[1]).unwrap();
+                            entry_store.insert(reg_name.clone(), *num);
+                        }
                     }
                 }
             }
@@ -427,13 +393,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let reg_state = ssa.registers_at(&ssa.exit_node());
         let nodes = ssa.args_of(reg_state);
         for node in &nodes {
-            radeco_trace!("CallFixer|{:?} with {:?}", node, ssa.get_node_data(node));
-            if let Some(reg) = ssa.register(node) {
-                if reg.alias_info == Some(String::from("SP")) {
-                    radeco_trace!("CallFixer|Initial data {:?} is {:?}", node, ssa.get_node_data(node));
-                    stack_offset.insert(*node, 0);
-                    worklist.push_back(*node);
-                }
+            let SP_name = self.SP_name.clone().unwrap_or(String::new());
+            if ssa.get_register(node).contains(&SP_name) {
+                stack_offset.insert(*node, 0);
+                worklist.push_back(*node);
             }
         }
         
@@ -447,12 +410,6 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             let base = stack_offset.get(&node).unwrap().clone();
             let args = ssa.get_operands(&node);
 
-            // For exit node, it's possible that there is not only one node.
-            radeco_trace!("CallFixer|Pop {:?} with {:?}", node, ssa.get_node_data(&node));
-            radeco_trace!("CallFixer|Register: {:?}", ssa.register(&node));
-            radeco_trace!("CallFixer|Args: {:?}", args);
-
-            // We have to consider the OpNarrow/OpWiden which uses node.
             let users = ssa.get_uses(&node);
             for user in users {
                 match ssa.get_opcode(&user) {
@@ -516,9 +473,6 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     fn analysis_entry_offset(&self, ssa: &SSAStorage, is_global: bool) 
             -> HashMap<LValueRef, i64> {
         let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
-
-        // At the entry of a function, SP should decrease first, thus initial
-        // SP will in the comment node
         {
             let reg_state = ssa.registers_at(&ssa.start_node());
             let nodes = ssa.args_of(reg_state);
@@ -526,16 +480,9 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 if ssa.get_comment(node).is_none() {
                     continue;
                 }
-                radeco_trace!("CallFixer|Comment Node {:?}: {:?}", node, ssa.get_node_data(node));
-                if ssa.register(node).is_none() {
+                if ssa.get_comment(node) != self.SP_name {
                     continue;
                 }
-
-                if ssa.register(node).unwrap().alias_info
-                    != Some(String::from("SP")) {
-                        continue;
-                }
-                radeco_trace!("CallFixer|Initial data is {:?}\n", ssa.get_node_data(node));
                 stack_offset.insert(*node, 0);
                 break;
             }
@@ -551,33 +498,17 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         } else {
             let blocks = ssa.succs_of(ssa.start_node());
             assert_eq!(blocks.len(), 1);
-            radeco_trace!("CallFixer|Found: {:?}", blocks);
             ssa.exprs_in(&blocks[0])
         };
 
         for node in &nodes {
-            //if let Some(reg) = ssa.register(&node) {
-            //    if let Some(aname) = reg.alias_info {
-            //        if aname == String::from("SP") {
-            //            println!("\nNode {:?} with {:?}", node, ssa.get_node_data(node));
-            //            println!("\tOperands: {:?}", ssa.get_operands(node));
-            //            println!("\tUsers: {:?}\n", ssa.get_uses(node));
-            //        }
-            //    }
-            //}
             if let Some(opc) = ssa.get_opcode(node) {
-                // We should stop digging stack offset when me met a call.
-                // BUT if we are doing a global search, we could not stop.
                 if opc == MOpcode::OpCall && !is_global {
                     break;
                 }
 
-                // Consider OpWiden, especially for 32-bits binary.
                 match opc {
                     MOpcode::OpWiden(_) | MOpcode::OpNarrow(_) => {
-                        radeco_trace!("CallFixer|Widen/Narrow Node: {:?}", node);
-                        radeco_trace!("CallFixer|Widen/Narrow argumes: {:?}", 
-                                        ssa.get_operands(node));
                         let args = ssa.get_operands(node);
                         if stack_offset.contains_key(&args[0]) {
                             let num = stack_offset.get(&args[0])
@@ -591,24 +522,17 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 }
 
                 // We only consider SP/BP.
-                if ssa.register(node).is_none() {
+                if ssa.get_register(node).is_empty() {
                     continue;
                 }
-                let alias_info = ssa.register(node).unwrap().alias_info;
-                if alias_info.is_none() {
-                    continue;
-                }
-                let alias_name = alias_info.unwrap();
-                if alias_name != String::from("SP") && 
-                    alias_name != String::from("BP") {
+                let regnames = ssa.get_register(node);
+                let SP_name = self.SP_name.clone().unwrap_or(String::new());
+                let BP_name = self.BP_name.clone().unwrap_or(String::new());
+                if !regnames.contains(&SP_name) && 
+                    !regnames.contains(&BP_name) { 
                         continue;
                     }
-                radeco_trace!("CallFixer|Found {:?} {:?}, with {:?}", node, 
-                                    ssa.get_node_data(node), 
-                                    ssa.register(node));
 
-                // At the entry of a function, only OpSub/OpAdd working on SP/BP
-                // could help our analysis
                 let args = ssa.get_operands(node);
                 if args.len() != 2 {
                     continue;
@@ -618,13 +542,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 let opcode_arg: i64;
                 match opc {
                     MOpcode::OpSub => {
-                        // OpSub is not commutative, so the seconde operand is const
                         const_arg = 1;
                         opcode_arg = 0;
                     }
                     MOpcode::OpAdd => {
-                        // OpAdd is commutative, as we have sorted operands, const 
-                        // operand will becomde the first one. 
                         const_arg = 0;
                         opcode_arg = 1;
                     }
@@ -643,14 +564,6 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                     (ssa.is_phi(&args[opcode_arg as usize]) && is_global) {
                     if let Some(MOpcode::OpConst(num)) = 
                                 ssa.get_opcode(&args[const_arg as usize]) {
-                        radeco_trace!("CallFixer|SP/BP operation found {:?}, with {:?}", node,
-                                 ssa.register(node));
-                        radeco_trace!("CallFixer|Node data is {:?}", ssa.get_node_data(&node));
-                        radeco_trace!("CallFixer|Equal to {:?} {:?} +/- {:?} {:?}",
-                                 args[0],
-                                 ssa.get_node_data(&args[0]),
-                                 args[1],
-                                 ssa.get_node_data(&args[1]));
                         // TODO: Some special cases may by not consided
                         if !stack_offset.contains_key(&args[opcode_arg as usize]) {
                             continue;
@@ -658,17 +571,14 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                         let base = stack_offset.get(&args[opcode_arg as usize])
                                                                 .unwrap()
                                                                 .clone() as i64;
-                        // A trick to distinguish OpAdd/OpSub.
                         stack_offset.insert(*node, 
                                     base + (opcode_arg - const_arg) * (num as i64));
-                        radeco_trace!("CallFixer|New offset for it: {:?}", 
-                                    base + (opcode_arg - const_arg) *
-                                    (num as i64));
                         continue;
                     }
                 }
                 radeco_warn!("No SP/BP algorithm Found!");
             }
+
             // If we are doing a global search, we should consider phi node.
             if ssa.is_phi(node) && is_global {
                 let args = ssa.get_operands(node);
@@ -676,7 +586,6 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 for arg in &args {
                     if stack_offset.contains_key(arg) {
                         let num = stack_offset.get(arg).unwrap().clone();
-                        // If one phi for SP/BP should have only one offset.
                         if !nums.contains(&num) {
                             nums.push(num);
                         }
@@ -684,10 +593,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 }
                 if nums.len() == 1 {
                     stack_offset.insert(*node, nums[0]);
-                    radeco_trace!("CallFixer|New offset for it: {:?}", nums[0]); 
-                } else {
-                    radeco_trace!("CallFixer|Phi's information: {:?}", ssa.register(&node));
-                }
+                } 
             }
         }
         radeco_trace!("CallFixer|Stack_offset: {:?}", stack_offset);
@@ -744,7 +650,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         worklist.push_back(id);
         println!("Initial Id: {:?}", id);
         println!("\tInitial Data: {:?}", ssa.get_node_data(&id));
-        println!("\tInitial Register: {:?}", ssa.register(&id));
+        println!("\tInitial Register: {:?}", ssa.get_register(&id));
         while let Some(node) = worklist.pop_front() {
             if !visited.contains(&node) {
                 visited.insert(node);
@@ -754,7 +660,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             number -= 1;
             println!("Id: {:?}", node);
             println!("\tData: {:?}", ssa.get_node_data(&node));
-            println!("\tRegister: {:?}", ssa.register(&node));
+            println!("\tRegister: {:?}", ssa.get_register(&node));
             println!("\tArgs: {:?}", ssa.get_operands(&node));
             println!("\tUses: {:?}", ssa.get_uses(&node));
             
@@ -769,7 +675,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             for arg in ssa.get_operands(&node) {
                 println!("\tArg_Id: {:?}", arg);
                 println!("\t\tArg_Data: {:?}", ssa.get_node_data(&arg));
-                println!("\t\tArg_Register: {:?}", ssa.register(&arg));
+                println!("\t\tArg_Register: {:?}", ssa.get_register(&arg));
                 println!("\t\tArg_Args: {:?}", ssa.get_operands(&arg));
                 println!("\t\tArg_Uses: {:?}", ssa.get_uses(&arg));
                 worklist.push_back(arg);
@@ -777,7 +683,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             for user in ssa.get_uses(&node) {
                 println!("\tUse_Id: {:?}", user);
                 println!("\t\tUse_Data: {:?}", ssa.get_node_data(&user));
-                println!("\t\tUse_Register: {:?}", ssa.register(&user));
+                println!("\t\tUse_Register: {:?}", ssa.get_register(&user));
                 println!("\t\tUse_Args: {:?}", ssa.get_operands(&user));
                 println!("\t\tUse_Uses: {:?}", ssa.get_uses(&user));
                 worklist.push_back(user);
