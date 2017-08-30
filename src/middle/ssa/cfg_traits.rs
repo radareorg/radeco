@@ -94,7 +94,7 @@ pub trait CFG {
     }
 
     /// Reference to the edge that connects the source to the target.
-    fn find_edge(&self, source: &Self::ActionRef, target: &Self::ActionRef) -> Self::CFEdgeRef;
+    fn find_edge(&self, source: &Self::ActionRef, target: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
 
     /// Reference to the true edge
     fn true_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
