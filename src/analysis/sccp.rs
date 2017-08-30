@@ -122,6 +122,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             // Even these operands are overdefined.
 
             let edge = self.g.find_edge(&operand_block, &parent_block);
+            if edge.len() == 0 {
+                continue;
+            }
             assert_eq!(edge.len(), 1);
             if !self.is_executable(&edge[0]) && edge[0] != self.g.invalid_edge() {
                 continue;
