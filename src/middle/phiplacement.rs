@@ -381,7 +381,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                           self.regfile.whole_names.get(variable),
                           datasource);
             self.ssa.phi_use(phi, datasource);
-            if self.ssa.register(&phi).is_none() {
+            if self.ssa.get_register(&phi).is_empty() {
                 self.propagate_reginfo(&phi);
             }
         }
@@ -551,8 +551,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             let reg_name = self.regfile.get_name(id).unwrap();
             let name = reg_name.as_str();
             if msg.starts_with(name) {
-                let regfile = self.regfile.get_reginfo(id).unwrap();
-                self.ssa.set_register(&i, regfile);
+                self.ssa.set_register(i, &reg_name);
             }
         }
 
@@ -658,7 +657,9 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                 _ => unreachable!()
             };
             self.write_variable(*address, id, value);
-            self.ssa.set_register(&value, self.regfile.get_reginfo(id).unwrap());
+            self.ssa.set_register(value, &self.regfile
+                                                .get_name(id)
+                                                .unwrap_or(String::new()));
             return;
         }
 
@@ -769,10 +770,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         // For OpAnd/OpOr, OpLsl, only their first operand coule be register;
         // For Phi node, their operations have the same reginfo;
         // Thus, choosing the first operand is enough. 
-        let regfile = self.ssa.register(&args[0]);
-        if regfile.is_some() {
-            self.ssa.set_register(node, regfile.unwrap().clone());
-            // Check whether its child nodes are incomplete 
+        let regnames = self.ssa.get_register(&args[0]);
+        if !regnames.is_empty() {
+            for regname in &regnames {
+                self.ssa.set_register(node.clone(), regname);
+                // Check whether its child nodes are incomplete 
+            }
             let users = self.ssa.get_uses(node);
             for user in users {
                 if let Some(victim) = self.incomplete_propagation.take(&user) {

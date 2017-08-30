@@ -136,6 +136,9 @@ impl GraphDot for SSAStorage {
             EdgeData::ReplacedBy => {
                 vec![("color".to_string(), "brown".to_string())]
             }
+            EdgeData::RegisterInfo => {
+                vec![("color".to_string(), "yellow".to_string())]
+            }
             EdgeData::RegisterState => unreachable!(),
         };
 

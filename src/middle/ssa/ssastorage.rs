@@ -19,7 +19,7 @@ use middle::ir::{MAddress, MOpcode};
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
-use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType, RegInfo};
+use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType};
 use super::cfg_traits::{CFG, CFGMod};
 use utils::logger;
 
@@ -31,9 +31,6 @@ pub struct AdditionalData {
     flag: Option<String>,
     mark: bool,
     color: Option<u8>,
-    // Phi nodes and Opcode node which EEq into registers and directly 
-    // influence registers' width will have register AdditionalData.
-    register: Option<RegInfo>,
 }
 
 impl AdditionalData {
@@ -43,7 +40,6 @@ impl AdditionalData {
             flag: None,
             mark: false,
             color: None,
-            register: None,
         }
     }
 }
@@ -55,7 +51,6 @@ impl default::Default for AdditionalData {
             flag: None,
             mark: false,
             color: None,
-            register: None,
         }
     }
 }
@@ -121,6 +116,9 @@ pub enum EdgeData {
     Data(u8),
     /// Edge from value to BasicBlock.
     ContainedInBB(MAddress),
+    /// Edeg from value or RegisterState to comment. Represent register infor-
+    /// mation for every value.
+    RegisterInfo,
     /// Edge from BasicBlock to value. Points from a basic block with multiple
     /// successors to a value that decides which branch will be taken.
     Selector,
@@ -196,6 +194,7 @@ impl SSAStorage {
             if let EdgeData::Data(d) = self.g[edge] {
                 if othernode == j {
                     // Avoid recursion use
+                    self.g.remove_edge(edge);
                     continue;
                 }
                 match self.g[othernode] {
@@ -205,7 +204,7 @@ impl SSAStorage {
                     NodeData::Phi(_, _) => {
                         self.phi_use(othernode, j);
                     }
-                    _ => {}
+                    _ => {  }
                 }
             } else if let EdgeData::Selector = self.g[edge] {
                 let bb = self.block_of(&i);
@@ -216,6 +215,16 @@ impl SSAStorage {
 
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
+            match self.g[edge] {
+                EdgeData::RegisterInfo => {
+                    if othernode == j {
+                        self.g.remove_edge(edge);
+                        continue;
+                    }
+                    self.insert_edge(j, othernode, EdgeData::RegisterInfo);
+                }
+                _ => {  }
+            }
             self.g.remove_edge(edge);
         }
 
@@ -228,33 +237,45 @@ impl SSAStorage {
 
     fn insert_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
         //Don't insert a duplicate edge between i and j with same EdgeData
-        let edge = self.find_edge(&i, &j);
+        let edges = self.find_edge(&i, &j);
         let mut flag = false;
-        if edge != self.invalid_edge() {
-            flag = match (self.g[edge], e) {
-                (EdgeData::Control(i), EdgeData::Control(j)) |
-                (EdgeData::Data(i), EdgeData::Data(j)) => {
-                    if i == j {
+        let mut exist_edge: EdgeIndex = EdgeIndex::end();
+        for edge in edges {
+            if edge != self.invalid_edge() {
+                flag = match (self.g[edge], e) {
+                    (EdgeData::Control(i), EdgeData::Control(j)) |
+                    (EdgeData::Data(i), EdgeData::Data(j)) => {
+                        if i == j {
+                            exist_edge = edge;
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    (EdgeData::ContainedInBB(i), EdgeData::ContainedInBB(j)) => {
+                        if i == j {
+                            exist_edge = edge;
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    (EdgeData::RegisterInfo, EdgeData::RegisterInfo) |
+                    (EdgeData::Selector, EdgeData::Selector) |
+                    (EdgeData::RegisterState, EdgeData::RegisterState) |
+                    (EdgeData::ReplacedBy, EdgeData::ReplacedBy) => {
+                        exist_edge = edge;
                         true
-                    } else {
-                        false
-                    }
-                },
-                (EdgeData::ContainedInBB(i), EdgeData::ContainedInBB(j)) => {
-                    if i == j {
-                        true
-                    } else {
-                        false
-                    }
-                },
-                (EdgeData::Selector, EdgeData::Selector) => true,
-                (EdgeData::RegisterState, EdgeData::RegisterState) => true,
-                (EdgeData::ReplacedBy, EdgeData::ReplacedBy) => true,
-                _ => false,
+                    },
+                    _ => false,
+                };
+                if flag {
+                    break;
+                }
             }
         }
         if flag {
-            edge
+            exist_edge
         } else {
             radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
             self.g.add_edge(i, j, e)
@@ -267,10 +288,10 @@ impl SSAStorage {
         self.g.update_edge(i, j, e)
     }
 
+    // It's possible that there are mutilple edges between two same nodes. like: xor eax, eax
     fn delete_edge(&mut self, i: NodeIndex, j: NodeIndex) {
         radeco_trace!(logger::Event::SSARemoveEdge(&i, &j));
-        let e = self.g.find_edge(i, j);
-        if let Some(ei) = e {
+        while let Some(ei) = self.g.find_edge(i, j) {
             self.g.remove_edge(ei);
         }
     }
@@ -387,12 +408,20 @@ impl CFG for SSAStorage {
         }
     }
 
-    fn find_edge(&self, source: &NodeIndex, target: &NodeIndex) -> EdgeIndex {
+    // It's possible that two same nodes have mutilple edges
+    fn find_edge(&self, source: &NodeIndex, target: &NodeIndex) -> Vec<EdgeIndex> {
         if *source == self.invalid_value() || *target == self.invalid_value() {
-            return self.invalid_edge();
+            return vec![];
         }
 
-        self.g.find_edge(*source, *target).unwrap_or_else(EdgeIndex::end)
+        let mut edges: Vec<EdgeIndex> = Vec::new();
+        let mut walk = self.g.neighbors_directed(*source, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
+            if &othernode == target {
+                edges.push(edge);
+            }
+        }
+        edges
     }
 
     fn true_edge_of(&self, i: &NodeIndex) -> EdgeIndex {
@@ -607,6 +636,22 @@ impl SSA for SSAStorage {
             }
         }
         uses
+    }
+
+    fn get_register(&self, i: &NodeIndex) -> Vec<String> {
+        let mut regs = Vec::new();
+        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
+            match self.g[edge] {
+                EdgeData::RegisterInfo => {
+                    if let Some(regname) = self.get_comment(&othernode) {
+                        regs.push(regname);
+                    }
+                }
+                _ => {  }
+            }
+        }
+        regs
     }
 
     fn get_block(&self, i: &NodeIndex) -> NodeIndex {
@@ -854,6 +899,17 @@ impl SSAMod for SSAStorage {
         self.insert_edge(node, argument, EdgeData::Data(index));
     }
 
+    fn set_register(&mut self, i: NodeIndex, regname: &String) {
+        let reg_state = self.registers_at(&self.start_node);
+        let operands = self.get_operands(&reg_state);
+        for op in operands {
+            if let Some(regname) = self.get_comment(&op).as_ref() {
+                self.insert_edge(i, op, EdgeData::RegisterInfo);
+                break;
+            }
+        }
+    }
+
     fn disconnect(&mut self, op: &NodeIndex, operand: &NodeIndex) {
         self.delete_edge(*op, *operand);
     }
@@ -932,12 +988,6 @@ impl SSAExtra for SSAStorage {
         data.comments = Some(comment);
     }
 
-    fn set_register(&mut self, i: &Self::ValueRef, regname: RegInfo) {
-        let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
-        data.register = Some(regname);
-    }
-
-
 
     fn add_flag(&mut self, i: &Self::ValueRef, f: String) {
         let data = self.assoc_data.entry(*i).or_insert_with(AdditionalData::new);
@@ -954,10 +1004,6 @@ impl SSAExtra for SSAStorage {
 
     fn comments(&self, i: &Self::ValueRef) -> Option<String> {
         self.assoc_data.get(i).and_then(|data| data.comments.clone())
-    }
-
-    fn register(&self, i: &Self::ValueRef) -> Option<RegInfo> {
-        self.assoc_data.get(i).and_then(|data| data.register.clone())
     }
 
     fn addr(&self, i: &Self::ValueRef) -> Option<String> {

@@ -165,6 +165,8 @@ pub trait SSA: CFG {
     /// Get OpCode information, as a pack of get_node_data on a Comment data.
     fn get_opcode(&self, i: &Self::ValueRef) -> Option<ir::MOpcode>;
 
+    /// Get information of the register which belongs to the node.
+    fn get_register(&self, _: &Self::ValueRef) -> Vec<String>;
 
     /// Returns true if the expression acts as a `Selector` for control flow.
     fn is_selector(&self, i: &Self::ValueRef) -> bool;
@@ -273,6 +275,8 @@ pub trait SSAMod: SSA + CFGMod {
     fn map_registers(&mut self, regs: Vec<String>);
 
     fn set_addr(&mut self, &Self::ValueRef, ir::MAddress);
+
+    fn set_register(&mut self, _: Self::ValueRef, _: &String) {  }
 }
 
 /// Extras. TODO
@@ -282,20 +286,11 @@ pub trait SSAMod: SSA + CFGMod {
 /// add any major functionality, but rather just convinence or display glitter, the user must not
 /// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
 
-#[derive(Clone, Debug, Default)]
-pub struct RegInfo {
-    pub name: String,
-    pub type_info: Option<String>,
-    pub alias_info: Option<String>,
-    pub width: Option<usize>,
-}
-
 pub trait SSAExtra: SSA {
     fn mark(&mut self, _: &Self::ValueRef) { }
     fn clear_mark(&mut self, &Self::ValueRef) { }
     fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
     fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
-    fn set_register(&mut self, _: &Self::ValueRef, _: RegInfo) {  }
     fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false
@@ -310,10 +305,6 @@ pub trait SSAExtra: SSA {
     }
 
     fn addr(&self, _: &Self::ValueRef) -> Option<String> {
-        None
-    }
-
-    fn register(&self, _: &Self::ValueRef) -> Option<RegInfo> {
         None
     }
 
