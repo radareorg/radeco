@@ -5,6 +5,8 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
+mod digstack;
 pub mod summary;
 pub mod interproc;
 pub mod transfer;
+pub mod fixcall;
