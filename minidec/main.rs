@@ -17,8 +17,8 @@ use r2pipe::r2::R2;
 use r2api::api_trait::R2Api;
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::sccp;
-use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
-use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
+//use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
+//use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
@@ -140,21 +140,21 @@ fn main() {
             mssa.run();
             mssa
         };
-        if false {
-            if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
-                continue;
-            }
-            println!("  [*] Analyzing Value Sets");
-            let fn_analyzer = FnAnalyzer::from((*rfn).clone());
-            let a_store_fn = fn_analyzer.analyze_rfn();
-            for (a_loc, strided_interval) in a_store_fn.store {
-                if let A_Loc{addr: AbstractAddress::Node{..}, ..} = a_loc {
-                    continue;
-                };
-                println!("{}", a_loc);
-                println!("Strided Interval: {}", strided_interval);
-            };
-        }
+        //if false {
+        //    if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
+        //        continue;
+        //    }
+        //    println!("  [*] Analyzing Value Sets");
+        //    let fn_analyzer = FnAnalyzer::from((*rfn).clone());
+        //    let a_store_fn = fn_analyzer.analyze_rfn();
+        //    for (a_loc, strided_interval) in a_store_fn.store {
+        //        if let A_Loc{addr: AbstractAddress::Node{..}, ..} = a_loc {
+        //            continue;
+        //        };
+        //        println!("{}", a_loc);
+        //        println!("Strided Interval: {}", strided_interval);
+        //    };
+        //}
         println!("  [*] Writing out IR");
 
         let mut fname = PathBuf::from(&dir);
