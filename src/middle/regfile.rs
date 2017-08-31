@@ -17,14 +17,6 @@ use r2api::structs::LRegInfo;
 use middle::ssa::ssa_traits::ValueType;
 
 
-#[derive(Clone, Debug, Default)]
-pub struct RegInfo {
-    pub name: String,
-    pub type_info: Option<String>,
-    pub alias_info: Option<String>,
-    pub width: Option<usize>,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct SubRegister {
     pub base: usize,
@@ -151,20 +143,6 @@ impl SubRegisterFile {
         }
     }
 
-    pub fn get_reginfo(&self, id: usize) -> Option<RegInfo> {
-        if let Some(name) = self.get_name(id) {
-            Some(RegInfo {
-                name: name.clone(),
-                type_info: self.type_info.get(&name).cloned(),
-                alias_info: self.alias_info.get(&name).cloned(),
-                width: self.get_width(id),
-            })
-        } else {
-            None
-        }
-    }
-
-
     // Get information by other way. 
     pub fn get_name_by_alias(&self, alias: &String) -> Option<String> {
         for id in 0..self.whole_names.len() {
@@ -173,20 +151,6 @@ impl SubRegisterFile {
                     return Some(name);
                 }
             }
-        }
-        None
-    }
-
-    pub fn get_reginfo_by_name(&self, name: &String) -> Option<RegInfo> {
-        for id in 0..self.whole_names.len() {
-            if Some(name) == self.get_name(id).as_ref() {
-                return Some(RegInfo {
-                            name: name.clone(),
-                            type_info: self.type_info.get(name).cloned(),
-                            alias_info: self.alias_info.get(name).cloned(),
-                            width: self.get_width(id),
-                });
-            } 
         }
         None
     }
