@@ -24,7 +24,7 @@ use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::cse::cse::CSE;
-use radeco_lib::analysis::valueset::fixcall::CallFixer;
+use radeco_lib::analysis::interproc::fixcall::CallFixer;
 
 
 pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;

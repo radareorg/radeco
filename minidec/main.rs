@@ -19,7 +19,7 @@ use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
 use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
-use radeco_lib::analysis::valueset::fixcall::CallFixer;
+use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
