@@ -298,7 +298,7 @@ impl CAST {
         self.ast.add_edge(self.fn_head, label, CASTEdge::StatementOrd(idx));
     }
 
-    pub fn insert_break(&mut self, after: NodeIndex) {
+    pub fn insert_break(&mut self, _ : NodeIndex) {
         let break_n = self.ast.add_node(CASTNode::Break);
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, break_n, CASTEdge::StatementOrd(idx));

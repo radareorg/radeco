@@ -12,10 +12,9 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use middle::ssa::ssastorage::EdgeData;
 use middle::ssa::ssa_traits::{SSA, SSAMod, SSAWalk};
 use middle::ssa::ssa_traits::{NodeType, NodeData};
-use middle::ir::{MArity, MOpcode};
+use middle::ir::MOpcode;
 
 
 // NOTE: I am not sure where to put this file, in analysis or in middle End.

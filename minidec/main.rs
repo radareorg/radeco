@@ -11,7 +11,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process;
-use petgraph::graph::{EdgeIndex,  NodeIndex};
+use petgraph::graph::NodeIndex;
 
 use r2pipe::r2::R2;
 use r2api::api_trait::R2Api;
@@ -124,10 +124,9 @@ fn main() {
                     process::exit(255);
                 }
                 Ok(_) => {  }
-                _ => unreachable!()
             }
         }
-        let mut memory_ssa = {
+        let memory_ssa = {
             // Generate MemorySSA
             println!("  [*] Generating Memory SSA");
             let mut mssa = MemorySSA::new(&rfn.ssa);

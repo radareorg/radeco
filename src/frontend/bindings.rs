@@ -313,7 +313,7 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
 
     fn is_global(&self) -> bool {
         match self.vloc {
-            VarLocation::Memory(MemoryRegion::Global { offset }) => true,
+            VarLocation::Memory(MemoryRegion::Global { .. }) => true,
             _ => false,
         }
     }

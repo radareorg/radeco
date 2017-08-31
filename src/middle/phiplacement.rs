@@ -11,8 +11,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 use std::u64;
-use std::io::{self, Write};
-use std::process;
 
 use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueType};
 use middle::ir::MAddress;
@@ -528,7 +526,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
     // Constants need not belong to any block. They are stored as a separate table.
     // BUG: But constants could be used as operands, which will cause panic in add_block
-    pub fn add_const(&mut self, address: MAddress, value: u64) -> T::ValueRef {
+    pub fn add_const(&mut self, _ : MAddress, value: u64) -> T::ValueRef {
         // All consts are assumed to be 64 bit wide.
         let i = self.ssa.add_const(value);
         // Need suggestion: In logic, OpConst sould not belongs to any block, but in future
@@ -654,7 +652,6 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                     self.op_use(&width_node, 0, &value);
                     width_node
                 }
-                _ => unreachable!()
             };
             self.write_variable(*address, id, value);
             self.ssa.set_register(value, &self.regfile

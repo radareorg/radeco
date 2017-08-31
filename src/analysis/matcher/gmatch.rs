@@ -155,7 +155,7 @@ where I: Iterator<Item=S::ValueRef>,
         }
 
         let node_h = self.hash_data(root);
-        let mut result: String;
+        let result: String;
         if !argh.is_empty() {
             result = format!("({} {})", node_h, argh);
         } else {

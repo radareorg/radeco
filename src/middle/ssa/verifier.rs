@@ -15,9 +15,7 @@ use std::collections::{HashMap, VecDeque};
 use petgraph::graph::NodeIndex;
 
 use super::cfg_traits::CFG;
-use super::ssa_traits::{SSA, SSAMod, ValueType};
-use super::ssastorage::EdgeData;
-use super::ssastorage::NodeData;
+use super::ssa_traits::{SSA, ValueType};
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::error::SSAErr;
@@ -289,8 +287,8 @@ impl Verify for SSAStorage {
         let mut SCC: Vec<Self::ValueRef> = Vec::new();
 
         // Why no do-while loop in Rust, wanna cry
-        let mut dfn = DFN.get(exi).unwrap();
-        let mut low = LOW.get(exi).unwrap();
+        let dfn = DFN.get(exi).unwrap();
+        let low = LOW.get(exi).unwrap();
         radeco_trace!("Verify_SCC| {:?} | DFN: {} | LOW: {}", exi, dfn, low);
         if dfn == low {
             while let Some(node) = stack.pop_back() {

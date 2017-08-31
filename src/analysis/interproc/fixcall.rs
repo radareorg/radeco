@@ -20,12 +20,11 @@ use petgraph::prelude::NodeIndex;
 use analysis::cse::ssasort::Sorter;
 use frontend::bindings::{RadecoBindings, RBind, RBindings};
 use frontend::containers::{RadecoFunction, RFunction};
-use frontend::containers::{RadecoModule, RModule};
+use frontend::containers::RadecoModule;
 use frontend::containers::CallContext;
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, SSAMod, SSAExtra, SSAWalk};
-use middle::ssa::ssa_traits::{NodeType};
+use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssastorage::SSAStorage;
 
 use super::digstack;
@@ -39,9 +38,9 @@ pub struct CallFixer<'a, 'b: 'a, B>
     where B: 'b + RBind + Debug + Clone,
 {
     rmod: &'a mut RadecoModule<'b, RadecoFunction<RadecoBindings<B>>>,
-    SP_offsets: HashMap<u64, Option<i64>>,
-    SP_name: Option<String>,
-    BP_name: Option<String>,
+    sp_offsets: HashMap<u64, Option<i64>>,
+    sp_name: Option<String>,
+    bp_name: Option<String>,
 }
 
 impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
@@ -50,20 +49,20 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     pub fn new(rmod: &'a mut RadecoModule<'b, RadecoFunction<RadecoBindings<B>>>) 
         -> CallFixer<'a, 'b, B> {
             CallFixer {
-                BP_name: rmod.regfile.clone()
+                bp_name: rmod.regfile.clone()
                     .unwrap().get_name_by_alias(&"BP".to_string()),
-                SP_name: rmod.regfile.clone()
+                sp_name: rmod.regfile.clone()
                     .unwrap().get_name_by_alias(&"SP".to_string()),
                 rmod: rmod,
-                SP_offsets: HashMap::new(),
+                sp_offsets: HashMap::new(),
             }
         }
 
     // Make a ROUNDED analyze for the RadecoModule. 
     pub fn rounded_analysis(&mut self) {
         let functions = self.rmod.functions.clone();
-        let mut matched_func_vec: Vec<u64> =
-            functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
+        let matched_func_vec: Vec<u64> =
+            functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
         // Do the first analysis.
         radeco_trace!("CallFixer|Do the first analysis.");
         for fn_addr in &matched_func_vec {
@@ -105,14 +104,14 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             let rfn = self.rmod.functions.get(rfn_addr)
                                 .expect("RadecoFunction Not Found!");
             let ssa = rfn.ssa_ref();
-            let SP_name = self.SP_name.clone().unwrap_or(String::new());
-            let BP_name = self.BP_name.clone().unwrap_or(String::new());
-            let stack_offset = digstack::rounded_analysis(&ssa, SP_name, BP_name);
+            let sp_name = self.sp_name.clone().unwrap_or(String::new());
+            let bp_name = self.bp_name.clone().unwrap_or(String::new());
+            let stack_offset = digstack::rounded_analysis(&ssa, sp_name, bp_name);
             // Here, we check the assumption we made in first analysis.
             // If the SP is not balanced, we will throw a WARN or PANIC.
             // TODO: if the SP is not balanced, please UNDO the fix.
             radeco_trace!("CallFixer|Global stack_offset: {:?}", stack_offset);
-            if let &Some(SP_offset) = self.SP_offsets.get(rfn_addr).unwrap() {
+            if let &Some(sp_offset) = self.sp_offsets.get(rfn_addr).unwrap() {
                 let mut max_offset: i64 = 0;
                 // The last SP offset should be the biggest
                 for offset in &stack_offset {
@@ -122,10 +121,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                         max_offset = *offset.1;
                     }
                 }
-                if max_offset != SP_offset {
+                if max_offset != sp_offset {
                     radeco_warn!("Stack is not Balanced in fn_addr {:?}! \
                                  First analysis {:?} with seconde analysis {:?}",
-                                rfn_addr, SP_offset, max_offset);
+                                rfn_addr, sp_offset, max_offset);
                     println!("  [*] WARN: Stack is not Balanced in function @ {:#}! Output \
                              analysis may be not accurate",
                              rfn_addr);
@@ -168,23 +167,23 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 
                 // analysis entry block
             let entry_store = { 
-                let SP_name = self.SP_name.clone().unwrap_or(String::new());
-                let BP_name = self.BP_name.clone().unwrap_or(String::new());
-                let entry_offset = digstack::frontward_analysis(&ssa, SP_name, BP_name);
+                let sp_name = self.sp_name.clone().unwrap_or(String::new());
+                let bp_name = self.bp_name.clone().unwrap_or(String::new());
+                let entry_offset = digstack::frontward_analysis(&ssa, sp_name, bp_name);
                 self.analysis_entry_store(ssa, entry_offset)
             };
 
                 // analysis exit blocks
             let exit_load = {
-                let SP_name = self.SP_name.clone().unwrap_or(String::new());
-                let exit_offset = digstack::backward_analysis(&ssa, SP_name);
+                let sp_name = self.sp_name.clone().unwrap_or(String::new());
+                let exit_offset = digstack::backward_analysis(&ssa, sp_name);
                 self.analysis_exit_load(ssa, exit_offset)
             };
             (entry_store, exit_load)
         };
 
-        let SP_offset = self.mark_preserved(rfn_addr, entry_store, exit_load);
-        self.SP_offsets.insert(*rfn_addr, SP_offset);
+        let sp_offset = self.mark_preserved(rfn_addr, entry_store, exit_load);
+        self.sp_offsets.insert(*rfn_addr, sp_offset);
     }
 
     // Fix the call_site with the callees' preserved register,
@@ -204,7 +203,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 
             for (node, mut regs) in call_info {
                 // Add SP for every function.
-                if let Some(ref name) = self.SP_name {
+                if let Some(ref name) = self.sp_name {
                     regs.push(name.clone());
                 }
                 for reg in regs {
@@ -244,15 +243,15 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     // check it in the reanalysis stage.
     fn mark_preserved(&mut self, rfn_addr: &u64, entry_store: HashMap<String, i64>,
                             exit_load: HashMap<String, i64>) -> Option<i64> {
-        let (preserves, SP_offset) = { 
-            let mut SP_offset: Option<i64> = None;
+        let (preserves, sp_offset) = { 
+            let mut sp_offset: Option<i64> = None;
             let mut preserves: HashSet<String> = HashSet::new();
             for (name, en_offset) in entry_store {
                 if let Some(ex_offset) = exit_load.get(&name).cloned() {
                     // Same reg name have appeared in entry and exit;
-                    match SP_offset {
+                    match sp_offset {
                         None => {
-                            SP_offset = Some(en_offset - ex_offset);
+                            sp_offset = Some(en_offset - ex_offset);
                             preserves.insert(name);
                         }
                         Some(off) if en_offset - ex_offset == off => {
@@ -260,16 +259,16 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                         }
                         Some(_) => {
                             preserves.clear();
-                            SP_offset = None;
+                            sp_offset = None;
                             break;
                         } 
                     }
                 }
             }
-            (preserves, SP_offset)
+            (preserves, sp_offset)
         };
 
-        radeco_trace!("CallFixer|{:?} with {:?}", preserves, SP_offset);
+        radeco_trace!("CallFixer|{:?} with {:?}", preserves, sp_offset);
 
         // Store data into RadecoFunction
         {
@@ -284,7 +283,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             }
         }
         
-        SP_offset
+        sp_offset
     }
 
     
@@ -399,7 +398,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             // If callee is not certain
             if con.callee.is_none() {
                 result.push((con.ssa_ref.unwrap()
-                        , vec![self.SP_name.clone().unwrap_or(String::new())]));
+                        , vec![self.sp_name.clone().unwrap_or(String::new())]));
                 continue;
             }
             let mut preserves: Vec<String> = Vec::new();
@@ -415,7 +414,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             } else {
                 // Callee is library function
                 result.push((con.ssa_ref.unwrap()
-                        , vec![self.BP_name.clone().unwrap_or(String::new())]));
+                        , vec![self.bp_name.clone().unwrap_or(String::new())]));
             }
         }
 
