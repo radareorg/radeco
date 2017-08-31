@@ -17,10 +17,8 @@
 //!     * http://www.airs.com/dnovillo/Papers/mem-ssa.pdf
 
 
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
-use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
@@ -28,10 +26,7 @@ use petgraph::graph::{EdgeIndex,  NodeIndex};
 use r2api::structs::LVarInfo;
 
 use super::ssa_traits::{SSA, SSAMod, SSAWalk};
-use super::ssa_traits::{NodeType, NodeData, ValueType};
-
-use middle::ir::MAddress;
-use middle::regfile::SubRegisterFile;
+use super::ssa_traits::NodeType;
 use middle::ir::MOpcode;
 
 // NOTE: Until now, this file is only used to implement raw Memory SSA, in 
@@ -192,7 +187,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         radeco_trace!("MemorrySSA|Gather variables: {:?}", self.variables);
 
         // Resize associated data structures
-        for i in 0..self.variables.len() {
+        for _ in 0..self.variables.len() {
             self.current_def.push(HashMap::new());
             self.incomplete_phis.push(HashMap::new());
         }

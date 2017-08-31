@@ -40,42 +40,51 @@ macro_rules! ir_write {
     });
 }
 
+#[allow(unused_macros)]
 macro_rules! concat_str {
     ($s:expr, $t:expr) => { $s = format!("{}{}", $s, $t); }
 }
 
+#[allow(unused_macros)]
 macro_rules! concat_strln {
     ($s:expr, $t:expr) => { $s = format!("{}\n{}", $s, $t); }
 }
 
 // Format constants.
+#[allow(unused_macros)]
 macro_rules! fmt_const {
     ($c:expr) => { format!("#x{:x}", $c); }
 }
 
 // Format bb.
+#[allow(unused_macros)]
 macro_rules! bb {
     ($bb:expr) => { format!("bb_{}():", $bb); }
 }
 
 // Format an expression
+#[allow(unused_macros)]
 macro_rules! expr {
     ($r:expr, $tp:tt = $rhs:expr) => { format!("%{}{} = {}", $r, fmttyp!($tp), $rhs); }
 }
 
 // Format a type
+#[allow(unused_macros)]
 macro_rules! fmttyp {
     ($t: expr) => { format!(":${}", $t); }
 }
 
+#[allow(unused_macros)]
 macro_rules! fmt_fn {
     ($f:expr) => { format!("define-fun {}(unknown) -> unknown {}", $f, BLOCK_SEP); }
 }
 
+#[allow(unused_macros)]
 macro_rules! fmtarg {
     ($v:expr, $typ:expr) => { format!("%{}{}", $v, fmttyp!($typ)); }
 }
 
+#[allow(unused_macros)]
 macro_rules! indent {
     ($n:expr, $s:expr) => { format!("{}{}", IRWriter::fmt_indent($n), $s); }
 }

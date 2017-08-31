@@ -15,7 +15,7 @@ use std::fmt::Debug;
 use petgraph::graph::NodeIndex;
 
 
-
+#[allow(unused_macros)]
 macro_rules! add_strings {
 	( $( $x: expr ),* ) => {
 		{

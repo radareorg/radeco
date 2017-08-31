@@ -11,7 +11,7 @@ pub mod dce;
 pub mod dot;
 pub mod ir;
 #[macro_use] pub mod ir_writer;
-pub mod phiplacement;
+#[allow(non_snake_case)] pub mod phiplacement;
 pub mod regfile;
 
 pub mod ssa {
@@ -21,5 +21,5 @@ pub mod ssa {
     pub mod error;
     pub mod ssadot;
     pub mod memoryssa;
-    pub mod verifier;
+    #[allow(non_snake_case)] pub mod verifier;
 }

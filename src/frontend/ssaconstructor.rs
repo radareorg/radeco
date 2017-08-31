@@ -293,9 +293,10 @@ impl<'a, T> SSAConstruct<'a, T>
             Token::EMod => {
                 (MOpcode::OpMod, ValueType::Integer { width: result_size })
             }
-            Token::EPoke(n) => {
+            Token::EPoke(_) => {
                 // TODO: rhs has to be cast to size 'n' if it's size is not already n.
-                let mem = self.phiplacer.read_variable(address, self.mem_id);
+                let mem_id = self.mem_id();
+                let mem = self.phiplacer.read_variable(address, mem_id);
                 let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
                                                     address,
                                                     ValueType::Integer { width: 0 });
@@ -307,6 +308,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 return None;
             }
             Token::EPeek(n) => {
+                let mem_id = self.mem_id();
                 let mem = self.phiplacer.read_variable(address, self.mem_id);
                 let op_node = self.phiplacer.add_op(&MOpcode::OpLoad,
                                                     address,
@@ -395,7 +397,8 @@ impl<'a, T> SSAConstruct<'a, T>
             let mem_comment = self.phiplacer.add_comment(start_address,
                                                          ValueType::Integer { width: 0 },
                                                          "mem".to_owned());
-            self.phiplacer.write_variable(start_address, self.mem_id, mem_comment);
+            let mem_id = self.mem_id();
+            self.phiplacer.write_variable(start_address, mem_id, mem_comment);
         }
 
         self.phiplacer.sync_register_state(start_block);

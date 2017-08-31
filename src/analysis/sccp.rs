@@ -25,15 +25,6 @@ enum LatticeValue {
     Const(u64),
 }
 
-macro_rules! exprval_match {
-   ( $x:expr ) => {
-        match $x {
-           ExprVal::Const(cval) => cval,
-           _ => return $x
-        }
-   };
-}
-
 impl LatticeValue {
     fn is_undefined(&self) -> bool {
         *self == LatticeValue::Top

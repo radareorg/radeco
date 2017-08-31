@@ -86,6 +86,7 @@ macro_rules! radeco_trace {
     });
 }
 
+#[macro_export]
 macro_rules! radeco_warn {
 	($t: expr) => ({
 		if cfg!(feature = "trace_log") {
@@ -144,6 +145,7 @@ where T: 'static + AsRef<Path> + Send + Sync + Clone {
     })
 }
 
+#[macro_export]
 macro_rules! enable_logging {
     () => (utils::logger::logger_init::<String>(None, None).expect("Logger Init Failed"));
     ($f: expr) => (utils::logger::logger_init(Some($f), None).expect("Logger Init Failed"));

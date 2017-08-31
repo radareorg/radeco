@@ -11,7 +11,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, SSAMod, SSAExtra, SSAWalk};
+use middle::ssa::ssa_traits::{SSA, SSAWalk};
 use middle::ssa::ssastorage::SSAStorage;
 
 type LValueRef = <SSAStorage as SSA>::ValueRef;
@@ -20,7 +20,7 @@ type LValueRef = <SSAStorage as SSA>::ValueRef;
 /// Analyze stack offset backward, by assuming the stack of last 
 /// SP register is ZERO. 
 /// You have to offer RadecoIL SSA and SP register name into analyzer.
-pub fn backward_analysis(ssa:&SSAStorage, SP_name: String)
+pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
         -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     let mut worklist: VecDeque<LValueRef> = VecDeque::new();
@@ -30,7 +30,7 @@ pub fn backward_analysis(ssa:&SSAStorage, SP_name: String)
     let reg_state = ssa.registers_at(&ssa.exit_node());
     let nodes = ssa.args_of(reg_state);
     for node in &nodes {
-        if ssa.get_register(node).contains(&SP_name) {
+        if ssa.get_register(node).contains(&sp_name) {
             stack_offset.insert(*node, 0);
             worklist.push_back(*node);
         }
@@ -108,26 +108,26 @@ pub fn backward_analysis(ssa:&SSAStorage, SP_name: String)
 /// Analyze stack offset frontward, only for first basic block.
 /// You have to offer RadecoIL SSA and SP & BP register name into analyzer.
 pub fn frontward_analysis(ssa: &SSAStorage,
-                       SP_name: String,
-                       BP_name: String)
+                       sp_name: String,
+                       bp_name: String)
         -> HashMap<LValueRef, i64> {
-   generic_frontward_analysis(ssa, SP_name, BP_name, false)  
+   generic_frontward_analysis(ssa, sp_name, bp_name, false)  
 }
 
 
 /// Analyze stack offset frontward, for the whole SSA.
 /// You have to offer RadecoIL SSA and SP & BP register name into analyzer.
 pub fn rounded_analysis(ssa: &SSAStorage,
-                       SP_name: String,
-                       BP_name: String)
+                       sp_name: String,
+                       bp_name: String)
         -> HashMap<LValueRef, i64> {
-   generic_frontward_analysis(ssa, SP_name, BP_name, true)  
+   generic_frontward_analysis(ssa, sp_name, bp_name, true)  
 }
 
 // Analyze stack offset frontward, for the first block or whole SSA.
 fn generic_frontward_analysis(ssa: &SSAStorage, 
-                         SP_name: String,
-                         BP_name: String,
+                         sp_name: String,
+                         bp_name: String,
                          is_global: bool) 
         -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
@@ -135,7 +135,7 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         let reg_state = ssa.registers_at(&ssa.start_node());
         let nodes = ssa.args_of(reg_state);
         for node in &nodes {
-            if ssa.get_comment(node) != Some(SP_name.clone()) {
+            if ssa.get_comment(node) != Some(sp_name.clone()) {
                 continue;
             }
             stack_offset.insert(*node, 0);
@@ -181,8 +181,8 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
                 continue;
             }
             let regnames = ssa.get_register(node);
-            if !regnames.contains(&SP_name) && 
-                !regnames.contains(&BP_name) { 
+            if !regnames.contains(&sp_name) && 
+                !regnames.contains(&bp_name) { 
                     continue;
                 }
 
