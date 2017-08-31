@@ -254,3 +254,69 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
 }
 
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use serde_json;
+    use r2api::structs::{LFunctionInfo, LRegInfo};
+    use std::fs::File;
+    use std::io::prelude::*;
+
+    use frontend::ssaconstructor::SSAConstruct;
+    use middle::ssa::ssastorage::SSAStorage;
+    use middle::dce;
+
+    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+    const BIN_LS_INSTRUCTIONS: &'static str = "test_files/bin_ls_instructions.json";
+    const CT1_INSTRUCTIONS: &'static str = "test_files/ct1_instructions.json";
+
+    #[test]
+    fn bin_ls_test() {
+        let mut instructions: LFunctionInfo;
+        let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
+        let mut s = String::new();
+        register_profile.read_to_string(&mut s).unwrap();
+        let reg_profile = serde_json::from_str(&*s).unwrap();
+        let mut instruction_file = File::open(BIN_LS_INSTRUCTIONS).unwrap();
+        let mut s = String::new();
+        instruction_file.read_to_string(&mut s).unwrap();
+        instructions = serde_json::from_str(&*s).unwrap();
+        let mut ssa = SSAStorage::new();
+        {
+            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            constructor.run(instructions.ops.unwrap());
+        }
+        {
+            dce::collect(&mut ssa);
+        }
+        
+        frontward_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
+        backward_analysis(&ssa, "rsp".to_string());
+        rounded_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
+    }
+
+    #[test]
+    fn ct1_test() {
+        let mut instructions: LFunctionInfo;
+        let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
+        let mut s = String::new();
+        register_profile.read_to_string(&mut s).unwrap();
+        let reg_profile = serde_json::from_str(&*s).unwrap();
+        let mut instruction_file = File::open(CT1_INSTRUCTIONS).unwrap();
+        let mut s = String::new();
+        instruction_file.read_to_string(&mut s).unwrap();
+        instructions = serde_json::from_str(&*s).unwrap();
+        let mut ssa = SSAStorage::new();
+        {
+            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            constructor.run(instructions.ops.unwrap());
+        }
+        {
+            dce::collect(&mut ssa);
+        }
+        
+        frontward_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
+        backward_analysis(&ssa, "rsp".to_string());
+        rounded_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
+    }
+}
