@@ -1,27 +1,21 @@
 //! Runs decompiler stages on main function of /bin/ls
 
-#[macro_use] extern crate radeco_lib;
+extern crate radeco_lib;
 extern crate r2pipe;
 extern crate r2api;
 extern crate serde_json;
 extern crate petgraph;
 
-use std::fs::File;
-use std::io::prelude::*;
-
 use petgraph::graph::NodeIndex;
 
-use r2api::structs::{LFunctionInfo, LRegInfo};
-
-use radeco_lib::frontend::bindings::{RadecoBindings, RBind, RBindings, Binding};
+use radeco_lib::frontend::bindings::{RadecoBindings, Binding};
 use radeco_lib::frontend::containers::{RadecoFunction, RFunction};
-use radeco_lib::frontend::containers::{RadecoModule, RModule};
+use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::frontend::source::FileSource;
-use radeco_lib::middle::ssa::memoryssa::MemorySSA;
-use radeco_lib::middle::ssa::ssastorage::SSAStorage;
+use radeco_lib::middle::ssa::memory_ssa::memory_ssa;
 use radeco_lib::middle::ssa::verifier;
 use radeco_lib::middle::ir_writer::IRWriter;
-use radeco_lib::middle::{dce, dot};
+use radeco_lib::middle::dce;
 use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
@@ -32,8 +26,8 @@ pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
 fn run_dce(rmod: &mut RadecoModule<DefaultFnTy>) 
 {
     let functions = rmod.functions.clone();
-    let mut matched_func_vec: Vec<u64> =
-        functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
+    let matched_func_vec: Vec<u64> =
+        functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
     for fn_addr in &matched_func_vec {
         let rfn = rmod.functions.get_mut(fn_addr)
                         .expect("RadecoFunction Not Found!");
@@ -46,10 +40,10 @@ fn run_dce(rmod: &mut RadecoModule<DefaultFnTy>)
 fn run_sccp(rmod: &mut RadecoModule<DefaultFnTy>) 
 {
     let functions = rmod.functions.clone();
-    let mut matched_func_vec: Vec<u64> =
-        functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
+    let matched_func_vec: Vec<u64> =
+        functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
     for fn_addr in &matched_func_vec {
-        let mut writer: IRWriter = Default::default();
+        let writer: IRWriter = Default::default();
         let rfn = rmod.functions.get_mut(fn_addr)
                         .expect("RadecoFunction Not Found!");
         let mut ssa = rfn.ssa_mut().clone();
@@ -63,8 +57,8 @@ fn run_sccp(rmod: &mut RadecoModule<DefaultFnTy>)
 fn run_cse(rmod: &mut RadecoModule<DefaultFnTy>) 
 {
     let functions = rmod.functions.clone();
-    let mut matched_func_vec: Vec<u64> =
-        functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
+    let matched_func_vec: Vec<u64> =
+        functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
     for fn_addr in &matched_func_vec {
         let rfn = rmod.functions.get_mut(fn_addr)
                         .expect("RadecoFunction Not Found!");
@@ -80,13 +74,13 @@ fn run_cse(rmod: &mut RadecoModule<DefaultFnTy>)
 fn run_memory_ssa(rmod: &RadecoModule<DefaultFnTy>) 
 {
     let functions = rmod.functions.clone();
-    let mut matched_func_vec: Vec<u64> =
-        functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
+    let matched_func_vec: Vec<u64> =
+        functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
     for fn_addr in &matched_func_vec {
         let rfn = rmod.functions.get(fn_addr)
                         .expect("RadecoFunction Not Found!");
-        let mut memory_ssa = {
-            let mut mssa = MemorySSA::new(&rfn.ssa);
+        let memory_ssa = {
+            let mut mssa = memory_ssa::new(&rfn.ssa);
             mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
                     &Some(rfn.call_ctx.iter().cloned()
                           .map(|x| if x.ssa_ref.is_some() {
@@ -102,10 +96,10 @@ fn run_memory_ssa(rmod: &RadecoModule<DefaultFnTy>)
 fn run_write(rmod: &RadecoModule<DefaultFnTy>) 
 {
     let functions = rmod.functions.clone();
-    let mut matched_func_vec: Vec<u64> =
-        functions.iter().map(|(fn_addr, rfn)| fn_addr.clone()).collect();
+    let matched_func_vec: Vec<u64> =
+        functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
     for fn_addr in &matched_func_vec {
-        let mut writer: IRWriter = Default::default();
+        let writer: IRWriter = Default::default();
         let rfn = rmod.functions.get(fn_addr)
                         .expect("RadecoFunction Not Found!");
         let ssa = rfn.ssa_ref();
@@ -116,7 +110,7 @@ fn run_write(rmod: &RadecoModule<DefaultFnTy>)
 #[test]
 fn bin_file_construction() {
     let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
-    let mut rmod = RadecoModule::from(&mut fsource);
+    let rmod = RadecoModule::from(&mut fsource);
 
     run_write(&rmod);
 }
@@ -218,7 +212,7 @@ fn bin_file_dce_fix_cse_sccp() {
 }
 
 #[test]
-fn bin_file_MemorySSA() {
+fn bin_file_memory_ssa() {
     let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
     let mut rmod = RadecoModule::from(&mut fsource);
 
