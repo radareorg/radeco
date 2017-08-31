@@ -903,7 +903,7 @@ impl SSAMod for SSAStorage {
         let reg_state = self.registers_at(&self.start_node);
         let operands = self.get_operands(&reg_state);
         for op in operands {
-            if let Some(regname) = self.get_comment(&op).as_ref() {
+            if Some(regname) == self.get_comment(&op).as_ref() {
                 self.insert_edge(i, op, EdgeData::RegisterInfo);
                 break;
             }
