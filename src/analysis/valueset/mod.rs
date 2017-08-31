@@ -25,6 +25,7 @@ mod sintrange;
 mod uintmultiple;
 mod sintmultiple;
 mod strided_interval;
+mod digstack;
 pub mod mem_structs;
 pub mod analyzer_wysinwyx;
 pub mod fixcall;

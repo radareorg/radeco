@@ -14,9 +14,7 @@
 //!
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::env;
 use std::fmt::Debug;
-use std::slice::Iter;
 use petgraph::prelude::NodeIndex;
 
 use analysis::cse::ssasort::Sorter;
@@ -25,11 +23,12 @@ use frontend::containers::{RadecoFunction, RFunction};
 use frontend::containers::{RadecoModule, RModule};
 use frontend::containers::CallContext;
 use middle::ir::MOpcode;
-use middle::dot::emit_dot;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAMod, SSAExtra, SSAWalk};
 use middle::ssa::ssa_traits::{NodeType};
 use middle::ssa::ssastorage::SSAStorage;
+
+use super::digstack;
 
 type LValueRef = <SSAStorage as SSA>::ValueRef;
 type LIdx<B> = <RadecoBindings<B> as RBindings>::Idx;
@@ -106,7 +105,9 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             let rfn = self.rmod.functions.get(rfn_addr)
                                 .expect("RadecoFunction Not Found!");
             let ssa = rfn.ssa_ref();
-            let stack_offset = self.analysis_entry_offset(ssa, true);
+            let SP_name = self.SP_name.clone().unwrap_or(String::new());
+            let BP_name = self.BP_name.clone().unwrap_or(String::new());
+            let stack_offset = digstack::rounded_analysis(&ssa, SP_name, BP_name);
             // Here, we check the assumption we made in first analysis.
             // If the SP is not balanced, we will throw a WARN or PANIC.
             // TODO: if the SP is not balanced, please UNDO the fix.
@@ -167,13 +168,16 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 
                 // analysis entry block
             let entry_store = { 
-                let entry_offset = self.analysis_entry_offset(ssa, false);
+                let SP_name = self.SP_name.clone().unwrap_or(String::new());
+                let BP_name = self.BP_name.clone().unwrap_or(String::new());
+                let entry_offset = digstack::frontward_analysis(&ssa, SP_name, BP_name);
                 self.analysis_entry_store(ssa, entry_offset)
             };
 
                 // analysis exit blocks
             let exit_load = {
-                let exit_offset = self.analysis_exit_offset(ssa);
+                let SP_name = self.SP_name.clone().unwrap_or(String::new());
+                let exit_offset = digstack::backward_analysis(&ssa, SP_name);
                 self.analysis_exit_load(ssa, exit_offset)
             };
             (entry_store, exit_load)
@@ -379,227 +383,6 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         radeco_trace!("CallFixer|Entry_store is {:?}", entry_store);
         entry_store
     } 
-
-
-    // Analyze stack offset of the exit basic block.
-    // Because different structure and order of exit block and entry block,
-    // we use different algorithms for them
-    fn analysis_exit_offset(&self, ssa:&SSAStorage)
-            -> HashMap<LValueRef, i64> {
-        let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
-        let mut worklist: VecDeque<LValueRef> = VecDeque::new();
-        let mut visited: HashSet<LValueRef> = HashSet::new();
-
-        let reg_state = ssa.registers_at(&ssa.exit_node());
-        let nodes = ssa.args_of(reg_state);
-        for node in &nodes {
-            let SP_name = self.SP_name.clone().unwrap_or(String::new());
-            if ssa.get_register(node).contains(&SP_name) {
-                stack_offset.insert(*node, 0);
-                worklist.push_back(*node);
-            }
-        }
-        
-        while let Some(node) = worklist.pop_front() {
-            if !visited.contains(&node) {
-                visited.insert(node);
-            } else {
-                continue;
-            }
-
-            let base = stack_offset.get(&node).unwrap().clone();
-            let args = ssa.get_operands(&node);
-
-            let users = ssa.get_uses(&node);
-            for user in users {
-                match ssa.get_opcode(&user) {
-                    Some(MOpcode::OpWiden(_)) |
-                    Some(MOpcode::OpNarrow(_)) => {
-                        stack_offset.insert(user, base);
-                        worklist.push_back(user);
-                    }
-                    _ => { }
-                }
-            }
-
-            // The node maybe a comment, for call statements made it
-            if ssa.get_comment(&node).is_some() {
-                continue;
-            }
-
-            // Every SP met at one phi node will have the same value.
-            if ssa.is_phi(&node) {
-                for arg in args {
-                    stack_offset.insert(arg, base);
-                    worklist.push_back(arg);
-                }
-                continue;
-            }
-            
-            // Consider exprission.
-            if ssa.get_opcode(&node).is_none() {
-                continue;
-            }
-
-            let opc = ssa.get_opcode(&node).unwrap();
-            match opc {
-                MOpcode::OpWiden(_) | 
-                MOpcode::OpNarrow(_) => {
-                    stack_offset.insert(args[0], base);
-                    worklist.push_back(args[0]);
-                }
-                MOpcode::OpSub => {
-                    if let Some(MOpcode::OpConst(num)) = ssa.get_opcode(&args[1]) {
-                        stack_offset.insert(args[0], base + (num as i64));
-                        worklist.push_back(args[0]);
-                    }
-                }
-                MOpcode::OpAdd => {
-                    if let Some(MOpcode::OpConst(num)) = ssa.get_opcode(&args[0]) {
-                        stack_offset.insert(args[1], base - (num as i64));
-                        worklist.push_back(args[1]);
-                    }
-                }
-                _ => { }
-            }
-        }        
-    
-        radeco_trace!("CallFixer|Stack_offset: {:?}", stack_offset);
-        stack_offset
-    }
-
-    // Analyze stack offset of the first basic block
-    // This function could also be used as global offset search in reanalysis.
-    fn analysis_entry_offset(&self, ssa: &SSAStorage, is_global: bool) 
-            -> HashMap<LValueRef, i64> {
-        let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
-        {
-            let reg_state = ssa.registers_at(&ssa.start_node());
-            let nodes = ssa.args_of(reg_state);
-            for node in &nodes {
-                if ssa.get_comment(node).is_none() {
-                    continue;
-                }
-                if ssa.get_comment(node) != self.SP_name {
-                    continue;
-                }
-                stack_offset.insert(*node, 0);
-                break;
-            }
-        }
-
-        let nodes = if is_global {
-            let mut nodes: Vec<LValueRef> = Vec::new();
-            let mut walker = ssa.bfs_walk().nodes;    
-            while let Some(node) = walker.pop_front() {
-                nodes.push(node);
-            }
-            nodes
-        } else {
-            let blocks = ssa.succs_of(ssa.start_node());
-            assert_eq!(blocks.len(), 1);
-            ssa.exprs_in(&blocks[0])
-        };
-
-        for node in &nodes {
-            if let Some(opc) = ssa.get_opcode(node) {
-                if opc == MOpcode::OpCall && !is_global {
-                    break;
-                }
-
-                match opc {
-                    MOpcode::OpWiden(_) | MOpcode::OpNarrow(_) => {
-                        let args = ssa.get_operands(node);
-                        if stack_offset.contains_key(&args[0]) {
-                            let num = stack_offset.get(&args[0])
-                                                    .unwrap()
-                                                    .clone();
-                            stack_offset.insert(*node, num);
-                            continue;
-                        }
-                    }
-                    _ => {  }
-                }
-
-                // We only consider SP/BP.
-                if ssa.get_register(node).is_empty() {
-                    continue;
-                }
-                let regnames = ssa.get_register(node);
-                let SP_name = self.SP_name.clone().unwrap_or(String::new());
-                let BP_name = self.BP_name.clone().unwrap_or(String::new());
-                if !regnames.contains(&SP_name) && 
-                    !regnames.contains(&BP_name) { 
-                        continue;
-                    }
-
-                let args = ssa.get_operands(node);
-                if args.len() != 2 {
-                    continue;
-                }
-
-                let const_arg: i64;
-                let opcode_arg: i64;
-                match opc {
-                    MOpcode::OpSub => {
-                        const_arg = 1;
-                        opcode_arg = 0;
-                    }
-                    MOpcode::OpAdd => {
-                        const_arg = 0;
-                        opcode_arg = 1;
-                    }
-                    // Some compiler will initial SP with and 0xfffffff0
-                    MOpcode::OpAnd => {
-                        stack_offset.clear();
-                        stack_offset.insert(*node, 0);
-                        continue;
-                    }
-                    _ => {
-                        continue;
-                    }
-                }
-                if ssa.get_opcode(&args[opcode_arg as usize]).is_some() || 
-                    ssa.get_comment(&args[opcode_arg as usize]).is_some() ||
-                    (ssa.is_phi(&args[opcode_arg as usize]) && is_global) {
-                    if let Some(MOpcode::OpConst(num)) = 
-                                ssa.get_opcode(&args[const_arg as usize]) {
-                        // TODO: Some special cases may by not consided
-                        if !stack_offset.contains_key(&args[opcode_arg as usize]) {
-                            continue;
-                        }
-                        let base = stack_offset.get(&args[opcode_arg as usize])
-                                                                .unwrap()
-                                                                .clone() as i64;
-                        stack_offset.insert(*node, 
-                                    base + (opcode_arg - const_arg) * (num as i64));
-                        continue;
-                    }
-                }
-                radeco_warn!("No SP/BP algorithm Found!");
-            }
-
-            // If we are doing a global search, we should consider phi node.
-            if ssa.is_phi(node) && is_global {
-                let args = ssa.get_operands(node);
-                let mut nums: Vec<i64> = Vec::new();
-                for arg in &args {
-                    if stack_offset.contains_key(arg) {
-                        let num = stack_offset.get(arg).unwrap().clone();
-                        if !nums.contains(&num) {
-                            nums.push(num);
-                        }
-                    }
-                }
-                if nums.len() == 1 {
-                    stack_offset.insert(*node, nums[0]);
-                } 
-            }
-        }
-        radeco_trace!("CallFixer|Stack_offset: {:?}", stack_offset);
-        stack_offset
-    }
-
 
     // Get callee's node and its preserved registers
     fn preserves_for_call_context(&self, 
