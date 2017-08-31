@@ -480,9 +480,6 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 #[cfg(test)]
 mod test {
     use super::*;
-    use r2api::api_trait::R2Api;
-    use r2pipe::r2::R2;
-    use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
     use frontend::source::FileSource;
     use frontend::containers::RadecoModule;
 
@@ -491,14 +488,14 @@ mod test {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
         let functions = rmod.functions.clone();
-        let mut matched_func_vec: Vec<(u64, &String)> =
-            functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
+        let matched_func_vec: Vec<u64> =
+            functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
 
         // Analyze preserved for all functions.
         {
             let mut callfixer = CallFixer::new(&mut rmod);
             for func in &matched_func_vec {
-                callfixer.analysis(&func.0);
+                callfixer.analysis(&func);
             }    
         }
     }
@@ -508,17 +505,17 @@ mod test {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
         let functions = rmod.functions.clone();
-        let mut matched_func_vec: Vec<(u64, &String)> =
-            functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
+        let matched_func_vec: Vec<u64> =
+            functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
 
         // Analyze preserved for all functions.
         {
             let mut callfixer = CallFixer::new(&mut rmod);
             for func in &matched_func_vec {
-                callfixer.analysis(&func.0);
+                callfixer.analysis(&func);
             }    
             for func in &matched_func_vec {
-                callfixer.fix(&func.0);
+                callfixer.fix(&func);
             }    
         }
     }
@@ -528,20 +525,20 @@ mod test {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
         let functions = rmod.functions.clone();
-        let mut matched_func_vec: Vec<(u64, &String)> =
-            functions.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
+        let matched_func_vec: Vec<u64> =
+            functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
 
         // Analyze preserved for all functions.
         {
             let mut callfixer = CallFixer::new(&mut rmod);
             for func in &matched_func_vec {
-                callfixer.analysis(&func.0);
+                callfixer.analysis(&func);
             }    
             for func in &matched_func_vec {
-                callfixer.fix(&func.0);
+                callfixer.fix(&func);
             }    
             for func in &matched_func_vec {
-                callfixer.reanalysis(&func.0);
+                callfixer.reanalysis(&func);
             }    
         }
     }

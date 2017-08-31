@@ -12,7 +12,7 @@ use radeco_lib::frontend::bindings::{RadecoBindings, Binding};
 use radeco_lib::frontend::containers::{RadecoFunction, RFunction};
 use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::frontend::source::FileSource;
-use radeco_lib::middle::ssa::memory_ssa::memory_ssa;
+use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 use radeco_lib::middle::ssa::verifier;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::dce;
@@ -43,7 +43,6 @@ fn run_sccp(rmod: &mut RadecoModule<DefaultFnTy>)
     let matched_func_vec: Vec<u64> =
         functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
     for fn_addr in &matched_func_vec {
-        let writer: IRWriter = Default::default();
         let rfn = rmod.functions.get_mut(fn_addr)
                         .expect("RadecoFunction Not Found!");
         let mut ssa = rfn.ssa_mut().clone();
@@ -80,7 +79,7 @@ fn run_memory_ssa(rmod: &RadecoModule<DefaultFnTy>)
         let rfn = rmod.functions.get(fn_addr)
                         .expect("RadecoFunction Not Found!");
         let memory_ssa = {
-            let mut mssa = memory_ssa::new(&rfn.ssa);
+            let mut mssa = MemorySSA::new(&rfn.ssa);
             mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
                     &Some(rfn.call_ctx.iter().cloned()
                           .map(|x| if x.ssa_ref.is_some() {
@@ -99,7 +98,7 @@ fn run_write(rmod: &RadecoModule<DefaultFnTy>)
     let matched_func_vec: Vec<u64> =
         functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
     for fn_addr in &matched_func_vec {
-        let writer: IRWriter = Default::default();
+        let mut writer: IRWriter = Default::default();
         let rfn = rmod.functions.get(fn_addr)
                         .expect("RadecoFunction Not Found!");
         let ssa = rfn.ssa_ref();

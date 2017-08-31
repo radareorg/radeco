@@ -258,7 +258,7 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
 mod test {
     use super::*;
     use serde_json;
-    use r2api::structs::{LFunctionInfo, LRegInfo};
+    use r2api::structs::LFunctionInfo;
     use std::fs::File;
     use std::io::prelude::*;
 
@@ -272,7 +272,7 @@ mod test {
 
     #[test]
     fn bin_ls_test() {
-        let mut instructions: LFunctionInfo;
+        let instructions: LFunctionInfo;
         let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
@@ -297,7 +297,7 @@ mod test {
 
     #[test]
     fn ct1_test() {
-        let mut instructions: LFunctionInfo;
+        let instructions: LFunctionInfo;
         let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
