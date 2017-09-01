@@ -64,6 +64,7 @@ pub mod frontend {
     pub mod ssaconstructor;
     pub mod source;
     pub mod containers;
+    pub mod radeco_containers;
     pub mod bindings;
 }
 
