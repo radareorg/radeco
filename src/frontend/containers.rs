@@ -164,7 +164,7 @@ fn ssa_single_fn(f: &FunctionInfo,
 
 // This function fixes up the call information.
 //
-// During SSA construction, call instructions are special cased, i.e. we do not sue the
+// During SSA construction, call instructions are special cased, i.e. we do not use the
 // corresponding esil for these instructions as inferring that these were call instructions from
 // the string is additional effort. As a concequence, the call instructions have a comment string
 // as an argument rather than an integer constant (address of the callee). This function iterates
