@@ -33,12 +33,13 @@
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
+use std::collections::{btree_map, hash_map};
 use std::path::Path;
 
 use petgraph::graph::NodeIndex;
 
 use r2pipe::r2::R2;
-use r2api::structs::{LOpInfo};
+use r2api::structs::{LOpInfo, LRegInfo};
 use r2api::api_trait::R2Api;
 
 use middle::ssa::ssastorage::SSAStorage;
@@ -60,6 +61,9 @@ pub struct ProjectOptions {
 pub struct RadecoProject {
     /// Map of loaded modules
     modules: HashMap<String, RadecoModule>,
+    /// Register/Arch information for loaded project
+    /// TODO: Discuss and replace with arch
+    reginfo: LRegInfo,
 }
 
 #[derive(Debug)]
@@ -121,7 +125,7 @@ pub struct RadecoFunction {
     /// Represents the type of function
     ftype: FunctionType,
     /// Raw instruction information for the current function
-    instructions: Vec<LOpInfo>,
+    pub instructions: Vec<LOpInfo>,
     /// Is current function known to be recursive
     is_recursive: bool,
     /// Human readable name for the function. Taken either from
@@ -144,10 +148,15 @@ pub struct RadecoFunction {
 /// Implements the `ProjectLoader` trait
 pub struct R2ProjectLoader { }
 
+#[derive(Debug)]
+/// Load a RadecoProject from formatted JSON files
+pub struct JSONProjectLoader { }
+
 impl RadecoProject {
     pub fn new() -> RadecoProject {
         RadecoProject {
             modules: HashMap::new(),
+            reginfo: LRegInfo::default(),
         }
     }
 
@@ -162,6 +171,18 @@ impl RadecoProject {
             self.modules.insert(module_name_str.clone(), rmod);
             Ok(self.modules.get_mut(&module_name_str).unwrap())
         }
+    }
+
+    pub fn modules(&self) -> hash_map::Values<String, RadecoModule> {
+        self.modules.values()
+    }
+
+    pub fn modules_mut(&mut self) -> hash_map::ValuesMut<String, RadecoModule> {
+        self.modules.values_mut()
+    }
+
+    pub fn reginfo(&self) -> &LRegInfo {
+        &self.reginfo
     }
 }
 
@@ -190,6 +211,14 @@ impl RadecoModule {
     pub fn function_at(&self, offset: &u64) -> Option<&RadecoFunction> {
         self.functions.get(offset)
     }
+
+    pub fn functions(&self) -> btree_map::Values<u64, RadecoFunction> {
+        self.functions.values()
+    }
+
+    pub fn functions_mut(&mut self) -> btree_map::ValuesMut<u64, RadecoFunction> {
+        self.functions.values_mut()
+    }
 }
 
 impl RadecoFunction {
@@ -209,6 +238,14 @@ impl RadecoFunction {
             xrefs: Vec::new(),
         }
     }
+
+    pub fn ssa(&self) -> &SSAStorage {
+        &self.ssa
+    }
+
+    pub fn ssa_mut(&mut self) -> &mut SSAStorage {
+        &mut self.ssa
+    }
 }
 
 impl ProjectLoader for R2ProjectLoader {
@@ -220,6 +257,7 @@ impl ProjectLoader for R2ProjectLoader {
         let options = options.unwrap_or(ProjectOptions::default());
         let bpath = String::from(bin.as_ref());
         let mut r2 = R2::new(Some(bin.as_ref()))?;
+        r2.init();
         let mut rp = RadecoProject::new();
         {
             // TODO: Setup the project with more information,
@@ -238,6 +276,8 @@ impl ProjectLoader for R2ProjectLoader {
                 } else {
                     FunctionType::Function
                 };
+                let insts = r2.instructions_at(offset);
+                rfn.instructions = insts;
             }
         }
         Ok(rp)
