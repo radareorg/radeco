@@ -655,8 +655,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             };
             self.write_variable(*address, id, value);
             self.ssa.set_register(value, &self.regfile
-                                                .get_name(id)
-                                                .unwrap_or(String::new()));
+                                              .get_name(id)
+                                              .unwrap_or(String::new()));
             return;
         }
 
