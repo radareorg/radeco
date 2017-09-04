@@ -300,7 +300,7 @@ impl SSAStorage {
         self.g.node_indices().collect()
     }
 
-    pub fn read_const(&self, ni: NodeIndex) -> Option<u64> {
+    pub fn get_const(&self, ni: NodeIndex) -> Option<u64> {
         if let NodeData::Op(MOpcode::OpConst(n), _) = self.g[ni] {
             Some(n)
         } else {
@@ -640,6 +640,13 @@ impl SSA for SSAStorage {
 
     fn get_register(&self, i: &NodeIndex) -> Vec<String> {
         let mut regs = Vec::new();
+        // Self-loop in RadecoIL is not welcomed ;D
+        // Thus, Comment Node in start_node will not have a RegisterInfo edge pointing to itself.
+        if let Some(s) = self.get_comment(i) {
+            if self.block_of(i) == self.start_node() {
+                regs.push(s);
+            }
+        } 
         let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             match self.g[edge] {
