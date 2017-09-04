@@ -1171,3 +1171,9 @@ impl Iterator for Walker {
         self.nodes.pop_front()
     }
 }
+
+impl DoubleEndedIterator for Walker {
+    fn next_back(&mut self) -> Option<NodeIndex> {
+        self.nodes.pop_back()
+    }
+}

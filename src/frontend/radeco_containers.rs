@@ -184,6 +184,10 @@ impl RadecoProject {
     pub fn reginfo(&self) -> &LRegInfo {
         &self.reginfo
     }
+
+    pub fn set_reginfo(&mut self, reginfo: LRegInfo) {
+        self.reginfo = reginfo;
+    }
 }
 
 impl RadecoModule {
@@ -259,6 +263,7 @@ impl ProjectLoader for R2ProjectLoader {
         let mut r2 = R2::new(Some(bin.as_ref()))?;
         r2.init();
         let mut rp = RadecoProject::new();
+        rp.set_reginfo(r2.reg_info().expect("Unable to load `LRegInfo`"));
         {
             // TODO: Setup the project with more information,
             // such as: arch, platform etc.
