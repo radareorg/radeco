@@ -50,7 +50,7 @@ pub struct SSAConstruct<'a, T>
     // Used to keep track of the offset within an instruction.
     instruction_offset: u64,
     needs_new_block: bool,
-    mem_id: usize,
+    mem_id: u64,
 }
 
 impl<'a, T> SSAConstruct<'a, T>
@@ -96,12 +96,12 @@ impl<'a, T> SSAConstruct<'a, T>
         sc
     }
 
-    fn set_mem_id(&mut self, id: usize) {
+    fn set_mem_id(&mut self, id: u64) {
         assert_eq!(self.mem_id, 0);
         self.mem_id = id;
     }
 
-    fn mem_id(&self) -> usize {
+    fn mem_id(&self) -> u64 {
         assert_ne!(self.mem_id, 0);
         self.mem_id
     }
@@ -187,14 +187,14 @@ impl<'a, T> SSAConstruct<'a, T>
         let (op, vt) = match *token {
             Token::ECmp => {
                 let op = MOpcode::OpSub;
-                let vt = ValueType::Integer { width: result_size };
+                let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(1));
                 (op, vt)
             }
             Token::ELt => {
-                (MOpcode::OpLt, ValueType::Integer { width: 1 })
+                (MOpcode::OpLt, ValueInfo::new_scalar(ir::WidthSpec::Known(1)))
             }
             Token::EGt => {
-                (MOpcode::OpGt, ValueType::Integer { width: 1 })
+                (MOpcode::OpGt, ValueInfo::new_scalar(ir::WidthSpec::Known(1)))
             }
             Token::EEq => {
                 // This case is the only one that performs a write_register call. Since all
@@ -215,6 +215,9 @@ impl<'a, T> SSAConstruct<'a, T>
                             self.phiplacer
                                 .add_block(target_addr, Some(*address), Some(UNCOND_EDGE));
                             self.needs_new_block = true;
+                        } else {
+                            // TODO: Issue#86
+                            radeco_warn!("Unhandled indirect control flow transfer");
                         }
                     } else {
                         // We are writing into a register.
@@ -223,12 +226,12 @@ impl<'a, T> SSAConstruct<'a, T>
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
                     // OpStore operation.
-                    radeco_warn!("Memory Write happends!");
+                    radeco_trace!("Memory Write");
                     let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
                                                         address,
-                                                        ValueType::Integer { width: 0 });
-                    self.phiplacer.op_use(&op_node, 0, lhs.as_ref().expect("lhs of `MemoryWrite` cannot be `None`"));
-                    self.phiplacer.op_use(&op_node, 1, rhs.as_ref().expect("rhs of `MemoryWrite` cannot be `None`"));
+                                                        ValueInfo::new_scalar(ir::WidthSpec::Known(0)));
+                    self.phiplacer.op_use(&op_node, 0, lhs.as_ref().expect("`addr` of `MemoryWrite` cannot be `None`"));
+                    self.phiplacer.op_use(&op_node, 1, rhs.as_ref().expect("`value` of `MemoryWrite` cannot be `None`"));
                 }
                 return None;
             }
@@ -238,7 +241,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 // The next instruction must be a part of the true block, unless we see an "{"
                 let op_node = self.phiplacer.add_op(&MOpcode::OpITE,
                                                     address,
-                                                    ValueType::Integer { width: 1 });
+                                                    ValueInfo::new_scalar(ir::WidthSpec::Known(1)));
                 self.nesting.push((op_node, *address));
                 // Though this is a ternary operator, the other two operands are actually
                 // represented throught the control flow edges of the block to which ITE belongs
@@ -248,50 +251,51 @@ impl<'a, T> SSAConstruct<'a, T>
                 let _true_block = self.phiplacer
                                       .add_block(true_address, Some(*address), Some(TRUE_EDGE));
                 let true_comment = self.phiplacer.add_comment(*address,
-                                                              ValueType::Integer { width: 0 },
+                                                              scalar!(0),
                                                               format!("T: {}", true_address));
                 self.phiplacer.op_use(&op_node, 0, lhs.as_ref().expect("lhs cannot be `None`"));
                 self.phiplacer.op_use(&op_node, 1, &true_comment);
                 return None;
             }
             Token::ELsl => {
-                (MOpcode::OpLsl, ValueType::Integer { width: result_size })
+                (MOpcode::OpLsl, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::ELsr => {
-                (MOpcode::OpLsr, ValueType::Integer { width: result_size })
+                (MOpcode::OpLsr, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::ERor => {
+                // TODO: Issue#87
                 unimplemented!()
             }
             Token::ERol => {
                 unimplemented!()
             }
             Token::EAnd => {
-                (MOpcode::OpAnd, ValueType::Integer { width: result_size })
+                (MOpcode::OpAnd, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EOr => {
-                (MOpcode::OpOr, ValueType::Integer { width: result_size })
+                (MOpcode::OpOr, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::ENeg => {
-                (MOpcode::OpNot, ValueType::Integer { width: result_size })
+                (MOpcode::OpNot, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EMul => {
-                (MOpcode::OpMul, ValueType::Integer { width: result_size })
+                (MOpcode::OpMul, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EXor => {
-                (MOpcode::OpXor, ValueType::Integer { width: result_size })
+                (MOpcode::OpXor, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EAdd => {
-                (MOpcode::OpAdd, ValueType::Integer { width: result_size })
+                (MOpcode::OpAdd, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::ESub => {
-                (MOpcode::OpSub, ValueType::Integer { width: result_size })
+                (MOpcode::OpSub, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EDiv => {
-                (MOpcode::OpDiv, ValueType::Integer { width: result_size })
+                (MOpcode::OpDiv, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EMod => {
-                (MOpcode::OpMod, ValueType::Integer { width: result_size })
+                (MOpcode::OpMod, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EPoke(_) => {
                 // TODO: rhs has to be cast to size 'n' if it's size is not already n.
@@ -299,7 +303,8 @@ impl<'a, T> SSAConstruct<'a, T>
                 let mem = self.phiplacer.read_variable(address, mem_id);
                 let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
                                                     address,
-                                                    ValueType::Integer { width: 0 });
+                                                    scalar!(0));
+
                 self.phiplacer.op_use(&op_node, 0, &mem);
                 self.phiplacer.op_use(&op_node, 1, lhs.as_ref().expect("lhs cannot be `None`"));
                 self.phiplacer.op_use(&op_node, 2, rhs.as_ref().expect("rhs cannot be `None`"));
@@ -312,7 +317,8 @@ impl<'a, T> SSAConstruct<'a, T>
                 let mem = self.phiplacer.read_variable(address, self.mem_id);
                 let op_node = self.phiplacer.add_op(&MOpcode::OpLoad,
                                                     address,
-                                                    ValueType::Integer { width: n as u16 });
+                                                    ValueInfo::new_unresolved(ir::WidthSpec::from(n as u16)));
+                
                 self.phiplacer.op_use(&op_node, 0, &mem);
                 self.phiplacer.op_use(&op_node, 1, lhs.as_ref().expect("lhs cannot be `None`"));
                 return Some(op_node);
@@ -343,7 +349,7 @@ impl<'a, T> SSAConstruct<'a, T>
         if rhs.is_some() {
             let (lhs, rhs) = match lhs_size.cmp(&rhs_size) {
                 cmp::Ordering::Greater => {
-                    let vt = ValueType::Integer { width: lhs_size };
+                    let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(lhs_size));
                     let casted_rhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(lhs_size), address, vt);
                     self.phiplacer.op_use(&casted_rhs, 0, rhs.as_ref().expect(""));
@@ -351,7 +357,7 @@ impl<'a, T> SSAConstruct<'a, T>
                     (lhs.expect("lhs cannot be `None`"), casted_rhs)
                 }
                 cmp::Ordering::Less => {
-                    let vt = ValueType::Integer { width: rhs_size };
+                    let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(rhs_size));
                     let casted_lhs = self.phiplacer
                                          .add_op(&MOpcode::OpWiden(rhs_size), address, vt);
                     self.phiplacer.op_use(&casted_lhs, 0, lhs.as_ref().expect("lhs cannot be `None`"));
@@ -387,15 +393,15 @@ impl<'a, T> SSAConstruct<'a, T>
             let reg = self.regfile.whole_registers.get(i).expect("This cannot be `None`");
             // Name the newly created nodes with register names.
             let argnode = self.phiplacer.add_comment(start_address, *reg, name.clone());
-            self.phiplacer.write_variable(start_address, i, argnode);
+            self.phiplacer.write_variable(start_address, i as u64, argnode);
         }
 
         {
             // Insert "mem" pseudo variable
             let reglen = self.regfile.whole_names.len();
-            self.set_mem_id(reglen);
+            self.set_mem_id(reglen as u64);
             let mem_comment = self.phiplacer.add_comment(start_address,
-                                                         ValueType::Integer { width: 0 },
+                                                         scalar!(0),
                                                          "mem".to_owned());
             let mem_id = self.mem_id();
             self.phiplacer.write_variable(start_address, mem_id, mem_comment);
@@ -452,7 +458,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 let src_address = node.1;
                 let src_node = &node.0;
                 let false_comment = self.phiplacer.add_comment(src_address,
-                                                               ValueType::Integer { width: 0 },
+                                                               scalar!(0),
                                                                format!("F: {}", current_address));
                 self.phiplacer.add_block(current_address, Some(src_address), Some(FALSE_EDGE));
                 self.phiplacer.op_use(src_node, 2, &false_comment);
@@ -466,11 +472,11 @@ impl<'a, T> SSAConstruct<'a, T>
                 if ty == "call" {
                     let unknown_str = "unknown".to_owned();
                     let call_operand = self.phiplacer.add_comment(current_address,
-                                                                  ValueType::Integer { width: 0 },
+                                                                  scalar!(0),
                                                                   op.opcode.clone().unwrap_or(unknown_str));
                     let op_call = self.phiplacer.add_op(&MOpcode::OpCall,
                                                         &mut current_address,
-                                                        ValueType::Integer { width: 0 });
+                                                        scalar!(0));
                     // Since we cannot reason about call, a safe assumption is that it reads and
                     // writes every register.
                     for (i, reg) in self.regfile.whole_names.iter().enumerate() {

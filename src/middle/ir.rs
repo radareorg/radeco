@@ -26,7 +26,23 @@ impl WidthSpec {
     pub fn get_width(&self) -> Option<u16> {
         match self {
             &WidthSpec::Known(ref w) => Some(*w),
-            _ => Nonw,
+            _ => None,
+        }
+    }
+
+    pub fn new_known(w: u16) -> WidthSpec {
+        assert!(&[0, 1, 2, 4, 8, 16, 32, 64, 128].contains(&w));
+        WidthSpec::Known(w)
+    }
+}
+
+impl From<u16> for WidthSpec {
+    fn from(other: u16) -> WidthSpec {
+        if other < u16::max_value() {
+            assert!(&[0, 1, 2, 4, 8, 16, 32, 64, 128].contains(&other));
+            WidthSpec::Known(other)
+        } else {
+            WidthSpec::Unknown
         }
     }
 }
@@ -106,8 +122,8 @@ pub enum MOpcode {
     OpCall,
     OpLoad,
     OpStore,
-    OpNarrow(WidthSpec),
-    OpWiden(WidthSpec),
+    OpNarrow(u16),
+    OpWiden(u16),
     OpConst(u64),
     OpNop,
     OpInvalid,

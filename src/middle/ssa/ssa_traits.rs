@@ -49,6 +49,12 @@ pub struct ValueInfo {
     width: ir::WidthSpec,
 }
 
+macro_rules! scalar {
+    ($w:expr) => {
+        ValueInfo::new($crate::middle::ssa::ssa_traits::ValueType::Scalar, ir::WidthSpec::new_known($w))
+    }
+}
+
 impl ValueInfo {
     pub fn new(vty: ValueType, width: ir::WidthSpec) -> ValueInfo {
         ValueInfo {
@@ -57,16 +63,40 @@ impl ValueInfo {
         }
     }
 
-    pub fn new_unresolved(width: ir::Widthspec) -> ValueInfo {
+    pub fn width(&self) -> &ir::WidthSpec {
+        &self.width
+    }
+
+    pub fn new_unresolved(width: ir::WidthSpec) -> ValueInfo {
         ValueInfo::new(ValueType::Unresolved, width)
     }
 
-    pub fn new_scalar(width: ir::Widthspec) -> ValueInfo {
+    pub fn new_scalar(width: ir::WidthSpec) -> ValueInfo {
         ValueInfo::new(ValueType::Scalar, width)
     }
 
-    pub fn new_reference(width: ir::Widthspec) -> ValueInfo {
+    pub fn new_reference(width: ir::WidthSpec) -> ValueInfo {
         ValueInfo::new(ValueType::Reference, width)
+    }
+
+    pub fn mark_as_scalar(&mut self) {
+        self.vty = ValueType::Scalar;
+    }
+
+    pub fn mark_as_reference(&mut self) {
+        self.vty = ValueType::Reference;
+    }
+
+    pub fn value_type(&self) -> &ValueType {
+        &self.vty
+    }
+
+    pub fn is_scalar(&self) -> bool {
+        self.vty == ValueType::Scalar
+    }
+
+    pub fn is_reference(&self) -> bool {
+        self.vty == ValueType::Reference
     }
 }
 
