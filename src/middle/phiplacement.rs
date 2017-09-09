@@ -12,12 +12,11 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::Ordering;
 use std::u64;
 
-use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueType};
-use middle::ir::MAddress;
+use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueInfo};
+use middle::ir::{self, MAddress, MOpcode};
 
 use middle::ssa::ssa_traits::{NodeType, NodeData};
 use middle::regfile::SubRegisterFile;
-use middle::ir::MOpcode;
 
 pub type VarId = usize;
 
@@ -25,7 +24,7 @@ const UNCOND_EDGE: u8 = 2;
 
 pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
     ssa: &'a mut T,
-    pub variable_types: Vec<ValueType>,
+    pub variable_types: Vec<ValueInfo>,
     sealed_blocks: HashSet<T::ActionRef>,
     current_def: Vec<BTreeMap<MAddress, T::ValueRef>>,
     incomplete_phis: HashMap<MAddress, HashMap<VarId, T::ValueRef>>,
@@ -55,7 +54,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
     }
 
-    pub fn add_variables(&mut self, variable_types: Vec<ValueType>) {
+    pub fn add_variables(&mut self, variable_types: Vec<ValueInfo>) {
         for _ in &variable_types {
             self.current_def.push(BTreeMap::new());
         }
@@ -68,6 +67,10 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                       variable,
                       self.regfile.whole_names.get(variable),
                       address);
+
+        if let Some(ref rname) = self.regfile.whole_names.get(variable) {
+            self.ssa.set_register(value, rname.to_owned());
+        }
 
         self.current_def[variable].insert(address, value);
         self.outputs.insert(value, variable);
@@ -496,7 +499,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     // particular
     // instruction has to go into.
 
-    fn add_phi(&mut self, address: &mut MAddress, vt: ValueType) -> T::ValueRef {
+    fn add_phi(&mut self, address: &mut MAddress, vt: ValueInfo) -> T::ValueRef {
         let i = self.ssa.add_phi(vt);
         self.index_to_addr.insert(i, *address);
         address.offset += 1;
@@ -506,10 +509,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
     // Some constants are generated to operate with other OpCode, which shoud be careful
     // about its width. Because we treat all consts are 64 bit.
-    fn add_narrow_const(&mut self, address: &mut MAddress, value: u64, vt: ValueType) -> T::ValueRef {
-        let width = match vt {
-            ValueType::Integer{ width: w } => { w }
+    fn add_narrow_const(&mut self, address: &mut MAddress, value: u64, vt: ValueInfo) -> T::ValueRef {
+        let width = match vt.width {
+            ir::WidthSpec::Known(ref w) => *w,
+            _ => 64,
         };
+
         if width < 64 {
             let val: u64 = value & (1 << (width) - 1);
             let const_node = self.add_const(*address, val);
@@ -535,13 +540,13 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         i
     }
 
-    pub fn add_undefined(&mut self, address: MAddress, vt: ValueType) -> T::ValueRef {
+    pub fn add_undefined(&mut self, address: MAddress, vt: ValueInfo) -> T::ValueRef {
         let i = self.ssa.add_undefined(vt);
         self.index_to_addr.insert(i, address);
         i
     }
 
-    pub fn add_comment(&mut self, address: MAddress, vt: ValueType, msg: String) -> T::ValueRef {
+    pub fn add_comment(&mut self, address: MAddress, vt: ValueInfo, msg: String) -> T::ValueRef {
         let i = self.ssa.add_comment(vt, msg.clone());
         
         // Add register information into comment;
@@ -560,7 +565,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     // TODO: Add a more convenient method to add an opcode and operands to it.
     // Something like the previous verified_add_op.
 
-    pub fn add_op(&mut self, op: &MOpcode, address: &mut MAddress, vt: ValueType) -> T::ValueRef {
+    pub fn add_op(&mut self, op: &MOpcode, address: &mut MAddress, vt: ValueInfo) -> T::ValueRef {
         let i = self.ssa.add_op(*op, vt, None);
         self.index_to_addr.insert(i, *address); 
         address.offset += 1;
@@ -577,10 +582,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let info = match self.regfile.get_subregister(var) {
             Some(reg) => reg,
             None => {
-                //writeln!(io::stderr(), "Error: Radeco haven't supported float nowadays");
-                //process::exit(1);
-                radeco_warn!("Nowadays, radeco could not support float operation");
-                let vt = ValueType::Integer{ width: 0 };
+                radeco_warn!("Float operations are not supported (yet)");
+                let vi = ValueInfo::new_scalar(ir::WidthSpec::Unknown);
                 let node = self.add_undefined(*address, vt);
                 return node;
             }
@@ -630,11 +633,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         };
         let id = info.base;
 
-
-        let width: u16 = match self.variable_types[id] {
-            ValueType::Integer { width } => width,
-        };
-        let vt = From::from(width);
+        let vt = self.variable_types[id];
+        let width = vt.width.get_width().unwrap_or(64);
 
         if info.width >= width as usize {
             // Register width should be corresponding with its residence's width.
@@ -710,9 +710,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     }
 
     pub fn operand_width(&self, node: &T::ValueRef) -> u16 {
-        match self.ssa.get_node_data(node).unwrap().vt {
-            ValueType::Integer{ref width} => *width,
-        }
+        self.ssa.get_node_data(node).unwrap().width.get_width().unwrap_or(64)
     }
 
     fn new_block(&mut self, bb: MAddress) -> T::ActionRef {

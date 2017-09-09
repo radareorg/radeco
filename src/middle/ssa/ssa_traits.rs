@@ -7,7 +7,7 @@
 
 //! Defines the traits to be implemented by SSA data structures.
 //!
-//! These traits extend upon the ones provided in `cfg_traits.1
+//! These traits extend upon the ones provided in `cfg_traits`
 //!
 //! # Design
 //!
@@ -17,14 +17,10 @@
 //!
 //!  * `SSAMod` - This trait provides methods to __manipulate__ operation nodes.
 //!
-//!  * `SSAExtras` - TODO
+//!  * `SSAExtras` - Provides additional methods that allow associated information to be stored
 //!
 //! The associated type `SSA::ValueRef` is used by the methods to refer to
 //! nodes.
-//!  `ValueRefs` are invalidated by removal or replacement of the target node.
-//!  You can revalidate a ValueRef by calling `SSA::refresh` on it.
-//!  Currently `SSAStorage` automatically uses `refresh` on arguments of its
-//!  `*_use`, `get_node_data` and `replace` methods.
 
 use std::hash::Hash;
 use std::fmt::{self, Debug};
@@ -33,49 +29,48 @@ use middle::ir;
 use super::cfg_traits::{CFG, CFGMod};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Defines the high level `type` of value for a node. It is only used to differentiate between
+/// references and non-reference (scalar) types.
 pub enum ValueType {
-    Integer {
-        width: ir::WidthSpec,
-    },
+    /// Pointer or reference to code or memory
+    Reference,
+    /// Not a pointer type
+    Scalar,
+    /// Not (yet) resolved to be a reference or a constant
+    Unresolved,
 }
 
-impl<'a> From<&'a str> for ValueType {
-    fn from(v: &'a str) -> ValueType {
-        let t = v.to_owned().chars().nth(0).unwrap();
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Information for a `ValueRef`
+pub struct ValueInfo {
+    /// `Type` of value
+    vty: ValueType,
+    /// `width` of the operation, should be in 1, 2, 4, 8, 16, 32, 64, 128
+    width: ir::WidthSpec,
+}
 
-        let w = match t {
-            'i' => v[1..].parse::<u16>().unwrap(),
-            _ => unimplemented!(),
-        };
-
-        ValueType::Integer { width: w }
+impl ValueInfo {
+    pub fn new(vty: ValueType, width: ir::WidthSpec) -> ValueInfo {
+        ValueInfo {
+            vty: vty,
+            width: width,
+        }
     }
-}
 
-impl From<String> for ValueType {
-    fn from(v: String) -> ValueType {
-        From::from(&*v)
+    pub fn new_unresolved(width: ir::Widthspec) -> ValueInfo {
+        ValueInfo::new(ValueType::Unresolved, width)
     }
-}
 
-impl From<u16> for ValueType {
-    fn from(v: u16) -> ValueType {
-        ValueType::Integer { width: v as ir::WidthSpec }
+    pub fn new_scalar(width: ir::Widthspec) -> ValueInfo {
+        ValueInfo::new(ValueType::Scalar, width)
     }
-}
 
-impl From<usize> for ValueType {
-    fn from(v: usize) -> ValueType {
-        ValueType::Integer { width: v as ir::WidthSpec }
+    pub fn new_reference(width: ir::Widthspec) -> ValueInfo {
+        ValueInfo::new(ValueType::Reference, width)
     }
 }
 
 pub struct BBInfo;
-//// Data associated with a basic block. Use is optional.
-//#[derive(Clone, Debug)]
-//pub struct BBInfo {
-    //pub addr: u64,
-//}
 
 /// Value node without operands
 #[derive(Clone, Debug)]
@@ -86,6 +81,7 @@ pub enum NodeType {
     Phi,
     /// A node with unknown value.
     Undefined,
+    /// Generic comment, used to represent other data
     Comment(String),
 }
 
@@ -103,10 +99,10 @@ impl fmt::Display for NodeType {
     }
 }
 
-/// Value node without operands with `ValueType`
 #[derive(Clone, Debug)]
+/// Value node without operands with `ValueInfo`
 pub struct NodeData {
-    pub vt: ValueType,
+    pub vt: ValueInfo,
     pub nt: NodeType,
 }
 
@@ -226,7 +222,7 @@ pub trait SSAMod: SSA + CFGMod {
     /// Add a new operation node.
     fn add_op(&mut self,
               opc: ir::MOpcode,
-              vt: ValueType,
+              vt: ValueInfo,
               addr: Option<u64>)
               -> Self::ValueRef;
 
@@ -234,14 +230,14 @@ pub trait SSAMod: SSA + CFGMod {
     fn add_const(&mut self, value: u64) -> Self::ValueRef;
 
     /// Add a new phi node.
-    fn add_phi(&mut self, vt: ValueType) -> Self::ValueRef;
+    fn add_phi(&mut self, vt: ValueInfo) -> Self::ValueRef;
 
     /// Add a new undefined node
-    fn add_undefined(&mut self, vt: ValueType) -> Self::ValueRef;
+    fn add_undefined(&mut self, vt: ValueInfo) -> Self::ValueRef;
 
     /// Add a new comment node
     fn add_comment(&mut self,
-                   vt: ValueType,
+                   vt: ValueInfo,
                    msg: String)
                    -> Self::ValueRef;
     

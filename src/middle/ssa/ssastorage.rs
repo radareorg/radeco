@@ -19,7 +19,7 @@ use middle::ir::{MAddress, MOpcode};
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
-use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueType};
+use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
 use super::cfg_traits::{CFG, CFGMod};
 use utils::logger;
 
@@ -63,18 +63,18 @@ pub type AssociatedData = HashMap<NodeIndex, AdditionalData>;
 /// Value nodes are `Op`, `Phi`, `Comment`, `Undefined` and `Removed`.
 /// Action nodes are `Unreachable`, `BasicBlock`, `DynamicAction`
 /// `RegisterState` is neither.
-/// Value nodes have a `ValueType` that can be extracted with
+/// Value nodes have a `ValueInfo` that can be extracted with
 /// `SSA::get_node_data`
 #[derive(Clone, Debug)]
 pub enum NodeData {
     /// Represents on operation.
-    Op(MOpcode, ValueType),
+    Op(MOpcode, ValueInfo),
     /// Represents a phi node.
-    Phi(ValueType, String),
+    Phi(ValueInfo, String),
     /// Represents an undefined node with a comment.
-    Comment(ValueType, String),
+    Comment(ValueInfo, String),
     /// Represents an undefined node without comment.
-    Undefined(ValueType),
+    Undefined(ValueInfo),
     /// Placeholder for value nodes.
     Removed,
     /// Placeholder for action nodes.
@@ -861,27 +861,26 @@ impl SSAMod for SSAStorage {
         }
     }
 
-    fn add_op(&mut self, opc: MOpcode, vt: ValueType, _: Option<u64>) -> NodeIndex {
+    fn add_op(&mut self, opc: MOpcode, vt: ValueInfo, _: Option<u64>) -> NodeIndex {
         self.insert_node(NodeData::Op(opc, vt))
     }
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
-
         let data = NodeData::Op(MOpcode::OpConst(value),
-                                ValueType::Integer { width: 64 });
+                                ValueInfo::Integer { width: 64 });
 
         self.insert_node(data)
     }
 
-    fn add_phi(&mut self, vt: ValueType) -> NodeIndex {
+    fn add_phi(&mut self, vt: ValueInfo) -> NodeIndex {
         self.insert_node(NodeData::Phi(vt, "".to_owned()))
     }
 
-    fn add_undefined(&mut self, vt: ValueType) -> NodeIndex {
+    fn add_undefined(&mut self, vt: ValueInfo) -> NodeIndex {
         self.insert_node(NodeData::Undefined(vt))
     }
 
-    fn add_comment(&mut self, vt: ValueType, msg: String) -> NodeIndex {
+    fn add_comment(&mut self, vt: ValueInfo, msg: String) -> NodeIndex {
         self.insert_node(NodeData::Comment(vt, msg))
     }
 

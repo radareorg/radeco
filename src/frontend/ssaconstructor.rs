@@ -21,10 +21,10 @@ use r2api::structs::{LOpInfo, LRegInfo};
 use esil::parser::{Parse, Parser};
 use esil::lexer::{Token, Tokenizer};
 
-use middle::ir::{MAddress, MOpcode};
+use middle::ir::{self, MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueType};
+use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
 
 pub type VarId = usize;
 
@@ -92,7 +92,7 @@ impl<'a, T> SSAConstruct<'a, T>
         // Add all the registers to the variable list.
         sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
         // Add a new variable for "memory".
-        sc.phiplacer.add_variables(vec![ValueType::Integer { width: 0 }]);
+        sc.phiplacer.add_variables(vec![ValueInfo::new_scalar(ir::WidthSpec::Known(0))]);
         sc
     }
 
