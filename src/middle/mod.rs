@@ -14,9 +14,10 @@ pub mod ir;
 #[allow(non_snake_case)] pub mod phiplacement;
 pub mod regfile;
 
+#[macro_use]
 pub mod ssa {
     pub mod cfg_traits;
-    pub mod ssa_traits;
+    #[macro_use] pub mod ssa_traits;
     pub mod ssastorage;
     pub mod error;
     pub mod ssadot;
