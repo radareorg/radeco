@@ -12,7 +12,24 @@
 use std::fmt;
 
 pub type Address = u64;
-pub type WidthSpec = u16;
+
+/// Used to describe the width of an operand/operation in a SSA Node.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WidthSpec {
+    /// Takes whatever width the other operation takes
+    Adaptive,
+    Known(u16),
+    Unknown,
+}
+
+impl WidthSpec {
+    pub fn get_width(&self) -> Option<u16> {
+        match self {
+            &WidthSpec::Known(ref w) => Some(*w),
+            _ => Nonw,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // New address struct

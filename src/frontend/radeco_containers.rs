@@ -130,9 +130,9 @@ pub struct RadecoFunction {
     is_recursive: bool,
     /// Human readable name for the function. Taken either from
     /// the symbol table or assigned based on offset.
-    name: Cow<'static, str>,
+    pub name: Cow<'static, str>,
     /// Start address of the function
-    offset: u64,
+    pub offset: u64,
     /// Calls to the function
     refs: Vec<CallRefs>,
     /// Size of the function in bytes
@@ -207,7 +207,7 @@ impl RadecoModule {
         if self.functions.contains_key(&offset) {
             return Err("Function already defined at current `offset`")
         } else {
-            self.functions.insert(offset, RadecoFunction::new(0, 0));
+            self.functions.insert(offset, RadecoFunction::new(offset, 0));
             Ok(self.functions.get_mut(&offset).unwrap())
         }
     }
