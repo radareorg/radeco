@@ -15,7 +15,7 @@ use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
-use middle::ir::{MAddress, MOpcode};
+use middle::ir::{self, MAddress, MOpcode};
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
@@ -867,7 +867,7 @@ impl SSAMod for SSAStorage {
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
         let data = NodeData::Op(MOpcode::OpConst(value),
-                                ValueInfo::Integer { width: 64 });
+                                scalar!(64));
 
         self.insert_node(data)
     }

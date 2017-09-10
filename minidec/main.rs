@@ -24,7 +24,7 @@ use radeco_lib::frontend::containers::RadecoModule;
 use radeco_lib::middle::dce;
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
-use radeco_lib::middle::ssa::verifier;
+//use radeco_lib::middle::ssa::verifier;
 
 const USAGE: &'static str = "
 Usage: minidec [-f <names>...] <target>
@@ -117,14 +117,14 @@ fn main() {
         }
         {
             // Verify SSA 
-            println!("  [*] Verifying SSA's Validity");
-            match verifier::verify(&rfn.ssa) {
-                Err(e) => {
-                    println!("  [*] Found Error: {}", e);
-                    process::exit(255);
-                }
-                Ok(_) => {  }
-            }
+            //println!("  [*] Verifying SSA's Validity");
+            //match verifier::verify(&rfn.ssa) {
+                //Err(e) => {
+                    //println!("  [*] Found Error: {}", e);
+                    //process::exit(255);
+                //}
+                //Ok(_) => {  }
+            //}
         }
         let memory_ssa = {
             // Generate MemorySSA

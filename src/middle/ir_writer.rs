@@ -11,7 +11,7 @@ use std::default;
 use petgraph::graph::NodeIndex;
 use middle::ir::{MOpcode};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
-use middle::ssa::ssa_traits::{SSA, SSAWalk, ValueType};
+use middle::ssa::ssa_traits::{SSA, SSAWalk, ValueInfo};
 use middle::ssa::cfg_traits::CFG;
 
 const BLOCK_SEP: &'static str = "{";
@@ -149,7 +149,7 @@ impl IRWriter {
     fn fmt_expression(&mut self,
                       ni: NodeIndex,
                       opcode: MOpcode,
-                      vt: ValueType,
+                      vt: ValueInfo,
                       operands: Vec<String>,
                       ssa: &SSAStorage)
                       -> String {
@@ -159,9 +159,7 @@ impl IRWriter {
             self.ctr += 1;
         }
 
-        let w = match vt {
-            ValueType::Integer { width } => width,
-        };
+        let w = vt.width().get_width().unwrap_or(64);
 
         match opcode {
             MOpcode::OpAdd => format!("%{}: $Unknown{}  = {} + {}",

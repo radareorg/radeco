@@ -15,6 +15,7 @@ use std::convert::From;
 use r2api::structs::LRegInfo;
 
 use middle::ssa::ssa_traits::ValueInfo;
+use middle::ir;
 
 
 #[derive(Clone, Copy, Debug)]
@@ -74,7 +75,7 @@ impl SubRegisterFile {
             if reg.name.ends_with("flags") {
                 continue;
             } // HARDCODED x86
-            events.push(SubRegister::new(i, reg.offset, reg.size));
+            events.push(SubRegister::new(i as u64, reg.offset as u64, reg.size as u64));
         }
 
         events.sort_by(|a, b| {
@@ -90,21 +91,21 @@ impl SubRegisterFile {
         let mut whole: Vec<ValueInfo> = Vec::new();
         let mut names: Vec<String> = Vec::new();
         for &ev in &events {
-            let name = &reg_info.reg_info[ev.base].name;
+            let name = &reg_info.reg_info[ev.base as usize].name;
             let cur_until = current.shift + current.width;
             if ev.shift >= cur_until {
                 current = ev;
 
                 radeco_trace!("regfile_mappings|{} -> {}", whole.len(), &name);
 
-                whole.push(From::from(current.width));
+                whole.push(ValueInfo::new_unresolved(ir::WidthSpec::from(current.width as u16)));
                 names.push(name.clone());
             } else {
                 let ev_until = ev.width + ev.shift;
                 assert!(ev_until <= cur_until);
             }
 
-            let subreg = SubRegister::new(whole.len() - 1, ev.shift - current.shift, ev.width);
+            let subreg = SubRegister::new(whole.len() as u64 - 1, ev.shift - current.shift, ev.width);
 
             slices.insert(name.clone(), subreg);
         }
@@ -131,7 +132,7 @@ impl SubRegisterFile {
         Some(self.whole_names[id].clone())
     }
 
-    pub fn get_width(&self, id: usize) -> Option<usize> {
+    pub fn get_width(&self, id: usize) -> Option<u64> {
         if let Some(name) = self.get_name(id) {
             if let Some(subreg) = self.named_registers.get(&name) {
                 Some(subreg.width)

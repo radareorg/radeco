@@ -15,7 +15,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::u64;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
-use middle::ssa::ssa_traits::{NodeType, ValueType};
+use middle::ssa::ssa_traits::{NodeType};
 use middle::ir::{MArity, MOpcode};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -190,9 +190,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
         // We should consider width.
         let ndata = self.g.get_node_data(i).unwrap();
-        let w = match ndata.vt {
-            ValueType::Integer { width } => width,
-        };
+        let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
         }
@@ -282,9 +280,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
         // We should consider width.
         let ndata = self.g.get_node_data(i).unwrap();
-        let w = match ndata.vt {
-            ValueType::Integer { width } => width,
-        };
+        let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
         }
@@ -399,9 +395,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                 // BUG: Width may be changed just using a simple replace.
                 let const_node = self.g.add_const(val);
                 let ndata = self.g.get_node_data(k).unwrap();
-                let w = match ndata.vt {
-                    ValueType::Integer { width } => width,
-                };
+                let w = ndata.vt.width().get_width().unwrap_or(64);
                 let new_node = if w == 64 {
                     const_node
                 } else {
