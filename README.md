@@ -1,7 +1,6 @@
 # radeco-lib
 radare2-based decompiler library
-
-[![Build Status](https://travis-ci.org/radare/radeco-lib.svg)](https://travis-ci.org/radare/radeco-lib)
+[![Build Status](https://travis-ci.org/radare/radeco-lib.svg?branch=master)](https://travis-ci.org/radare/radeco-lib)
 [![Coverage Status](https://coveralls.io/repos/github/radare/radeco-lib/badge.svg?branch=master)](https://coveralls.io/github/radare/radeco-lib?branch=master)
 
 ## License

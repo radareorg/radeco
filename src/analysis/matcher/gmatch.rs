@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::fmt;
 
-use middle::ir::{MAddress, MOpcode};
-use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk, ValueType};
+use middle::ir::{MAddress, MOpcode, WidthSpec};
+use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk, ValueInfo};
 
 #[derive(Clone, Debug)]
 struct ParseToken {
@@ -338,7 +338,7 @@ where I: Iterator<Item=S::ValueRef>,
             }
         };
         if let Some(op) = opcode {
-            let node = self.ssa.add_op(op, ValueType::Integer { width: 64 }, None);
+            let node = self.ssa.add_op(op, ValueInfo::new_unresolved(WidthSpec::from(64)), None);
             match op {
                 MOpcode::OpConst(_) => {}
                 _ => {
@@ -348,7 +348,7 @@ where I: Iterator<Item=S::ValueRef>,
             }
             node
         } else {
-            let node = self.ssa.add_comment(ValueType::Integer { width: 0 }, t.to_owned());
+            let node = self.ssa.add_comment(ValueInfo::new_unresolved(WidthSpec::from(64)), t.to_owned());
             addr.offset += 1;
             self.ssa.add_to_block(node, *block, *addr);
             node
@@ -487,7 +487,7 @@ mod test {
     #[test]
     fn simple_grep_test() {
         let mut ssa = SSAStorage::new();
-        let vt = ValueType::Integer { width: 64 };
+        let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
         let add = ssa.add_op(MOpcode::OpAdd, vt, None);
         let const_1 = ssa.add_const(1);
         let const_2 = ssa.add_const(2);
@@ -502,7 +502,7 @@ mod test {
     #[test]
     fn simple_grep_test2() {
         let mut ssa = SSAStorage::new();
-        let vt = ValueType::Integer { width: 64 };
+        let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
         let add = ssa.add_op(MOpcode::OpXor, vt, None);
         let const_1 = ssa.add_const(1);
         ssa.op_use(add, 0, const_1);
@@ -519,7 +519,7 @@ mod test {
         let mut ssa = SSAStorage::new();
         {
             let blk = ssa.add_dynamic();
-            let vt = ValueType::Integer { width: 64 };
+            let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
             let add = ssa.add_op(MOpcode::OpAdd, vt, None);
             let const_1 = ssa.add_const(1);
             let const_2 = ssa.add_const(2);

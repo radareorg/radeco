@@ -22,5 +22,5 @@ pub mod ssa {
     pub mod error;
     pub mod ssadot;
     pub mod memoryssa;
-    //#[allow(non_snake_case)] pub mod verifier;
+    #[allow(non_snake_case)] pub mod verifier;
 }
