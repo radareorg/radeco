@@ -167,12 +167,8 @@ impl Verify for SSAStorage {
         }
         if let Ok(ndata) = self.get_node_data(exi) { 
             match (ndata.nt, ndata.vt) {
-                (TNodeType::Op(opcode), ValueType::Integer { width: w }) => { 
-                    let extract_width = |x: TNodeData| -> u16 {
-                        match x.vt {
-                            ValueType::Integer { width: w } => w,
-                        }
-                    };
+                (TNodeType::Op(opcode), vi) => { 
+                    let w = vi.width().get_width().unwrap_or(64);
 
                     let opfilter = |&x: &NodeIndex| -> bool {
                         if let Some(op) = self.get_opcode(&x) {
@@ -208,12 +204,12 @@ impl Verify for SSAStorage {
                     }
                     match opcode {
                         MOpcode::OpNarrow(w0) => {
-                            let opw = self.get_node_data(&operands[0]).map(&extract_width).unwrap();
+                            let opw = self.get_node_data(&operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                             check!(opw > w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
                             check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
                         }
                         MOpcode::OpWiden(w0) => {
-                            let opw = self.get_node_data(&operands[0]).map(&extract_width).unwrap();
+                            let opw = self.get_node_data(&operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                             check!(opw < w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
                             check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
                         }
@@ -226,10 +222,10 @@ impl Verify for SSAStorage {
                         MOpcode::OpCall | MOpcode::OpStore | MOpcode::OpLoad => {}
                         _ => {
                             // All operands to an expr must have the same width.
-                            let w0 = self.get_node_data(&operands[0]).map(&extract_width).unwrap();
+                            let w0 = self.get_node_data(&operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                             check!(w0 == w, SSAErr::IncompatibleWidth(*exi, w, w0));
                             for op in operands.iter() {
-                                let w1 = self.get_node_data(op).map(&extract_width).unwrap();
+                                let w1 = self.get_node_data(op).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                                 check!(w == w1, SSAErr::IncompatibleWidth(*exi, w, w1));
                             }
                         }

@@ -187,7 +187,7 @@ impl<'a, T> SSAConstruct<'a, T>
         let (op, vt) = match *token {
             Token::ECmp => {
                 let op = MOpcode::OpSub;
-                let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(1));
+                let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(result_size));
                 (op, vt)
             }
             Token::ELt => {

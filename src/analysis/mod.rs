@@ -19,8 +19,8 @@ pub mod cse {
 
 #[macro_use]
 pub mod matcher {
-    //#[macro_use]
-    //pub mod gmatch;
+    #[macro_use]
+    pub mod gmatch;
 }
 
 pub mod interproc;
