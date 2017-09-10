@@ -13,7 +13,7 @@ use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use middle::ir::MOpcode;
 use middle::dot::{DotAttrBlock, GraphDot};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
-use super::ssa_traits::{SSA, SSAExtra, ValueType};
+use super::ssa_traits::{SSA, SSAExtra};
 use middle::ssa::cfg_traits::CFG;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -151,7 +151,8 @@ impl GraphDot for SSAStorage {
         prefix.push_str(&format!("n{}", i.index()));
 
         let attr = match *node {
-            NodeData::Op(opc, ValueType::Integer{width: w}) => {
+            NodeData::Op(opc, vi) => {
+                let w = vi.width().get_width().unwrap_or(64);
                 let mut attrs = Vec::new();
                 let mut r = String::new();
                 let addr = self.addr(i);
