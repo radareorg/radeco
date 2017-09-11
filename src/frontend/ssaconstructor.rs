@@ -42,7 +42,6 @@ pub struct SSAConstruct<'a, T>
     // even better if this is done at the r2pipe level and we expose API to get
     // alias information.
     alias_info: HashMap<String, String>,
-    constants: HashMap<u64, T::ValueRef>,
     ident_map: HashMap<String, u64>,
     // Used to keep track of esil if-else. The reference to the ITE node and the address of this
     // instruction.
@@ -67,7 +66,6 @@ impl<'a, T> SSAConstruct<'a, T>
             intermediates: Vec::new(),
             alias_info: HashMap::new(),
             ident_map: HashMap::new(),
-            constants: HashMap::new(),
             nesting: Vec::new(),
             instruction_offset: 0,
             needs_new_block: true,
@@ -131,13 +129,11 @@ impl<'a, T> SSAConstruct<'a, T>
             }
             Token::EConstant(value) => {
                 // Add or retrieve a constant with the value from the table.
-                *self.constants.entry(value).or_insert(self.phiplacer.add_const(*address, value))
+                self.phiplacer.add_const(*address, value)
             }
             Token::EAddress => {
                 // Treat this as retrieving a constant.
-                *self.constants
-                     .entry(address.address)
-                     .or_insert(self.phiplacer.add_const(*address, address.address))
+                self.phiplacer.add_const(*address, address.address)
             }
             _ => panic!("SSAConstruct Error: Found something other than a Var as an operand to \
                          an instruction!"),
