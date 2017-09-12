@@ -138,6 +138,7 @@ pub struct SSAStorage {
     pub exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
     pub regnames: Vec<String>,
+    constants: HashMap<u64, NodeIndex>,
     last_key: usize,
 }
 
@@ -149,6 +150,7 @@ impl default::Default for SSAStorage {
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
             regnames: Vec::new(),
+            constants: HashMap::new(),
             last_key: 0,
         }
     }
@@ -162,6 +164,7 @@ impl SSAStorage {
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
             regnames: Vec::new(),
+            constants: HashMap::new(),
             last_key: 0,
         }
     }
@@ -866,10 +869,15 @@ impl SSAMod for SSAStorage {
     }
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
-        let data = NodeData::Op(MOpcode::OpConst(value),
-                                scalar!(64));
-
-        self.insert_node(data)
+        if self.constants.contains_key(&value) {
+            self.constants.get(&value).unwrap().to_owned()
+        } else {
+            let data = NodeData::Op(MOpcode::OpConst(value),
+                                    scalar!(64));
+            let id = self.insert_node(data);
+            self.constants.insert(value, id);
+            id
+        }
     }
 
     fn add_phi(&mut self, vt: ValueInfo) -> NodeIndex {
