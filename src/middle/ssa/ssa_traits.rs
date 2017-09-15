@@ -185,6 +185,9 @@ pub trait SSA: CFG {
     /// Get the actual NodeData.
     fn get_node_data(&self, i: &Self::ValueRef) -> Result<NodeData, Box<Debug>>;
 
+    /// Get const information, as a pack of get_node_data on a OpConst node.
+    fn get_const(&self, i: &Self::ValueRef) -> Option<u64>;
+
     /// Get comment information, as a pack of get_node_data on a Comment data.
     fn get_comment(&self, i: &Self::ValueRef) -> Option<String>;
 

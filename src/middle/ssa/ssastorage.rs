@@ -303,14 +303,6 @@ impl SSAStorage {
         self.g.node_indices().collect()
     }
 
-    pub fn get_const(&self, ni: NodeIndex) -> Option<u64> {
-        if let NodeData::Op(MOpcode::OpConst(n), _) = self.g[ni] {
-            Some(n)
-        } else {
-            None
-        }
-    }
-
     fn gather_adjacent(&self,
                        node: NodeIndex,
                        direction: EdgeDirection,
@@ -756,6 +748,14 @@ impl SSA for SSAStorage {
             NodeData::BasicBlock(_) |
             NodeData::DynamicAction |
             NodeData::RegisterState => Err(Box::new(self.g[*i].clone())),
+        }
+    }
+
+    fn get_const(&self, ni: &NodeIndex) -> Option<u64> {
+        if let NodeData::Op(MOpcode::OpConst(n), _) = self.g[*ni] {
+            Some(n)
+        } else {
+            None
         }
     }
 
