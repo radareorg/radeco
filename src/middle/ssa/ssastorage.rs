@@ -185,7 +185,9 @@ impl SSAStorage {
     fn remove_node(&mut self, exi: NodeIndex) {
         radeco_trace!(logger::Event::SSARemoveNode(&exi));
         // Remove the current association.
-        self.g.remove_node(exi);
+        if self.get_const(&exi).is_none() {
+            self.g.remove_node(exi);
+        }
     }
 
     fn replace_node(&mut self, i: NodeIndex, j: NodeIndex) {
