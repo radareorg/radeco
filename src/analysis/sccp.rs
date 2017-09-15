@@ -389,6 +389,9 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
     pub fn emit_ssa(&mut self) -> T {
         for (k, v) in &self.expr_val {
+            if self.g.get_const(k).is_some() {
+                continue;
+            }
             if let LatticeValue::Const(val) = *v {
                 radeco_trace!("{:?} with {:?} --> Const {:#}", 
                               k, self.g.get_node_data(k), val);
