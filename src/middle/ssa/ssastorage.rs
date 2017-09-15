@@ -185,7 +185,13 @@ impl SSAStorage {
     fn remove_node(&mut self, exi: NodeIndex) {
         radeco_trace!(logger::Event::SSARemoveNode(&exi));
         // Remove the current association.
-        if self.get_const(&exi).is_none() {
+        if let Some(val) = self.get_const(&exi) {
+            let uses = self.get_uses(&exi);
+            if uses.is_empty() {
+                self.g.remove_node(exi);
+                self.constants.remove(&val);
+            }
+        } else {
             self.g.remove_node(exi);
         }
     }
@@ -940,6 +946,11 @@ impl SSAMod for SSAStorage {
 
     fn remove(&mut self, node: NodeIndex) {
         self.assoc_data.remove(&node);
+        // We should remove the edges which are associated with node.
+        let mut walk = self.g.neighbors_undirected(node).detach();
+        while let Some((edge, _)) = walk.next(&self.g) {
+            self.g.remove_edge(edge);
+        }
         self.remove_node(node);
     }
 
