@@ -870,7 +870,7 @@ impl SSAMod for SSAStorage {
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
         if self.constants.contains_key(&value) {
-            self.constants.get(&value).unwrap().to_owned()
+            self.constants.get(&value).unwrap().clone()
         } else {
             let data = NodeData::Op(MOpcode::OpConst(value),
                                     scalar!(64));
