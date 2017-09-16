@@ -138,7 +138,7 @@ pub struct SSAStorage {
     pub exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
     pub regnames: Vec<String>,
-    constants: HashMap<u64, NodeIndex>,
+    pub constants: HashMap<u64, NodeIndex>,
     last_key: usize,
 }
 

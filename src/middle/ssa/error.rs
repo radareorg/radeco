@@ -25,6 +25,8 @@ pub enum SSAErr<T: SSA + Debug> {
     IncompatibleWidth(T::ValueRef, u16, u16),
     BackUse(T::ValueRef, T::ValueRef),
     UnreachablePhiSCC(Vec<T::ValueRef>),
+    UnrecordedConstant(u64),
+    MultiConstantCopy(u64, T::ValueRef, T::ValueRef),
 }
 
 impl fmt::Display for SSAErr<SSAStorage> {
@@ -71,6 +73,12 @@ impl fmt::Display for SSAErr<SSAStorage> {
             }
             SSAErr::UnreachablePhiSCC(ref nodes) => {
                 format!("Found Use-Def chains become a loop: {:?}", nodes)
+            }
+            SSAErr::UnrecordedConstant(con) => {
+                format!("Found unrecored constant: {:#}", con)
+            }
+            SSAErr::MultiConstantCopy(con, ref i, ref j) => {
+                format!("Found more than one copy of {:#}, with {:?} an {:?}", con, i, j)
             }
         };
         write!(f, "{}.", err)
