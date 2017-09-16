@@ -170,8 +170,10 @@ impl<'a, T> SSAConstruct<'a, T>
         // handles assignments
         // and jumps as these are cases that need to be handled a bit differently from
         // the rest of the opcodes.
-        let lhs = self.process_in(&operands[0], address);
-        let rhs = self.process_in(&operands[1], address);
+        let mut lhs = self.process_in(&operands[0], address);
+        let mut rhs = self.process_in(&operands[1], address);
+
+        self.phiplacer.narrow_const_operand(address, &mut lhs, &mut rhs);
 
         // Check if the two operands are of compatible sizes for compare
         let lhs_size = lhs.map_or(0, |i| self.phiplacer.operand_width(&i));
