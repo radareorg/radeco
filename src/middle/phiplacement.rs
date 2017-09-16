@@ -509,27 +509,24 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
     // Some constants are generated to operate with other OpCode, which shoud be careful
     // about its width. Because we treat all consts are 64 bit.
-    fn add_narrow_const(&mut self, address: &mut MAddress, value: u64, vt: ValueInfo) -> T::ValueRef {
+    // Constants need not belong to any block. They are stored as a separate table.
+    pub fn add_const(&mut self, address: &mut MAddress, value: u64, vt_option: Option<ValueInfo>) -> T::ValueRef {
+        if vt_option.is_none() {
+            return self.ssa.add_const(value);
+        }
+        let vt = vt_option.unwrap();
         let width = vt.width().get_width().unwrap_or(64);
         if width < 64 {
             let val: u64 = value & (1 << (width) - 1);
-            let const_node = self.add_const(*address, val);
+            let const_node = self.ssa.add_const(val);
             let opcode = MOpcode::OpNarrow(width as u16);
             let narrow_node = self.add_op(&opcode, address, vt);
             self.op_use(&narrow_node, 0, &const_node);
             narrow_node
         } else {
-            let const_node = self.add_const(*address, value);
+            let const_node = self.ssa.add_const(value);
             const_node
         }
-    }
-
-
-    // Constants need not belong to any block. They are stored as a separate table.
-    pub fn add_const(&mut self, _ : MAddress, value: u64) -> T::ValueRef {
-        // All consts are assumed to be 64 bit wide.
-        let i = self.ssa.add_const(value);
-        i
     }
 
     pub fn add_undefined(&mut self, address: MAddress, vt: ValueInfo) -> T::ValueRef {
@@ -590,7 +587,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
         if info.shift > 0 {
             let vtype = ValueInfo::new_unresolved(ir::WidthSpec::from(width));
-            let shift_amount_node = self.add_narrow_const(address, info.shift as u64, vtype);
+            let shift_amount_node = self.add_const(address, info.shift as u64, Some(vtype));
             let opcode = MOpcode::OpLsr;
             let op_node = self.add_op(&opcode, address, vtype);
             self.op_use(&op_node, 0, &value);
@@ -664,7 +661,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         if info.shift > 0 {
-            let shift_amount_node = self.add_narrow_const(address, info.shift as u64, vt);
+            let shift_amount_node = self.add_const(address, info.shift as u64, Some(vt));
             let opcode_node = self.add_op(&MOpcode::OpLsl, address, vt);
             self.op_use(&opcode_node, 0, &value);
             self.op_use(&opcode_node, 1, &shift_amount_node);
@@ -681,7 +678,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         let mut ov = self.read_variable(address, id);
-        let maskvalue_node = self.add_narrow_const(address, maskval, vt);
+        let maskvalue_node = self.add_const(address, maskval, Some(vt));
 
         let op_and = self.add_op(&MOpcode::OpAnd, address, vt);
         self.op_use(&op_and, 0, &ov);
