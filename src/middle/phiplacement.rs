@@ -715,6 +715,37 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
     }
 
+    // For constant, we should narrow it rather widening another OpCode
+    pub fn narrow_const_operand(&mut self, 
+                                address: &mut MAddress, 
+                                lhs: &mut Option<T::ValueRef>, 
+                                rhs: &mut Option<T::ValueRef>) {
+        if lhs.is_none() || rhs.is_none() {
+            return
+        }
+
+        let lhs_size = lhs.map_or(0, |i| self.operand_width(&i));
+        let rhs_size = rhs.map_or(0, |i| self.operand_width(&i));
+
+        // Narrowing will happen only if there is one constant and one normal opcode.
+        if lhs.map_or(false, |i| self.ssa.get_const(&i).is_some()) ^
+            rhs.map_or(false, |i| self.ssa.get_const(&i).is_some()) {
+                let (victim, victim_size) = if lhs_size < 64 {
+                    (rhs, lhs_size)
+                } else {
+                    (lhs, rhs_size)
+                };
+                if victim_size < 64 {
+                    let victim_node = victim.unwrap();
+                    let vtype = ValueInfo::new_unresolved(ir::WidthSpec::from(victim_size));
+                    let opc = MOpcode::OpNarrow(victim_size as u16);
+                    let node = self.add_op(&opc, address, vtype);
+                    self.op_use(&node, 0, &victim_node);
+                    *victim = Some(node);
+                }
+        }
+    }  
+
     // Determine which block as address should belong to.
     // This basically translates to finding the greatest address that is less that
     // `address` in self.blocks. This is fairly simple as self.blocks is sorted.
