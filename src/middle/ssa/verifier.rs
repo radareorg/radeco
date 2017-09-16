@@ -196,6 +196,14 @@ impl Verify for SSAStorage {
                         check!(op_len == n, SSAErr::WrongNumOperands(*exi, n, op_len));
                     }
 
+                    for op in &operands {
+                        if let Some(val) = self.get_const(op) {
+                            check!(self.constants.get(&val).is_some(), SSAErr::UnrecordedConstant(val));
+                            let const_node = self.constants.get(&val).unwrap();
+                            check!(const_node == op, SSAErr::MultiConstantCopy(val, *const_node, *op));
+                        }
+                    }
+
                     // TODO: We do not consider OpStore and OpLoad's width now.
                     operands.retain(&opfilter);
 
