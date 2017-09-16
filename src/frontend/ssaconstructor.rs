@@ -129,11 +129,12 @@ impl<'a, T> SSAConstruct<'a, T>
             }
             Token::EConstant(value) => {
                 // Add or retrieve a constant with the value from the table.
-                self.phiplacer.add_const(*address, value)
+                self.phiplacer.add_const(address, value, None)
             }
             Token::EAddress => {
                 // Treat this as retrieving a constant.
-                self.phiplacer.add_const(*address, address.address)
+                let value = address.address;
+                self.phiplacer.add_const(address, value, None)
             }
             _ => panic!("SSAConstruct Error: Found something other than a Var as an operand to \
                          an instruction!"),
