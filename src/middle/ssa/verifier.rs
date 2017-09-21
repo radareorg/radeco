@@ -147,8 +147,8 @@ impl Verify for SSAStorage {
         if edges.len() == 2 {
             check!(selector.is_some(), SSAErr::NoSelector(*block));
         } else {
-            check!(selector.is_none(),
-                   SSAErr::UnexpectedSelector(*block, selector.unwrap()));
+            //check!(selector.is_none(),
+                   //SSAErr::UnexpectedSelector(*block, selector.unwrap()));
         }
 
         // Make sure that this block is reachable.
