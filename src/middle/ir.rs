@@ -72,7 +72,7 @@ impl MAddress {
 
 impl fmt::UpperHex for MAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:#08X}.{:04}", self.address, self.offset)
+        write!(f, "{:#08X}.{:04X}", self.address, self.offset)
     }
 }
 

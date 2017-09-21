@@ -217,13 +217,13 @@ impl<'a, T> SSAConstruct<'a, T>
                         } else { // Indirect CF transfer
                             // TODO: Partially fixed. Though we still don't have a selector
                             // marked for the node that determines the CF tranfer.
-                            radeco_warn!("Unhandled indirect control flow transfer");
-
-                            let target = &operands[1];
-                            self.phiplacer.add_unexplored_block(Some(*addr), UNCOND_EDGE);
-
-                            // Next instruction should begin in a new block
-                            self.needs_new_block = true;
+                            if let Some(ref jump_idx) = rhs {
+                                self.phiplacer.add_indirect_cf(jump_idx, *address, UNCOND_EDGE);
+                                // Next instruction should begin in a new block
+                                self.needs_new_block = true;
+                            } else {
+                                radeco_warn!("Found a indirect jump without a corresponding target expression");
+                            }
                         }
                     } else {
                         // We are writing into a register.
