@@ -21,7 +21,7 @@ use radeco_lib::analysis::sccp;
 //use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::frontend::containers::RadecoModule;
-use radeco_lib::middle::dce;
+use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 use radeco_lib::middle::ssa::verifier;
@@ -153,19 +153,34 @@ fn main() {
         //        println!("Strided Interval: {}", strided_interval);
         //    };
         //}
-        println!("  [*] Writing out IR");
 
         let mut fname = PathBuf::from(&dir);
         fname.push(&rfn.name);
 
-        let mut ff = File::create(&fname).expect("Unable to create file");
-        let mut writer: IRWriter = Default::default();
-        let res = writer.emit_il(Some(rfn.name.clone()), &rfn.ssa);
-
-        writeln!(ff, "{}", res).expect("Error writing to file");
-        writeln!(ffm, "{}", res).expect("Error writing to file");
-
-        rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
+        {
+            ///////////////////////////
+            // Write out the IR file
+            //////////////////////////
+            println!("  [*] Writing out IR");
+            let mut ff = File::create(&fname).expect("Unable to create file");
+            let mut writer: IRWriter = Default::default();
+            let res = writer.emit_il(Some(rfn.name.clone()), &rfn.ssa);
+            writeln!(ff, "{}", res).expect("Error writing to file");
+            writeln!(ffm, "{}", res).expect("Error writing to file");
+            // Set as a comment in radare2
+            rmod.src.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
+        }
+        
+        {
+            ////////////////////////
+            // Generate DOT file
+            ///////////////////////
+            println!("  [*] Generating dot");
+            fname.set_extension("dot");
+            let mut df = File::create(&fname).expect("Unable to create .dot file");
+            let dot = dot::emit_dot(&rfn.ssa);
+            writeln!(df, "{}", dot).expect("Error writing to file");
+        }
     }
 
     rmod.src.as_mut().unwrap().send("e scr.color=true")
