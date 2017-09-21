@@ -35,7 +35,7 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
     outputs: HashMap<T::ValueRef, VarId>,
     incomplete_propagation: HashSet<T::ValueRef>,
     unexplored_addr: u64,
-    must_be_selectors: HashSet<T::ValueRef>,
+    must_be_selectors: HashSet<(T::ValueRef, MAddress)>,
 }
 
 impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
@@ -324,7 +324,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         self.ssa.add_control_edge(source_block, unexplored_block, edge_type);
 
         // Keep track of the node to be marked as the selector
-        self.must_be_selectors.insert(*selector);
+        self.must_be_selectors.insert((*selector, current_addr));
     }
 
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
@@ -871,13 +871,11 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
 
         // Mark any left over selectors in `self.must_be_selectors`
-        for sel in &self.must_be_selectors {
-            if let Some(addr) = self.index_to_addr.get(&sel).cloned() {
-                if let Some(blk) = self.block_of(addr) {
-                    self.ssa.mark_selector(*sel, blk);
-                } else {
-                    radeco_warn!("No block found for a node that has to be selector!");
-                }
+        for &(ref sel, ref jaddr) in &self.must_be_selectors {
+            if let Some(blk) = self.block_of(*jaddr) {
+                self.ssa.mark_selector(*sel, blk);
+            } else {
+                radeco_warn!("No block found for a node that has to be selector!");
             }
         }
 
