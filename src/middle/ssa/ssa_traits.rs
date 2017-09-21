@@ -38,6 +38,8 @@ pub enum ValueType {
     Scalar,
     /// Not (yet) resolved to be a reference or a constant
     Unresolved,
+    /// Invalid/Unconsistent
+    Invalid,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

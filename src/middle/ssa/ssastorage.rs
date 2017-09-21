@@ -90,6 +90,35 @@ pub enum NodeData {
     RegisterState,
 }
 
+impl NodeData {
+    pub fn set_valueinfo(&mut self, vi: ValueInfo) {
+        match *self {
+            NodeData::Op(_, ref mut vif) |
+            NodeData::Phi(ref mut vif, _) |
+            NodeData::Comment(ref mut vif, _) => *vif = vi,
+            _ => {},
+        }
+    }
+
+    pub fn get_valueinfo(&self) -> Option<&ValueInfo> {
+        match self {
+            &NodeData::Op(_, ref vif) |
+            &NodeData::Phi(ref vif, _) |
+            &NodeData::Comment(ref vif, _) => Some(vif),
+            _ => None,
+        }
+    }
+
+    pub fn get_valueinfo_mut(&mut self) -> Option<&mut ValueInfo> {
+        match *self {
+            NodeData::Op(_, ref mut vif) |
+            NodeData::Phi(ref mut vif, _) |
+            NodeData::Comment(ref mut vif, _) => Some(vif),
+            _ => None,
+        }
+    }
+}
+
 // Implement display helper for NodeData to make it a little nicer to read prefix notation.
 impl fmt::Display for NodeData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

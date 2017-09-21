@@ -34,6 +34,7 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
     // addr_to_index: BTreeMap<MAddress, T::ValueRef>,
     outputs: HashMap<T::ValueRef, VarId>,
     incomplete_propagation: HashSet<T::ValueRef>,
+    unexplored_addr: u64,
 }
 
 impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
@@ -51,6 +52,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             // addr_to_index: BTreeMap::new(),
             outputs: HashMap::new(),
             incomplete_propagation: HashSet::new(),
+            unexplored_addr: u64::max_value() - 1,
         }
     }
 
@@ -212,7 +214,6 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             return upper_block;
         }
 
-
         if seen {
             // Details on performing the split up.
             //   - Add an unconditional flow edge from the upper to the lower block.
@@ -305,6 +306,19 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             self.blocks.insert(at, lower_block);
         }
         lower_block
+    }
+
+    pub fn add_unexplored_block(&mut self, current_addr: MAddress, edge_type: u8) {
+        let source_block = self.block_of(current_addr).unwrap();
+        let unexplored_addr = MAddress::new(self.unexplored_addr, 0);
+
+        // Decrement the unexplored addr.
+        self.unexplored_addr = self.unexplored_addr - 1;
+
+        let unexplored_block = self.new_block(unexplored_addr);
+
+        self.blocks.insert(unexplored_addr, unexplored_block);
+        self.ssa.add_control_edge(source_block, unexplored_block, edge_type);
     }
 
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
