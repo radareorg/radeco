@@ -54,7 +54,6 @@ fn main() {
         RadecoModule::from(&mut r2)
     };
 
-
     // Reduce the complexity of rmod.functions to just a vec of (u64,&String)
     // for easier extraction and matching
     //

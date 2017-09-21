@@ -209,14 +209,21 @@ impl<'a, T> SSAConstruct<'a, T>
                         // case, we add a new block and label it unresolved. This maybe resolved as
                         // a part of some other analysis. Right now, the only targets we can
                         // determine are the ones where the rhs is a constant.
-                        if let Some(Token::EConstant(target)) = operands[1] {
+                        if let Some(Token::EConstant(target)) = operands[1] { // Direct/known CF tranfer
                             let target_addr = MAddress::new(target, 0);
                             self.phiplacer
                                 .add_block(target_addr, Some(*address), Some(UNCOND_EDGE));
                             self.needs_new_block = true;
-                        } else {
-                            // TODO: Issue#86
+                        } else { // Indirect CF transfer
+                            // TODO: Partially fixed. Though we still don't have a selector
+                            // marked for the node that determines the CF tranfer.
                             radeco_warn!("Unhandled indirect control flow transfer");
+
+                            let target = &operands[1];
+                            self.phiplacer.add_unexplored_block(Some(*addr), UNCOND_EDGE);
+
+                            // Next instruction should begin in a new block
+                            self.needs_new_block = true;
                         }
                     } else {
                         // We are writing into a register.
@@ -279,7 +286,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 (MOpcode::OpNot, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EMul => {
-                (MOpcode::OpMul, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
+                (MOpcode::OpMul, ValueInfo::new_scalar(ir::WidthSpec::from(result_size)))
             }
             Token::EXor => {
                 (MOpcode::OpXor, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
@@ -291,10 +298,10 @@ impl<'a, T> SSAConstruct<'a, T>
                 (MOpcode::OpSub, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EDiv => {
-                (MOpcode::OpDiv, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
+                (MOpcode::OpDiv, ValueInfo::new_scalar(ir::WidthSpec::from(result_size)))
             }
             Token::EMod => {
-                (MOpcode::OpMod, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
+                (MOpcode::OpMod, ValueInfo::new_scalar(ir::WidthSpec::from(result_size)))
             }
             Token::EPoke(_) => {
                 // TODO: rhs has to be cast to size 'n' if it's size is not already n.
