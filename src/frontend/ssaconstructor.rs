@@ -215,10 +215,8 @@ impl<'a, T> SSAConstruct<'a, T>
                                 .add_block(target_addr, Some(*address), Some(UNCOND_EDGE));
                             self.needs_new_block = true;
                         } else { // Indirect CF transfer
-                            // TODO: Partially fixed. Though we still don't have a selector
-                            // marked for the node that determines the CF tranfer.
                             if let Some(ref jump_idx) = rhs {
-                                self.phiplacer.add_indirect_cf(jump_idx, *address, UNCOND_EDGE);
+                                self.phiplacer.add_indirect_cf(jump_idx, address, UNCOND_EDGE);
                                 // Next instruction should begin in a new block
                                 self.needs_new_block = true;
                             } else {

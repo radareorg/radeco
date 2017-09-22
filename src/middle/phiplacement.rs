@@ -35,7 +35,6 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
     outputs: HashMap<T::ValueRef, VarId>,
     incomplete_propagation: HashSet<T::ValueRef>,
     unexplored_addr: u64,
-    must_be_selectors: HashSet<(T::ValueRef, MAddress)>,
 }
 
 impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
@@ -54,7 +53,6 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             outputs: HashMap::new(),
             incomplete_propagation: HashSet::new(),
             unexplored_addr: u64::max_value() - 1,
-            must_be_selectors: HashSet::new(),
         }
     }
 
@@ -311,8 +309,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     }
 
     // Function to add an indirect control flow transfer
-    pub fn add_indirect_cf(&mut self, selector: &T::ValueRef, current_addr: MAddress, edge_type: u8) {
-        let source_block = self.block_of(current_addr).unwrap();
+    pub fn add_indirect_cf(&mut self, selector: &T::ValueRef, current_addr: &mut MAddress, edge_type: u8) {
+        let source_block = self.block_of(*current_addr).unwrap();
         let unexplored_addr = MAddress::new(self.unexplored_addr, 0);
 
         // Decrement the unexplored addr so that we have a new unexplored block for next use
@@ -323,8 +321,12 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         self.blocks.insert(unexplored_addr, unexplored_block);
         self.ssa.add_control_edge(source_block, unexplored_block, edge_type);
 
-        // Keep track of the node to be marked as the selector
-        self.must_be_selectors.insert((*selector, current_addr));
+        // Add a dummy ITE to mark the selector.
+        let op_node = self.add_op(&MOpcode::OpITE,
+                                  current_addr,
+                                  ValueInfo::new_scalar(ir::WidthSpec::Known(1)));
+
+        self.op_use(&op_node, 0, selector);
     }
 
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
@@ -867,15 +869,6 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                         self.ssa.remove(node);
                     }
                 }
-            }
-        }
-
-        // Mark any left over selectors in `self.must_be_selectors`
-        for &(ref sel, ref jaddr) in &self.must_be_selectors {
-            if let Some(blk) = self.block_of(*jaddr) {
-                self.ssa.mark_selector(*sel, blk);
-            } else {
-                radeco_warn!("No block found for a node that has to be selector!");
             }
         }
 

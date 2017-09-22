@@ -271,7 +271,6 @@ impl SSAStorage {
         if self.start_node == i {
             self.start_node = j;
         }
-
         self.remove_node(i);
     }
 
