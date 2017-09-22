@@ -93,42 +93,46 @@ impl From<u64> for MAddress {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MArity {
-    Zero,
-    Unary,
     Binary,
     Ternary,
+    Unary,
+    Zero,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MOpcode {
     OpAdd,
-    OpSub,
-    OpMul,
-    OpDiv,
-    OpMod,
     OpAnd,
-    OpOr,
-    OpXor,
-    OpNot,
-    OpEq,
-    OpCmp,
-    OpGt,
-    OpLt,
-    OpLsl,
-    OpLsr,
-    OpIf,
-    OpJmp,
     OpCJmp,
     OpCall,
-    OpLoad,
-    OpStore,
-    OpNarrow(u16),
-    OpWiden(u16),
+    OpCmp,
     OpConst(u64),
-    OpNop,
-    OpInvalid,
+    OpDiv,
+    OpEq,
+    OpGt,
     // If - Then - Else
     OpITE,
+    OpIf,
+    OpInvalid,
+    OpJmp,
+    OpLoad,
+    OpLsl,
+    OpLsr,
+    OpLt,
+    OpMod,
+    OpMul,
+    OpNarrow(u16),
+    OpNop,
+    OpNot,
+    OpOr,
+    // Rotate Shift Left
+    OpRol,
+    // Rotate Shift Right
+    OpRor,
+    OpStore,
+    OpSub,
+    OpWiden(u16),
+    OpXor,
 }
 
 impl MOpcode {
@@ -175,11 +179,11 @@ impl MOpcode {
 
     pub fn allowed_in_ssa(&self) -> bool {
         match *self {
-            MOpcode::OpJmp |
             MOpcode::OpCJmp |
-            MOpcode::OpNop |
             MOpcode::OpITE |
-            MOpcode::OpInvalid => false,
+            MOpcode::OpInvalid |
+            MOpcode::OpJmp |
+            MOpcode::OpNop => false,
             _ => true,
         }
     }
@@ -187,32 +191,34 @@ impl MOpcode {
     fn info(&self) -> (String, MArity) {
         match *self {
             MOpcode::OpAdd => ("OpAdd".to_owned(), MArity::Binary),
-            MOpcode::OpSub => ("OpSub".to_owned(), MArity::Binary),
-            MOpcode::OpMul => ("OpMul".to_owned(), MArity::Binary),
-            MOpcode::OpDiv => ("OpDiv".to_owned(), MArity::Binary),
-            MOpcode::OpMod => ("OpMod".to_owned(), MArity::Binary),
             MOpcode::OpAnd => ("OpAnd".to_owned(), MArity::Binary),
-            MOpcode::OpOr => ("OpOr".to_owned(), MArity::Binary),
-            MOpcode::OpXor => ("OpXor".to_owned(), MArity::Binary),
-            MOpcode::OpNot => ("OpNot".to_owned(), MArity::Unary),
-            MOpcode::OpEq => ("OpEq".to_owned(), MArity::Binary),
-            MOpcode::OpCmp => ("OpCmp".to_owned(), MArity::Binary),
-            MOpcode::OpGt => ("OpGt".to_owned(), MArity::Binary),
-            MOpcode::OpLt => ("OpLt".to_owned(), MArity::Binary),
-            MOpcode::OpLsl => ("OpLsl".to_owned(), MArity::Binary),
-            MOpcode::OpLsr => ("OpLsr".to_owned(), MArity::Binary),
-            MOpcode::OpIf => ("OpIf".to_owned(), MArity::Unary),
-            MOpcode::OpLoad => ("OpLoad".to_owned(), MArity::Binary),
-            MOpcode::OpStore => ("OpStore".to_owned(), MArity::Binary),
-            MOpcode::OpNarrow(_) => ("OpNarrow".to_owned(), MArity::Unary),
-            MOpcode::OpWiden(_) => ("OpWiden".to_owned(), MArity::Unary),
-            MOpcode::OpJmp => ("OpJmp".to_owned(), MArity::Unary),
             MOpcode::OpCJmp => ("OpJmpIf".to_owned(), MArity::Binary),
             MOpcode::OpCall => ("OpCall".to_owned(), MArity::Unary),
+            MOpcode::OpCmp => ("OpCmp".to_owned(), MArity::Binary),
             MOpcode::OpConst(c) => (format!("OpCost({})", c), MArity::Zero),
-            MOpcode::OpNop => ("OpNop".to_owned(), MArity::Zero),
-            MOpcode::OpInvalid => ("OpInvalid".to_owned(), MArity::Zero),
+            MOpcode::OpDiv => ("OpDiv".to_owned(), MArity::Binary),
+            MOpcode::OpEq => ("OpEq".to_owned(), MArity::Binary),
+            MOpcode::OpGt => ("OpGt".to_owned(), MArity::Binary),
             MOpcode::OpITE => ("ITE".to_owned(), MArity::Ternary),
+            MOpcode::OpIf => ("OpIf".to_owned(), MArity::Unary),
+            MOpcode::OpInvalid => ("OpInvalid".to_owned(), MArity::Zero),
+            MOpcode::OpJmp => ("OpJmp".to_owned(), MArity::Unary),
+            MOpcode::OpLoad => ("OpLoad".to_owned(), MArity::Binary),
+            MOpcode::OpLsl => ("OpLsl".to_owned(), MArity::Binary),
+            MOpcode::OpLsr => ("OpLsr".to_owned(), MArity::Binary),
+            MOpcode::OpLt => ("OpLt".to_owned(), MArity::Binary),
+            MOpcode::OpMod => ("OpMod".to_owned(), MArity::Binary),
+            MOpcode::OpMul => ("OpMul".to_owned(), MArity::Binary),
+            MOpcode::OpNarrow(_) => ("OpNarrow".to_owned(), MArity::Unary),
+            MOpcode::OpNop => ("OpNop".to_owned(), MArity::Zero),
+            MOpcode::OpNot => ("OpNot".to_owned(), MArity::Unary),
+            MOpcode::OpOr => ("OpOr".to_owned(), MArity::Binary),
+            MOpcode::OpRol => ("OpRol".to_owned(), MArity::Binary),
+            MOpcode::OpRor => ("OpRor".to_owned(), MArity::Binary),
+            MOpcode::OpStore => ("OpStore".to_owned(), MArity::Binary),
+            MOpcode::OpSub => ("OpSub".to_owned(), MArity::Binary),
+            MOpcode::OpWiden(_) => ("OpWiden".to_owned(), MArity::Unary),
+            MOpcode::OpXor => ("OpXor".to_owned(), MArity::Binary),
         }
     }
 }
