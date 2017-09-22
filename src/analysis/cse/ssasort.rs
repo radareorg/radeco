@@ -51,6 +51,8 @@ const POPCONST  : u16 = 26;
 const POPNOP    : u16 = 27;
 const POPINVALID: u16 = 28;
 const POPITE    : u16 = 29;
+const POPROL    : u16 = 30;
+const POPROR    : u16 = 31;
 
 pub struct Sorter<'a, I, T>
     where I: Iterator<Item = T::ValueRef>,
@@ -83,32 +85,34 @@ impl<'a, I, T> Sorter<'a, I, T>
             NodeType::Op(opc) => {
                 match opc {
                     MOpcode::OpAdd   => (POPADD, 0),
-                    MOpcode::OpSub   => (POPSUB, 0),
-                    MOpcode::OpMul   => (POPMUL, 0),
-                    MOpcode::OpDiv   => (POPDIV, 0),
-                    MOpcode::OpMod   => (POPMOD, 0),
                     MOpcode::OpAnd   => (POPAND, 0),
-                    MOpcode::OpOr    => (POPOR, 0),
-                    MOpcode::OpXor   => (POPXOR, 0),
-                    MOpcode::OpNot   => (POPNOT, 0),
-                    MOpcode::OpEq    => (POPEQ, 0),
-                    MOpcode::OpCmp   => (POPCMP, 0),
-                    MOpcode::OpGt    => (POPGT, 0),
-                    MOpcode::OpLt    => (POPLT, 0),
-                    MOpcode::OpLsl   => (POPLSL, 0),
-                    MOpcode::OpLsr   => (POPLSR, 0),
-                    MOpcode::OpIf    => (POPIF, 0),
-                    MOpcode::OpJmp   => (POPJMP, 0),
                     MOpcode::OpCJmp  => (POPCJMP, 0),
                     MOpcode::OpCall  => (POPCALL, 0),
-                    MOpcode::OpLoad  => (POPLOAD, 0),
-                    MOpcode::OpStore => (POPSTORE, 0),
-                    MOpcode::OpNarrow(num) => (POPNARROW, num as u64),
-                    MOpcode::OpWiden(num)  => (POPWIDEN, num as u64),
+                    MOpcode::OpCmp   => (POPCMP, 0),
                     MOpcode::OpConst(num)  => (POPCONST, num),
-                    MOpcode::OpNop   => (POPNOP, 0),
-                    MOpcode::OpInvalid   => (POPINVALID, 0),
+                    MOpcode::OpDiv   => (POPDIV, 0),
+                    MOpcode::OpEq    => (POPEQ, 0),
+                    MOpcode::OpGt    => (POPGT, 0),
                     MOpcode::OpITE   => (POPITE, 0),
+                    MOpcode::OpIf    => (POPIF, 0),
+                    MOpcode::OpInvalid   => (POPINVALID, 0),
+                    MOpcode::OpJmp   => (POPJMP, 0),
+                    MOpcode::OpLoad  => (POPLOAD, 0),
+                    MOpcode::OpLsl   => (POPLSL, 0),
+                    MOpcode::OpLsr   => (POPLSR, 0),
+                    MOpcode::OpLt    => (POPLT, 0),
+                    MOpcode::OpMod   => (POPMOD, 0),
+                    MOpcode::OpMul   => (POPMUL, 0),
+                    MOpcode::OpNarrow(num) => (POPNARROW, num as u64),
+                    MOpcode::OpNop   => (POPNOP, 0),
+                    MOpcode::OpNot   => (POPNOT, 0),
+                    MOpcode::OpOr    => (POPOR, 0),
+                    MOpcode::OpRol   => (POPROL, 0),
+                    MOpcode::OpRor   => (POPROR, 0),
+                    MOpcode::OpStore => (POPSTORE, 0),
+                    MOpcode::OpSub   => (POPSUB, 0),
+                    MOpcode::OpWiden(num)  => (POPWIDEN, num as u64),
+                    MOpcode::OpXor   => (POPXOR, 0),
                 }
             }
         }
