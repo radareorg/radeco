@@ -190,7 +190,7 @@ where I: Iterator<Item=S::ValueRef>,
                     MOpcode::OpLoad => "OpLoad".to_owned(),
                     MOpcode::OpStore => "OpStore".to_owned(), 
                     MOpcode::OpNarrow(w) => format!("OpNarrow{}", w),
-                    MOpcode::OpWiden(w) => format!("OpWiden{}", w),
+                    MOpcode::OpZeroExt(w) => format!("OpZeroExt{}", w),
                     MOpcode::OpCall => "OpCall".to_owned(),
                     _ => unreachable!(),
                 });
@@ -312,8 +312,8 @@ where I: Iterator<Item=S::ValueRef>,
         } else if t.starts_with("OpNarrow") {
             Some(MOpcode::OpNarrow(u16::from_str_radix(&t[8..], 10)
                                        .expect("Invalid decimal integer")))
-        } else if t.starts_with("OpWiden") {
-            Some(MOpcode::OpWiden(u16::from_str_radix(&t[7..], 10)
+        } else if t.starts_with("OpZeroExt") {
+            Some(MOpcode::OpZeroExt(u16::from_str_radix(&t[7..], 10)
                                       .expect("Invalid decimal integer")))
         } else {
             match t {

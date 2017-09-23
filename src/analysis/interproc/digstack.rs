@@ -50,8 +50,8 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
 
         let users = ssa.uses_of(node);
         for user in users {
-            match ssa.opcode(user) {
-                Some(MOpcode::OpWiden(_)) |
+            match ssa.opcode(&user) {
+                Some(MOpcode::OpZeroExt(_)) |
                 Some(MOpcode::OpNarrow(_)) => {
                     stack_offset.insert(user, base);
                     worklist.push_back(user);
@@ -81,7 +81,7 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
 
         let opc = ssa.opcode(node).unwrap();
         match opc {
-            MOpcode::OpWiden(_) | 
+            MOpcode::OpZeroExt(_) | 
             MOpcode::OpNarrow(_) => {
                 stack_offset.insert(args[0], base);
                 worklist.push_back(args[0]);
@@ -167,8 +167,8 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
             }
 
             match opc {
-                MOpcode::OpWiden(_) | MOpcode::OpNarrow(_) => {
-                    let args = ssa.operands_of(*node);
+                MOpcode::OpZeroExt(_) | MOpcode::OpNarrow(_) => {
+                    let args = ssa.operands_of(node);
                     if stack_offset.contains_key(&args[0]) {
                         let num = stack_offset.get(&args[0])
                                                 .unwrap()

@@ -47,12 +47,13 @@ const POPLOAD   : u16 = 22;
 const POPSTORE  : u16 = 23;
 const POPNARROW : u16 = 24;
 const POPWIDEN  : u16 = 25;
-const POPCONST  : u16 = 26;
-const POPNOP    : u16 = 27;
-const POPINVALID: u16 = 28;
-const POPITE    : u16 = 29;
-const POPROL    : u16 = 30;
-const POPROR    : u16 = 31;
+const POPWIDEN1 : u16 = 26;
+const POPCONST  : u16 = 27;
+const POPNOP    : u16 = 28;
+const POPINVALID: u16 = 29;
+const POPITE    : u16 = 30;
+const POPROL    : u16 = 31;
+const POPROR    : u16 = 32;
 
 pub struct Sorter<'a, I, T>
     where I: Iterator<Item = T::ValueRef>,
@@ -111,7 +112,8 @@ impl<'a, I, T> Sorter<'a, I, T>
                     MOpcode::OpRor   => (POPROR, 0),
                     MOpcode::OpStore => (POPSTORE, 0),
                     MOpcode::OpSub   => (POPSUB, 0),
-                    MOpcode::OpWiden(num)  => (POPWIDEN, num as u64),
+                    MOpcode::OpZeroExt(num)  => (POPWIDEN, num as u64),
+                    MOpcode::OpSignExt(num)  => (POPWIDEN1, num as u64),
                     MOpcode::OpXor   => (POPXOR, 0),
                 }
             }

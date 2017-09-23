@@ -191,7 +191,7 @@ impl<T> Analyzer<T>
 
 
         let mut val: u64 = match opcode {
-            MOpcode::OpWiden(_) => {
+            MOpcode::OpZeroExt(_) | MOpcode::OpSignExt(_) => {
                 // Nothing to do in case of widen as the value cannot change.
                 const_val
             }
