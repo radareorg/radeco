@@ -129,10 +129,13 @@ pub enum MOpcode {
     OpRol,
     // Rotate Shift Right
     OpRor,
+    // Sign Extend to width
+    OpSignExt(u16),
     OpStore,
     OpSub,
-    OpWiden(u16),
     OpXor,
+    // Zero Extend to width
+    OpZeroExt(u16),
 }
 
 impl MOpcode {
@@ -215,10 +218,11 @@ impl MOpcode {
             MOpcode::OpOr => ("OpOr".to_owned(), MArity::Binary),
             MOpcode::OpRol => ("OpRol".to_owned(), MArity::Binary),
             MOpcode::OpRor => ("OpRor".to_owned(), MArity::Binary),
+            MOpcode::OpSignExt(_) => ("OpZeroExt".to_owned(), MArity::Unary),
             MOpcode::OpStore => ("OpStore".to_owned(), MArity::Binary),
             MOpcode::OpSub => ("OpSub".to_owned(), MArity::Binary),
-            MOpcode::OpWiden(_) => ("OpWiden".to_owned(), MArity::Unary),
             MOpcode::OpXor => ("OpXor".to_owned(), MArity::Binary),
+            MOpcode::OpZeroExt(_) => ("OpZeroExt".to_owned(), MArity::Unary),
         }
     }
 }

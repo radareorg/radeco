@@ -322,7 +322,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 match ssa.opcode(arg) {
                     // OpNarrow and OpWiden are transfromed data
                     Some(MOpcode::OpNarrow(_)) |
-                    Some(MOpcode::OpWiden(_)) => {
+                    Some(MOpcode::OpZeroExt(_)) => {
                         worklist.push_back(arg);    
                     }
                     Some(MOpcode::OpLoad) => {

@@ -303,9 +303,9 @@ impl<'a, T> PhiPlacer<'a, T>
                         // The above two steps can easily be accomplished by doing a read_variable
                         // and adding an operand edge.
                         // BUG: Not all operands are the register residences.
-                        // For example, OpWiden for 32-bit register. If we want to add a 32-bit register
+                        // For example, OpZeroExt for 32-bit register. If we want to add a 32-bit register
                         // with a constant, our algorithm will add an Opwiden(64) node for the register,
-                        // then add the OpWiden node with an Opconst. In this situation, OpWiden
+                        // then add the OpZeroExt node with an Opconst. In this situation, OpZeroExt
                         // node isn't a residence for any register. 
                         if !self.outputs.contains_key(&operand) {
                             continue;
@@ -681,7 +681,7 @@ impl<'a, T> PhiPlacer<'a, T>
                     narrow_node
                 }
                 Ordering::Greater => {
-                    let opcode = MOpcode::OpWiden(width);
+                    let opcode = MOpcode::OpZeroExt(width);
                     let width_node = self.add_op(&opcode, address, vt);
                     self.op_use(&width_node, 0, &value);
                     width_node
@@ -696,7 +696,7 @@ impl<'a, T> PhiPlacer<'a, T>
 
         // BUG: If width is not 64, every operation with OpConst will make
         // unbalanced width.
-        let opcode = MOpcode::OpWiden(width as u16);
+        let opcode = MOpcode::OpZeroExt(width as u16);
 
         if self.operand_width(&value) < width {
             let opcode_node = self.add_op(&opcode, address, vt);

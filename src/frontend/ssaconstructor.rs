@@ -359,7 +359,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 cmp::Ordering::Greater => {
                     let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(lhs_size));
                     let casted_rhs = self.phiplacer
-                                         .add_op(&MOpcode::OpWiden(lhs_size), address, vt);
+                                         .add_op(&MOpcode::OpZeroExt(lhs_size), address, vt);
                     self.phiplacer.op_use(&casted_rhs, 0, rhs.as_ref().expect(""));
                     self.phiplacer.propagate_reginfo(&casted_rhs);
                     (lhs.expect("lhs cannot be `None`"), casted_rhs)
@@ -367,7 +367,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 cmp::Ordering::Less => {
                     let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(rhs_size));
                     let casted_lhs = self.phiplacer
-                                         .add_op(&MOpcode::OpWiden(rhs_size), address, vt);
+                                         .add_op(&MOpcode::OpZeroExt(rhs_size), address, vt);
                     self.phiplacer.op_use(&casted_lhs, 0, lhs.as_ref().expect("lhs cannot be `None`"));
                     self.phiplacer.propagate_reginfo(&casted_lhs);
                     (casted_lhs, rhs.expect(""))
