@@ -16,6 +16,7 @@ pub mod regfile;
 
 #[macro_use]
 pub mod ssa {
+    pub mod graph_traits;
     pub mod cfg_traits;
     #[macro_use] pub mod ssa_traits;
     pub mod ssastorage;

@@ -505,8 +505,8 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         }
     }
 
-    pub fn mark_start_node(&mut self, block: &T::ActionRef) {
-        self.ssa.mark_start_node(block);
+    pub fn mark_entry_node(&mut self, block: &T::ActionRef) {
+        self.ssa.mark_entry_node(block);
     }
 
     pub fn mark_exit_node(&mut self, block: &T::ActionRef) {
@@ -771,7 +771,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn block_of(&self, address: MAddress) -> Option<T::ActionRef> {
         let mut last = None;
         let start_address = {
-            let start = self.ssa.start_node();
+            let start = self.ssa.entry_node();
             self.addr_of(&start)
         };
         for (baddr, index) in self.blocks.iter().rev() {
@@ -857,16 +857,16 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
             self.seal_block(*block);
         }
 
-        for node in self.ssa.nodes() {
-            if let Some(addr) = self.index_to_addr.get(&node).cloned() {
-                self.associate_block(&node, addr);
+        for node in &self.ssa.values() {
+            if let Some(addr) = self.index_to_addr.get(node).cloned() {
+                self.associate_block(node, addr);
                 // Mark selector.
-                if let Ok(ndata) = self.ssa.get_node_data(&node) {
+                if let Ok(ndata) = self.ssa.get_node_data(node) {
                     if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
                         let block = self.block_of(addr);
-                        let cond_node = self.ssa.get_operands(&node)[0];
+                        let cond_node = self.ssa.get_operands(node)[0];
                         self.ssa.mark_selector(cond_node, block.unwrap());
-                        self.ssa.remove(node);
+                        self.ssa.remove(*node);
                     }
                 }
             }

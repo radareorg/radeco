@@ -149,7 +149,11 @@ pub trait SSA: CFG {
     //// Node accessors and helpers
     ///////////////////////////////////////////////////////////////////////////
 
+    /// Get all value nodes in the whole graph.
+    fn values(&self) -> Vec<Self::ValueRef>;
+
     fn get_address(&self, &Self::ValueRef) -> ir::MAddress;
+
     /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
     fn exprs_in(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
 
@@ -245,10 +249,6 @@ pub trait SSA: CFG {
 
     fn to_value(&self, Self::ActionRef) -> Self::ValueRef;
     fn to_action(&self, Self::ValueRef) -> Self::ActionRef;
-
-    fn node_count(&self) -> usize;
-    fn edge_count(&self) -> usize;
-    fn nodes(&self) -> Vec<Self::ValueRef>;
 }
 
 /// Trait for modifying SSA data

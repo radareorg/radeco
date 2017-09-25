@@ -241,18 +241,18 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // NOTE: It maybe become unnecessary after VSA finish, because VSA could make 
     // may_alias set, rather than in MemorySSA.
     fn init_nodes_type(&mut self) {
-        for node in self.ssa.nodes() {
-            if let Ok(ndata) = self.ssa.get_node_data(&node) {
+        for node in &self.ssa.values() {
+            if let Ok(ndata) = self.ssa.get_node_data(node) {
                 match ndata.nt {
                     NodeType::Op(MOpcode::OpConst(addr)) => {
                         if self.check_global(addr) {
-                            self.global_nodes.insert(node);
+                            self.global_nodes.insert(*node);
                         }
                     }
 
                     NodeType::Comment(reg) => {
                         if self.check_local(reg.clone()) {
-                            self.local_nodes.insert(node);
+                            self.local_nodes.insert(*node);
                         }
                     } 
                     _ => {}
@@ -613,11 +613,11 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // Main function of MemorySSA, generate Memory SSA using the similar way of 
     // phiplacement.rs
     fn generate(&mut self) {
-        let start_node = self.ssa.start_node();
-        let mem_start_node = self.g.add_node(MemOpcode::MemoryAccess);
-        self.associated_blocks.insert(mem_start_node, start_node);
+        let entry_node = self.ssa.entry_node();
+        let mem_entry_node = self.g.add_node(MemOpcode::MemoryAccess);
+        self.associated_blocks.insert(mem_entry_node, entry_node);
         for i in 0..self.variables.len() {
-            self.write_variable(i, &start_node, &mem_start_node);
+            self.write_variable(i, &entry_node, &mem_entry_node);
         }
         // Init MemorySSA, making MemoryAccess as all variables' define.
 

@@ -22,7 +22,7 @@ pub fn collect<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
 
 /// Marks node for removal. This method does not remove nodes
 pub fn mark<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
-    let nodes = ssa.nodes();
+    let nodes = ssa.values();
     let exit_node = ssa.exit_node();
     let roots = ssa.registers_at(&exit_node);
     let mut queue = VecDeque::<T::ValueRef>::new();
@@ -50,7 +50,7 @@ pub fn mark<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
 
 /// Sweeps away the un-marked nodes
 pub fn sweep<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
-    for node in &ssa.nodes() {
+    for node in &ssa.values() {
         if !ssa.is_marked(node) {
             ssa.remove(*node);
         }
@@ -61,7 +61,7 @@ pub fn sweep<T: Clone + SSAMod + SSAExtra>(ssa: &mut T) {
     let blocks = ssa.blocks();
     for block in &blocks {
         // Do not touch start or exit nodes
-        if *block == ssa.start_node() || *block == ssa.exit_node() {
+        if *block == ssa.entry_node() || *block == ssa.exit_node() {
             continue;
         }
 

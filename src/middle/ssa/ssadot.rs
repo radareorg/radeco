@@ -24,6 +24,7 @@ impl GraphDot for SSAStorage {
 	type NodeIndex = graph::NodeIndex;
 	type EdgeIndex = graph::EdgeIndex;
 
+
     fn configure(&self) -> String {
         "digraph cfg {\nsplines=\"ortho\";\ngraph [fontsize=12 fontname=\"Verdana\" compound=true \
          rankdir=TB;]\n"
@@ -31,7 +32,7 @@ impl GraphDot for SSAStorage {
     }
 
     fn nodes(&self) -> Vec<Self::NodeIndex> {
-        self.valid_nodes()
+        self.g.node_indices().collect()
     }
 
     fn edges(&self) -> Vec<Self::EdgeIndex> {
@@ -186,7 +187,7 @@ impl GraphDot for SSAStorage {
                                          Information<br/>Start Address: {}</font>>",
                                         addr);
                 let mut attrs = Vec::new();
-                if self.start_node() == *i {
+                if self.entry_node() == *i {
                     attrs.push(("rank".to_string(), "min".to_string()));
                 }
 

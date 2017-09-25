@@ -391,7 +391,7 @@ impl<'a, T> SSAConstruct<'a, T>
         let start_address = MAddress::new(0, 0);
         let start_block = self.phiplacer.add_block(start_address, None, None);
 
-        self.phiplacer.mark_start_node(&start_block);
+        self.phiplacer.mark_entry_node(&start_block);
 
         for (i, name) in self.regfile.whole_names.iter().enumerate() {
             let reg = self.regfile.whole_registers.get(i).expect("This cannot be `None`");

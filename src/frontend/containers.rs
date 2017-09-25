@@ -242,7 +242,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
         let name = rfn.name.clone();
         let ssa = rfn.ssa_mut();
         let mem = {
-            let start = ssa.start_node();
+            let start = ssa.entry_node();
             let rs = ssa.registers_at(&start);
             // mem is the first argument for the register state.
             // NOTE: If something changes in the future, the above assumption may no longer be
@@ -360,7 +360,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                     // Add all defined registers to bindings.
                     let regs = {
                         let ssa = rfn.ssa_mut();
-                        let start = ssa.start_node();
+                        let start = ssa.entry_node();
                         let rs = ssa.registers_at(&start);
                         ssa.args_of(rs)
                     };

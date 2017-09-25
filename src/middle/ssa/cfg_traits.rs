@@ -7,9 +7,7 @@
 
 //! Defines the traits to be implemented by the Control Flow Graph (CFG).
 //!
-//! These traits act as a way to abstract the actual storage
-//! mechanism of the CFG (and SSA).
-//! Any struct that implement these traits can be used with other methods.
+//! These traits extend upon the ones provided in `graph_traits`
 //!
 //! # Design
 //!
@@ -43,9 +41,10 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use middle::ir::MAddress;
+use super::graph_traits::Graph;
 
 /// Provides __accessors__ to the underlying storage
-pub trait CFG {
+pub trait CFG: Graph {
 	type ActionRef: Eq + Hash + Clone + Copy + Debug;
 	type CFEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
@@ -53,7 +52,7 @@ pub trait CFG {
     fn blocks(&self) -> Vec<Self::ActionRef>;
 
     /// Reference to entry block of the CFG
-    fn start_node(&self) -> Self::ActionRef;
+    fn entry_node(&self) -> Self::ActionRef;
 
     /// Reference to exit block of the CFG
     fn exit_node(&self) -> Self::ActionRef;
@@ -80,18 +79,11 @@ pub trait CFG {
     /// Reference to all the incoming edges to a block
     fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
 
-    /// Returns (source_block, target_block) for an edge
-    fn info(&self, i: &Self::CFEdgeRef) -> (Self::ActionRef, Self::ActionRef);
-
     /// Reference to the source block for the edge
-    fn source_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
-        self.info(i).0
-    }
+    fn source_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef;
 
     /// Reference to the target block for the edge
-    fn target_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
-        self.info(i).1
-    }
+    fn target_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef;
 
     /// Reference to the edge that connects the source to the target.
     fn find_edge(&self, source: &Self::ActionRef, target: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
@@ -116,7 +108,7 @@ pub trait CFGMod: CFG {
 	type BBInfo;
 
     /// Mark the start node for the SSA graph
-    fn mark_start_node(&mut self, start: &Self::ActionRef);
+    fn mark_entry_node(&mut self, start: &Self::ActionRef);
 
     /// Mark the exit node for the SSA graph
     fn mark_exit_node(&mut self, exit: &Self::ActionRef);

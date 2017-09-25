@@ -321,8 +321,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     pub fn analyze(&mut self) {
 
         {
-            let start_node = self.g.start_node();
-            let edges = self.g.edges_of(&start_node);
+            let entry_node = self.g.entry_node();
+            let edges = self.g.edges_of(&entry_node);
             for &(ref next, _) in &edges {
                 self.cfgwl_push(next);
             }
@@ -477,8 +477,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     }
 
     fn is_block_executable(&self, i: &T::ActionRef) -> bool {
-        // start_node is always reachable.
-        if *i == self.g.start_node() {
+        // entry_node is always reachable.
+        if *i == self.g.entry_node() {
             return true;
         }
         let incoming = self.g.incoming_edges(i);
