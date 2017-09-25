@@ -132,7 +132,7 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     {
-        let reg_state = ssa.registers_at(&ssa.start_node());
+        let reg_state = ssa.registers_at(&ssa.entry_node());
         let nodes = ssa.args_of(reg_state);
         for node in &nodes {
             if ssa.get_comment(node) != Some(sp_name.clone()) {
@@ -151,7 +151,7 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         }
         nodes
     } else {
-        let blocks = ssa.succs_of(ssa.start_node());
+        let blocks = ssa.succs_of(ssa.entry_node());
         assert_eq!(blocks.len(), 1);
         ssa.exprs_in(&blocks[0])
     };

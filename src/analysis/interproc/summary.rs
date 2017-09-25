@@ -39,7 +39,7 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
             {
                 let locals = rfn.locals().iter().map(|x| x.0).collect::<HashSet<_>>();
                 let ssa = rfn.ssa_ref();
-                let start_block = ssa.start_node();
+                let start_block = ssa.entry_node();
                 // Get register state at the start block.
                 let rs = ssa.registers_at(&start_block);
                 // For every register in the starting block.

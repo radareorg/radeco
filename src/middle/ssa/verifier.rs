@@ -14,6 +14,7 @@ use std::fmt::Debug;
 use std::collections::{HashMap, VecDeque};
 use petgraph::graph::NodeIndex;
 
+use super::graph_traits::Graph;
 use super::cfg_traits::CFG;
 use super::ssa_traits::{SSA, ValueType};
 use super::ssa_traits::NodeData as TNodeData;
@@ -78,7 +79,7 @@ macro_rules! check {
 
 impl Verify for SSAStorage {
     fn verify_block(&self, block: &NodeIndex) -> VResult<Self> {
-        let _ = self.node_count();
+        let _ = self.nodes_count();
 
         let edges = self.edges_of(block);
 

@@ -11,7 +11,7 @@ use std::fmt::{self, Debug};
 use std::collections::{HashMap, VecDeque, HashSet, BinaryHeap};
 use std::{default, u64};
 use std::cmp::{PartialOrd, PartialEq, Ordering};
-use petgraph::visit::{IntoEdgeReferences, EdgeRef};
+use petgraph::visit::{IntoEdgeReferences, IntoNodeReferences, EdgeRef};
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
@@ -21,6 +21,7 @@ use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
 use super::cfg_traits::{CFG, CFGMod};
+use super::graph_traits::{Graph, EdgeInfo, ConditionInfo};
 use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
@@ -57,7 +58,6 @@ impl default::Default for AdditionalData {
 
 pub type AssociatedData = HashMap<NodeIndex, AdditionalData>;
 
-/// Node type for the SSAStorage-internal petgraph.
 /// Both actions and values are represented using this same enum.
 ///
 /// Value nodes are `Op`, `Phi`, `Comment`, `Undefined` and `Removed`.
@@ -163,55 +163,62 @@ pub enum EdgeData {
 #[derive(Debug, Clone)]
 pub struct SSAStorage {
     pub g: StableDiGraph<NodeData, EdgeData>,
-    pub start_node: NodeIndex,
-    pub exit_node: NodeIndex,
+    entry_node: NodeIndex,
+    exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
     pub regnames: Vec<String>,
     pub constants: HashMap<u64, NodeIndex>,
-    last_key: usize,
 }
 
 impl default::Default for SSAStorage {
     fn default() -> SSAStorage {
         SSAStorage {
             g: StableDiGraph::new(),
-            start_node: NodeIndex::end(),
+            entry_node: NodeIndex::end(),
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
             regnames: Vec::new(),
             constants: HashMap::new(),
-            last_key: 0,
         }
     }
 }
 
-impl SSAStorage {
-    pub fn new() -> SSAStorage {
-        SSAStorage {
-            g: StableDiGraph::new(),
-            start_node: NodeIndex::end(),
-            exit_node: NodeIndex::end(),
-            assoc_data: HashMap::new(),
-            regnames: Vec::new(),
-            constants: HashMap::new(),
-            last_key: 0,
+impl Graph for SSAStorage {
+    type GraphNodeRef = NodeIndex;
+    type GraphEdgeRef = EdgeIndex;
+
+
+    fn nodes(&self) -> Vec<Self::GraphNodeRef> {
+        self.g.node_indices().collect()
+    }
+
+    fn nodes_count(&self) -> usize {
+        self.g.node_count()
+    }
+
+    fn edges_count(&self) -> usize {
+        self.g.edge_count()
+    }
+
+    fn edge_info(&self, i: Self::GraphEdgeRef) -> Option<EdgeInfo<Self::GraphNodeRef>> {
+        if let Some(edge_data) = self.g.edge_references().find(|x| x.id() == i) {
+            Some(EdgeInfo::new(edge_data.source(), edge_data.target()))
+        } else {
+            Some(EdgeInfo::new(NodeIndex::end(), NodeIndex::end()))
         }
     }
 
-    //////////////////////////////////////////////////////////////////////////
-    //// Revised API for SSAStorage.
-    //////////////////////////////////////////////////////////////////////////
-
-    // Regulate all access to SSAStorage, especially insertions and deletions
-    // through this API to prevent stablemap from being out of sync.
-
-    fn insert_node(&mut self, d: NodeData) -> NodeIndex {
+    fn insert_node(&mut self, d: NodeData) -> Option<Self::GraphNodeRef> {
         let ret = self.g.add_node(d);
         radeco_trace!(logger::Event::SSAInsertNode(&ret));
-        ret
+        if ret == NodeIndex::end() {
+            None
+        } else {
+            Some(ret)
+        }
     }
 
-    fn remove_node(&mut self, exi: NodeIndex) {
+    fn remove_node(&mut self, exi: Self::GraphNodeRef) {
         radeco_trace!(logger::Event::SSARemoveNode(&exi));
         // Remove the current association.
         if let Some(val) = self.get_const(&exi) {
@@ -225,7 +232,7 @@ impl SSAStorage {
         }
     }
 
-    fn replace_node(&mut self, i: NodeIndex, j: NodeIndex) {
+    fn replace_node(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef) {
         radeco_trace!(logger::Event::SSAReplaceNode(&i, &j));
         // Before replace, we need to copy over the edges.
 
@@ -268,13 +275,13 @@ impl SSAStorage {
             self.g.remove_edge(edge);
         }
 
-        if self.start_node == i {
-            self.start_node = j;
+        if self.entry_node == i {
+            self.entry_node = j;
         }
         self.remove_node(i);
     }
 
-    fn insert_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
+    fn insert_edge(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef, e: EdgeData) -> Option<Self::GraphEdgeRef> {
         //Don't insert a duplicate edge between i and j with same EdgeData
         let edges = self.find_edge(&i, &j);
         let mut flag = false;
@@ -314,36 +321,31 @@ impl SSAStorage {
             }
         }
         if flag {
-            exist_edge
+            Some(exist_edge)
         } else {
             radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
-            self.g.add_edge(i, j, e)
+            Some(self.g.add_edge(i, j, e))
         }
     }
 
-    #[allow(dead_code)]
-    fn update_edge(&mut self, i: NodeIndex, j: NodeIndex, e: EdgeData) -> EdgeIndex {
+    fn update_edge(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef, e: EdgeData) -> Option<Self::GraphEdgeRef> {
         radeco_trace!(logger::Event::SSAUpdateEdge(&i, &j));
-        self.g.update_edge(i, j, e)
+        Some(self.g.update_edge(i, j, e))
     }
 
     // It's possible that there are mutilple edges between two same nodes. like: xor eax, eax
-    fn delete_edge(&mut self, i: NodeIndex, j: NodeIndex) {
+    fn remove_edge_between(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef) {
         radeco_trace!(logger::Event::SSARemoveEdge(&i, &j));
         while let Some(ei) = self.g.find_edge(i, j) {
             self.g.remove_edge(ei);
         }
     }
 
-    pub fn valid_nodes(&self) -> Vec<NodeIndex> {
-        self.g.node_indices().collect()
-    }
-
     fn gather_adjacent(&self,
-                       node: NodeIndex,
+                       node: Self::GraphNodeRef,
                        direction: EdgeDirection,
                        data: bool)
-                       -> Vec<NodeIndex> {
+                       -> Vec<Self::GraphNodeRef> {
         let mut adjacent = Vec::new();
         let mut walk = self.g.neighbors_directed(node, direction).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
@@ -356,6 +358,26 @@ impl SSAStorage {
         adjacent.sort_by(|a, b| a.0.cmp(&b.0));
         adjacent.iter().map(|x| x.1).collect::<Vec<_>>()
     }
+}
+
+impl SSAStorage {
+    pub fn new() -> SSAStorage {
+        SSAStorage {
+            g: StableDiGraph::new(),
+            entry_node: NodeIndex::end(),
+            exit_node: NodeIndex::end(),
+            assoc_data: HashMap::new(),
+            regnames: Vec::new(),
+            constants: HashMap::new(),
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    //// Revised API for SSAStorage.
+    //////////////////////////////////////////////////////////////////////////
+
+    // Regulate all access to SSAStorage, especially insertions and deletions
+    // through this API to prevent stablemap from being out of sync.
 
     pub fn is_block(&self, node: NodeIndex) -> bool {
         if let NodeData::BasicBlock(_) = self.g[node] {
@@ -377,6 +399,14 @@ impl CFG for SSAStorage {
 	type ActionRef = NodeIndex;
 	type CFEdgeRef = EdgeIndex;
 
+    fn source_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
+        self.edge_info(*i).unwrap().source
+    }
+
+    fn target_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef {
+        self.edge_info(*i).unwrap().target
+    }
+
     fn blocks(&self) -> Vec<NodeIndex> {
         self.g.node_indices().filter(|x| match self.g[*x] {
             NodeData::BasicBlock(_) => true,
@@ -384,9 +414,9 @@ impl CFG for SSAStorage {
         }).collect()
     }
 
-    fn start_node(&self) -> NodeIndex {
-        assert_ne!(self.start_node, NodeIndex::end());
-        self.start_node
+    fn entry_node(&self) -> NodeIndex {
+        assert_ne!(self.entry_node, NodeIndex::end());
+        self.entry_node
     }
 
     fn exit_node(&self) -> NodeIndex {
@@ -428,15 +458,6 @@ impl CFG for SSAStorage {
             }
         }
         edges
-    }
-
-    fn info(&self, i: &EdgeIndex) -> (NodeIndex, NodeIndex) {
-        if let Some(edge_data) = self.g.edge_references().find(|x| x.id() == *i) {
-            (edge_data.source(),
-            edge_data.target())
-        } else {
-            (NodeIndex::end(), NodeIndex::end())
-        }
     }
 
     // It's possible that two same nodes have mutilple edges
@@ -515,8 +536,8 @@ impl CFGMod for SSAStorage {
 
 	type BBInfo = MAddress;
 
-    fn mark_start_node(&mut self, si: &Self::ActionRef) {
-        self.start_node = *si;
+    fn mark_entry_node(&mut self, si: &Self::ActionRef) {
+        self.entry_node = *si;
     }
 
     fn mark_exit_node(&mut self, ei: &Self::ActionRef) {
@@ -524,16 +545,16 @@ impl CFGMod for SSAStorage {
     }
 
     fn add_block(&mut self, info: Self::BBInfo) -> NodeIndex {
-        let bb = self.insert_node(NodeData::BasicBlock(info));
-        let rs = self.insert_node(NodeData::RegisterState);
+        let bb = self.insert_node(NodeData::BasicBlock(info)).expect("Cannot insert new nodes");
+        let rs = self.insert_node(NodeData::RegisterState).expect("Cannot insert new nodes");
         self.insert_edge(bb, rs, EdgeData::RegisterState);
         self.insert_edge(rs, bb, EdgeData::ContainedInBB(info));
         bb
     }
 
     fn add_dynamic(&mut self) -> NodeIndex {
-        let a = self.insert_node(NodeData::DynamicAction);
-        let rs = self.insert_node(NodeData::RegisterState);
+        let a = self.insert_node(NodeData::DynamicAction).expect("Cannot insert new nodes");
+        let rs = self.insert_node(NodeData::RegisterState).expect("Cannot insert new nodes");
         self.insert_edge(a, rs, EdgeData::RegisterState);
         self.insert_edge(rs, a, EdgeData::ContainedInBB(MAddress::invalid_address()));
         a
@@ -596,6 +617,12 @@ impl CFGMod for SSAStorage {
 
 impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;
+
+    fn values(&self) -> Vec<Self::ValueRef> {
+        let mut exprs = self.nodes();
+        exprs.retain(|x| !self.is_action(*x));
+        exprs
+    }
 
     fn get_address(&self, ni: &NodeIndex) -> MAddress {
         for edge in self.g.edges(*ni) {
@@ -672,9 +699,9 @@ impl SSA for SSAStorage {
     fn get_register(&self, i: &NodeIndex) -> Vec<String> {
         let mut regs = Vec::new();
         // Self-loop in RadecoIL is not welcomed ;D
-        // Thus, Comment Node in start_node will not have a RegisterInfo edge pointing to itself.
+        // Thus, Comment Node in entry_node will not have a RegisterInfo edge pointing to itself.
         if let Some(s) = self.get_comment(i) {
-            if self.block_of(i) == self.start_node() {
+            if self.block_of(i) == self.entry_node() {
                 regs.push(s);
             }
         } 
@@ -869,18 +896,6 @@ impl SSA for SSAStorage {
     fn to_action(&self, n: NodeIndex) -> NodeIndex {
         n
     }
-
-    fn nodes(&self) -> Vec<NodeIndex> {
-        self.valid_nodes()
-    }
-
-    fn node_count(&self) -> usize {
-        self.g.node_count()
-    }
-
-    fn edge_count(&self) -> usize {
-        self.g.edge_count()
-    }
 }
 
 impl SSAMod for SSAStorage {
@@ -901,7 +916,7 @@ impl SSAMod for SSAStorage {
     }
 
     fn add_op(&mut self, opc: MOpcode, vt: ValueInfo, _: Option<u64>) -> NodeIndex {
-        self.insert_node(NodeData::Op(opc, vt))
+        self.insert_node(NodeData::Op(opc, vt)).expect("Cannot insert new nodes!")
     }
 
     fn add_const(&mut self, value: u64) -> NodeIndex {
@@ -910,22 +925,22 @@ impl SSAMod for SSAStorage {
         } else {
             let data = NodeData::Op(MOpcode::OpConst(value),
                                     scalar!(64));
-            let id = self.insert_node(data);
+            let id = self.insert_node(data).expect("Cannot insert new nodes");
             self.constants.insert(value, id);
             id
         }
     }
 
     fn add_phi(&mut self, vt: ValueInfo) -> NodeIndex {
-        self.insert_node(NodeData::Phi(vt, "".to_owned()))
+        self.insert_node(NodeData::Phi(vt, "".to_owned())).expect("Cannot insert new nodes")
     }
 
     fn add_undefined(&mut self, vt: ValueInfo) -> NodeIndex {
-        self.insert_node(NodeData::Undefined(vt))
+        self.insert_node(NodeData::Undefined(vt)).expect("Cannot insert new nodes")
     }
 
     fn add_comment(&mut self, vt: ValueInfo, msg: String) -> NodeIndex {
-        self.insert_node(NodeData::Comment(vt, msg))
+        self.insert_node(NodeData::Comment(vt, msg)).expect("Cannot insert new nodes")
     }
 
     fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
@@ -937,7 +952,7 @@ impl SSAMod for SSAStorage {
     }
 
     fn phi_unuse(&mut self, phi: NodeIndex, node: NodeIndex) {
-        self.delete_edge(phi, node);
+        self.remove_edge_between(phi, node);
     }
 
     fn op_use(&mut self, node: NodeIndex, index: u8, argument: NodeIndex) {
@@ -950,7 +965,7 @@ impl SSAMod for SSAStorage {
     }
 
     fn set_register(&mut self, i: NodeIndex, regname: &String) {
-        let reg_state = self.registers_at(&self.start_node);
+        let reg_state = self.registers_at(&self.entry_node);
         let operands = self.get_operands(&reg_state);
         for op in operands {
             if Some(regname) == self.get_comment(&op).as_ref() {
@@ -961,7 +976,7 @@ impl SSAMod for SSAStorage {
     }
 
     fn disconnect(&mut self, op: &NodeIndex, operand: &NodeIndex) {
-        self.delete_edge(*op, *operand);
+        self.remove_edge_between(*op, *operand);
     }
 
     fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
@@ -1133,7 +1148,7 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = VecDeque::new();
-            explorer.push_back(self.start_node());
+            explorer.push_back(self.entry_node());
             let nodes = &mut walker.nodes;
             while let Some(ref block) = explorer.pop_front() {
                 if visited.contains(block) {
@@ -1169,7 +1184,7 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = BinaryHeap::<InorderKey>::new();
-            explorer.push(InorderKey::new(MAddress::new(0, 0), self.start_node()));
+            explorer.push(InorderKey::new(MAddress::new(0, 0), self.entry_node()));
             let nodes = &mut walker.nodes;
             while let Some(ref key) = explorer.pop() {
                 let block = &key.value;

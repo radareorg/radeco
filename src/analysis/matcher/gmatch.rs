@@ -493,7 +493,7 @@ mod test {
         let const_2 = ssa.add_const(2);
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_2);
-        ssa.mark_start_node(&add);
+        ssa.mark_entry_node(&add);
         let _ = ssa.add_op(MOpcode::OpAdd, vt, None);
         let m = grep!(&mut ssa, "(OpAdd #x1, #x2)");
         assert_eq!(m[0].root.index(), 0);
@@ -507,7 +507,7 @@ mod test {
         let const_1 = ssa.add_const(1);
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_1);
-        ssa.mark_start_node(&add);
+        ssa.mark_entry_node(&add);
         let m = grep!(&mut ssa, "(OpXor %1, %1)");
         assert_eq!(m[0].root.index(), 0);
         assert_eq!(m[0].bindings[0].0, "%1");
@@ -529,7 +529,7 @@ mod test {
             ssa.add_to_block(const_2, blk, addr);
             ssa.op_use(add, 0, const_1);
             ssa.op_use(add, 1, const_2);
-            ssa.mark_start_node(&blk);
+            ssa.mark_entry_node(&blk);
         }
 
         grep_and_replace!(&mut ssa, "(OpAdd %1, %2)" => "(OpSub %1, %2)");

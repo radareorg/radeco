@@ -355,7 +355,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             -> HashMap<String, i64> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
-        let reg_state = ssa.registers_at(&ssa.start_node());
+        let reg_state = ssa.registers_at(&ssa.entry_node());
         let nodes = ssa.args_of(reg_state);
         for node in &nodes {
             if ssa.get_comment(node).is_none(){
