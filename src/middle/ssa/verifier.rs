@@ -81,7 +81,7 @@ impl Verify for SSAStorage {
     fn verify_block(&self, block: &NodeIndex) -> VResult<Self> {
         let _ = self.nodes_count();
 
-        let edges = self.edges_of(block);
+        let edges = self.outgoing_edges(*block);
 
         radeco_trace!("ssa verify|Block {:?}", block);
         radeco_trace!("ssa verify|Edges {:?}", edges);
@@ -94,7 +94,7 @@ impl Verify for SSAStorage {
         let mut edgecases = [false; 256];
 
         for edge in edges.iter() {
-            let target = self.target_of(&edge.0);
+            let target = self.edge_info(edge.0).expect("Less-endpoints edge").target;
             check!(self.is_action(target),
                    SSAErr::InvalidType("Block".to_owned()));
             check!(!edgecases[edge.1 as usize],
@@ -111,13 +111,14 @@ impl Verify for SSAStorage {
                     //  * The jump targets must not be the same block.
                     check!(edges.len() == 2,
                            SSAErr::WrongNumEdges(*block, 2, edges.len()));
+                    let branchs = self.conditional_edges(*block).expect("No conditonal edges is found");
                     let other_edge = match edge.1 {
-                        0 => self.true_edge_of(block),
-                        1 => self.false_edge_of(block),
+                        0 => branchs.true_side,
+                        1 => branchs.false_side,
                         _ => unreachable!(),
                     };
-                    let target_1 = self.target_of(&edge.0);
-                    let target_2 = self.target_of(&other_edge);
+                    let target_1 = self.edge_info(edge.0).expect("Less-endpoints edge").target;
+                    let target_2 = self.edge_info(other_edge).expect("Less-endpoints edge").target;
                     check!(target_1 != target_2, SSAErr::InvalidControl(*block, edge.0));
                     // No need to test the next edge.
                     break;
@@ -128,7 +129,7 @@ impl Verify for SSAStorage {
                     //  * There can be no selector.
                     //  * Make sure we have not introduced an unconditional jump
                     //    which self-loops.
-                    let _ = self.target_of(&edge.0);
+                    let _ = self.edge_info(edge.0).expect("Less-endpoints edge").target;
                     check!(edges.len() == 1,
                            SSAErr::WrongNumEdges(*block, 1, edges.len()));
 
@@ -347,7 +348,7 @@ pub fn verify<T>(ssa: &T) -> VResult<T>
 
     // Find the start point. RegisterState for exit_node could be the best choose.
     // Because it could reach all the nodes in SSA.
-    let exi = ssa.exit_node();
+    let exi = ssa.exit_node().expect("Incomplete CFG graph");
     let register = ssa.registers_at(&exi);
     try!(ssa.verify_SCC(&register, &mut timestamp, &mut DFN, &mut LOW, &mut stack));
     Ok(())

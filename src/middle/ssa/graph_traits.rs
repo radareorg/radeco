@@ -33,8 +33,10 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use middle::ir::MAddress;
-use super::ssastorage::{NodeData, EdgeData};
 use petgraph::EdgeDirection;
+
+
+// TODO: Add invalid function for EdgeInfo and ConditionInfo
 
 /// Edge info for avoiding ugly tuples
 #[derive(Clone, Debug)]
@@ -73,6 +75,9 @@ pub trait Graph {
 	type GraphNodeRef: Eq + Hash + Clone + Copy + Debug;
 	type GraphEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
+    type NodeData: Clone + Debug;
+    type EdgeData: Clone + Debug;
+
     /// Return all nodes in the graph.
     fn nodes(&self) -> Vec<Self::GraphNodeRef>;
 
@@ -86,7 +91,7 @@ pub trait Graph {
     fn edge_info(&self, i: Self::GraphEdgeRef) -> Option<EdgeInfo<Self::GraphNodeRef>>;
 
     /// Insert a new node into graph.
-    fn insert_node(&mut self, d: NodeData) -> Option<Self::GraphNodeRef>;
+    fn insert_node(&mut self, d: Self::NodeData) -> Option<Self::GraphNodeRef>;
 
     /// Remove a certain node in the graph.
     fn remove_node(&mut self, exit: Self::GraphNodeRef);
@@ -95,13 +100,16 @@ pub trait Graph {
     fn replace_node(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef);
 
     /// Insert a new edge into graph.
-    fn insert_edge(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef, e: EdgeData) -> Option<Self::GraphEdgeRef>; 
+    fn insert_edge(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef, e: Self::EdgeData) -> Option<Self::GraphEdgeRef>; 
 
     /// Update edge information.
-    fn update_edge(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef, e: EdgeData) -> Option<Self::GraphEdgeRef>;
+    fn update_edge(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef, e: Self::EdgeData) -> Option<Self::GraphEdgeRef>;
+
+    /// Reference to the edge that connects the source to the target.
+    fn find_edges_between(&self, source: Self::GraphNodeRef, target: Self::GraphNodeRef) -> Vec<Self::GraphEdgeRef>;
 
     /// Remove edges beteween nodes.
-    fn remove_edge_between(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef); 
+    fn remove_edges_between(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef); 
 
     /// Gather neighborhood nodes.
     fn gather_adjacent(&self, node: Self::GraphNodeRef, direction: EdgeDirection, data: bool) -> Vec<Self::GraphNodeRef>;

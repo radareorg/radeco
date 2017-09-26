@@ -13,6 +13,7 @@ use std::cmp::Ordering;
 use std::u64;
 
 use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueInfo};
+use middle::ssa::graph_traits::{Graph, ConditionInfo};
 use middle::ir::{self, MAddress, MOpcode};
 
 use middle::ssa::ssa_traits::{NodeType, NodeData};
@@ -22,7 +23,12 @@ pub type VarId = u64;
 
 const UNCOND_EDGE: u8 = 2;
 
-pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
+pub struct PhiPlacer<'a, T> 
+    where T: 'a + SSAExtra +
+        SSAMod<BBInfo = MAddress,
+                ActionRef = <T as Graph>::GraphNodeRef,
+                CFEdgeRef = <T as Graph>::GraphEdgeRef>
+{
     ssa: &'a mut T,
     pub variable_types: Vec<ValueInfo>,
     sealed_blocks: HashSet<T::ActionRef>,
@@ -37,7 +43,12 @@ pub struct PhiPlacer<'a, T: SSAMod<BBInfo = MAddress> + SSAExtra + 'a> {
     unexplored_addr: u64,
 }
 
-impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
+impl<'a, T> PhiPlacer<'a, T> 
+    where T: 'a + SSAExtra +
+        SSAMod<BBInfo = MAddress,
+                ActionRef = <T as Graph>::GraphNodeRef,
+                CFEdgeRef = <T as Graph>::GraphEdgeRef>
+{
     pub fn new(ssa: &'a mut T, regfile: SubRegisterFile) -> PhiPlacer<'a, T> {
         PhiPlacer {
             ssa: ssa,
@@ -196,7 +207,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
         let upper_block = if seen {
             self.block_of(at).unwrap()
         } else {
-            self.ssa.invalid_action()
+            self.ssa.invalid_action().expect("Invalid Action is not defined")
         };
 
         // Create a new block and add the required type of edge.
@@ -226,13 +237,22 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
 
             // Copy all the outgoing CF edges.
-            let outgoing = [self.ssa.false_edge_of(&upper_block),
-                            self.ssa.true_edge_of(&upper_block),
-                            self.ssa.next_edge_of(&upper_block)
+            let invalid_edge = self.ssa.invalid_edge()
+                                        .expect("Invalid Edge is not defined");
+            let conditional_branches = 
+                if let Some(branches) = self.ssa.conditional_edges(upper_block) {
+                    branches
+                } else {
+                    ConditionInfo::new(invalid_edge, invalid_edge)
+                };
+            let outgoing = [conditional_branches.false_side,
+                            conditional_branches.true_side,
+                            self.ssa.unconditional_edge(upper_block).unwrap_or(invalid_edge)
                             ];
             for (i, edge) in outgoing.iter().enumerate() {
-                if *edge != self.ssa.invalid_edge() {
-                    let target = self.ssa.target_of(edge);
+                if *edge != self.ssa.invalid_edge()
+                                        .expect("Invalid Edge is not defined") {
+                    let target = self.ssa.edge_info(*edge).expect("Less-endpoints edge").target;
                     if lower_block != target {
                         radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
                                       lower_block, i, target);
@@ -340,7 +360,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     // Adds an unconditional edge the the next block if there are no edges for the current block.
     pub fn maybe_add_edge(&mut self, source: MAddress, target: MAddress) {
         let source_block = self.block_of(source).unwrap();
-        if self.ssa.edges_of(&source_block).is_empty() {
+        if self.ssa.outgoing_edges(source_block).is_empty() {
             let target_block = self.block_of(target).unwrap();
             if target_block != source_block {
                 radeco_trace!("phip_add_edge|{} --{}--> {}", source, UNCOND_EDGE, target);
@@ -771,7 +791,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
     pub fn block_of(&self, address: MAddress) -> Option<T::ActionRef> {
         let mut last = None;
         let start_address = {
-            let start = self.ssa.entry_node();
+            let start = self.ssa.entry_node().expect("Incomplete CFG graph");
             self.addr_of(&start)
         };
         for (baddr, index) in self.blocks.iter().rev() {
@@ -791,7 +811,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
 
     // Return the address corresponding to the block.
     fn addr_of(&self, block: &T::ActionRef) -> MAddress {
-        self.ssa.address(block).unwrap()
+        self.ssa.starting_address(*block).expect("Losing start address of an action")
     }
 
     pub fn associate_block(&mut self, node: &T::ValueRef, addr: MAddress) {
@@ -840,7 +860,7 @@ impl<'a, T: SSAMod<BBInfo=MAddress> + SSAExtra +  'a> PhiPlacer<'a, T> {
                 exits.push(block);
             }
         } 
-        let exit_node = self.ssa.exit_node();
+        let exit_node = self.ssa.exit_node().expect("Incomplete CFG graph");
         for exit in exits {
             self.ssa.add_control_edge(exit, exit_node, UNCOND_EDGE);
         }

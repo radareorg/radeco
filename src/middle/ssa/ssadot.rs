@@ -187,7 +187,7 @@ impl GraphDot for SSAStorage {
                                          Information<br/>Start Address: {}</font>>",
                                         addr);
                 let mut attrs = Vec::new();
-                if self.entry_node() == *i {
+                if self.entry_node().expect("Incomplete CFG graph") == *i {
                     attrs.push(("rank".to_string(), "min".to_string()));
                 }
 

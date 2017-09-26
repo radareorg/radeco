@@ -13,6 +13,7 @@ use middle::ir::{MOpcode};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::ssa_traits::{SSA, SSAWalk, ValueInfo};
 use middle::ssa::cfg_traits::CFG;
+use middle::ssa::graph_traits::Graph;
 
 const BLOCK_SEP: &'static str = "{";
 const CL_BLOCK_SEP: &'static str = "}";
@@ -320,9 +321,10 @@ impl IRWriter {
                 NodeData::BasicBlock(addr) => {
                     let bbline = if let Some(ref prev_block) = last {
                         let mut jmp_statement = "JMP".to_owned();
-                        let outgoing = ssa.edges_of(prev_block)
+                        let outgoing = ssa.outgoing_edges(*prev_block)
                                           .iter()
-                                          .map(|x| (ssa.target_of(&x.0), x.1))
+                                          .map(|x| 
+                                            (ssa.edge_info(x.0).expect("Less-endpoints edge").target, x.1))
                                           .collect::<Vec<_>>();
                         // This is a conditional jump.
                         if ssa.is_selector(&prev_block) && outgoing.len() > 1 {
@@ -374,7 +376,7 @@ impl IRWriter {
             }
         }
 
-        let exit_node = ssa.exit_node();
+        let exit_node = ssa.exit_node().expect("Incomplete CFG graph");
         let final_state = ssa.registers_at(&exit_node);
         let mem_comment = "mem".to_owned();
 

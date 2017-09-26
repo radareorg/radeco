@@ -39,7 +39,7 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
             {
                 let locals = rfn.locals().iter().map(|x| x.0).collect::<HashSet<_>>();
                 let ssa = rfn.ssa_ref();
-                let start_block = ssa.entry_node();
+                let start_block = ssa.entry_node().expect("Incomplete CFG graph");
                 // Get register state at the start block.
                 let rs = ssa.registers_at(&start_block);
                 // For every register in the starting block.
@@ -68,7 +68,7 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                         }
                     }
                 }
-                let exit_block = ssa.exit_node();
+                let exit_block = ssa.exit_node().expect("Incomplete CFG graph");
                 let rs = ssa.registers_at(&exit_block);
                 for (i, r) in ssa.args_of(rs).iter().enumerate() {
                     let (insert_r, insert_m) = if let Ok(ref data) = ssa.get_node_data(r) {

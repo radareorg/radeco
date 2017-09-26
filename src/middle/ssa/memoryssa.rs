@@ -613,7 +613,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // Main function of MemorySSA, generate Memory SSA using the similar way of 
     // phiplacement.rs
     fn generate(&mut self) {
-        let entry_node = self.ssa.entry_node();
+        let entry_node = self.ssa.entry_node().expect("Incomplete CFG graph");
         let mem_entry_node = self.g.add_node(MemOpcode::MemoryAccess);
         self.associated_blocks.insert(mem_entry_node, entry_node);
         for i in 0..self.variables.len() {
