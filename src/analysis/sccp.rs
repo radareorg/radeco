@@ -15,7 +15,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::u64;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
-use middle::ssa::ssa_traits::{NodeType};
+use middle::ssa::ssa_traits::NodeType;
+use middle::ssa::graph_traits::{Graph, ConditionInfo};
 use middle::ir::{MArity, MOpcode};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -65,7 +66,13 @@ fn meet(v1: &LatticeValue, v2: &LatticeValue) -> LatticeValue {
     *v1
 }
 
-pub struct Analyzer<T: SSAMod + SSA + Clone> {
+pub struct Analyzer<T> 
+    where T: Clone +
+        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, 
+                    CFEdgeRef=<T as Graph>::GraphEdgeRef> +
+        SSA<ActionRef=<T as Graph>::GraphNodeRef, 
+                    CFEdgeRef=<T as Graph>::GraphEdgeRef> 
+{
     ssa_worklist: VecDeque<T::ValueRef>,
     cfg_worklist: VecDeque<T::CFEdgeRef>,
     executable: HashMap<T::CFEdgeRef, bool>,
@@ -73,7 +80,13 @@ pub struct Analyzer<T: SSAMod + SSA + Clone> {
     g: T,
 }
 
-impl<T: SSA + SSAMod + Clone> Analyzer<T> {
+impl<T> Analyzer<T> 
+    where T: Clone +
+        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, 
+                    CFEdgeRef=<T as Graph>::GraphEdgeRef> +
+        SSA<ActionRef=<T as Graph>::GraphNodeRef, 
+                    CFEdgeRef=<T as Graph>::GraphEdgeRef> 
+{
     pub fn new(g: &mut T) -> Analyzer<T> {
         Analyzer {
             ssa_worklist: VecDeque::new(),
@@ -112,12 +125,13 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             // Only operand which could be executable will be considered.
             // Even these operands are overdefined.
 
-            let edge = self.g.find_edge(&operand_block, &parent_block);
+            let edge = self.g.find_edges_between(operand_block, parent_block);
             if edge.len() == 0 {
                 continue;
             }
             assert_eq!(edge.len(), 1);
-            if !self.is_executable(&edge[0]) && edge[0] != self.g.invalid_edge() {
+            if !self.is_executable(&edge[0]) && 
+                edge[0] != self.g.invalid_edge().expect("Invalid Edge is not defined") {
                 continue;
             }
             //TODO: Not sure what to do when the edge is invalid
@@ -132,8 +146,15 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
         let cond_val = self.get_value(i);
         let block = self.g.selects_for(i);
-        let true_branch = self.g.true_edge_of(&block);
-        let false_branch = self.g.false_edge_of(&block);
+        let invalid_edge = self.g.invalid_edge().expect("Invalid Edge is not defined");
+        let conditional_branches = 
+            if let Some(branches) = self.g.conditional_edges(block) {
+                branches
+            } else {
+                ConditionInfo::new(invalid_edge, invalid_edge)
+            };
+        let true_branch = conditional_branches.true_side;
+        let false_branch = conditional_branches.false_side;
         match cond_val {
             LatticeValue::Bottom => {
                 self.cfg_worklist.push_back(true_branch);
@@ -321,8 +342,8 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
     pub fn analyze(&mut self) {
 
         {
-            let entry_node = self.g.entry_node();
-            let edges = self.g.edges_of(&entry_node);
+            let entry_node = self.g.entry_node().expect("Incomplete CFG graph");
+            let edges = self.g.outgoing_edges(entry_node);
             for &(ref next, _) in &edges {
                 self.cfgwl_push(next);
             }
@@ -332,14 +353,14 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
             while let Some(edge) = self.cfg_worklist.pop_front() {
                 if !self.is_executable(&edge) {
                     self.mark_executable(&edge);
-                    let block = self.g.target_of(&edge);
+                    let block = self.g.edge_info(edge).unwrap().target;
                     let phis = self.g.get_phis(&block);
                     for phi in &phis {
                         let v = self.visit_phi(phi);
                         self.set_value(phi, v);
                     }
 
-                    let visits = self.g.incoming_edges(&block).iter().fold(0, |acc, &e| {
+                    let visits = self.g.incoming_edges(block).iter().fold(0, |acc, &e| {
                         if self.is_executable(&e.0) {
                             acc + 1
                         } else {
@@ -358,8 +379,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
                         }
                     }
 
-                    let next_edge = self.g.next_edge_of(&block);
-                    if next_edge != self.g.invalid_edge() {
+                    if let Some(next_edge) = self.g.unconditional_edge(block) {
                         self.cfgwl_push(&next_edge);
                     }
                 }
@@ -418,7 +438,7 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
         let mut remove_edges = Vec::<T::CFEdgeRef>::new();
         let mut remove_blocks = Vec::<T::ActionRef>::new();
         for block in &blocks {
-            let edges = self.g.edges_of(block);
+            let edges = self.g.outgoing_edges(*block);
             for &(ref edge, _) in &edges {
                 if !self.is_executable(edge) {
                     remove_edges.push(*edge);
@@ -478,10 +498,10 @@ impl<T: SSA + SSAMod + Clone> Analyzer<T> {
 
     fn is_block_executable(&self, i: &T::ActionRef) -> bool {
         // entry_node is always reachable.
-        if *i == self.g.entry_node() {
+        if *i == self.g.entry_node().expect("Incomplete CFG graph") {
             return true;
         }
-        let incoming = self.g.incoming_edges(i);
+        let incoming = self.g.incoming_edges(*i);
         for &(ref edge, _) in &incoming {
             if self.is_executable(edge) {
                 return true;

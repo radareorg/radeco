@@ -296,7 +296,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
         let mut visited: HashSet<LValueRef> = HashSet::new();
 
-        let reg_state = ssa.registers_at(&ssa.exit_node());
+        let reg_state = ssa.registers_at(&ssa.exit_node().expect("Incomplete CFG graph"));
         worklist.push_back(reg_state);
         
         while let Some(node) = worklist.pop_front() {
@@ -355,7 +355,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             -> HashMap<String, i64> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
-        let reg_state = ssa.registers_at(&ssa.entry_node());
+        let reg_state = ssa.registers_at(&ssa.entry_node().expect("Incomplete CFG graph"));
         let nodes = ssa.args_of(reg_state);
         for node in &nodes {
             if ssa.get_comment(node).is_none(){

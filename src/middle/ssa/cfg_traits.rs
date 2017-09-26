@@ -41,24 +41,27 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use middle::ir::MAddress;
-use super::graph_traits::Graph;
+use super::graph_traits::{Graph, ConditionInfo};
 
 /// Provides __accessors__ to the underlying storage
 pub trait CFG: Graph {
 	type ActionRef: Eq + Hash + Clone + Copy + Debug;
 	type CFEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
+    /// Check whether the node is a basic block.
+    fn is_block(&self, action: Self::ActionRef) -> bool;
+
+    /// Check whether the node is an action.
+    fn is_action(&self, action: Self::ActionRef) -> bool;
+
     /// Reference to all blocks in the CFG
     fn blocks(&self) -> Vec<Self::ActionRef>;
 
     /// Reference to entry block of the CFG
-    fn entry_node(&self) -> Self::ActionRef;
+    fn entry_node(&self) -> Option<Self::ActionRef>;
 
     /// Reference to exit block of the CFG
-    fn exit_node(&self) -> Self::ActionRef;
-
-    /// Reference to the next block in the natural flow of the CFG
-    fn get_unconditional(&self, i: &Self::ActionRef) -> Self::ActionRef;
+    fn exit_node(&self) -> Option<Self::ActionRef>;
 
     /// Reference to immediate predecessors of block
     fn preds_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
@@ -66,41 +69,36 @@ pub trait CFG: Graph {
     /// Reference to immediate successors of block
     fn succs_of(&self, node: Self::ActionRef) -> Vec<Self::ActionRef>;
 
+    /// Reference to the next block in the natural flow of the CFG
+    fn unconditional_block(&self, i: Self::ActionRef) -> Option<Self::ActionRef>;
+
+    /// Reference to the conditional blocks in the natural flow of the CFG
+    fn conditional_blocks(&self, i: Self::ActionRef) -> Option<ConditionInfo<Self::ActionRef>>;
+
     /// Reference that represents and Invalid block
-    fn invalid_action(&self) -> Self::ActionRef;
+    fn invalid_action(&self) -> Option<Self::ActionRef>;
 
     ///////////////////////////////////////////////////////////////////////////
     //// Edge accessors and helpers
     ///////////////////////////////////////////////////////////////////////////
 
-    /// Reference to all outgoing edges from a block
-    fn edges_of(&self, i: &Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
-
-    /// Reference to all the incoming edges to a block
-    fn incoming_edges(&self, i: &Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
-
-    /// Reference to the source block for the edge
-    fn source_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef;
-
-    /// Reference to the target block for the edge
-    fn target_of(&self, i: &Self::CFEdgeRef) -> Self::ActionRef;
-
-    /// Reference to the edge that connects the source to the target.
-    fn find_edge(&self, source: &Self::ActionRef, target: &Self::ActionRef) -> Vec<Self::CFEdgeRef>;
-
-    /// Reference to the true edge
-    fn true_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
-
-    /// Reference to the false edge
-    fn false_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+    /// Reference to the conditional edges that flows out of the block
+    fn conditional_edges(&self, i: Self::ActionRef) -> Option<ConditionInfo<Self::CFEdgeRef>>;
 
     /// Reference to the unconditional edge that flows out of the block
-    fn next_edge_of(&self, i: &Self::ActionRef) -> Self::CFEdgeRef;
+    fn unconditional_edge(&self, i: Self::ActionRef) -> Option<Self::CFEdgeRef>;
+
+    /// Reference to all the incoming edges to a block
+    fn incoming_edges(&self, i: Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
+
+    /// Reference to all the outgoing edges from a block
+    fn outgoing_edges(&self, i: Self::ActionRef) -> Vec<(Self::CFEdgeRef, u8)>;
+
+    /// Starting address of a basic block or dynamic
+    fn starting_address(&self, block: Self::ActionRef) -> Option<MAddress>;
 
     /// Reference that represents an Invalid control flow edge.
-    fn invalid_edge(&self) -> Self::CFEdgeRef;
-    
-    fn address(&self, block: &Self::ActionRef) -> Option<MAddress>;
+    fn invalid_edge(&self) -> Option<Self::CFEdgeRef>;
 }
 
 /// Provides __mutators__ to the underlying storage

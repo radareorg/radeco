@@ -25,6 +25,7 @@ use middle::ir::{self, MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
 use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
+use middle::ssa::graph_traits::Graph;
 
 pub type VarId = usize;
 
@@ -33,7 +34,10 @@ const TRUE_EDGE: u8 = 1;
 const UNCOND_EDGE: u8 = 2;
 
 pub struct SSAConstruct<'a, T>
-    where T: 'a + Clone + fmt::Debug + SSAMod<BBInfo = MAddress> + SSAExtra
+    where T: 'a + Clone + fmt::Debug + SSAExtra +
+        SSAMod<BBInfo = MAddress,
+                ActionRef = <T as Graph>::GraphNodeRef,
+                CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
     phiplacer: PhiPlacer<'a, T>,
     regfile: SubRegisterFile,
@@ -53,10 +57,10 @@ pub struct SSAConstruct<'a, T>
 }
 
 impl<'a, T> SSAConstruct<'a, T>
-    where T: 'a + Clone
-    + fmt::Debug
-    + SSAExtra
-    + SSAMod<BBInfo=MAddress, ValueRef=NodeIndex, ActionRef=NodeIndex>
+    where T: 'a + Clone + fmt::Debug + SSAExtra +
+        SSAMod<BBInfo = MAddress,
+                ActionRef = <T as Graph>::GraphNodeRef,
+                CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
     pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruct<'a, T> {
         let regfile = SubRegisterFile::new(reg_info);
