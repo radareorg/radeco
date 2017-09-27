@@ -27,10 +27,12 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
     let mut visited: HashSet<LValueRef> = HashSet::new();
 
     // Initial the last SP register offset to ZERO.
-    let reg_state = ssa.registers_at(&ssa.exit_node().expect("Incomplete CFG graph"));
-    let nodes = ssa.args_of(reg_state);
+    let reg_state = ssa.registers_in(ssa.exit_node()
+                                            .expect("Incomplete CFG graph"))
+                        .expect("No register state node found");
+    let nodes = ssa.operands_of(reg_state);
     for node in &nodes {
-        if ssa.get_register(node).contains(&sp_name) {
+        if ssa.registers(*node).contains(&sp_name) {
             stack_offset.insert(*node, 0);
             worklist.push_back(*node);
         }
@@ -44,11 +46,11 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
         }
 
         let base = stack_offset.get(&node).unwrap().clone();
-        let args = ssa.get_operands(&node);
+        let args = ssa.operands_of(node);
 
-        let users = ssa.get_uses(&node);
+        let users = ssa.uses_of(node);
         for user in users {
-            match ssa.get_opcode(&user) {
+            match ssa.opcode(user) {
                 Some(MOpcode::OpWiden(_)) |
                 Some(MOpcode::OpNarrow(_)) => {
                     stack_offset.insert(user, base);
@@ -59,12 +61,12 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
         }
 
         // The node maybe a comment, for call statements made it
-        if ssa.get_comment(&node).is_some() {
+        if ssa.comment(node).is_some() {
             continue;
         }
 
         // Every SP met at one phi node will have the same value.
-        if ssa.is_phi(&node) {
+        if ssa.is_phi(node) {
             for arg in args {
                 stack_offset.insert(arg, base);
                 worklist.push_back(arg);
@@ -73,11 +75,11 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
         }
         
         // Consider exprission.
-        if ssa.get_opcode(&node).is_none() {
+        if ssa.opcode(node).is_none() {
             continue;
         }
 
-        let opc = ssa.get_opcode(&node).unwrap();
+        let opc = ssa.opcode(node).unwrap();
         match opc {
             MOpcode::OpWiden(_) | 
             MOpcode::OpNarrow(_) => {
@@ -85,13 +87,13 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
                 worklist.push_back(args[0]);
             }
             MOpcode::OpSub => {
-                if let Some(MOpcode::OpConst(num)) = ssa.get_opcode(&args[1]) {
+                if let Some(MOpcode::OpConst(num)) = ssa.opcode(args[1]) {
                     stack_offset.insert(args[0], base + (num as i64));
                     worklist.push_back(args[0]);
                 }
             }
             MOpcode::OpAdd => {
-                if let Some(MOpcode::OpConst(num)) = ssa.get_opcode(&args[0]) {
+                if let Some(MOpcode::OpConst(num)) = ssa.opcode(args[0]) {
                     stack_offset.insert(args[1], base - (num as i64));
                     worklist.push_back(args[1]);
                 }
@@ -132,10 +134,12 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     {
-        let reg_state = ssa.registers_at(&ssa.entry_node().expect("Incomplete CFG graph"));
-        let nodes = ssa.args_of(reg_state);
+        let reg_state = ssa.registers_in(ssa.entry_node()
+                                                .expect("Incomplete CFG graph"))
+                            .expect("No register state node found");
+        let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
-            if ssa.get_comment(node) != Some(sp_name.clone()) {
+            if ssa.comment(*node) != Some(sp_name.clone()) {
                 continue;
             }
             stack_offset.insert(*node, 0);
@@ -153,18 +157,18 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
     } else {
         let blocks = ssa.succs_of(ssa.entry_node().expect("Incomplete CFG graph"));
         assert_eq!(blocks.len(), 1);
-        ssa.exprs_in(&blocks[0])
+        ssa.exprs_in(blocks[0])
     };
 
     for node in &nodes {
-        if let Some(opc) = ssa.get_opcode(node) {
+        if let Some(opc) = ssa.opcode(*node) {
             if opc == MOpcode::OpCall && !is_global {
                 break;
             }
 
             match opc {
                 MOpcode::OpWiden(_) | MOpcode::OpNarrow(_) => {
-                    let args = ssa.get_operands(node);
+                    let args = ssa.operands_of(*node);
                     if stack_offset.contains_key(&args[0]) {
                         let num = stack_offset.get(&args[0])
                                                 .unwrap()
@@ -177,16 +181,16 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
             }
 
             // We only consider SP/BP.
-            if ssa.get_register(node).is_empty() {
+            if ssa.registers(*node).is_empty() {
                 continue;
             }
-            let regnames = ssa.get_register(node);
+            let regnames = ssa.registers(*node);
             if !regnames.contains(&sp_name) && 
                 !regnames.contains(&bp_name) { 
                     continue;
                 }
 
-            let args = ssa.get_operands(node);
+            let args = ssa.operands_of(*node);
             if args.len() != 2 {
                 continue;
             }
@@ -212,11 +216,11 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
                     continue;
                 }
             }
-            if ssa.get_opcode(&args[opcode_arg as usize]).is_some() || 
-                ssa.get_comment(&args[opcode_arg as usize]).is_some() ||
-                (ssa.is_phi(&args[opcode_arg as usize]) && is_global) {
+            if ssa.opcode(args[opcode_arg as usize]).is_some() || 
+                ssa.comment(args[opcode_arg as usize]).is_some() ||
+                (ssa.is_phi(args[opcode_arg as usize]) && is_global) {
                 if let Some(MOpcode::OpConst(num)) = 
-                            ssa.get_opcode(&args[const_arg as usize]) {
+                            ssa.opcode(args[const_arg as usize]) {
                     // TODO: Some special cases may by not consided
                     if !stack_offset.contains_key(&args[opcode_arg as usize]) {
                         continue;
@@ -233,8 +237,8 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         }
 
         // If we are doing a global search, we should consider phi node.
-        if ssa.is_phi(node) && is_global {
-            let args = ssa.get_operands(node);
+        if ssa.is_phi(*node) && is_global {
+            let args = ssa.operands_of(*node);
             let mut nums: Vec<i64> = Vec::new();
             for arg in &args {
                 if stack_offset.contains_key(arg) {

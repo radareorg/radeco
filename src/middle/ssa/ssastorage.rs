@@ -243,8 +243,8 @@ impl Graph for SSAStorage {
     fn remove_node(&mut self, exi: Self::GraphNodeRef) {
         radeco_trace!(logger::Event::SSARemoveNode(&exi));
         // Remove the current association.
-        if let Some(val) = self.get_const(&exi) {
-            let uses = self.get_uses(&exi);
+        if let Some(val) = self.constant(exi) {
+            let uses = self.uses_of(exi);
             if uses.is_empty() {
                 self.g.remove_node(exi);
                 self.constants.remove(&val);
@@ -276,7 +276,8 @@ impl Graph for SSAStorage {
                     _ => {  }
                 }
             } else if let EdgeData::Selector = self.g[edge] {
-                let bb = self.block_of(&i);
+                let bb = self.block_of(i)
+                             .expect("Value node does'n belong to any block");
                 self.mark_selector(j, bb);
             }
             self.g.remove_edge(edge); // TODO: Need suggestion. Remove edges? if not, there might be an operation to get successor on the preds(i) which would result in access to this deleted node
@@ -357,7 +358,7 @@ impl Graph for SSAStorage {
 
     // It's possible that two same nodes have mutilple edges
     fn find_edges_between(&self, source: Self::GraphNodeRef, target: Self::GraphNodeRef) -> Vec<Self::GraphEdgeRef> {
-        if source == self.invalid_value() || target == self.invalid_value() {
+        if Some(source) == self.invalid_value() || Some(target) == self.invalid_value() {
             return vec![];
         }
 
@@ -589,7 +590,8 @@ impl CFGMod for SSAStorage {
     fn remove_block(&mut self, exi: Self::ActionRef) {
         assert!(self.is_block(exi));
 
-        let regstate = self.registers_at(&exi);
+        let regstate = self.registers_in(exi)
+                                .expect("No register state node found");
         self.remove(regstate);
 
         let node = exi;
@@ -640,25 +642,51 @@ impl CFGMod for SSAStorage {
 impl SSA for SSAStorage {
 	type ValueRef = NodeIndex;
 
+    fn is_expr(&self, exi: Self::ValueRef) -> bool {
+        let i = exi;
+        match self.g[i] {
+            NodeData::Op(_, _) => true,
+            _ => false,
+        }
+    }
+
+    fn is_phi(&self, exi: Self::ValueRef) -> bool {
+        let i = exi;
+        match self.g[i] {
+            NodeData::Phi(_, _) => true,
+            _ => false,
+        }
+    }
+
+    fn is_selector(&self, exi: Self::ValueRef) -> bool {
+        let i = exi;
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
+        while let Some((edge, _)) = walk.next(&self.g) {
+            if let EdgeData::Selector = self.g[edge] {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn address(&self, ni: Self::ValueRef) -> Option<MAddress> {
+        for edge in self.g.edges(ni) {
+            if let EdgeData::ContainedInBB(addr) = *edge.weight() {
+                return Some(addr);
+            }
+        }
+        None
+    }
+
     fn values(&self) -> Vec<Self::ValueRef> {
         let mut exprs = self.nodes();
         exprs.retain(|x| !self.is_action(*x));
         exprs
     }
 
-    fn get_address(&self, ni: &NodeIndex) -> MAddress {
-        for edge in self.g.edges(*ni) {
-            if let EdgeData::ContainedInBB(addr) = *edge.weight() {
-                return addr;
-            }
-        }
-
-        MAddress::invalid_address()
-    }
-
-    fn exprs_in(&self, i: &NodeIndex) -> Vec<NodeIndex> {
+    fn exprs_in(&self, i: Self::ActionRef) -> Vec<Self::ValueRef> {
         let mut expressions = Vec::new();
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB(addr) = self.g[edge] {
                 if let NodeData::Op(_, _) = self.g[othernode] {
@@ -674,29 +702,13 @@ impl SSA for SSAStorage {
         expressions.iter().map(|x| x.0).collect()
     }
 
-    fn is_expr(&self, exi: &NodeIndex) -> bool {
-        let i = exi;
-        match self.g[*i] {
-            NodeData::Op(_, _) => true,
-            _ => false,
-        }
-    }
-
-    fn is_phi(&self, exi: &NodeIndex) -> bool {
-        let i = exi;
-        match self.g[*i] {
-            NodeData::Phi(_, _) => true,
-            _ => false,
-        }
-    }
-
-    fn get_phis(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
-        if self.invalid_value() == *exi {
+    fn phis_in(&self, exi: Self::ActionRef) -> Vec<Self::ValueRef> {
+        if self.invalid_value() == Some(exi) {
             return Vec::new();
         }
         let i = exi;
         let mut phis = Vec::<NodeIndex>::new();
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB(_) = self.g[edge] {
                 if let NodeData::Phi(_, _) = self.g[othernode] {
@@ -707,101 +719,52 @@ impl SSA for SSAStorage {
         phis
     }
 
-    fn get_uses(&self, i: &NodeIndex) -> Vec<NodeIndex> {
-        let mut uses = Vec::new();
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
-        while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Data(_) = self.g[edge] {
-                uses.push(othernode);
-            }
-        }
-        uses
-    }
-
-    fn get_register(&self, i: &NodeIndex) -> Vec<String> {
-        let mut regs = Vec::new();
-        // Self-loop in RadecoIL is not welcomed ;D
-        // Thus, Comment Node in entry_node will not have a RegisterInfo edge pointing to itself.
-        if let Some(s) = self.get_comment(i) {
-            if self.block_of(i) == self.entry_node().expect("Incomplete CFG graph") {
-                regs.push(s);
-            }
-        } 
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
-        while let Some((edge, othernode)) = walk.next(&self.g) {
-            match self.g[edge] {
-                EdgeData::RegisterInfo => {
-                    if let Some(regname) = self.get_comment(&othernode) {
-                        regs.push(regname);
-                    }
-                }
-                _ => {  }
-            }
-        }
-        regs
-    }
-
-    fn get_block(&self, i: &NodeIndex) -> NodeIndex {
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
-        while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB(_) = self.g[edge] {
-                return othernode;
-            }
-        }
-        NodeIndex::end()
-    }
-
-    fn selects_for(&self, i: &NodeIndex) -> NodeIndex {
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
-        while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Selector = self.g[edge] {
-                return othernode;
-            }
-        }
-        NodeIndex::end()
-    }
-
-    fn get_branches(&self, exi: &NodeIndex) -> (NodeIndex, NodeIndex) {
-        let selects_for_e = self.selects_for(exi);
-        // Make sure that we have a block for the selector.
-        assert_ne!(selects_for_e, NodeIndex::end());
-        let selects_for = selects_for_e;
-
-        let mut true_branch = NodeIndex::end();
-        let mut false_branch = NodeIndex::end();
-        let mut walk = self.g.neighbors_directed(selects_for, EdgeDirection::Outgoing).detach();
-        while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Control(0) = self.g[edge] {
-                false_branch = othernode;
-            } else if let EdgeData::Control(1) = self.g[edge] {
-                true_branch = othernode;
-            }
-        }
-        (false_branch, true_branch)
-    }
-
-    fn registers_at(&self, exi: &NodeIndex) -> NodeIndex {
-        assert!(self.is_action(*exi));
+    fn registers_in(&self, exi: Self::ActionRef) -> Option<Self::ValueRef> {
+        assert!(self.is_action(exi));
         let i = exi;
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::RegisterState = self.g[edge] {
-                return othernode;
+                return Some(othernode);
             }
         }
-        NodeIndex::end()
+        None
     }
 
-    fn get_operands(&self, exi: &NodeIndex) -> Vec<NodeIndex> {
-        let mut args = self.get_sparse_operands(exi);
+    fn selector_in(&self, i: Self::ActionRef) -> Option<Self::ValueRef> {
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
+            if let EdgeData::Selector = self.g[edge] {
+                return Some(othernode);
+            }
+        }
+        None
+    }
+
+    fn selector_for(&self, i: Self::ValueRef) -> Option<Self::ActionRef> {
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
+            if let EdgeData::Selector = self.g[edge] {
+                return Some(othernode);
+            }
+        }
+        None
+    }
+
+    fn uses_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef> {
+        self.gather_adjacent(node, EdgeDirection::Incoming, true)
+    }
+
+    fn operands_of(&self, exi: Self::ValueRef) -> Vec<Self::ValueRef> {
+        let mut args = self.sparse_operands_of(exi);
         args.sort_by(|a, b| a.0.cmp(&b.0));
         args.iter().map(|a| a.1).collect()
     }
 
-    fn get_sparse_operands(&self, exi: &NodeIndex) -> Vec<(u8, NodeIndex)> {
+    fn sparse_operands_of(&self, exi: Self::ValueRef) -> Vec<(u8, Self::ValueRef)> {
         let i = exi;
         let mut args = Vec::new();
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::Data(index) = self.g[edge] {
                 args.push((index, othernode));
@@ -810,8 +773,18 @@ impl SSA for SSAStorage {
         args
     }
 
-    fn get_node_data(&self, i: &NodeIndex) -> Result<TNodeData, Box<Debug>> {
-        match self.g[*i] {
+    fn block_of(&self, i: Self::ValueRef) -> Option<Self::ActionRef> {
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
+            if let EdgeData::ContainedInBB(_) = self.g[edge] {
+                return Some(othernode);
+            }
+        }
+        None
+    }
+
+    fn node_data(&self, i: Self::ValueRef) -> Result<TNodeData, Box<Debug>> {
+        match self.g[i] {
             NodeData::Op(opc, vt) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Op(opc),
@@ -832,20 +805,20 @@ impl SSA for SSAStorage {
             NodeData::Unreachable |
             NodeData::BasicBlock(_) |
             NodeData::DynamicAction |
-            NodeData::RegisterState => Err(Box::new(self.g[*i].clone())),
+            NodeData::RegisterState => Err(Box::new(self.g[i].clone())),
         }
     }
 
-    fn get_const(&self, ni: &NodeIndex) -> Option<u64> {
-        if let NodeData::Op(MOpcode::OpConst(n), _) = self.g[*ni] {
+    fn constant(&self, ni: Self::ValueRef) -> Option<u64> {
+        if let NodeData::Op(MOpcode::OpConst(n), _) = self.g[ni] {
             Some(n)
         } else {
             None
         }
     }
 
-    fn get_comment(&self, i: &NodeIndex) -> Option<String> {
-        if let Ok(ndata) = self.get_node_data(i) {
+    fn comment(&self, i: Self::ValueRef) -> Option<String> {
+        if let Ok(ndata) = self.node_data(i) {
             if let TNodeType::Comment(s) = ndata.nt {
                 Some(s.clone())
             } else {
@@ -856,8 +829,31 @@ impl SSA for SSAStorage {
         }
     }
 
-    fn get_opcode(&self, i: &NodeIndex) -> Option<MOpcode> {
-        if let Ok(ndata) = self.get_node_data(i) {
+    fn registers(&self, i: Self::ValueRef) -> Vec<String> {
+        let mut regs = Vec::new();
+        // Self-loop in RadecoIL is not welcomed ;D
+        // Thus, Comment Node in entry_node will not have a RegisterInfo edge pointing to itself.
+        if let Some(s) = self.comment(i) {
+            if self.block_of(i) == self.entry_node() {
+                regs.push(s);
+            }
+        } 
+        let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
+        while let Some((edge, othernode)) = walk.next(&self.g) {
+            match self.g[edge] {
+                EdgeData::RegisterInfo => {
+                    if let Some(regname) = self.comment(othernode) {
+                        regs.push(regname);
+                    }
+                }
+                _ => {  }
+            }
+        }
+        regs
+    }
+
+    fn opcode(&self, i: Self::ValueRef) -> Option<MOpcode> {
+        if let Ok(ndata) = self.node_data(i) {
             if let TNodeType::Op(opc) = ndata.nt {
                 Some(opc.clone())
             } else {
@@ -868,55 +864,8 @@ impl SSA for SSAStorage {
         }
     }
 
-    fn is_selector(&self, exi: &Self::ValueRef) -> bool {
-        let i = exi;
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Incoming).detach();
-        while let Some((edge, _)) = walk.next(&self.g) {
-            if let EdgeData::Selector = self.g[edge] {
-                return true;
-            }
-        }
-        false
-    }
-
-
-    fn selector_of(&self, i: &Self::ActionRef) -> Option<Self::ValueRef> {
-        let mut walk = self.g.neighbors_directed(*i, EdgeDirection::Outgoing).detach();
-        while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Selector = self.g[edge] {
-                return Some(othernode);
-            }
-        }
-        None
-    }
-
-    fn get_target(&self, exi: &NodeIndex) -> NodeIndex {
-        let cur_block = self.get_block(exi);
-        let mut walk = self.g.neighbors_directed(cur_block, EdgeDirection::Outgoing).detach();
-        while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Control(_) = self.g[edge] {
-                return othernode;
-            }
-        }
-        NodeIndex::end()
-    }
-
-    fn args_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-        self.gather_adjacent(node, EdgeDirection::Outgoing, true)
-    }
-
-    fn uses_of(&self, node: NodeIndex) -> Vec<NodeIndex> {
-        self.gather_adjacent(node, EdgeDirection::Incoming, true)
-    }
-
-    fn invalid_value(&self) -> NodeIndex {
-        NodeIndex::end()
-    }
-    fn to_value(&self, n: NodeIndex) -> NodeIndex {
-        n
-    }
-    fn to_action(&self, n: NodeIndex) -> NodeIndex {
-        n
+    fn invalid_value(&self) -> Option<Self::ValueRef> {
+        Some(NodeIndex::end())
     }
 }
 
@@ -987,10 +936,11 @@ impl SSAMod for SSAStorage {
     }
 
     fn set_register(&mut self, i: NodeIndex, regname: &String) {
-        let reg_state = self.registers_at(&self.entry_node);
-        let operands = self.get_operands(&reg_state);
+        let reg_state = self.registers_in(self.entry_node)
+                                .expect("No register state node found");
+        let operands = self.operands_of(reg_state);
         for op in operands {
-            if Some(regname) == self.get_comment(&op).as_ref() {
+            if Some(regname) == self.comment(op).as_ref() {
                 self.insert_edge(i, op, EdgeData::RegisterInfo);
                 break;
             }
@@ -1021,7 +971,7 @@ impl SSAMod for SSAStorage {
 
     fn remove_edge(&mut self, i: &Self::CFEdgeRef) {
         let src_node = self.edge_info(*i).expect("Less-endpoints edge").source;
-        if let Some(selector) = self.selector_of(&src_node) {
+        if let Some(selector) = self.selector_in(src_node) {
             self.remove(selector);
         }
 
@@ -1184,16 +1134,18 @@ impl SSAWalk<Walker> for SSAStorage {
                     continue;
                 }
                 visited.insert(*block);
-                nodes.push_back(self.to_value(*block));
-                let mut exprs = self.exprs_in(block)
+                nodes.push_back(*block);
+                let mut exprs = self.exprs_in(*block)
                                     .iter()
-                                    .chain(self.get_phis(block).iter())
+                                    .chain(self.phis_in(*block).iter())
                                     .cloned()
                                     .collect::<Vec<NodeIndex>>();
 
                 exprs.sort_by(|x, y| {
-                    let addr_x = self.get_address(x);
-                    let addr_y = self.get_address(y);
+                    let addr_x = self.address(*x)
+                                        .expect("No address information found");
+                    let addr_y = self.address(*y)
+                                        .expect("No address information found");
                     addr_x.cmp(&addr_y)
                 });
 
@@ -1221,16 +1173,18 @@ impl SSAWalk<Walker> for SSAStorage {
                     continue;
                 }
                 visited.insert(*block);
-                nodes.push_back(self.to_value(*block));
-                let mut exprs = self.exprs_in(block)
+                nodes.push_back(*block);
+                let mut exprs = self.exprs_in(*block)
                                     .iter()
-                                    .chain(self.get_phis(block).iter())
+                                    .chain(self.phis_in(*block).iter())
                                     .cloned()
                                     .collect::<Vec<NodeIndex>>();
 
                 exprs.sort_by(|x, y| {
-                    let addr_x = self.get_address(x);
-                    let addr_y = self.get_address(y);
+                    let addr_x = self.address(*x)
+                                        .expect("No address information found");
+                    let addr_y = self.address(*y)
+                                        .expect("No address information found");
                     addr_x.cmp(&addr_y)
                 });
                 for expr in &exprs {

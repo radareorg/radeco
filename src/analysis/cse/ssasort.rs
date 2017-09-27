@@ -119,8 +119,8 @@ impl<'a, I, T> Sorter<'a, I, T>
     // use-def chain withoud any phi node. Because the recursion will stop at phi node, it's 
     // impossible to become an infinite loop.
     fn compare_operands(&mut self, op1: T::ValueRef, op2: T::ValueRef) -> Ordering {
-        let operands1 = self.ssa.get_operands(&op1);
-        let operands2 = self.ssa.get_operands(&op2);
+        let operands1 = self.ssa.operands_of(op1);
+        let operands2 = self.ssa.operands_of(op2);
         for i in 0..operands1.len() {
             let result = self.compare(operands1[i], operands2[i]);
             if result != Ordering::Equal {
@@ -150,8 +150,8 @@ impl<'a, I, T> Sorter<'a, I, T>
         if !self.sorted.contains_key(&op2) {
             self.sort_operands(op2);
         }
-        let node_data1 = self.ssa.get_node_data(&op1).expect("Operand node not found!");
-        let node_data2 = self.ssa.get_node_data(&op2).expect("Operand node not found!");
+        let node_data1 = self.ssa.node_data(op1).expect("Operand node not found!");
+        let node_data2 = self.ssa.node_data(op2).expect("Operand node not found!");
         let priority1 = self.get_priority(node_data1);
         let priority2 = self.get_priority(node_data2);
 
@@ -173,8 +173,10 @@ impl<'a, I, T> Sorter<'a, I, T>
             POPLOAD |
             POPSTORE |
             POPITE => { 
-                let addr1 = self.ssa.get_address(&op1);
-                let addr2 = self.ssa.get_address(&op2);
+                let addr1 = self.ssa.address(op1)
+                                        .expect("No address information found");
+                let addr2 = self.ssa.address(op2)
+                                        .expect("No address information found");
                 return self.return_value(addr1.cmp(&addr2), op1, op2);
             }
             POPCONST => {
@@ -205,10 +207,10 @@ impl<'a, I, T> Sorter<'a, I, T>
         if self.sorted.contains_key(&idx) {
             return; 
         }
-        if let Ok(node_data) = self.ssa.get_node_data(&idx) {
+        if let Ok(node_data) = self.ssa.node_data(idx) {
             match node_data.nt {
                 NodeType::Op(opc) if opc.is_commutative() => {
-                    let operands = self.ssa.get_operands(&idx);
+                    let operands = self.ssa.operands_of(idx);
                     // Operands' length must be 2, for only commutative opcode 
                     // could get in this function, while commutative opcodes 
                     // always have two operands.

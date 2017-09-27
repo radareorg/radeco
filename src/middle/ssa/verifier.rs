@@ -145,7 +145,7 @@ impl Verify for SSAStorage {
         }
 
 
-        let selector = self.selector_of(block);
+        let selector = self.selector_in(*block);
         if edges.len() == 2 {
             check!(selector.is_some(), SSAErr::NoSelector(*block));
         } else {
@@ -162,18 +162,18 @@ impl Verify for SSAStorage {
     }
 
     fn verify_expr(&self, exi: &NodeIndex) -> VResult<Self> {
-        radeco_trace!("ssa verify|Node {:?} with {:?}", exi, self.get_node_data(exi));
-        radeco_trace!("ssa verify|Args: {:?}", self.get_operands(exi));
-        for arg in &self.get_operands(exi) {
-            radeco_trace!("ssa verify|\targ: {:?} with {:?}", arg, self.get_node_data(arg));
+        radeco_trace!("ssa verify|Node {:?} with {:?}", exi, self.node_data(*exi));
+        radeco_trace!("ssa verify|Args: {:?}", self.operands_of(*exi));
+        for arg in &self.operands_of(*exi) {
+            radeco_trace!("ssa verify|\targ: {:?} with {:?}", arg, self.node_data(*arg));
         }
-        if let Ok(ndata) = self.get_node_data(exi) { 
+        if let Ok(ndata) = self.node_data(*exi) { 
             match (ndata.nt, ndata.vt) {
                 (TNodeType::Op(opcode), vi) => { 
                     let w = vi.width().get_width().unwrap_or(64);
 
                     let opfilter = |&x: &NodeIndex| -> bool {
-                        if let Some(op) = self.get_opcode(&x) {
+                        if let Some(op) = self.opcode(x) {
                             match op {
                                 MOpcode::OpLoad | MOpcode::OpStore => false,
                                 _ => true,
@@ -183,7 +183,7 @@ impl Verify for SSAStorage {
                         }
                     };
 
-                    let mut operands = self.get_operands(exi);
+                    let mut operands = self.operands_of(*exi);
                     let op_len = operands.len();
                     let n = match opcode.arity() {
                         MArity::Zero => 0,
@@ -199,7 +199,7 @@ impl Verify for SSAStorage {
                     }
 
                     for op in &operands {
-                        if let Some(val) = self.get_const(op) {
+                        if let Some(val) = self.constant(*op) {
                             check!(self.constants.get(&val).is_some(), SSAErr::UnrecordedConstant(val));
                             let const_node = self.constants.get(&val).unwrap();
                             check!(const_node == op, SSAErr::MultiConstantCopy(val, *const_node, *op));
@@ -214,12 +214,12 @@ impl Verify for SSAStorage {
                     }
                     match opcode {
                         MOpcode::OpNarrow(w0) => {
-                            let opw = self.get_node_data(&operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
+                            let opw = self.node_data(operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                             check!(opw > w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
                             check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
                         }
                         MOpcode::OpWiden(w0) => {
-                            let opw = self.get_node_data(&operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
+                            let opw = self.node_data(operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                             check!(opw < w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
                             check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
                         }
@@ -232,10 +232,10 @@ impl Verify for SSAStorage {
                         MOpcode::OpCall | MOpcode::OpStore | MOpcode::OpLoad => {}
                         _ => {
                             // All operands to an expr must have the same width.
-                            let w0 = self.get_node_data(&operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
+                            let w0 = self.node_data(operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                             check!(w0 == w, SSAErr::IncompatibleWidth(*exi, w, w0));
                             for op in operands.iter() {
-                                let w1 = self.get_node_data(op).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
+                                let w1 = self.node_data(*op).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                                 check!(w == w1, SSAErr::IncompatibleWidth(*exi, w, w1));
                             }
                         }
@@ -269,9 +269,9 @@ impl Verify for SSAStorage {
         stack.push_back(*exi);
 
         // DFS with its operands.
-        let operands = self.get_operands(exi);
+        let operands = self.operands_of(*exi);
         for op in &operands {
-            check!(op != exi || self.is_phi(exi), SSAErr::BackUse(*exi, *op));
+            check!(op != exi || self.is_phi(*exi), SSAErr::BackUse(*exi, *op));
             let low_exi = LOW.get(exi).cloned().unwrap();
             if !DFN.contains_key(op) {
                 try!(self.verify_SCC(op, timestamp, DFN, LOW, stack));
@@ -280,8 +280,8 @@ impl Verify for SSAStorage {
                     LOW.insert(*exi, low_op);
                 } else if stack.contains(op) {
                     radeco_trace!("Verify_SCC_BackUse| {:?} with {:?} --> {:?} with {:?}",
-                                exi, self.get_node_data(exi), op, self.get_node_data(op));
-                    check!(self.is_phi(exi), SSAErr::BackUse(*exi, *op));
+                                exi, self.node_data(*exi), op, self.node_data(*op));
+                    check!(self.is_phi(*exi), SSAErr::BackUse(*exi, *op));
                     let dfn_op = DFN.get(op).cloned().unwrap();
                     if dfn_op < low_exi {
                         LOW.insert(*exi, dfn_op);
@@ -306,8 +306,8 @@ impl Verify for SSAStorage {
             let mut reachable = false;
             // That will be caused by phi nodes.
             for node in &SCC {
-                let operands = self.get_operands(node);
-                radeco_trace!("Verify_SCC_PhiSCC|{:?} with {:?}", node, self.get_node_data(node));
+                let operands = self.operands_of(*node);
+                radeco_trace!("Verify_SCC_PhiSCC|{:?} with {:?}", node, self.node_data(*node));
                 radeco_trace!("Verify_SCC_PhiScc|\tOperands: {:?}", operands);
                 for op in &operands {
                     if !SCC.contains(op) {
@@ -335,7 +335,7 @@ pub fn verify<T>(ssa: &T) -> VResult<T>
         // assert the qualities of the block first.
         try!(ssa.verify_block(block));
         // Iterate through each node in the block and assert their properties.
-        let exprs = ssa.exprs_in(block);
+        let exprs = ssa.exprs_in(*block);
         for expr in exprs.iter() {
             try!(ssa.verify_expr(expr));
         }
@@ -349,7 +349,7 @@ pub fn verify<T>(ssa: &T) -> VResult<T>
     // Find the start point. RegisterState for exit_node could be the best choose.
     // Because it could reach all the nodes in SSA.
     let exi = ssa.exit_node().expect("Incomplete CFG graph");
-    let register = ssa.registers_at(&exi);
+    let register = ssa.registers_in(exi).expect("No register state node found");
     try!(ssa.verify_SCC(&register, &mut timestamp, &mut DFN, &mut LOW, &mut stack));
     Ok(())
 }

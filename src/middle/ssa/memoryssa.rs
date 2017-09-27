@@ -242,7 +242,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // may_alias set, rather than in MemorySSA.
     fn init_nodes_type(&mut self) {
         for node in &self.ssa.values() {
-            if let Ok(ndata) = self.ssa.get_node_data(node) {
+            if let Ok(ndata) = self.ssa.node_data(*node) {
                 match ndata.nt {
                     NodeType::Op(MOpcode::OpConst(addr)) => {
                         if self.check_global(addr) {
@@ -354,8 +354,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         //      variable address to propagate node type. 
         //      I will try to do it later.
         for expr in self.ssa.inorder_walk() {
-            if let Ok(ndata) = self.ssa.get_node_data(&expr) {
-                let operands = self.ssa.get_operands(&expr);
+            if let Ok(ndata) = self.ssa.node_data(expr) {
+                let operands = self.ssa.operands_of(expr);
                 match ndata.nt {
                     NodeType::Op(opc) => {
                         match opc {
@@ -392,7 +392,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         let mem_node = self.g.add_node(data);
         self.associated_nodes.insert(mem_node, *ssa_node);
 
-        let block = self.ssa.get_block(&ssa_node);
+        let block = self.ssa.block_of(*ssa_node)
+                            .expect("Value node doesn't belong to any block");
         self.associated_blocks.insert(mem_node, block.clone());
         return mem_node;
     }
@@ -622,7 +623,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         // Init MemorySSA, making MemoryAccess as all variables' define.
 
         for expr in self.ssa.inorder_walk() {
-            if let Ok(ndata) = self.ssa.get_node_data(&expr) {
+            if let Ok(ndata) = self.ssa.node_data(expr) {
                 radeco_trace!("MemorrySSA|Deal with node: {:?}", expr);
 
                 match ndata.nt {
@@ -634,7 +635,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                                                                 .collect();
                         let vuse = self.add_node(&expr, MemOpcode::VUse);
                         for i in set {
-                            let block = self.ssa.get_block(&expr);
+                            let block = self.ssa.block_of(expr)
+                                                .expect("Value node doesn't belong to any block");
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vuse, &arg);
                         }
@@ -648,7 +650,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                                                                 .collect();
                         let vdef = self.add_node(&expr, MemOpcode::VDef);
                         for i in set {
-                            let block = self.ssa.get_block(&expr);
+                            let block = self.ssa.block_of(expr)
+                                                .expect("Value node doesn't belong to any block");
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vdef, &arg);
                             self.write_variable(i, &block, &vdef);

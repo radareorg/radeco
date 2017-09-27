@@ -143,9 +143,9 @@ where I: Iterator<Item=S::ValueRef>,
 
         // Only Opcode should be considered its argument.
         let mut argh = String::new();
-        if let Ok(node_data) = self.ssa.get_node_data(&root) {
+        if let Ok(node_data) = self.ssa.node_data(root) {
             if let NodeType::Op(_) = node_data.nt {
-                for arg in self.ssa.args_of(root) {
+                for arg in self.ssa.operands_of(root) {
                     if !argh.is_empty() {
                         argh.push_str(", ");
                     }
@@ -169,7 +169,7 @@ where I: Iterator<Item=S::ValueRef>,
 
     fn hash_data(&self, ni: S::ValueRef) -> String {
         let mut result = String::new();
-        if let Ok(node_data) = self.ssa.get_node_data(&ni) {
+        if let Ok(node_data) = self.ssa.node_data(ni) {
             if let NodeType::Op(opc) = node_data.nt {
                 result.push_str(&match opc {
                     MOpcode::OpConst(val) => format!("#x{:x}", val),
@@ -217,7 +217,7 @@ where I: Iterator<Item=S::ValueRef>,
                 continue;
             }
             {
-                let args = self.ssa.args_of(node);
+                let args = self.ssa.operands_of(node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
                 if args.len() != first_expr.len() {
                     continue;
@@ -272,7 +272,7 @@ where I: Iterator<Item=S::ValueRef>,
                     break;
                 }
 
-                let args = self.ssa.args_of(inner_node);
+                let args = self.ssa.operands_of(inner_node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
                 // Since "%" binds the entire subtree, it will not have any arguments. So we skip
                 // this case.
@@ -363,12 +363,12 @@ where I: Iterator<Item=S::ValueRef>,
         let mut worklist = Vec::new();
         // Remove operands to the root node and prepare for replace.
         let root = found.root;
-        let mut address = self.ssa.get_address(&root);
-        let block = self.ssa.block_of(&root);
+        let mut address = self.ssa.address(root).expect("No address information found");
+        let block = self.ssa.block_of(root).expect("Value node doesn't belong to any block");
 
         // Now we have a root node with no args, but retaining its uses.
         // Replace this node with the root node in the replace expression.
-        for arg in &self.ssa.args_of(root) {
+        for arg in &self.ssa.operands_of(root) {
             self.ssa.disconnect(&root, arg);
         }
 
@@ -534,7 +534,7 @@ mod test {
 
         grep_and_replace!(&mut ssa, "(OpAdd %1, %2)" => "(OpSub %1, %2)");
         let sub_node = ssa.inorder_walk().last().expect("No last node!");
-        let args = ssa.args_of(sub_node);
+        let args = ssa.operands_of(sub_node);
 
         assert!({
             match ssa.g[sub_node] {

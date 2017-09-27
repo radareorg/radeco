@@ -40,7 +40,7 @@ where I: Iterator<Item = S::ValueRef>,
     fn hash_args(&self, args: &[S::ValueRef]) -> String {
         let mut result = String::new();
         for arg in args {
-            if let Ok(node_data) = self.ssa.get_node_data(arg) {
+            if let Ok(node_data) = self.ssa.node_data(*arg) {
                 match node_data.nt {
                     NodeType::Op(opc) => {
                         match opc {
@@ -66,9 +66,9 @@ where I: Iterator<Item = S::ValueRef>,
 
     // NOTE: Because we have sorted the operands, it's unnecessary to consider commutative opcodes.
     fn hash_string(&self, idx: &S::ValueRef) -> Option<String> {
-        if let Ok(node_data) = self.ssa.get_node_data(idx) {
+        if let Ok(node_data) = self.ssa.node_data(*idx) {
             if let NodeType::Op(opc) = node_data.nt {
-                let args = self.ssa.args_of(*idx);
+                let args = self.ssa.operands_of(*idx);
                 let hashed_args = self.hash_args(&args);
                 let hs = format!("{}{}", opc, hashed_args);
                 return Some(hs);
@@ -99,7 +99,7 @@ where I: Iterator<Item = S::ValueRef>,
                 // restrict outselves to the case where both the expressions belong to the same
                 // block.
                 for ex_idx in &ex_idxs {
-                    if self.ssa.block_of(ex_idx) == self.ssa.block_of(&expr) {
+                    if self.ssa.block_of(*ex_idx) == self.ssa.block_of(expr) {
                         self.ssa.replace(expr, *ex_idx);
                         replaced = true;
                         break;
