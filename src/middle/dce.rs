@@ -32,12 +32,13 @@ pub fn mark<T>(ssa: &mut T)
 {
     let nodes = ssa.values();
     let exit_node = ssa.exit_node().expect("Incomplete CFG graph");
-    let roots = ssa.registers_at(&exit_node);
+    let roots = ssa.registers_in(exit_node)
+                        .expect("No register state node found");
     let mut queue = VecDeque::<T::ValueRef>::new();
     for node in &nodes {
-        if let Ok(ref result) = ssa.get_node_data(node) {
+        if let Ok(ref result) = ssa.node_data(*node) {
             if let NodeType::Op(ref op) = result.nt {
-                if op.has_sideeffects() || ssa.is_selector(node) {
+                if op.has_sideeffects() || ssa.is_selector(*node) {
                     queue.push_back(*node);
                 }
             }
@@ -52,7 +53,7 @@ pub fn mark<T>(ssa: &mut T)
             continue;
         }
         ssa.mark(&ni);
-        queue.extend(ssa.args_of(ni));
+        queue.extend(ssa.operands_of(ni));
     }
 }
 
@@ -77,8 +78,8 @@ pub fn sweep<T>(ssa: &mut T)
             continue;
         }
 
-        let remove_block = if ssa.exprs_in(block).is_empty() &&
-            ssa.get_phis(block).is_empty() {
+        let remove_block = if ssa.exprs_in(*block).is_empty() &&
+            ssa.phis_in(*block).is_empty() {
                 let incoming = ssa.incoming_edges(*block);
                 let outgoing = ssa.outgoing_edges(*block);
                 // Two cases.

@@ -116,7 +116,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                 // The last SP offset should be the biggest
                 for offset in &stack_offset {
                     radeco_trace!("CallFixer|{:?} with {:?}: {}", offset.0,
-                             ssa.get_node_data(offset.0), offset.1);
+                             ssa.node_data(*offset.0), offset.1);
                     if offset.1 > &max_offset {
                         max_offset = *offset.1;
                     }
@@ -207,11 +207,11 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                     regs.push(name.clone());
                 }
                 for reg in regs {
-                    let node_sets = vec![ssa.get_operands(&node), ssa.get_uses(&node)];
+                    let node_sets = vec![ssa.operands_of(node), ssa.uses_of(node)];
                     let mut replace_pair: Vec<LValueRef> = Vec::with_capacity(2);
                     for node_set in node_sets {
                         for sub_node in node_set {
-                            if ssa.get_register(&sub_node).contains(&reg) {
+                            if ssa.registers(sub_node).contains(&reg) {
                                 replace_pair.push(sub_node);
                                 break
                             }
@@ -296,7 +296,9 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
         let mut visited: HashSet<LValueRef> = HashSet::new();
 
-        let reg_state = ssa.registers_at(&ssa.exit_node().expect("Incomplete CFG graph"));
+        let reg_state = ssa.registers_in(ssa.exit_node()
+                                         .expect("Incomplete CFG graph"))
+                            .expect("No register state node found");
         worklist.push_back(reg_state);
         
         while let Some(node) = worklist.pop_front() {
@@ -305,32 +307,32 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             } else {
                 continue;
             }
-            radeco_trace!("CallFixer|Pop {:?} with {:?}", node, ssa.get_node_data(&node));
-            radeco_trace!("CallFixer|Register is {:?}", ssa.get_register(&node));
-            let args = ssa.args_of(node);
+            radeco_trace!("CallFixer|Pop {:?} with {:?}", node, ssa.node_data(node));
+            radeco_trace!("CallFixer|Register is {:?}", ssa.registers(node));
+            let args = ssa.operands_of(node);
             for arg in args {
-                if ssa.get_register(&arg).is_empty() {
+                if ssa.registers(arg).is_empty() {
                     continue;
                 }
 
-                if ssa.is_phi(&arg) {
+                if ssa.is_phi(arg) {
                     worklist.push_back(arg);
                     continue;
                 }
-                match ssa.get_opcode(&arg) {
+                match ssa.opcode(arg) {
                     // OpNarrow and OpWiden are transfromed data
                     Some(MOpcode::OpNarrow(_)) |
                     Some(MOpcode::OpWiden(_)) => {
                         worklist.push_back(arg);    
                     }
                     Some(MOpcode::OpLoad) => {
-                        let operands = ssa.get_operands(&arg);
+                        let operands = ssa.operands_of(arg);
                         if !exit_offset.contains_key(&operands[1]) {
                             continue;
                         }
 
                         let base = exit_offset.get(&operands[1]).unwrap().clone();
-                        let names = ssa.get_register(&arg);
+                        let names = ssa.registers(arg);
                         for name in names {
                             radeco_trace!("CallFixer|Found {:?} with {:?}", name, base);
                             if exit_load.contains_key(&name) {
@@ -355,21 +357,23 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             -> HashMap<String, i64> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
-        let reg_state = ssa.registers_at(&ssa.entry_node().expect("Incomplete CFG graph"));
-        let nodes = ssa.args_of(reg_state);
+        let reg_state = ssa.registers_in(ssa.entry_node()
+                                         .expect("Incomplete CFG graph"))
+                            .expect("No register state node found");
+        let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
-            if ssa.get_comment(node).is_none(){
+            if ssa.comment(*node).is_none(){
                 continue;
             }
-            if ssa.get_register(node).is_empty() {
+            if ssa.registers(*node).is_empty() {
                 continue;
             }
-            let reg_names = ssa.get_register(node);
-            let users = ssa.get_uses(node);
+            let reg_names = ssa.registers(*node);
+            let users = ssa.uses_of(*node);
             for reg_name in reg_names {
                 for user in &users {
-                    if Some(MOpcode::OpStore) == ssa.get_opcode(user) {
-                        let args = ssa.get_operands(user);
+                    if Some(MOpcode::OpStore) == ssa.opcode(*user) {
+                        let args = ssa.operands_of(*user);
                         if entry_offset.contains_key(&args[1]) {
                             let num = entry_offset.get(&args[1]).unwrap();
                             entry_store.insert(reg_name.clone(), *num);
@@ -431,8 +435,8 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let id = NodeIndex::new(start);
         worklist.push_back(id);
         println!("Initial Id: {:?}", id);
-        println!("\tInitial Data: {:?}", ssa.get_node_data(&id));
-        println!("\tInitial Register: {:?}", ssa.get_register(&id));
+        println!("\tInitial Data: {:?}", ssa.node_data(id));
+        println!("\tInitial Register: {:?}", ssa.registers(id));
         while let Some(node) = worklist.pop_front() {
             if !visited.contains(&node) {
                 visited.insert(node);
@@ -441,33 +445,33 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             }
             number -= 1;
             println!("Id: {:?}", node);
-            println!("\tData: {:?}", ssa.get_node_data(&node));
-            println!("\tRegister: {:?}", ssa.get_register(&node));
-            println!("\tArgs: {:?}", ssa.get_operands(&node));
-            println!("\tUses: {:?}", ssa.get_uses(&node));
+            println!("\tData: {:?}", ssa.node_data(node));
+            println!("\tRegister: {:?}", ssa.registers(node));
+            println!("\tArgs: {:?}", ssa.operands_of(node));
+            println!("\tUses: {:?}", ssa.uses_of(node));
             
             if number == 0 {
                 break;
             }
 
-            match ssa.get_opcode(&node) {
+            match ssa.opcode(node) {
                 Some(MOpcode::OpConst(_)) => { continue; }
                 _ => {  }
             }
-            for arg in ssa.get_operands(&node) {
+            for arg in ssa.operands_of(node) {
                 println!("\tArg_Id: {:?}", arg);
-                println!("\t\tArg_Data: {:?}", ssa.get_node_data(&arg));
-                println!("\t\tArg_Register: {:?}", ssa.get_register(&arg));
-                println!("\t\tArg_Args: {:?}", ssa.get_operands(&arg));
-                println!("\t\tArg_Uses: {:?}", ssa.get_uses(&arg));
+                println!("\t\tArg_Data: {:?}", ssa.node_data(arg));
+                println!("\t\tArg_Register: {:?}", ssa.registers(arg));
+                println!("\t\tArg_Args: {:?}", ssa.operands_of(arg));
+                println!("\t\tArg_Uses: {:?}", ssa.uses_of(arg));
                 worklist.push_back(arg);
             }
-            for user in ssa.get_uses(&node) {
+            for user in ssa.uses_of(node) {
                 println!("\tUse_Id: {:?}", user);
-                println!("\t\tUse_Data: {:?}", ssa.get_node_data(&user));
-                println!("\t\tUse_Register: {:?}", ssa.get_register(&user));
-                println!("\t\tUse_Args: {:?}", ssa.get_operands(&user));
-                println!("\t\tUse_Uses: {:?}", ssa.get_uses(&user));
+                println!("\t\tUse_Data: {:?}", ssa.node_data(user));
+                println!("\t\tUse_Register: {:?}", ssa.registers(user));
+                println!("\t\tUse_Args: {:?}", ssa.operands_of(user));
+                println!("\t\tUse_Uses: {:?}", ssa.uses_of(user));
                 worklist.push_back(user);
             }
         }

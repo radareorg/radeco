@@ -41,14 +41,15 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                 let ssa = rfn.ssa_ref();
                 let start_block = ssa.entry_node().expect("Incomplete CFG graph");
                 // Get register state at the start block.
-                let rs = ssa.registers_at(&start_block);
+                let rs = ssa.registers_in(start_block)
+                                .expect("No register state node found");
                 // For every register in the starting block.
-                for (i, reg) in ssa.args_of(rs).iter().enumerate() {
+                for (i, reg) in ssa.operands_of(rs).iter().enumerate() {
                     // Get the uses of the register
                     let uses = ssa.uses_of(*reg);
                     if !uses.is_empty() {
                         let insert = uses.iter().any(|x| {
-                            if let Ok(ref data) = ssa.get_node_data(x) {
+                            if let Ok(ref data) = ssa.node_data(*x) {
                                 match data.nt {
                                     NodeType::Op(MOpcode::OpLoad) |
                                     NodeType::Op(MOpcode::OpStore) => {
@@ -69,9 +70,10 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                     }
                 }
                 let exit_block = ssa.exit_node().expect("Incomplete CFG graph");
-                let rs = ssa.registers_at(&exit_block);
-                for (i, r) in ssa.args_of(rs).iter().enumerate() {
-                    let (insert_r, insert_m) = if let Ok(ref data) = ssa.get_node_data(r) {
+                let rs = ssa.registers_in(exit_block)
+                                .expect("No register state node found");
+                for (i, r) in ssa.operands_of(rs).iter().enumerate() {
+                    let (insert_r, insert_m) = if let Ok(ref data) = ssa.node_data(*r) {
                         match data.nt {
                             NodeType::Comment(_) => (false, false),
                             NodeType::Op(MOpcode::OpLoad) => {

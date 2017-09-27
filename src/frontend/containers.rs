@@ -179,12 +179,14 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
         let caller = rfn.offset;
         let ssa = rfn.ssa_mut();
         for node in ssa.inorder_walk() {
-            if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.get_node_data(&node).map(|x| x.nt) {
+            if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.node_data(node).map(|x| x.nt) {
                 // Fixup the call by converting a comment to a proper argument.
                 let call_node = &node;
-                let call_site = ssa.get_address(call_node).address;
+                let call_site = ssa.address(*call_node)
+                                    .expect("No address information found")
+                                    .address;
                 if let Some(info) = call_info.get_mut(&call_site) {
-                    if let Some(arg_node) = ssa.args_of(*call_node).get(0) {
+                    if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
                         let target_node = ssa.add_const(info.callee.unwrap());
                         ssa.disconnect(call_node, arg_node);
                         ssa.op_use(*call_node, 0, target_node);
@@ -200,14 +202,14 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
 
 // TODO: Make this a method of SSA Soon to pretty print expression trees.
 fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
-    let nt = ssa.get_node_data(n).map(|x| x.nt);
+    let nt = ssa.node_data(*n).map(|x| x.nt);
     if nt.is_err() {
         return String::new();
     }
     let nt = nt.unwrap();
 
     let mut result = format!("{}", nt);
-    let mut args = ssa.args_of(*n);
+    let mut args = ssa.operands_of(*n);
     if let NodeType::Op(MOpcode::OpCall) = nt {
         args.truncate(1);
     }
@@ -243,20 +245,20 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
         let ssa = rfn.ssa_mut();
         let mem = {
             let start = ssa.entry_node().expect("Incomplete CFG graph");
-            let rs = ssa.registers_at(&start);
+            let rs = ssa.registers_in(start).expect("No register state node found");
             // mem is the first argument for the register state.
             // NOTE: If something changes in the future, the above assumption may no longer be
             // true. In that case, look here!
-            ssa.args_of(rs).pop()
+            ssa.operands_of(rs).pop()
         };
 
         if let Some(mem) = mem {
             wl = ssa.uses_of(mem);
             while let Some(node) = wl.pop() {
-                let data = ssa.get_node_data(&node).map(|x| x.nt);
+                let data = ssa.node_data(node).map(|x| x.nt);
                 match data {
                     Ok(NodeType::Op(MOpcode::OpLoad)) | Ok(NodeType::Op(MOpcode::OpStore)) => {
-                        let args = ssa.args_of(node);
+                        let args = ssa.operands_of(node);
                         // If operation is a store it will produce a new memory instance. Hence,
                         // push all uses of new memory to the worklist.
                         if let Ok(NodeType::Op(MOpcode::OpStore)) = data {
@@ -361,8 +363,8 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                     let regs = {
                         let ssa = rfn.ssa_mut();
                         let start = ssa.entry_node().expect("Incomplete CFG graph");
-                        let rs = ssa.registers_at(&start);
-                        ssa.args_of(rs)
+                        let rs = ssa.registers_in(start).expect("No registers state node found");
+                        ssa.operands_of(rs)
                     };
                     for (i, reg) in regs.iter().enumerate() {
                         let mut bind = Binding::default();

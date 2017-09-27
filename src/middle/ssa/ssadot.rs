@@ -56,9 +56,10 @@ impl GraphDot for SSAStorage {
     }
 
     fn node_cluster(&self, i: &Self::NodeIndex) -> Option<usize> {
+        let invalid_block = self.invalid_action().expect("Invalid Action is not defined");
         match self.g.node_weight(*i) {
             Some(&NodeData::BasicBlock(_)) | Some(&NodeData::DynamicAction) => Some(i.index()),
-            _ => Some(self.get_block(i).index()),
+            _ => Some(self.block_of(*i).unwrap_or(invalid_block).index()),
         }
     }
 

@@ -294,13 +294,13 @@ impl IRWriter {
                     if let MOpcode::OpConst(_) = opcode {
                         String::new()
                     } else {
-                        let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), ssa);
+                        let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
                         indent!(self.indent,
                                 self.fmt_expression(node, opcode, vt, operands, &ssa))
                     }
                 }
                 NodeData::Phi(_, _) => {
-                    let operands = self.fmt_operands(ssa.get_operands(&node).as_slice(), ssa);
+                    let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
                     let next = self.ctr + 1;
                     let result_idx = self.seen.entry(node).or_insert(next);
                     if *result_idx == next {
@@ -327,8 +327,8 @@ impl IRWriter {
                                             (ssa.edge_info(x.0).expect("Less-endpoints edge").target, x.1))
                                           .collect::<Vec<_>>();
                         // This is a conditional jump.
-                        if ssa.is_selector(&prev_block) && outgoing.len() > 1 {
-                            let condition = self.fmt_operands(&[ssa.selector_of(prev_block)
+                        if ssa.is_selector(*prev_block) && outgoing.len() > 1 {
+                            let condition = self.fmt_operands(&[ssa.selector_in(*prev_block)
                                                                    .unwrap()],
                                                               ssa);
                             jmp_statement = format!("{} IF {}", jmp_statement, condition[0]);
@@ -377,10 +377,11 @@ impl IRWriter {
         }
 
         let exit_node = ssa.exit_node().expect("Incomplete CFG graph");
-        let final_state = ssa.registers_at(&exit_node);
+        let final_state = ssa.registers_in(exit_node)
+                                .expect("No register state node found");
         let mem_comment = "mem".to_owned();
 
-        for (i, reg) in ssa.get_operands(&final_state).iter().enumerate() {
+        for (i, reg) in ssa.operands_of(final_state).iter().enumerate() {
             let reg_assign = match ssa.g[*reg] {
                 NodeData::Comment(_, _) => String::new(),
                 _ => {

@@ -149,106 +149,65 @@ pub trait SSA: CFG {
     //// Node accessors and helpers
     ///////////////////////////////////////////////////////////////////////////
 
+    /// Check if the node at the given index is a expression or not.
+    fn is_expr(&self, i: Self::ValueRef) -> bool;
+
+    /// Check if the node at the given index is a phi node or not.
+    fn is_phi(&self, i: Self::ValueRef) -> bool;
+
+    /// Returns true if the expression acts as a `Selector` for control flow.
+    fn is_selector(&self, i: Self::ValueRef) -> bool;
+
     /// Get all value nodes in the whole graph.
     fn values(&self) -> Vec<Self::ValueRef>;
 
-    fn get_address(&self, &Self::ValueRef) -> ir::MAddress;
+    /// Get expr/phi node address
+    fn address(&self, Self::ValueRef) -> Option<ir::MAddress>;
 
     /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
-    fn exprs_in(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
-
-    /// Check if the node at the given index is a expression or not.
-    fn is_expr(&self, i: &Self::ValueRef) -> bool;
-
-    /// Check if the node at the given index is a phi node or not.
-    fn is_phi(&self, i: &Self::ValueRef) -> bool;
+    fn exprs_in(&self, i: Self::ActionRef) -> Vec<Self::ValueRef>;
 
     /// Get all phis in the BasicBlock with index 'i'.
-    fn get_phis(&self, i: &Self::ActionRef) -> Vec<Self::ValueRef>;
-
-    /// Get all the uses of the node with index 'i'.
-    fn get_uses(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
-
-    /// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
-    fn get_block(&self, i: &Self::ValueRef) -> Self::ActionRef;
-
-    /// Get the operands for the operation with NodeIndex 'i'.
-    fn get_operands(&self, i: &Self::ValueRef) -> Vec<Self::ValueRef>;
-
-    /// Get the operands for the operation with NodeIndex 'i' as tuples.
-    fn get_sparse_operands(&self, i: &Self::ValueRef) -> Vec<(u8, Self::ValueRef)>;
-
-    /// Get the lhs() of the Operation with NodeIndex 'i'.
-    fn lhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[0]
-    }
-
-    /// Get the rhs() of the Operation with NodeIndex 'i'.
-    fn rhs(&self, i: &Self::ValueRef) -> Self::ValueRef {
-        self.get_operands(i)[1]
-    }
-
-    /// Get the actual NodeData.
-    fn get_node_data(&self, i: &Self::ValueRef) -> Result<NodeData, Box<Debug>>;
-
-    /// Get const information, as a pack of get_node_data on a OpConst node.
-    fn get_const(&self, i: &Self::ValueRef) -> Option<u64>;
-
-    /// Get comment information, as a pack of get_node_data on a Comment data.
-    fn get_comment(&self, i: &Self::ValueRef) -> Option<String>;
-
-    /// Get OpCode information, as a pack of get_node_data on a Comment data.
-    fn get_opcode(&self, i: &Self::ValueRef) -> Option<ir::MOpcode>;
-
-    /// Get information of the register which belongs to the node.
-    fn get_register(&self, _: &Self::ValueRef) -> Vec<String>;
-
-    /// Returns true if the expression acts as a `Selector` for control flow.
-    fn is_selector(&self, i: &Self::ValueRef) -> bool;
-
-    /// Returns the selector for the Block.
-    fn selector_of(&self, i: &Self::ActionRef) -> Option<Self::ValueRef>;
-
-    /// Get the Block for which i acts as a selector.
-    fn selects_for(&self, i: &Self::ValueRef) -> Self::ActionRef;
-
-    /// Get Jump target of a call or an unconditional jump.
-    fn get_target(&self, i: &Self::ValueRef) -> Self::ActionRef;
-
-    /// Get branches of a selector (false_branch, true_branch).
-    fn get_branches(&self, i: &Self::ValueRef) -> (Self::ActionRef, Self::ActionRef);
-
-    /// Helper method that gets only the true branch.
-    fn get_true_branch(&self, i: &Self::ValueRef) -> Self::ActionRef {
-        self.get_branches(i).1
-    }
-
-    /// Helper method that gets only the false branch.
-    fn get_false_branch(&self, i: &Self::ValueRef) -> Self::ActionRef {
-        self.get_branches(i).0
-    }
-
-    /// Gets the data dependencies of a value node in any order.
-    /// (See get_operands for ordered return value)
-    fn args_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef>;
-
-    /// Gets uses dependents of a value node.
-    /// (Equivalent as `SSAMod::get_uses`)
-    fn uses_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef>;
-
-    /// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
-    /// (Alias for get_block)
-    fn block_of(&self, i: &Self::ValueRef) -> Self::ActionRef {
-        self.get_block(i)
-    }
+    fn phis_in(&self, i: Self::ActionRef) -> Vec<Self::ValueRef>;
 
     /// Get a node that has all register values at the beginning of the specified basic block as args
-    fn registers_at(&self, i: &Self::ActionRef) -> Self::ValueRef;
+    fn registers_in(&self, i: Self::ActionRef) -> Option<Self::ValueRef>;
 
-    fn invalid_value(&self) -> Self::ValueRef;
+    /// Returns the selector for the Block.
+    fn selector_in(&self, i: Self::ActionRef) -> Option<Self::ValueRef>;
 
-    fn to_value(&self, Self::ActionRef) -> Self::ValueRef;
-    fn to_action(&self, Self::ValueRef) -> Self::ActionRef;
+    /// Get the Block for which i acts as a selector.
+    fn selector_for(&self, i: Self::ValueRef) -> Option<Self::ActionRef>;
+
+    /// Get all the uses of the node with index 'i'.
+    fn uses_of(&self, i: Self::ValueRef) -> Vec<Self::ValueRef>;
+
+    /// Get the operands for the operation with NodeIndex 'i'.
+    fn operands_of(&self, i: Self::ValueRef) -> Vec<Self::ValueRef>;
+
+    /// Get the operands for the operation with NodeIndex 'i' as tuples.
+    fn sparse_operands_of(&self, i: Self::ValueRef) -> Vec<(u8, Self::ValueRef)>;
+
+    /// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
+    fn block_of(&self, i: Self::ValueRef) -> Option<Self::ActionRef>;
+
+    /// Get the actual NodeData.
+    fn node_data(&self, i: Self::ValueRef) -> Result<NodeData, Box<Debug>>;
+
+    /// Get const information, as a pack of get_node_data on a OpConst node.
+    fn constant(&self, i: Self::ValueRef) -> Option<u64>;
+
+    /// Get comment information, as a pack of get_node_data on a Comment data.
+    fn comment(&self, i: Self::ValueRef) -> Option<String>;
+
+    /// Get OpCode information, as a pack of get_node_data on a Comment data.
+    fn opcode(&self, i: Self::ValueRef) -> Option<ir::MOpcode>;
+
+    /// Get information of the register which belongs to the node.
+    fn registers(&self, _: Self::ValueRef) -> Vec<String>;
+
+    /// Return invalid value
+    fn invalid_value(&self) -> Option<Self::ValueRef>;
 }
 
 /// Trait for modifying SSA data

@@ -102,7 +102,7 @@ impl<T> Analyzer<T>
     }
 
     fn visit_phi(&mut self, i: &T::ValueRef) -> LatticeValue {
-        let operands = self.g.get_operands(i);
+        let operands = self.g.operands_of(*i);
         let mut phi_val = self.get_value(i);
 
         // If "overdefined" return it.
@@ -110,9 +110,10 @@ impl<T> Analyzer<T>
             return LatticeValue::Bottom;
         }
 
-        let parent_block = self.g.get_block(i);
+        let invalid_block = self.g.invalid_action().expect("Invalid Action is not defind");
+        let parent_block = self.g.block_of(*i).unwrap_or(invalid_block);
         for op in &operands {
-            let operand_block = self.g.get_block(op);
+            let operand_block = self.g.block_of(*op).unwrap_or(invalid_block);
             let op_val = self.get_value(op);
 
             if op_val.is_undefined() {
@@ -142,10 +143,10 @@ impl<T> Analyzer<T>
     }
 
     fn evaluate_control_flow(&mut self, i: &T::ValueRef) {
-        assert!(self.g.is_selector(i));
+        assert!(self.g.is_selector(*i));
 
         let cond_val = self.get_value(i);
-        let block = self.g.selects_for(i);
+        let block = self.g.selector_for(*i).expect("Victim value is not a selector");
         let invalid_edge = self.g.invalid_edge().expect("Invalid Edge is not defined");
         let conditional_branches = 
             if let Some(branches) = self.g.conditional_edges(block) {
@@ -174,7 +175,7 @@ impl<T> Analyzer<T>
     }
 
     fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
-        let operand = self.g.get_operands(i);
+        let operand = self.g.operands_of(*i);
         let operand = if operand.is_empty() {
             return LatticeValue::Top;
         } else {
@@ -210,7 +211,7 @@ impl<T> Analyzer<T>
         };
 
         // We should consider width.
-        let ndata = self.g.get_node_data(i).unwrap();
+        let ndata = self.g.node_data(*i).unwrap();
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
@@ -226,7 +227,7 @@ impl<T> Analyzer<T>
             _ => { },
         }
 
-        let operands = self.g.get_operands(i).iter().map(|x| self.get_value(x)).collect::<Vec<_>>();
+        let operands = self.g.operands_of(*i).iter().map(|x| self.get_value(x)).collect::<Vec<_>>();
 
         let lhs = operands[0];
         let rhs = operands[1];
@@ -300,7 +301,7 @@ impl<T> Analyzer<T>
         };
 
         // We should consider width.
-        let ndata = self.g.get_node_data(i).unwrap();
+        let ndata = self.g.node_data(*i).unwrap();
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
@@ -310,7 +311,7 @@ impl<T> Analyzer<T>
     }
 
     fn visit_expression(&mut self, i: &T::ValueRef) -> LatticeValue {
-        let expr = self.g.get_node_data(i).unwrap();
+        let expr = self.g.node_data(*i).unwrap();
         let opcode = if let NodeType::Op(opcode) = expr.nt {
             opcode
         } else {
@@ -332,7 +333,7 @@ impl<T> Analyzer<T>
         // Hence evaluate the control flow to add edges to the cfgwl.
         // TODO: Handle the case where the selector of a block may belong to a
         // different block.
-        if self.g.is_selector(i) {
+        if self.g.is_selector(*i) {
             self.evaluate_control_flow(i);
         }
 
@@ -354,7 +355,7 @@ impl<T> Analyzer<T>
                 if !self.is_executable(&edge) {
                     self.mark_executable(&edge);
                     let block = self.g.edge_info(edge).unwrap().target;
-                    let phis = self.g.get_phis(&block);
+                    let phis = self.g.phis_in(block);
                     for phi in &phis {
                         let v = self.visit_phi(phi);
                         self.set_value(phi, v);
@@ -370,10 +371,10 @@ impl<T> Analyzer<T>
 
                     // If this is the first visit to the block.
                     if visits == 1 {
-                        for expr in self.g.exprs_in(&block) {
+                        for expr in self.g.exprs_in(block) {
                             let val = self.visit_expression(&expr);
                             self.set_value(&expr, val);
-                            for use_ in self.g.get_uses(&expr) {
+                            for use_ in self.g.uses_of(expr) {
                                 self.ssawl_push(&use_);
                             }
                         }
@@ -386,8 +387,9 @@ impl<T> Analyzer<T>
             } // End of cfgwl
 
             while let Some(e) = self.ssa_worklist.pop_front() {
-                let t = if self.g.is_expr(&e) {
-                    let block_of = self.g.block_of(&e);
+                let t = if self.g.is_expr(e) {
+                    let block_of = self.g.block_of(e)
+                                            .expect("Value node doesn't belong to any block");
                     if self.is_block_executable(&block_of) {
                         self.visit_expression(&e)
                     } else {
@@ -399,7 +401,7 @@ impl<T> Analyzer<T>
 
                 if t != self.get_value(&e) {
                     self.set_value(&e, t);
-                    for use_ in &self.g.get_uses(&e) {
+                    for use_ in &self.g.uses_of(e) {
                         self.ssawl_push(use_);
                     }
                 }
@@ -409,22 +411,23 @@ impl<T> Analyzer<T>
 
     pub fn emit_ssa(&mut self) -> T {
         for (k, v) in &self.expr_val {
-            if self.g.get_const(k).is_some() {
+            if self.g.constant(*k).is_some() {
                 continue;
             }
             if let LatticeValue::Const(val) = *v {
                 radeco_trace!("{:?} with {:?} --> Const {:#}", 
-                              k, self.g.get_node_data(k), val);
+                              k, self.g.node_data(*k), val);
                 // BUG: Width may be changed just using a simple replace.
                 let const_node = self.g.add_const(val);
-                let ndata = self.g.get_node_data(k).unwrap();
+                let ndata = self.g.node_data(*k).unwrap();
                 let w = ndata.vt.width().get_width().unwrap_or(64);
                 let new_node = if w == 64 {
                     const_node
                 } else {
                     // val should not be larger than the k node could be.  
                     assert!(w < 64 && val < (1 << (w)));
-                    let address = self.g.get_address(k);
+                    let address = self.g.address(*k)
+                                        .expect("No address information found");
                     let opcode = MOpcode::OpNarrow(w as u16);
                     let new_node = self.g.add_op(opcode, ndata.vt, None);
                     self.g.set_addr(&new_node, address);
@@ -473,7 +476,7 @@ impl<T> Analyzer<T>
 
     // Determines the Initial value
     fn init_val(&self, i: &T::ValueRef) -> LatticeValue {
-        let node_data = self.g.get_node_data(i).unwrap();
+        let node_data = self.g.node_data(*i).unwrap();
         match node_data.nt {
             NodeType::Op(MOpcode::OpConst(v)) => LatticeValue::Const(v),
             NodeType::Undefined => LatticeValue::Bottom,
@@ -511,10 +514,11 @@ impl<T> Analyzer<T>
     }
 
     fn ssawl_push(&mut self, i: &T::ValueRef) {
-        if !self.g.is_expr(i) {
+        if !self.g.is_expr(*i) {
             return;
         }
-        let owner_block = self.g.get_block(i);
+        let owner_block = self.g.block_of(*i)
+                                .expect("Value node doesn't belong to any block");
         if self.is_block_executable(&owner_block) {
             self.ssa_worklist.push_back(*i);
         }

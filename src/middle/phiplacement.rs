@@ -280,13 +280,13 @@ impl<'a, T> PhiPlacer<'a, T>
                     }
                 }
                 // Now, this node index belongs to the lower part of the split block.
-                let operands = self.ssa.get_sparse_operands(&ni);
+                let operands = self.ssa.sparse_operands_of(ni);
                 // Check if the operands belong to the upper block and if they do, remove the
                 // operands edge, add a new phi and connect the edge from phi to ni.
                 for operand_ in &operands {
                     let (i, operand) = *operand_;
                     // If operand is const, it cannot belong to any block.
-                    match self.ssa.get_opcode(&operand) {
+                    match self.ssa.opcode(operand) {
                         Some(MOpcode::OpConst(_)) => { continue; }
                         _ => {  }
                     }
@@ -424,7 +424,7 @@ impl<'a, T> PhiPlacer<'a, T>
                           self.regfile.whole_names.get(variable as usize),
                           datasource);
             self.ssa.phi_use(phi, datasource);
-            if self.ssa.get_register(&phi).is_empty() {
+            if self.ssa.registers(phi).is_empty() {
                 self.propagate_reginfo(&phi);
             }
         }
@@ -432,10 +432,10 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
-        let undef = self.ssa.invalid_value();
+        let undef = self.ssa.invalid_value().expect("Invalid Value is not defined");
         // The phi is unreachable or in the start block
         let mut same: T::ValueRef = undef;
-        for op in self.ssa.args_of(phi) {
+        for op in self.ssa.operands_of(phi) {
             if op == same || op == phi {
                 // Unique value or self−reference
                 continue;
@@ -451,7 +451,7 @@ impl<'a, T> PhiPlacer<'a, T>
             let phi_addr = self.index_to_addr.get(&phi).cloned().unwrap();
             let block = self.block_of(phi_addr).unwrap();
             let valtype = self.ssa
-                              .get_node_data(&phi)
+                              .node_data(phi)
                               .expect("No Data associated with this node!")
                               .vt;
             let block_addr = self.addr_of(&block);
@@ -461,7 +461,7 @@ impl<'a, T> PhiPlacer<'a, T>
         //let users = self.ssa.uses_of(phi); //This works too instead of the code below.
         let mut users: Vec<T::ValueRef> = Vec::new(); 
         //I feel this is better is there is no comparison with phi value that is being replaced.
-        // Better not, when get_node_data called for the phi node, it has been removed, so raise
+        // Better not, when node_data called for the phi node, it has been removed, so raise
         // an error.
         for uses in self.ssa.uses_of(phi) {
             if !users.contains(&uses) {
@@ -492,14 +492,14 @@ impl<'a, T> PhiPlacer<'a, T>
                 continue;
             }
             if true || false { //TODO: Need suggestion
-                match self.ssa.get_node_data(&use_) {
+                match self.ssa.node_data(use_) {
                     Ok(NodeData {vt: _, nt: NodeType::Phi}) => {
                         self.try_remove_trivial_phi(use_);
                     },
                     _ => {}
                 }
             } else { //XXX: Remove this?
-                if self.ssa.get_node_data(&use_).is_ok() {
+                if self.ssa.node_data(use_).is_ok() {
                     self.try_remove_trivial_phi(use_);
                 }
             }
@@ -517,7 +517,7 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn sync_register_state(&mut self, block: T::ActionRef) {
-        let rs = self.ssa.registers_at(&block);
+        let rs = self.ssa.registers_in(block).expect("No register state node found");
         for var in 0..self.variable_types.len() {
             let mut addr = self.addr_of(&block);
             let val = self.read_variable(&mut addr, var as u64);
@@ -741,7 +741,7 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn operand_width(&self, node: &T::ValueRef) -> u16 {
-        self.ssa.get_node_data(node).unwrap().vt.width().get_width().unwrap_or(64)
+        self.ssa.node_data(*node).unwrap().vt.width().get_width().unwrap_or(64)
     }
 
     fn new_block(&mut self, bb: MAddress) -> T::ActionRef {
@@ -767,8 +767,8 @@ impl<'a, T> PhiPlacer<'a, T>
         let rhs_size = rhs.map_or(0, |i| self.operand_width(&i));
 
         // Narrowing will happen only if there is one constant and one normal opcode.
-        if lhs.map_or(false, |i| self.ssa.get_const(&i).is_some()) ^
-            rhs.map_or(false, |i| self.ssa.get_const(&i).is_some()) {
+        if lhs.map_or(false, |i| self.ssa.constant(i).is_some()) ^
+            rhs.map_or(false, |i| self.ssa.constant(i).is_some()) {
                 let (victim, victim_size) = if lhs_size < 64 {
                     (rhs, lhs_size)
                 } else {
@@ -822,18 +822,18 @@ impl<'a, T> PhiPlacer<'a, T>
     // Copy the reginfo from operand into expr, especially for OpWiden/OpNarrow,
     // OpAnd/OpOr, OpLsl, which are used in width change, also, for Phi nodes.
     pub fn propagate_reginfo(&mut self, node: &T::ValueRef) {
-        let args = self.ssa.get_operands(node);
+        let args = self.ssa.operands_of(*node);
         // For OpWiden/OpNarrow, they only have one operation;
         // For OpAnd/OpOr, OpLsl, only their first operand coule be register;
         // For Phi node, their operations have the same reginfo;
         // Thus, choosing the first operand is enough. 
-        let regnames = self.ssa.get_register(&args[0]);
+        let regnames = self.ssa.registers(args[0]);
         if !regnames.is_empty() {
             for regname in &regnames {
                 self.ssa.set_register(node.clone(), regname);
                 // Check whether its child nodes are incomplete 
             }
-            let users = self.ssa.get_uses(node);
+            let users = self.ssa.uses_of(*node);
             for user in users {
                 if let Some(victim) = self.incomplete_propagation.take(&user) {
                     self.propagate_reginfo(&victim);
@@ -843,9 +843,9 @@ impl<'a, T> PhiPlacer<'a, T>
             // Wait its parent node to be propagated.
             self.incomplete_propagation.insert(*node);
             radeco_trace!("Fail in propagate_reginfo: {:?} with {:?}"
-                          , node, self.ssa.get_node_data(&node));
+                          , node, self.ssa.node_data(*node));
             radeco_trace!("First operand is {:?} with {:?}", args[0]
-                          , self.ssa.get_node_data(&args[0]));
+                          , self.ssa.node_data(args[0]));
         }
     }
 
@@ -881,10 +881,10 @@ impl<'a, T> PhiPlacer<'a, T>
             if let Some(addr) = self.index_to_addr.get(node).cloned() {
                 self.associate_block(node, addr);
                 // Mark selector.
-                if let Ok(ndata) = self.ssa.get_node_data(node) {
+                if let Ok(ndata) = self.ssa.node_data(*node) {
                     if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
                         let block = self.block_of(addr);
-                        let cond_node = self.ssa.get_operands(node)[0];
+                        let cond_node = self.ssa.operands_of(*node)[0];
                         self.ssa.mark_selector(cond_node, block.unwrap());
                         self.ssa.remove(*node);
                     }
