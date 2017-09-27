@@ -398,6 +398,10 @@ impl Graph for SSAStorage {
     }
 }
 
+/// ////////////////////////////////////////////////////////////////////////////
+/// / Implementation of CFG for SSAStorage.
+/// ////////////////////////////////////////////////////////////////////////////
+
 impl CFG for SSAStorage {
 	type ActionRef = <SSAStorage as Graph>::GraphNodeRef;
 	type CFEdgeRef = <SSAStorage as Graph>::GraphEdgeRef;
@@ -554,32 +558,32 @@ impl CFGMod for SSAStorage {
 
 	type BBInfo = MAddress;
 
-    fn mark_entry_node(&mut self, si: &Self::ActionRef) {
-        self.entry_node = *si;
+    fn set_entry_node(&mut self, si: Self::ActionRef) {
+        self.entry_node = si;
     }
 
-    fn mark_exit_node(&mut self, ei: &Self::ActionRef) {
-        self.exit_node = *ei;
+    fn set_exit_node(&mut self, ei: Self::ActionRef) {
+        self.exit_node = ei;
     }
 
-    fn add_block(&mut self, info: Self::BBInfo) -> NodeIndex {
+    fn insert_block(&mut self, info: Self::BBInfo) -> Option<Self::ActionRef> {
         let bb = self.insert_node(NodeData::BasicBlock(info)).expect("Cannot insert new nodes");
         let rs = self.insert_node(NodeData::RegisterState).expect("Cannot insert new nodes");
         self.insert_edge(bb, rs, EdgeData::RegisterState);
         self.insert_edge(rs, bb, EdgeData::ContainedInBB(info));
-        bb
+        Some(bb)
     }
 
-    fn add_dynamic(&mut self) -> NodeIndex {
+    fn insert_dynamic(&mut self) -> Option<Self::ActionRef> {
         let a = self.insert_node(NodeData::DynamicAction).expect("Cannot insert new nodes");
         let rs = self.insert_node(NodeData::RegisterState).expect("Cannot insert new nodes");
         self.insert_edge(a, rs, EdgeData::RegisterState);
         self.insert_edge(rs, a, EdgeData::ContainedInBB(MAddress::invalid_address()));
-        a
+        Some(a)
     }
 
-    fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) {
-        self.insert_edge(source, target, EdgeData::Control(index));
+    fn insert_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) -> Option<Self::CFEdgeRef> {
+        self.insert_edge(source, target, EdgeData::Control(index))
     }
 
     fn remove_block(&mut self, exi: Self::ActionRef) {
