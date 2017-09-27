@@ -88,7 +88,7 @@ pub fn sweep<T>(ssa: &mut T)
                     for &(ie, ref i) in &incoming {
                         let new_src = ssa.edge_info(ie).expect("Less-endpoints edge").source;
                         ssa.remove_control_edge(ie);
-                        ssa.add_control_edge(new_src, new_target, *i);
+                        ssa.insert_control_edge(new_src, new_target, *i);
                     }
                     ssa.remove_control_edge(outgoing[0].0);
                     true

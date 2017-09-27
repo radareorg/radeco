@@ -106,22 +106,23 @@ pub trait CFGMod: CFG {
 	type BBInfo;
 
     /// Mark the start node for the SSA graph
-    fn mark_entry_node(&mut self, start: &Self::ActionRef);
+    fn set_entry_node(&mut self, start: Self::ActionRef);
 
     /// Mark the exit node for the SSA graph
-    fn mark_exit_node(&mut self, exit: &Self::ActionRef);
+    fn set_exit_node(&mut self, exit: Self::ActionRef);
 
-    /// Add a new basic block
-    fn add_block(&mut self, info: Self::BBInfo) -> Self::ActionRef;
+    /// Insert a new basic block
+    fn insert_block(&mut self, info: Self::BBInfo) -> Option<Self::ActionRef>;
 
-    /// Add a new exit
-    fn add_dynamic(&mut self) -> Self::ActionRef;
+    /// Insert a new exit
+    fn insert_dynamic(&mut self) -> Option<Self::ActionRef>;
 
-    /// Add a control edge between to basic blocks
-    fn add_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8);
+    /// Insert a control edge between to basic blocks
+    fn insert_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) -> Option<Self::CFEdgeRef>;
 
-    fn remove_control_edge(&mut self, source: Self::CFEdgeRef);
-
-    /// Will remove a block and all its associated data from the graph
+    /// Remove a block and all its associated data from the graph
     fn remove_block(&mut self, node: Self::ActionRef);
+
+    /// Remove a control edge from the graph
+    fn remove_control_edge(&mut self, source: Self::CFEdgeRef);
 }

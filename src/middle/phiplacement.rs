@@ -217,7 +217,7 @@ impl<'a, T> PhiPlacer<'a, T>
                 let current_block = self.block_of(addr).unwrap();
                 radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
                               current_block, e, lower_block);
-                self.ssa.add_control_edge(current_block, lower_block, e);
+                self.ssa.insert_control_edge(current_block, lower_block, e);
             }
         }
         
@@ -256,7 +256,7 @@ impl<'a, T> PhiPlacer<'a, T>
                     if lower_block != target {
                         radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
                                       lower_block, i, target);
-                        self.ssa.add_control_edge(lower_block, target, i as u8);
+                        self.ssa.insert_control_edge(lower_block, target, i as u8);
                         self.ssa.remove_control_edge(*edge);
                     }
                 }
@@ -264,7 +264,7 @@ impl<'a, T> PhiPlacer<'a, T>
 
             radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", upper_block, 
                           UNCOND_EDGE, lower_block);
-            self.ssa.add_control_edge(upper_block, lower_block, UNCOND_EDGE);
+            self.ssa.insert_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
             // for (addr, ni) in self.addr_to_index.clone() {
@@ -339,7 +339,7 @@ impl<'a, T> PhiPlacer<'a, T>
         let unexplored_block = self.new_block(unexplored_addr);
 
         self.blocks.insert(unexplored_addr, unexplored_block);
-        self.ssa.add_control_edge(source_block, unexplored_block, edge_type);
+        self.ssa.insert_control_edge(source_block, unexplored_block, edge_type);
 
         // Add a dummy ITE to mark the selector.
         let op_node = self.add_op(&MOpcode::OpITE,
@@ -354,7 +354,7 @@ impl<'a, T> PhiPlacer<'a, T>
         let target_block = self.block_of(target).unwrap();
         radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, cftype, target_block);
         radeco_trace!("phip_add_edge|{} --{}--> {}", source, cftype, target);
-        self.ssa.add_control_edge(source_block, target_block, cftype);
+        self.ssa.insert_control_edge(source_block, target_block, cftype);
     }
 
     // Adds an unconditional edge the the next block if there are no edges for the current block.
@@ -366,7 +366,7 @@ impl<'a, T> PhiPlacer<'a, T>
                 radeco_trace!("phip_add_edge|{} --{}--> {}", source, UNCOND_EDGE, target);
                 radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, UNCOND_EDGE, 
                               target_block);
-                self.ssa.add_control_edge(source_block, target_block, UNCOND_EDGE);
+                self.ssa.insert_control_edge(source_block, target_block, UNCOND_EDGE);
             }
         }
     }
@@ -508,7 +508,7 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn add_dynamic(&mut self) -> T::ActionRef {
-        let action = self.ssa.add_dynamic();
+        let action = self.ssa.insert_dynamic().expect("Cannot insert new actions");
         let dyn_addr = MAddress::new(u64::MAX, 0);
         self.blocks.insert(dyn_addr, action);
         self.incomplete_phis.insert(dyn_addr, HashMap::new());
@@ -526,11 +526,11 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn mark_entry_node(&mut self, block: &T::ActionRef) {
-        self.ssa.mark_entry_node(block);
+        self.ssa.set_entry_node(*block);
     }
 
     pub fn mark_exit_node(&mut self, block: &T::ActionRef) {
-        self.ssa.mark_exit_node(block);
+        self.ssa.set_exit_node(*block);
     }
 
     // These functions take in address and automatically determine the block that
@@ -748,7 +748,7 @@ impl<'a, T> PhiPlacer<'a, T>
         if let Some(b) = self.blocks.get(&bb) {
             *b
         } else {
-            let block = self.ssa.add_block(bb);
+            let block = self.ssa.insert_block(bb).expect("Cannot insert new blocks");
             self.incomplete_phis.insert(bb, HashMap::new());
             block
         }
@@ -862,7 +862,7 @@ impl<'a, T> PhiPlacer<'a, T>
         } 
         let exit_node = self.ssa.exit_node().expect("Incomplete CFG graph");
         for exit in exits {
-            self.ssa.add_control_edge(exit, exit_node, UNCOND_EDGE);
+            self.ssa.insert_control_edge(exit, exit_node, UNCOND_EDGE);
         }
     }
 
