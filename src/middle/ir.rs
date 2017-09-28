@@ -10,6 +10,7 @@
 //! ESIL parser.
 
 use std::fmt;
+use std::borrow::Cow;
 
 pub type Address = u64;
 
@@ -151,7 +152,7 @@ impl MOpcode {
         self.info().1
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn to_string(&self) -> Cow<str> {
         self.info().0
     }
 
@@ -191,38 +192,38 @@ impl MOpcode {
         }
     }
 
-    fn info(&self) -> (String, MArity) {
+    fn info(&self) -> (Cow<str>, MArity) {
         match *self {
-            MOpcode::OpAdd => ("OpAdd".to_owned(), MArity::Binary),
-            MOpcode::OpAnd => ("OpAnd".to_owned(), MArity::Binary),
-            MOpcode::OpCJmp => ("OpJmpIf".to_owned(), MArity::Binary),
-            MOpcode::OpCall => ("OpCall".to_owned(), MArity::Unary),
-            MOpcode::OpCmp => ("OpCmp".to_owned(), MArity::Binary),
-            MOpcode::OpConst(c) => (format!("OpCost({})", c), MArity::Zero),
-            MOpcode::OpDiv => ("OpDiv".to_owned(), MArity::Binary),
-            MOpcode::OpEq => ("OpEq".to_owned(), MArity::Binary),
-            MOpcode::OpGt => ("OpGt".to_owned(), MArity::Binary),
-            MOpcode::OpITE => ("ITE".to_owned(), MArity::Ternary),
-            MOpcode::OpIf => ("OpIf".to_owned(), MArity::Unary),
-            MOpcode::OpInvalid => ("OpInvalid".to_owned(), MArity::Zero),
-            MOpcode::OpJmp => ("OpJmp".to_owned(), MArity::Unary),
-            MOpcode::OpLoad => ("OpLoad".to_owned(), MArity::Binary),
-            MOpcode::OpLsl => ("OpLsl".to_owned(), MArity::Binary),
-            MOpcode::OpLsr => ("OpLsr".to_owned(), MArity::Binary),
-            MOpcode::OpLt => ("OpLt".to_owned(), MArity::Binary),
-            MOpcode::OpMod => ("OpMod".to_owned(), MArity::Binary),
-            MOpcode::OpMul => ("OpMul".to_owned(), MArity::Binary),
-            MOpcode::OpNarrow(_) => ("OpNarrow".to_owned(), MArity::Unary),
-            MOpcode::OpNop => ("OpNop".to_owned(), MArity::Zero),
-            MOpcode::OpNot => ("OpNot".to_owned(), MArity::Unary),
-            MOpcode::OpOr => ("OpOr".to_owned(), MArity::Binary),
-            MOpcode::OpRol => ("OpRol".to_owned(), MArity::Binary),
-            MOpcode::OpRor => ("OpRor".to_owned(), MArity::Binary),
-            MOpcode::OpSignExt(_) => ("OpZeroExt".to_owned(), MArity::Unary),
-            MOpcode::OpStore => ("OpStore".to_owned(), MArity::Binary),
-            MOpcode::OpSub => ("OpSub".to_owned(), MArity::Binary),
-            MOpcode::OpXor => ("OpXor".to_owned(), MArity::Binary),
-            MOpcode::OpZeroExt(_) => ("OpZeroExt".to_owned(), MArity::Unary),
+            MOpcode::OpAdd => (Cow::from("OpAdd"), MArity::Binary),
+            MOpcode::OpAnd => (Cow::from("OpAnd"), MArity::Binary),
+            MOpcode::OpCJmp => (Cow::from("OpJmpIf"), MArity::Binary),
+            MOpcode::OpCall => (Cow::from("OpCall"), MArity::Unary),
+            MOpcode::OpCmp => (Cow::from("OpCmp"), MArity::Binary),
+            MOpcode::OpConst(c) => (Cow::from(format!("OpCost({})", c)), MArity::Zero),
+            MOpcode::OpDiv => (Cow::from("OpDiv"), MArity::Binary),
+            MOpcode::OpEq => (Cow::from("OpEq"), MArity::Binary),
+            MOpcode::OpGt => (Cow::from("OpGt"), MArity::Binary),
+            MOpcode::OpITE => (Cow::from("OpITE"), MArity::Ternary),
+            MOpcode::OpIf => (Cow::from("OpIf"), MArity::Unary),
+            MOpcode::OpInvalid => (Cow::from("OpInvalid"), MArity::Zero),
+            MOpcode::OpJmp => (Cow::from("OpJmp"), MArity::Unary),
+            MOpcode::OpLoad => (Cow::from("OpLoad"), MArity::Binary),
+            MOpcode::OpLsl => (Cow::from("OpLsl"), MArity::Binary),
+            MOpcode::OpLsr => (Cow::from("OpLsr"), MArity::Binary),
+            MOpcode::OpLt => (Cow::from("OpLt"), MArity::Binary),
+            MOpcode::OpMod => (Cow::from("OpMod"), MArity::Binary),
+            MOpcode::OpMul => (Cow::from("OpMul"), MArity::Binary),
+            MOpcode::OpNarrow(_) => (Cow::from("OpNarrow"), MArity::Unary),
+            MOpcode::OpNop => (Cow::from("OpNop"), MArity::Zero),
+            MOpcode::OpNot => (Cow::from("OpNot"), MArity::Unary),
+            MOpcode::OpOr => (Cow::from("OpOr"), MArity::Binary),
+            MOpcode::OpRol => (Cow::from("OpRol"), MArity::Binary),
+            MOpcode::OpRor => (Cow::from("OpRor"), MArity::Binary),
+            MOpcode::OpSignExt(_) => (Cow::from("OpSignExt"), MArity::Unary),
+            MOpcode::OpStore => (Cow::from("OpStore"), MArity::Binary),
+            MOpcode::OpSub => (Cow::from("OpSub"), MArity::Binary),
+            MOpcode::OpXor => (Cow::from("OpXor"), MArity::Binary),
+            MOpcode::OpZeroExt(_) => (Cow::from("OpZeroExt"), MArity::Unary),
         }
     }
 }
