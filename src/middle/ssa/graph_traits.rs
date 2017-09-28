@@ -112,5 +112,5 @@ pub trait Graph {
     fn remove_edges_between(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef); 
 
     /// Gather neighborhood nodes.
-    fn gather_adjacent(&self, node: Self::GraphNodeRef, direction: EdgeDirection, data: bool) -> Vec<Self::GraphNodeRef>;
+    fn gather_adjacences(&self, node: Self::GraphNodeRef, direction: EdgeDirection, data: bool) -> Vec<Self::GraphNodeRef>;
 }

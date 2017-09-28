@@ -392,7 +392,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         let mem_node = self.g.add_node(data);
         self.associated_nodes.insert(mem_node, *ssa_node);
 
-        let block = self.ssa.block_of(*ssa_node)
+        let block = self.ssa.block_for(*ssa_node)
                             .expect("Value node doesn't belong to any block");
         self.associated_blocks.insert(mem_node, block.clone());
         return mem_node;
@@ -635,7 +635,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                                                                 .collect();
                         let vuse = self.add_node(&expr, MemOpcode::VUse);
                         for i in set {
-                            let block = self.ssa.block_of(expr)
+                            let block = self.ssa.block_for(expr)
                                                 .expect("Value node doesn't belong to any block");
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vuse, &arg);
@@ -650,7 +650,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                                                                 .collect();
                         let vdef = self.add_node(&expr, MemOpcode::VDef);
                         for i in set {
-                            let block = self.ssa.block_of(expr)
+                            let block = self.ssa.block_for(expr)
                                                 .expect("Value node doesn't belong to any block");
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vdef, &arg);

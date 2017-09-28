@@ -278,7 +278,7 @@ impl Graph for SSAStorage {
                     _ => {  }
                 }
             } else if let EdgeData::Selector = self.g[edge] {
-                let bb = self.block_of(i)
+                let bb = self.block_for(i)
                              .expect("Value node does'n belong to any block");
                 self.set_selector(j, bb);
             }
@@ -382,7 +382,7 @@ impl Graph for SSAStorage {
         }
     }
 
-    fn gather_adjacent(&self,
+    fn gather_adjacences(&self,
                        node: Self::GraphNodeRef,
                        direction: EdgeDirection,
                        data: bool)
@@ -447,11 +447,11 @@ impl CFG for SSAStorage {
     }
 
     fn preds_of(&self, exi: Self::ActionRef) -> Vec<Self::ActionRef> {
-        self.gather_adjacent(exi, EdgeDirection::Incoming, false)
+        self.gather_adjacences(exi, EdgeDirection::Incoming, false)
     }
 
     fn succs_of(&self, exi: Self::ActionRef) -> Vec<Self::ActionRef> {
-        self.gather_adjacent(exi, EdgeDirection::Outgoing, false)
+        self.gather_adjacences(exi, EdgeDirection::Outgoing, false)
     }
 
     fn unconditional_block(&self, i: Self::ActionRef) -> Option<Self::ActionRef> {
@@ -754,7 +754,7 @@ impl SSA for SSAStorage {
     }
 
     fn uses_of(&self, node: Self::ValueRef) -> Vec<Self::ValueRef> {
-        self.gather_adjacent(node, EdgeDirection::Incoming, true)
+        self.gather_adjacences(node, EdgeDirection::Incoming, true)
     }
 
     fn operands_of(&self, exi: Self::ValueRef) -> Vec<Self::ValueRef> {
@@ -775,7 +775,7 @@ impl SSA for SSAStorage {
         args
     }
 
-    fn block_of(&self, i: Self::ValueRef) -> Option<Self::ActionRef> {
+    fn block_for(&self, i: Self::ValueRef) -> Option<Self::ActionRef> {
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
             if let EdgeData::ContainedInBB(_) = self.g[edge] {
@@ -836,7 +836,7 @@ impl SSA for SSAStorage {
         // Self-loop in RadecoIL is not welcomed ;D
         // Thus, Comment Node in entry_node will not have a RegisterInfo edge pointing to itself.
         if let Some(s) = self.comment(i) {
-            if self.block_of(i) == self.entry_node() {
+            if self.block_for(i) == self.entry_node() {
                 regs.push(s);
             }
         } 
