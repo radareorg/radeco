@@ -187,8 +187,9 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
                                     .address;
                 if let Some(info) = call_info.get_mut(&call_site) {
                     if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
-                        let target_node = ssa.add_const(info.callee.unwrap());
-                        ssa.disconnect(call_node, arg_node);
+                        let target_node = ssa.insert_const(info.callee.unwrap())
+                                                .expect("Cannot insert new constants");
+                        ssa.op_unuse(*call_node, *arg_node);
                         ssa.op_use(*call_node, 0, target_node);
                         info.ssa_ref = Some(*call_node);
                     }

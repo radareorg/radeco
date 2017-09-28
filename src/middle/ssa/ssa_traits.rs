@@ -162,7 +162,7 @@ pub trait SSA: CFG {
     fn values(&self) -> Vec<Self::ValueRef>;
 
     /// Get expr/phi node address
-    fn address(&self, Self::ValueRef) -> Option<ir::MAddress>;
+    fn address(&self, ni: Self::ValueRef) -> Option<ir::MAddress>;
 
     /// Get all the NodeIndex of all operations/expressions in the BasicBlock with index 'i'.
     fn exprs_in(&self, i: Self::ActionRef) -> Vec<Self::ValueRef>;
@@ -213,33 +213,32 @@ pub trait SSA: CFG {
 /// Trait for modifying SSA data
 pub trait SSAMod: SSA + CFGMod {
 
-    /// Add a new operation node.
-    fn add_op(&mut self,
-              opc: ir::MOpcode,
-              vt: ValueInfo,
-              addr: Option<u64>)
-              -> Self::ValueRef;
+    /// Set the address of a value
+    fn set_address(&mut self, i: Self::ValueRef, addr: ir::MAddress);
+
+    /// Set the register information for a value
+    fn set_register(&mut self, i: Self::ValueRef, regname: String);
+
+    /// Set the node as selector for the control edges away from the specified basic block
+    fn set_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
+
+    /// Insert a new operation node.
+    fn insert_op(&mut self, opc: ir::MOpcode, vt: ValueInfo, addr: Option<u64>) -> Option<Self::ValueRef>;
 
     /// Add a new constant node.
-    fn add_const(&mut self, value: u64) -> Self::ValueRef;
+    fn insert_const(&mut self, value: u64) -> Option<Self::ValueRef>;
 
     /// Add a new phi node.
-    fn add_phi(&mut self, vt: ValueInfo) -> Self::ValueRef;
+    fn insert_phi(&mut self, vt: ValueInfo) -> Option<Self::ValueRef>;
 
     /// Add a new undefined node
-    fn add_undefined(&mut self, vt: ValueInfo) -> Self::ValueRef;
+    fn insert_undefined(&mut self, vt: ValueInfo) -> Option<Self::ValueRef>;
 
     /// Add a new comment node
-    fn add_comment(&mut self,
-                   vt: ValueInfo,
-                   msg: String)
-                   -> Self::ValueRef;
+    fn insert_comment(&mut self, vt: ValueInfo, msg: String) -> Option<Self::ValueRef>;
     
     /// Associate a node with index n with a block
-    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, ir::MAddress);
-
-    /// Mark the node as selector for the control edges away from the specified basic block
-    fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
+    fn insert_into_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, ir::MAddress);
 
     /// Add a data source to a phi node.
     fn phi_use(&mut self, phi: Self::ValueRef, node: Self::ValueRef);
@@ -250,23 +249,20 @@ pub trait SSAMod: SSA + CFGMod {
     /// Set the index-th argument of the node.
     fn op_use(&mut self, node: Self::ValueRef, index: u8, argument: Self::ValueRef);
 
-    /// Disconnect n1 from n2 (deletes the edge if one exists.
-    fn disconnect(&mut self, &Self::ValueRef, &Self::ValueRef);
+    /// Remove a data source from a expr node.
+    fn op_unuse(&mut self, op: Self::ValueRef, operand: Self::ValueRef);
 
     /// Replace one node by another within one basic block.
-    fn replace(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
+    fn replace_value(&mut self, node: Self::ValueRef, replacement: Self::ValueRef);
 
     /// Remove a node without replacement
-    fn remove(&mut self, node: Self::ValueRef);
+    fn remove_value(&mut self, node: Self::ValueRef);
 
     /// Remove control flow edge. This is a part of SSAMod as this potentially modifies the ssa.
-    fn remove_edge(&mut self, i: &Self::CFEdgeRef);
+    fn remove_data_edge(&mut self, i: Self::CFEdgeRef);
 
+    /// Map register names into SSA Graph
     fn map_registers(&mut self, regs: Vec<String>);
-
-    fn set_addr(&mut self, &Self::ValueRef, ir::MAddress);
-
-    fn set_register(&mut self, _: Self::ValueRef, _: &String) {  }
 }
 
 /// Extras. TODO

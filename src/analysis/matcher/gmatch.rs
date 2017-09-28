@@ -80,7 +80,7 @@ macro_rules! grep_and_replace {
         {
             let mut matcher = gmatch::GraphMatcher::new($s);
             for m in matcher.grep($f.to_owned()) {
-                matcher.replace(m, $r.to_owned());
+                matcher.replace_value(m, $r.to_owned());
             }
         }
     };
@@ -338,26 +338,28 @@ where I: Iterator<Item=S::ValueRef>,
             }
         };
         if let Some(op) = opcode {
-            let node = self.ssa.add_op(op, ValueInfo::new_unresolved(WidthSpec::from(64)), None);
+            let node = self.ssa.insert_op(op, ValueInfo::new_unresolved(WidthSpec::from(64)), None)
+                                .expect("Cannot insert new values");
             match op {
                 MOpcode::OpConst(_) => {}
                 _ => {
                     addr.offset += 1;
-                    self.ssa.add_to_block(node, *block, *addr);
+                    self.ssa.insert_into_block(node, *block, *addr);
                 }
             }
             node
         } else {
-            let node = self.ssa.add_comment(ValueInfo::new_unresolved(WidthSpec::from(64)), t.to_owned());
+            let node = self.ssa.insert_comment(ValueInfo::new_unresolved(WidthSpec::from(64)), t.to_owned())
+                                .expect("Cannot insert new comments");
             addr.offset += 1;
-            self.ssa.add_to_block(node, *block, *addr);
+            self.ssa.insert_into_block(node, *block, *addr);
             node
         }
     }
 
     /// Replaces the subtree rooted at `S::ValueRef` by the `replace` expression.
     /// Returns the root of the replaced expression.
-    pub fn replace(&mut self, found: Match<S::ValueRef>, replace: String) -> S::ValueRef {
+    pub fn replace_value(&mut self, found: Match<S::ValueRef>, replace: String) -> S::ValueRef {
         let bindings = found.bindings.iter().cloned().collect::<HashMap<_, _>>();
         // Vec of (parent, lhs/rhs (0/1), parse_expression)
         let mut worklist = Vec::new();
@@ -369,7 +371,7 @@ where I: Iterator<Item=S::ValueRef>,
         // Now we have a root node with no args, but retaining its uses.
         // Replace this node with the root node in the replace expression.
         for arg in &self.ssa.operands_of(root) {
-            self.ssa.disconnect(&root, arg);
+            self.ssa.op_unuse(root, *arg);
         }
 
         let r = if let Some(tk) = self.seen.get(&replace).cloned() {
@@ -388,7 +390,7 @@ where I: Iterator<Item=S::ValueRef>,
                                                   &mut address)
         };
 
-        self.ssa.replace(root, replace_root);
+        self.ssa.replace_value(root, replace_root);
         for i in 0..r.len() {
             worklist.push((replace_root, i as u8, r.op(i + 1).unwrap()));
         }
@@ -414,7 +416,7 @@ where I: Iterator<Item=S::ValueRef>,
         }
 
         address.offset += 1;
-        self.ssa.set_addr(&replace_root, address);
+        self.ssa.set_address(replace_root, address);
         replace_root
     }
 }
@@ -488,13 +490,17 @@ mod test {
     fn simple_grep_test() {
         let mut ssa = SSAStorage::new();
         let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
-        let add = ssa.add_op(MOpcode::OpAdd, vt, None);
-        let const_1 = ssa.add_const(1);
-        let const_2 = ssa.add_const(2);
+        let add = ssa.insert_op(MOpcode::OpAdd, vt, None)
+                            .expect("Cannot insert new expressions");
+        let const_1 = ssa.insert_const(1)
+                                .expect("Cannot insert new constants");
+        let const_2 = ssa.insert_const(2)
+                                .expect("Cannot insert new constants");
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_2);
         ssa.set_entry_node(add);
-        let _ = ssa.add_op(MOpcode::OpAdd, vt, None);
+        let _ = ssa.insert_op(MOpcode::OpAdd, vt, None)
+                            .expect("Cannot insert new expressions");
         let m = grep!(&mut ssa, "(OpAdd #x1, #x2)");
         assert_eq!(m[0].root.index(), 0);
     }
@@ -503,8 +509,10 @@ mod test {
     fn simple_grep_test2() {
         let mut ssa = SSAStorage::new();
         let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
-        let add = ssa.add_op(MOpcode::OpXor, vt, None);
-        let const_1 = ssa.add_const(1);
+        let add = ssa.insert_op(MOpcode::OpXor, vt, None)
+                            .expect("Cannot insert new expressions");
+        let const_1 = ssa.insert_const(1)
+                                .expect("Cannot insert new constants");
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_1);
         ssa.set_entry_node(add);
@@ -520,13 +528,16 @@ mod test {
         {
             let blk = ssa.insert_dynamic().expect("Cannot insert new dynamics");
             let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
-            let add = ssa.add_op(MOpcode::OpAdd, vt, None);
-            let const_1 = ssa.add_const(1);
-            let const_2 = ssa.add_const(2);
+            let add = ssa.insert_op(MOpcode::OpAdd, vt, None)
+                            .expect("Cannot insert new expressions");
+            let const_1 = ssa.insert_const(1)
+                                .expect("Cannot insert new constants");
+            let const_2 = ssa.insert_const(2)
+                                .expect("Cannot insert new constants");
             let addr = MAddress::new(0, 0);
-            ssa.add_to_block(add, blk, addr);
-            ssa.add_to_block(const_1, blk, addr);
-            ssa.add_to_block(const_2, blk, addr);
+            ssa.insert_into_block(add, blk, addr);
+            ssa.insert_into_block(const_1, blk, addr);
+            ssa.insert_into_block(const_2, blk, addr);
             ssa.op_use(add, 0, const_1);
             ssa.op_use(add, 1, const_2);
             ssa.set_entry_node(blk);

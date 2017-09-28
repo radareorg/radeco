@@ -254,6 +254,7 @@ impl Graph for SSAStorage {
         }
     }
 
+    // TODO: When i is a constant, there may be some bugs.
     fn replace_node(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef) {
         radeco_trace!(logger::Event::SSAReplaceNode(&i, &j));
         // Before replace, we need to copy over the edges.
@@ -278,7 +279,7 @@ impl Graph for SSAStorage {
             } else if let EdgeData::Selector = self.g[edge] {
                 let bb = self.block_of(i)
                              .expect("Value node does'n belong to any block");
-                self.mark_selector(j, bb);
+                self.set_selector(j, bb);
             }
             self.g.remove_edge(edge); // TODO: Need suggestion. Remove edges? if not, there might be an operation to get successor on the preds(i) which would result in access to this deleted node
         }
@@ -592,7 +593,7 @@ impl CFGMod for SSAStorage {
 
         let regstate = self.registers_in(exi)
                                 .expect("No register state node found");
-        self.remove(regstate);
+        self.remove_value(regstate);
 
         let node = exi;
         let mut expressions = Vec::<NodeIndex>::new();
@@ -604,11 +605,11 @@ impl CFGMod for SSAStorage {
         }
 
         for expr in expressions {
-            self.remove(expr);
+            self.remove_value(expr);
         }
 
         let preds = self.preds_of(exi);
-        self.remove(exi);
+        self.remove_value(exi);
 
         // block removal can make predecessors lose selectors
         for pred_e in preds {
@@ -870,9 +871,9 @@ impl SSA for SSAStorage {
 }
 
 impl SSAMod for SSAStorage {
-    fn set_addr(&mut self, i: &Self::ValueRef, addr: MAddress) {
+    fn set_address(&mut self, i: Self::ValueRef, addr: MAddress) {
         let mut e = None;
-        for edge in self.g.edges(*i) {
+        for edge in self.g.edges(i) {
             if let EdgeData::ContainedInBB(_) = *edge.weight() {
                 e = Some(edge.id());
                 break;
@@ -886,47 +887,64 @@ impl SSAMod for SSAStorage {
         }
     }
 
-    fn add_op(&mut self, opc: MOpcode, vt: ValueInfo, _: Option<u64>) -> NodeIndex {
-        self.insert_node(NodeData::Op(opc, vt)).expect("Cannot insert new nodes!")
+    fn set_register(&mut self, i: Self::ValueRef, regname: String) {
+        let reg_state = self.registers_in(self.entry_node)
+                                .expect("No register state node found");
+        let operands = self.operands_of(reg_state);
+        for op in operands {
+            if Some(regname.clone()) == self.comment(op) {
+                self.insert_edge(i, op, EdgeData::RegisterInfo);
+                break;
+            }
+        }
     }
 
-    fn add_const(&mut self, value: u64) -> NodeIndex {
+    fn set_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
+        self.insert_edge(block, node, EdgeData::Selector);
+    }
+
+    fn insert_op(&mut self, opc: MOpcode, vt: ValueInfo, _: Option<u64>) ->
+        Option<Self::ValueRef> {
+        Some(self.insert_node(NodeData::Op(opc, vt)).expect("Cannot insert new nodes!"))
+    }
+
+    fn insert_const(&mut self, value: u64) -> Option<Self::ValueRef> {
         if self.constants.contains_key(&value) {
-            self.constants.get(&value).unwrap().clone()
+            Some(self.constants.get(&value).unwrap().clone())
         } else {
             let data = NodeData::Op(MOpcode::OpConst(value),
                                     scalar!(64));
             let id = self.insert_node(data).expect("Cannot insert new nodes");
             self.constants.insert(value, id);
-            id
+            Some(id)
         }
     }
 
-    fn add_phi(&mut self, vt: ValueInfo) -> NodeIndex {
-        self.insert_node(NodeData::Phi(vt, "".to_owned())).expect("Cannot insert new nodes")
+    fn insert_phi(&mut self, vt: ValueInfo) -> Option<Self::ValueRef> {
+        self.insert_node(NodeData::Phi(vt, "".to_owned()))
     }
 
-    fn add_undefined(&mut self, vt: ValueInfo) -> NodeIndex {
-        self.insert_node(NodeData::Undefined(vt)).expect("Cannot insert new nodes")
+    fn insert_undefined(&mut self, vt: ValueInfo) -> Option<Self::ValueRef> {
+        self.insert_node(NodeData::Undefined(vt))
     }
 
-    fn add_comment(&mut self, vt: ValueInfo, msg: String) -> NodeIndex {
-        self.insert_node(NodeData::Comment(vt, msg)).expect("Cannot insert new nodes")
+    fn insert_comment(&mut self, vt: ValueInfo, msg: String) -> Option<Self::ValueRef> {
+        self.insert_node(NodeData::Comment(vt, msg))
     }
 
-    fn mark_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef) {
-        self.insert_edge(block, node, EdgeData::Selector);
+    fn insert_into_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, at: MAddress) {
+        self.insert_edge(node, block, EdgeData::ContainedInBB(at));
     }
 
-    fn phi_use(&mut self, phi: NodeIndex, node: NodeIndex) {
+    fn phi_use(&mut self, phi: Self::ValueRef, node: Self::ValueRef) {
         self.insert_edge(phi, node, EdgeData::Data(0));
     }
 
-    fn phi_unuse(&mut self, phi: NodeIndex, node: NodeIndex) {
+    fn phi_unuse(&mut self, phi: Self::ValueRef, node: Self::ValueRef) {
         self.remove_edges_between(phi, node);
     }
 
-    fn op_use(&mut self, node: NodeIndex, index: u8, argument: NodeIndex) {
+    fn op_use(&mut self, node: Self::ValueRef, index: u8, argument: Self::ValueRef) {
         if argument == NodeIndex::end() {
             return;
         }
@@ -935,23 +953,11 @@ impl SSAMod for SSAStorage {
         self.insert_edge(node, argument, EdgeData::Data(index));
     }
 
-    fn set_register(&mut self, i: NodeIndex, regname: &String) {
-        let reg_state = self.registers_in(self.entry_node)
-                                .expect("No register state node found");
-        let operands = self.operands_of(reg_state);
-        for op in operands {
-            if Some(regname) == self.comment(op).as_ref() {
-                self.insert_edge(i, op, EdgeData::RegisterInfo);
-                break;
-            }
-        }
+    fn op_unuse(&mut self, op: Self::ValueRef, operand: Self::ValueRef) {
+        self.remove_edges_between(op, operand);
     }
 
-    fn disconnect(&mut self, op: &NodeIndex, operand: &NodeIndex) {
-        self.remove_edges_between(*op, *operand);
-    }
-
-    fn replace(&mut self, node: NodeIndex, replacement: NodeIndex) {
+    fn replace_value(&mut self, node: Self::ValueRef, replacement: Self::ValueRef) {
         //self.replace_node(node, replacement);
         if let Some(adata) = self.assoc_data.remove(&node) {
             self.assoc_data.insert(replacement, adata);
@@ -959,7 +965,7 @@ impl SSAMod for SSAStorage {
         self.replace_node(node, replacement);
     }
 
-    fn remove(&mut self, node: NodeIndex) {
+    fn remove_value(&mut self, node: Self::ValueRef) {
         self.assoc_data.remove(&node);
         // We should remove the edges which are associated with node.
         let mut walk = self.g.neighbors_undirected(node).detach();
@@ -969,10 +975,10 @@ impl SSAMod for SSAStorage {
         self.remove_node(node);
     }
 
-    fn remove_edge(&mut self, i: &Self::CFEdgeRef) {
-        let src_node = self.edge_info(*i).expect("Less-endpoints edge").source;
+    fn remove_data_edge(&mut self, i: Self::CFEdgeRef) {
+        let src_node = self.edge_info(i).expect("Less-endpoints edge").source;
         if let Some(selector) = self.selector_in(src_node) {
-            self.remove(selector);
+            self.remove_value(selector);
         }
 
         let invalid_edge = self.invalid_edge().expect("Invalid Edge is not defined");
@@ -982,7 +988,7 @@ impl SSAMod for SSAStorage {
             } else {
                 ConditionInfo::new(invalid_edge, invalid_edge)
             };
-        let other_edge = match self.g[*i] {
+        let other_edge = match self.g[i] {
             EdgeData::Control(j) if j <= 2 => {
                 match j {
                     0 => Some(conditional_branches.true_side),
@@ -1001,11 +1007,7 @@ impl SSAMod for SSAStorage {
             }
         }
 
-        self.g.remove_edge(*i);
-    }
-
-    fn add_to_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, at: MAddress) {
-        self.insert_edge(node, block, EdgeData::ContainedInBB(at));
+        self.g.remove_edge(i);
     }
 
     fn map_registers(&mut self, regs: Vec<String>) {

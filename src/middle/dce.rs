@@ -64,7 +64,7 @@ pub fn sweep<T>(ssa: &mut T)
 {
     for node in &ssa.values() {
         if !ssa.is_marked(node) {
-            ssa.remove(*node);
+            ssa.remove_value(*node);
         }
         ssa.clear_mark(node);
     }
