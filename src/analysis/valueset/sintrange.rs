@@ -67,7 +67,7 @@ impl SIntRange {
 }
 
 impl<'a, 'b> BitAnd<&'a SIntRange> for &'b SIntRange {
-	type Output = SIntRange;
+    type Output = SIntRange;
 
     fn bitand(self, rhs: &SIntRange) -> SIntRange {
         SIntRange {
@@ -78,7 +78,7 @@ impl<'a, 'b> BitAnd<&'a SIntRange> for &'b SIntRange {
 }
 
 impl<'a, 'b> BitOr<&'a SIntRange> for &'b SIntRange {
-	type Output = SIntRange;
+    type Output = SIntRange;
 
     fn bitor(self, rhs: &SIntRange) -> SIntRange {
         SIntRange {

@@ -21,8 +21,8 @@ use middle::ssa::cfg_traits::CFG;
 ///////////////////////////////////////////////////////////////////////////////
 
 impl GraphDot for SSAStorage {
-	type NodeIndex = graph::NodeIndex;
-	type EdgeIndex = graph::EdgeIndex;
+    type NodeIndex = graph::NodeIndex;
+    type EdgeIndex = graph::EdgeIndex;
 
 
     fn configure(&self) -> String {

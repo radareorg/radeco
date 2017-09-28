@@ -6,5 +6,5 @@
 // except according to those terms.
 
 pub trait DataOperator<T> {
-	fn join(inputs: &[T]) -> T;
+    fn join(inputs: &[T]) -> T;
 }

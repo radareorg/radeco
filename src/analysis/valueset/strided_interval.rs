@@ -321,7 +321,7 @@ impl StridedInterval {
 }
 
 impl<'a, 'b> BitAnd<&'a StridedInterval> for &'b StridedInterval {
-	type Output = StridedInterval;
+    type Output = StridedInterval;
 
     fn bitand(self, rhs: &StridedInterval) -> StridedInterval {
         StridedInterval {
@@ -332,7 +332,7 @@ impl<'a, 'b> BitAnd<&'a StridedInterval> for &'b StridedInterval {
 }
 
 impl<'a, 'b> BitOr<&'a StridedInterval> for &'b StridedInterval {
-	type Output = StridedInterval;
+    type Output = StridedInterval;
 
     fn bitor(self, rhs: &StridedInterval) -> StridedInterval {
         StridedInterval {

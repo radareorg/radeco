@@ -212,8 +212,7 @@ impl DomTree {
 
     pub fn doms(&self, i: graph::NodeIndex) -> Vec<graph::NodeIndex> {
         assert!(self.idom.len() > 0,
-                "Call to DomTree::doms before 
-									  DomTree::build_dom_tree.");
+                "Call to DomTree::doms before DomTree::build_dom_tree.");
 
         let internal_index = self.rmap[&i];
         let mut idom = internal_index;
@@ -229,8 +228,7 @@ impl DomTree {
 
     pub fn idom(&self, i: graph::NodeIndex) -> graph::NodeIndex {
         assert!(self.idom.len() > 0,
-                "Call to DomTree::idom before 
-				DomTree::build_dom_tree.");
+                "Call to DomTree::idom before DomTree::build_dom_tree.");
 
         let internal_index = self.rmap[&i];
         let internal_node = self.idom[internal_index];
@@ -348,8 +346,7 @@ impl DomTree {
 
     pub fn compute_dominance_frontier(&mut self) {
         assert!(self.idom.len() > 0,
-                "Call to DomTree::compute_dominance_frontier 
-				before DomTree::build_dom_tree.");
+                "Call to DomTree::compute_dominance_frontier before DomTree::build_dom_tree.");
 
         let node_count = self.idom.len();
         let mut frontier_map = HashMap::<graph::NodeIndex, HashSet<graph::NodeIndex>>::new();
@@ -386,8 +383,8 @@ impl DomTree {
 /// ////////////////////////////////////////////////////////////////////////////
 
 impl GraphDot for DomTree {
-	type NodeIndex = graph::NodeIndex;
-	type EdgeIndex = u8;
+    type NodeIndex = graph::NodeIndex;
+    type EdgeIndex = u8;
 
     fn node_count(&self) -> usize {
         self.g.node_count()

@@ -36,7 +36,7 @@ impl UIntRange {
 }
 
 impl<'a, 'b> BitAnd<&'a UIntRange> for &'b UIntRange {
-	type Output = UIntRange;
+    type Output = UIntRange;
 
     fn bitand(self, rhs: &UIntRange) -> UIntRange {
         UIntRange {
@@ -47,7 +47,7 @@ impl<'a, 'b> BitAnd<&'a UIntRange> for &'b UIntRange {
 }
 
 impl<'a, 'b> BitOr<&'a UIntRange> for &'b UIntRange {
-	type Output = UIntRange;
+    type Output = UIntRange;
 
     fn bitor(self, rhs: &UIntRange) -> UIntRange {
         UIntRange {

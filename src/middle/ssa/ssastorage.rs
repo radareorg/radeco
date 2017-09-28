@@ -258,6 +258,7 @@ impl Graph for SSAStorage {
     fn replace_node(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef) {
         radeco_trace!(logger::Event::SSAReplaceNode(&i, &j));
         // Before replace, we need to copy over the edges.
+        assert!(self.constant(i).is_none());
 
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
@@ -405,8 +406,8 @@ impl Graph for SSAStorage {
 /// ////////////////////////////////////////////////////////////////////////////
 
 impl CFG for SSAStorage {
-	type ActionRef = <SSAStorage as Graph>::GraphNodeRef;
-	type CFEdgeRef = <SSAStorage as Graph>::GraphEdgeRef;
+    type ActionRef = <SSAStorage as Graph>::GraphNodeRef;
+    type CFEdgeRef = <SSAStorage as Graph>::GraphEdgeRef;
 
     fn is_block(&self, node: Self::ActionRef) -> bool {
         if let NodeData::BasicBlock(_) = self.g[node] {
@@ -508,7 +509,7 @@ impl CFG for SSAStorage {
             Some(ConditionInfo::new(true_edge, false_edge))
         }
     }
-    
+
     fn unconditional_edge(&self, i: Self::ActionRef) -> Option<Self::CFEdgeRef> {
         let edges = self.outgoing_edges(i);
         for &(edge, ety) in &edges {
@@ -558,7 +559,7 @@ impl CFG for SSAStorage {
 
 impl CFGMod for SSAStorage {
 
-	type BBInfo = MAddress;
+    type BBInfo = MAddress;
 
     fn set_entry_node(&mut self, si: Self::ActionRef) {
         self.entry_node = si;
@@ -641,7 +642,7 @@ impl CFGMod for SSAStorage {
 /// ////////////////////////////////////////////////////////////////////////////
 
 impl SSA for SSAStorage {
-	type ValueRef = NodeIndex;
+    type ValueRef = NodeIndex;
 
     fn is_expr(&self, exi: Self::ValueRef) -> bool {
         let i = exi;

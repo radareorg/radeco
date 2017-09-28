@@ -81,7 +81,7 @@ impl UIntMultiple {
 }
 
 impl<'a, 'b> BitAnd<&'a UIntMultiple> for &'b UIntMultiple {
-	type Output = UIntMultiple;
+    type Output = UIntMultiple;
 
     fn bitand(self, rhs: &UIntMultiple) -> UIntMultiple {
         // calls the euclidean algorithm three times
@@ -132,7 +132,7 @@ impl<'a, 'b> BitAnd<&'a UIntMultiple> for &'b UIntMultiple {
 }
 
 impl<'a, 'b> BitOr<&'a UIntMultiple> for &'b UIntMultiple {
-	type Output = UIntMultiple;
+    type Output = UIntMultiple;
 
     fn bitor(self, rhs: &UIntMultiple) -> UIntMultiple {
 
