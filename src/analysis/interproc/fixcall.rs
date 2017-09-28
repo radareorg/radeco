@@ -224,7 +224,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                         continue;
                     }
 
-                    ssa.replace(replace_pair[1], replace_pair[0]);
+                    ssa.replace_value(replace_pair[1], replace_pair[0]);
                 }
             }
         }

@@ -81,8 +81,8 @@ impl<'a, T> PhiPlacer<'a, T>
                       self.regfile.whole_names.get(variable as usize),
                       address);
 
-        if let Some(ref rname) = self.regfile.whole_names.get(variable as usize) {
-            self.ssa.set_register(value, rname.to_owned());
+        if let Some(rname) = self.regfile.whole_names.get(variable as usize) {
+            self.ssa.set_register(value, rname.clone());
         }
 
         self.current_def[variable as usize].insert(address, value);
@@ -310,7 +310,7 @@ impl<'a, T> PhiPlacer<'a, T>
                         if !self.outputs.contains_key(&operand) {
                             continue;
                         }
-                        self.ssa.disconnect(&ni, &operand);
+                        self.ssa.op_unuse(ni, operand);
                         let output_varid = self.outputs[&operand];
                         let mut at_ = at;
                         // BUG: if current define is ni itself, this code may cause ni use itself
@@ -470,7 +470,7 @@ impl<'a, T> PhiPlacer<'a, T>
         }
         // Reroute all uses of phi to same and remove phi
         self.index_to_addr.remove(&phi);
-        self.ssa.replace(phi, same);
+        self.ssa.replace_value(phi, same);
         // TODO: There is a deep-hidden bug: when phi is some variables' residence, we should replace 
         // these variables' residences from phi to same. Otherwise, later when we call read_variable,
         // the function will return a deleted node, and cause panic in future work.
@@ -542,7 +542,7 @@ impl<'a, T> PhiPlacer<'a, T>
     // instruction has to go into.
 
     fn add_phi(&mut self, address: &mut MAddress, vt: ValueInfo) -> T::ValueRef {
-        let i = self.ssa.add_phi(vt);
+        let i = self.ssa.insert_phi(vt).expect("Cannot insert new phi nodes");
         self.index_to_addr.insert(i, *address);
         address.offset += 1;
         i
@@ -554,38 +554,41 @@ impl<'a, T> PhiPlacer<'a, T>
     // Constants need not belong to any block. They are stored as a separate table.
     pub fn add_const(&mut self, address: &mut MAddress, value: u64, vt_option: Option<ValueInfo>) -> T::ValueRef {
         if vt_option.is_none() {
-            return self.ssa.add_const(value);
+            return self.ssa.insert_const(value).expect("Cannot insert new constants");
         }
         let vt = vt_option.unwrap();
         let width = vt.width().get_width().unwrap_or(64);
         if width < 64 {
             let val: u64 = value & (1 << (width) - 1);
-            let const_node = self.ssa.add_const(val);
+            let const_node = self.ssa.insert_const(val)
+                                        .expect("Cannot insert new constants");
             let opcode = MOpcode::OpNarrow(width as u16);
             let narrow_node = self.add_op(&opcode, address, vt);
             self.op_use(&narrow_node, 0, &const_node);
             narrow_node
         } else {
-            let const_node = self.ssa.add_const(value);
+            let const_node = self.ssa.insert_const(value)
+                                        .expect("Cannot insert new constants");
             const_node
         }
     }
 
     pub fn add_undefined(&mut self, address: MAddress, vt: ValueInfo) -> T::ValueRef {
-        let i = self.ssa.add_undefined(vt);
+        let i = self.ssa.insert_undefined(vt).expect("Cannot insert new undefined nodes");
         self.index_to_addr.insert(i, address);
         i
     }
 
     pub fn add_comment(&mut self, address: MAddress, vt: ValueInfo, msg: String) -> T::ValueRef {
-        let i = self.ssa.add_comment(vt, msg.clone());
+        let i = self.ssa.insert_comment(vt, msg.clone())
+                        .expect("Cannot insert new comments");
         
         // Add register information into comment;
         for id in 0..self.regfile.whole_names.len() {
             let reg_name = self.regfile.get_name(id).unwrap();
             let name = reg_name.as_str();
             if msg.starts_with(name) {
-                self.ssa.set_register(i, &reg_name);
+                self.ssa.set_register(i, reg_name.clone());
             }
         }
 
@@ -597,7 +600,7 @@ impl<'a, T> PhiPlacer<'a, T>
     // Something like the previous verified_add_op.
 
     pub fn add_op(&mut self, op: &MOpcode, address: &mut MAddress, vt: ValueInfo) -> T::ValueRef {
-        let i = self.ssa.add_op(*op, vt, None);
+        let i = self.ssa.insert_op(*op, vt, None).expect("Cannot insert new values");
         self.index_to_addr.insert(i, *address); 
         address.offset += 1;
         i
@@ -685,7 +688,7 @@ impl<'a, T> PhiPlacer<'a, T>
                 }
             };
             self.write_variable(*address, id, value);
-            self.ssa.set_register(value, &self.regfile
+            self.ssa.set_register(value, self.regfile
                                               .get_name(id as usize)
                                               .unwrap_or(String::new()));
             return;
@@ -816,7 +819,7 @@ impl<'a, T> PhiPlacer<'a, T>
 
     pub fn associate_block(&mut self, node: &T::ValueRef, addr: MAddress) {
         let block = self.block_of(addr);
-        self.ssa.add_to_block(*node, block.unwrap(), addr);
+        self.ssa.insert_into_block(*node, block.unwrap(), addr);
     }
 
     // Copy the reginfo from operand into expr, especially for OpWiden/OpNarrow,
@@ -830,7 +833,7 @@ impl<'a, T> PhiPlacer<'a, T>
         let regnames = self.ssa.registers(args[0]);
         if !regnames.is_empty() {
             for regname in &regnames {
-                self.ssa.set_register(node.clone(), regname);
+                self.ssa.set_register(node.clone(), regname.clone());
                 // Check whether its child nodes are incomplete 
             }
             let users = self.ssa.uses_of(*node);
@@ -885,8 +888,8 @@ impl<'a, T> PhiPlacer<'a, T>
                     if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
                         let block = self.block_of(addr);
                         let cond_node = self.ssa.operands_of(*node)[0];
-                        self.ssa.mark_selector(cond_node, block.unwrap());
-                        self.ssa.remove(*node);
+                        self.ssa.set_selector(cond_node, block.unwrap());
+                        self.ssa.remove_value(*node);
                     }
                 }
             }

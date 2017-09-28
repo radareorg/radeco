@@ -100,7 +100,7 @@ where I: Iterator<Item = S::ValueRef>,
                 // block.
                 for ex_idx in &ex_idxs {
                     if self.ssa.block_of(*ex_idx) == self.ssa.block_of(expr) {
-                        self.ssa.replace(expr, *ex_idx);
+                        self.ssa.replace_value(expr, *ex_idx);
                         replaced = true;
                         break;
                     }

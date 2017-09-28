@@ -418,7 +418,8 @@ impl<T> Analyzer<T>
                 radeco_trace!("{:?} with {:?} --> Const {:#}", 
                               k, self.g.node_data(*k), val);
                 // BUG: Width may be changed just using a simple replace.
-                let const_node = self.g.add_const(val);
+                let const_node = self.g.insert_const(val)
+                                        .expect("Cannot insert new constants");
                 let ndata = self.g.node_data(*k).unwrap();
                 let w = ndata.vt.width().get_width().unwrap_or(64);
                 let new_node = if w == 64 {
@@ -429,12 +430,13 @@ impl<T> Analyzer<T>
                     let address = self.g.address(*k)
                                         .expect("No address information found");
                     let opcode = MOpcode::OpNarrow(w as u16);
-                    let new_node = self.g.add_op(opcode, ndata.vt, None);
-                    self.g.set_addr(&new_node, address);
+                    let new_node = self.g.insert_op(opcode, ndata.vt, None)
+                                            .expect("Cannot insert new values");
+                    self.g.set_address(new_node, address);
                     self.g.op_use(new_node, 0, const_node);
                     new_node
                 };
-                self.g.replace(*k, new_node);
+                self.g.replace_value(*k, new_node);
             }
         }
         let blocks = self.g.blocks();
@@ -453,7 +455,7 @@ impl<T> Analyzer<T>
             }
         }
         for edge in &remove_edges {
-            self.g.remove_edge(edge);
+            self.g.remove_data_edge(*edge);
         }
         for block in &remove_blocks {
             self.g.remove_block(*block);

@@ -216,8 +216,8 @@ impl<'a, I, T> Sorter<'a, I, T>
                     // always have two operands.
                     assert_eq!(operands.len(), 2);
                     if self.compare(operands[0], operands[1]) == Ordering::Less {
-                        self.ssa.disconnect(&idx, &operands[0]);
-                        self.ssa.disconnect(&idx, &operands[1]);
+                        self.ssa.op_unuse(idx, operands[0]);
+                        self.ssa.op_unuse(idx, operands[1]);
                         self.ssa.op_use(idx, 0, operands[1]);
                         self.ssa.op_use(idx, 1, operands[0]);
                     }
