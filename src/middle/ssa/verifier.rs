@@ -219,7 +219,7 @@ impl Verify for SSAStorage {
                             check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
                         }
                         MOpcode::OpZeroExt(w0) | MOpcode::OpSignExt(w0) => {
-                            let opw = self.node_data(&operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
+                            let opw = self.node_data(operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();
                             check!(opw < w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
                             check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
                         }
