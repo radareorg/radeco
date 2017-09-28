@@ -31,7 +31,7 @@ pub mod logger;
 //use middle::ssa::verifier;
 
 //macro_rules! out {
-	//($str: expr, $m: expr) => { if $m { println!($str) } }
+    //($str: expr, $m: expr) => { if $m { println!($str) } }
 //}
 
 //#[derive(Clone, Copy, Debug)]

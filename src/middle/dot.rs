@@ -17,15 +17,15 @@ use petgraph::graph::NodeIndex;
 
 #[allow(unused_macros)]
 macro_rules! add_strings {
-	( $( $x: expr ),* ) => {
-		{
-			let mut s = String::new();
-			$(
-				s.push_str(&format!("{}", $x));
-			 )*
-				s
-		}
-	};
+    ( $( $x: expr ),* ) => {
+        {
+            let mut s = String::new();
+            $(
+                s.push_str(&format!("{}", $x));
+             )*
+                s
+        }
+    };
 }
 
 /// Represents the contents of a `GraphViz` attribute block
@@ -93,8 +93,8 @@ impl Index for NodeIndex {
 
 /// This trait enables graphs to be generated from implementors.
 pub trait GraphDot {
-	type NodeIndex: Hash + Clone + Eq + Index + Debug;
-	type EdgeIndex: Hash + Clone + Eq;
+    type NodeIndex: Hash + Clone + Eq + Index + Debug;
+    type EdgeIndex: Hash + Clone + Eq;
 
     fn node_index_new(usize) -> Self::NodeIndex;
     fn edge_index_new(usize) -> Self::EdgeIndex;

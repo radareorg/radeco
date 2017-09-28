@@ -143,7 +143,7 @@ pub struct NodeData {
 // implementations provided
 // the SSA form implements the following traits.
 pub trait SSA: CFG {
-	type ValueRef: Eq + Hash + Clone + Copy + Debug; // We could drop the Copy trait later and insert .clone()
+    type ValueRef: Eq + Hash + Clone + Copy + Debug; // We could drop the Copy trait later and insert .clone()
 
     ///////////////////////////////////////////////////////////////////////////
     //// Node accessors and helpers

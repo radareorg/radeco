@@ -55,7 +55,7 @@ impl Hash for InternalIndex {
 impl Eq for InternalIndex { }
 
 impl Index<InternalIndex> for Vec<InternalIndex> {
-	type Output = InternalIndex;
+    type Output = InternalIndex;
     fn index(&self, index: InternalIndex) -> &InternalIndex {
         &self[index.index]
     }

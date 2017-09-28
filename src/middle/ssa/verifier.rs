@@ -72,9 +72,9 @@ pub trait Verify: SSA + Sized + Debug {
 //}
 
 macro_rules! check {
-	($cond: expr, $ssaerr: expr) => (
-		if !$cond { return Err($ssaerr) }
-	);
+    ($cond: expr, $ssaerr: expr) => (
+        if !$cond { return Err($ssaerr) }
+    );
 }
 
 impl Verify for SSAStorage {
@@ -111,10 +111,10 @@ impl Verify for SSAStorage {
                     //  * The jump targets must not be the same block.
                     check!(edges.len() == 2,
                            SSAErr::WrongNumEdges(*block, 2, edges.len()));
-                    let branchs = self.conditional_edges(*block).expect("No conditonal edges is found");
+                    let branches = self.conditional_edges(*block).expect("No conditonal edges is found");
                     let other_edge = match edge.1 {
-                        0 => branchs.true_side,
-                        1 => branchs.false_side,
+                        0 => branches.true_side,
+                        1 => branches.false_side,
                         _ => unreachable!(),
                     };
                     let target_1 = self.edge_info(edge.0).expect("Less-endpoints edge").target;

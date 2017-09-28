@@ -88,11 +88,11 @@ macro_rules! radeco_trace {
 
 #[macro_export]
 macro_rules! radeco_warn {
-	($t: expr) => ({
-		if cfg!(feature = "trace_log") {
-			warn!("{}", $t.to_string());
-		}
-	});
+    ($t: expr) => ({
+        if cfg!(feature = "trace_log") {
+            warn!("{}", $t.to_string());
+        }
+    });
     ($fmt:expr, $($arg:tt)*) => ({
         if cfg!(feature = "trace_log") {
             warn!("{}", format_args!($fmt, $($arg)*));

@@ -68,7 +68,7 @@ impl KnownBits {
 }
 
 impl<'a, 'b> BitAnd<&'a KnownBits> for &'b KnownBits {
-	type Output = KnownBits;
+    type Output = KnownBits;
 
     fn bitand(self, rhs: &KnownBits) -> KnownBits {
         KnownBits {
@@ -79,7 +79,7 @@ impl<'a, 'b> BitAnd<&'a KnownBits> for &'b KnownBits {
 }
 
 impl<'a, 'b> BitOr<&'a KnownBits> for &'b KnownBits {
-	type Output = KnownBits;
+    type Output = KnownBits;
 
     fn bitor(self, rhs: &KnownBits) -> KnownBits {
         KnownBits {

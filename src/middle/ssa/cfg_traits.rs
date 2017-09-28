@@ -45,8 +45,8 @@ use super::graph_traits::{Graph, ConditionInfo};
 
 /// Provides __accessors__ to the underlying storage
 pub trait CFG: Graph {
-	type ActionRef: Eq + Hash + Clone + Copy + Debug;
-	type CFEdgeRef: Eq + Hash + Clone + Copy + Debug;
+    type ActionRef: Eq + Hash + Clone + Copy + Debug;
+    type CFEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
     /// Check whether the node is a basic block.
     fn is_block(&self, action: Self::ActionRef) -> bool;
@@ -103,7 +103,7 @@ pub trait CFG: Graph {
 
 /// Provides __mutators__ to the underlying storage
 pub trait CFGMod: CFG {
-	type BBInfo;
+    type BBInfo;
 
     /// Mark the start node for the SSA graph
     fn set_entry_node(&mut self, start: Self::ActionRef);

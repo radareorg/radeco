@@ -72,8 +72,8 @@ impl<T: Eq + Hash + Clone + Copy + Debug> ConditionInfo<T> {
 
 /// Trait provide basic graph operations.
 pub trait Graph {
-	type GraphNodeRef: Eq + Hash + Clone + Copy + Debug;
-	type GraphEdgeRef: Eq + Hash + Clone + Copy + Debug;
+    type GraphNodeRef: Eq + Hash + Clone + Copy + Debug;
+    type GraphEdgeRef: Eq + Hash + Clone + Copy + Debug;
 
     type NodeData: Clone + Debug;
     type EdgeData: Clone + Debug;
