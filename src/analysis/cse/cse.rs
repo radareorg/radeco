@@ -99,7 +99,7 @@ where I: Iterator<Item = S::ValueRef>,
                 // restrict outselves to the case where both the expressions belong to the same
                 // block.
                 for ex_idx in &ex_idxs {
-                    if self.ssa.block_of(*ex_idx) == self.ssa.block_of(expr) {
+                    if self.ssa.block_for(*ex_idx) == self.ssa.block_for(expr) {
                         self.ssa.replace_value(expr, *ex_idx);
                         replaced = true;
                         break;

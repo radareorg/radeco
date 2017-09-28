@@ -189,7 +189,7 @@ pub trait SSA: CFG {
     fn sparse_operands_of(&self, i: Self::ValueRef) -> Vec<(u8, Self::ValueRef)>;
 
     /// Get the NodeIndex of the BasicBlock to which node with index 'i' belongs to.
-    fn block_of(&self, i: Self::ValueRef) -> Option<Self::ActionRef>;
+    fn block_for(&self, i: Self::ValueRef) -> Option<Self::ActionRef>;
 
     /// Get the actual NodeData.
     fn node_data(&self, i: Self::ValueRef) -> Result<NodeData, Box<Debug>>;

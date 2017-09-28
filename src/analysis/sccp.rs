@@ -111,9 +111,9 @@ impl<T> Analyzer<T>
         }
 
         let invalid_block = self.g.invalid_action().expect("Invalid Action is not defind");
-        let parent_block = self.g.block_of(*i).unwrap_or(invalid_block);
+        let parent_block = self.g.block_for(*i).unwrap_or(invalid_block);
         for op in &operands {
-            let operand_block = self.g.block_of(*op).unwrap_or(invalid_block);
+            let operand_block = self.g.block_for(*op).unwrap_or(invalid_block);
             let op_val = self.get_value(op);
 
             if op_val.is_undefined() {
@@ -388,7 +388,7 @@ impl<T> Analyzer<T>
 
             while let Some(e) = self.ssa_worklist.pop_front() {
                 let t = if self.g.is_expr(e) {
-                    let block_of = self.g.block_of(e)
+                    let block_of = self.g.block_for(e)
                                             .expect("Value node doesn't belong to any block");
                     if self.is_block_executable(&block_of) {
                         self.visit_expression(&e)
@@ -519,7 +519,7 @@ impl<T> Analyzer<T>
         if !self.g.is_expr(*i) {
             return;
         }
-        let owner_block = self.g.block_of(*i)
+        let owner_block = self.g.block_for(*i)
                                 .expect("Value node doesn't belong to any block");
         if self.is_block_executable(&owner_block) {
             self.ssa_worklist.push_back(*i);

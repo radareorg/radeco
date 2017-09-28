@@ -366,7 +366,7 @@ where I: Iterator<Item=S::ValueRef>,
         // Remove operands to the root node and prepare for replace.
         let root = found.root;
         let mut address = self.ssa.address(root).expect("No address information found");
-        let block = self.ssa.block_of(root).expect("Value node doesn't belong to any block");
+        let block = self.ssa.block_for(root).expect("Value node doesn't belong to any block");
 
         // Now we have a root node with no args, but retaining its uses.
         // Replace this node with the root node in the replace expression.

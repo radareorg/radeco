@@ -59,7 +59,7 @@ impl GraphDot for SSAStorage {
         let invalid_block = self.invalid_action().expect("Invalid Action is not defined");
         match self.g.node_weight(*i) {
             Some(&NodeData::BasicBlock(_)) | Some(&NodeData::DynamicAction) => Some(i.index()),
-            _ => Some(self.block_of(*i).unwrap_or(invalid_block).index()),
+            _ => Some(self.block_for(*i).unwrap_or(invalid_block).index()),
         }
     }
 
