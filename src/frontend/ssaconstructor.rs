@@ -272,11 +272,10 @@ impl<'a, T> SSAConstruct<'a, T>
                 (MOpcode::OpLsr, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::ERor => {
-                // TODO: Issue#87
-                unimplemented!()
+                (MOpcode::OpRor, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::ERol => {
-                unimplemented!()
+                (MOpcode::OpRol, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))
             }
             Token::EAnd => {
                 (MOpcode::OpAnd, ValueInfo::new_unresolved(ir::WidthSpec::from(result_size)))

@@ -26,47 +26,52 @@ const UNCOND_EDGE: u8 = 2;
 pub struct PhiPlacer<'a, T> 
     where T: 'a + SSAExtra +
         SSAMod<BBInfo = MAddress,
-                ActionRef = <T as Graph>::GraphNodeRef,
-                CFEdgeRef = <T as Graph>::GraphEdgeRef>
+               ActionRef = <T as Graph>::GraphNodeRef,
+               CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
-    ssa: &'a mut T,
-    pub variable_types: Vec<ValueInfo>,
-    sealed_blocks: HashSet<T::ActionRef>,
     current_def: Vec<BTreeMap<MAddress, T::ValueRef>>,
     incomplete_phis: HashMap<MAddress, HashMap<VarId, T::ValueRef>>,
-    regfile: SubRegisterFile,
+    incomplete_propagation: HashSet<T::ValueRef>,
+    outputs: HashMap<T::ValueRef, VarId>,
     pub blocks: BTreeMap<MAddress, T::ActionRef>,
     pub index_to_addr: HashMap<T::ValueRef, MAddress>,
-    // addr_to_index: BTreeMap<MAddress, T::ValueRef>,
-    outputs: HashMap<T::ValueRef, VarId>,
-    incomplete_propagation: HashSet<T::ValueRef>,
+    pub variable_types: Vec<ValueInfo>,
+    regfile: SubRegisterFile,
+    sealed_blocks: HashSet<T::ActionRef>,
+    ssa: &'a mut T,
     unexplored_addr: u64,
 }
 
 impl<'a, T> PhiPlacer<'a, T> 
     where T: 'a + SSAExtra +
         SSAMod<BBInfo = MAddress,
-                ActionRef = <T as Graph>::GraphNodeRef,
-                CFEdgeRef = <T as Graph>::GraphEdgeRef>
+               ActionRef = <T as Graph>::GraphNodeRef,
+               CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
+
+    /// Create a new instance of phiplacer
     pub fn new(ssa: &'a mut T, regfile: SubRegisterFile) -> PhiPlacer<'a, T> {
         PhiPlacer {
-            ssa: ssa,
-            variable_types: Vec::new(),
-            sealed_blocks: HashSet::new(),
+            blocks: BTreeMap::new(),
             current_def: Vec::new(),
             incomplete_phis: HashMap::new(),
-            regfile: regfile,
-            blocks: BTreeMap::new(),
-            index_to_addr: HashMap::new(),
-            // No need for addr_to_index
-            // addr_to_index: BTreeMap::new(),
-            outputs: HashMap::new(),
             incomplete_propagation: HashSet::new(),
+            index_to_addr: HashMap::new(),
+            outputs: HashMap::new(),
+            regfile: regfile,
+            sealed_blocks: HashSet::new(),
+            ssa: ssa,
             unexplored_addr: u64::max_value() - 1,
+            variable_types: Vec::new(),
         }
     }
 
+    /// Add a new variable that the phiplacer should know of.
+    /// This information is required to place phi-s. Note that the 
+    /// phis are generated only for variabels defined in this list.
+    ///
+    /// This list typically should include all the registers that a part of the
+    /// arch and a memory instance.
     pub fn add_variables(&mut self, variable_types: Vec<ValueInfo>) {
         for _ in &variable_types {
             self.current_def.push(BTreeMap::new());
@@ -74,6 +79,11 @@ impl<'a, T> PhiPlacer<'a, T>
         self.variable_types.extend(variable_types);
     }
 
+    /// Write/associate a value/node with a defined variable. Usually called when the 
+    /// expression has an assignment.
+    ///
+    /// It is up to the caller function to ensure that the sizes are compatible, and insert
+    /// appropriate width operations if necessary.
     pub fn write_variable(&mut self, address: MAddress, variable: VarId, value: T::ValueRef) {
         radeco_trace!("phip_write_var|{:?}|{} ({:?})|{}",
                       value,
@@ -99,9 +109,6 @@ impl<'a, T> PhiPlacer<'a, T>
                       address: MAddress)
                       -> Option<(&MAddress, &T::ValueRef)> {
         for (addr, idx) in self.current_def[variable as usize].iter().rev() {
-            // if *addr > address {
-            // continue;
-            // }
             if self.block_of(*addr) != self.block_of(address) && *addr > address {
                 continue;
             }
@@ -173,7 +180,6 @@ impl<'a, T> PhiPlacer<'a, T>
         val
     }
 
-    // TODO: Add methods to expose addition of edges between the basic blocks.
     // In this new implementation, this method is a bit tricky.
     // Let us break down this functionality into multiple steps.
     // - add_block takes an address to add a block at.
@@ -364,8 +370,6 @@ impl<'a, T> PhiPlacer<'a, T>
             let target_block = self.block_of(target).unwrap();
             if target_block != source_block {
                 radeco_trace!("phip_add_edge|{} --{}--> {}", source, UNCOND_EDGE, target);
-                radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, UNCOND_EDGE, 
-                              target_block);
                 self.ssa.insert_control_edge(source_block, target_block, UNCOND_EDGE);
             }
         }
@@ -419,10 +423,6 @@ impl<'a, T> PhiPlacer<'a, T>
             radeco_trace!("phip_add_phi_operands|cur:{}|pred:{}", baddr, p_addr);
 
             let datasource = self.read_variable(&mut p_addr, variable);
-            radeco_trace!("phip_add_phi_operands_src|{} ({:?})|{:?}",
-                          variable,
-                          self.regfile.whole_names.get(variable as usize),
-                          datasource);
             self.ssa.phi_use(phi, datasource);
             if self.ssa.registers(phi).is_empty() {
                 self.propagate_reginfo(&phi);
@@ -857,16 +857,12 @@ impl<'a, T> PhiPlacer<'a, T>
     // with exit_node
     pub fn gather_exits(&mut self) {
         let blocks = self.ssa.blocks();
-        let mut exits: Vec<T::ActionRef> = Vec::new();
+        let exit_node = self.ssa.exit_node().expect("Incomplete CFG graph");
         for block in blocks {
             if self.ssa.succs_of(block).len() == 0 {
-                exits.push(block);
+                self.ssa.insert_control_edge(block, exit_node, UNCOND_EDGE);
             }
         } 
-        let exit_node = self.ssa.exit_node().expect("Incomplete CFG graph");
-        for exit in exits {
-            self.ssa.insert_control_edge(exit, exit_node, UNCOND_EDGE);
-        }
     }
 
     // Performs SSA finish operation such as assigning the blocks in the final
