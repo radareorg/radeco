@@ -89,6 +89,10 @@ impl ValueInfo {
         self.vty = ValueType::Reference;
     }
 
+    pub fn mark_as_invalid(&mut self) {
+        self.vty = ValueType::Invalid;
+    }
+
     pub fn value_type(&self) -> &ValueType {
         &self.vty
     }
