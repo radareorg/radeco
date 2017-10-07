@@ -149,11 +149,11 @@ impl ReferenceMarker {
     fn mark_node(&self, ssa: &mut SSAStorage, ni: NodeIndex, ty: ValueType) {
         if let Some(ref mut nd) = ssa.g.node_weight_mut(ni) {
             if let Some(vi) = nd.get_valueinfo_mut() {
-                match vi.value_type() {
-                    &ValueType::Invalid => vi.mark_as_invalid(),
-                    &ValueType::Reference => vi.mark_as_reference(),
-                    &ValueType::Scalar => vi.mark_as_scalar(),
-                    &ValueType::Unresolved => { },
+                match ty {
+                    ValueType::Invalid => vi.mark_as_invalid(),
+                    ValueType::Reference => vi.mark_as_reference(),
+                    ValueType::Scalar => vi.mark_as_scalar(),
+                    ValueType::Unresolved => { },
                 }
             }
         }
@@ -217,44 +217,81 @@ impl ReferenceMarker {
         let mut wl: VecDeque<NodeIndex> =  VecDeque::new();
         let seen: HashSet<NodeIndex> = HashSet::new();
 
+        // Stores the indices to nodes that are marked as references,
+        // but have none of its subtrees marked as references yet.
+        let mut unresolved = HashSet::new();
 
-
-        //   First mark all the trivial references and add them to a worklist.
+        // First mark all the trivial references and add them to a worklist.
         wl = self.mark_trivial_references(ssa);
+        unresolved = wl.iter().cloned().collect();
 
         while !wl.is_empty() {
-            let current = wl.pop_front().expect("Cannot be `None`");
-            let nd  = ssa.g[current].clone();
+            let current_ni = wl.pop_front().expect("This cannot be `None`");
 
-            match nd {
-                NodeData::Op(ref opc, ref vi) => {
-                    match opc {
-                        &MOpcode::OpStore | &MOpcode::OpLoad => {
-                            let addr = ssa.operands_of(current)[1];
-                            if let Some(ref mut ind) = ssa.g.node_weight_mut(addr) {
-                                if let Some(ref mut vi) = ind.get_valueinfo_mut() {
-                                    vi.mark_as_reference();
-                                }
-                            }
-                            // Push in the next use of memory, if this is a store.
-                            if opc == &MOpcode::OpStore {
-                                let uses = ssa.uses_of(current);
-                                wl.extend(&uses);
-                            }
-                            wl.push_back(addr);
-                        }
+            // Now we need to look at which opearand/subtree is a reference.
+            // If we can identify the subtree that is a reference, we mark the
+            // others as non-reference (scalar), as an operation cannot
+            // have more than one reference.
 
-                        &MOpcode::OpCall => unimplemented!(),
+            let operands = ssa.operands_of(current_ni);
+            let operands_vt = operands.iter().map(|&op| ssa.g[op]
+                                                           .get_valueinfo()
+                                                           .map(|x| x.value_type())
+                                                           .unwrap_or(&ValueType::Unresolved));
 
+            match operands_vt.fold(ValueType::Unresolved,
+                                   |acc, &x| { self.compute_result(&[acc, x]) }) {
+                // Best case! Nothing to do. Mark the ones that are not references
+                // as scalar, and we're done.
+                ValueType::Reference => (),
 
-                        _ => continue,
-                    }
-                }
-                NodeData::Phi(ref vi, ref c) => unimplemented!(),
-                NodeData::Comment(ref vi, ref c) => unimplemented!(),
-                _ => continue,
+                // Need to resolve and decide which tree is a reference
+                ValueType::Unresolved => (),
+
+                // This subtree, i.e. one indexed at current_ni is not a reference,
+                // Propagate this information upwards, this might help decide
+                // the other unresolved pieces.
+                ValueType::Scalar => (),
+
+                // Throw a warning. Situation is not consistent with our assumptions
+                ValueType::Invalid => (),
             }
         }
+
+
+        //while !wl.is_empty() {
+            //let current = wl.pop_front().expect("Cannot be `None`");
+            //let nd  = ssa.g[current].clone();
+
+            //match nd {
+                //NodeData::Op(ref opc, ref vi) => {
+                    //match opc {
+                        //&MOpcode::OpStore | &MOpcode::OpLoad => {
+                            //let addr = ssa.operands_of(current)[1];
+                            //if let Some(ref mut ind) = ssa.g.node_weight_mut(addr) {
+                                //if let Some(ref mut vi) = ind.get_valueinfo_mut() {
+                                    //vi.mark_as_reference();
+                                //}
+                            //}
+                            //// Push in the next use of memory, if this is a store.
+                            //if opc == &MOpcode::OpStore {
+                                //let uses = ssa.uses_of(current);
+                                //wl.extend(&uses);
+                            //}
+                            //wl.push_back(addr);
+                        //}
+
+                        //&MOpcode::OpCall => unimplemented!(),
+
+
+                        //_ => continue,
+                    //}
+                //}
+                //NodeData::Phi(ref vi, ref c) => unimplemented!(),
+                //NodeData::Comment(ref vi, ref c) => unimplemented!(),
+                //_ => continue,
+            //}
+        //}
     }
 }
 

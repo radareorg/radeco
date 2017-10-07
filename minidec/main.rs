@@ -26,6 +26,9 @@ use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 use radeco_lib::middle::ssa::verifier;
 
+// Expreimental reference marking
+use radeco_lib::analysis::mark_refs;
+
 const USAGE: &'static str = "
 Usage: minidec [-f <names>...] <target>
 
@@ -94,7 +97,7 @@ fn main() {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
             println!("  [*] Eliminating Dead Code");
-            dce::collect(&mut rfn.ssa);
+            //dce::collect(&mut rfn.ssa);
         }
         let mut ssa = {
             // Constant Propagation (sccp)
@@ -125,19 +128,24 @@ fn main() {
                 Ok(_) => {  }
             }
         }
-        let memory_ssa = {
-            // Generate MemorySSA
-            println!("  [*] Generating Memory SSA");
-            let mut mssa = MemorySSA::new(&rfn.ssa);
-            mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
-                    &Some(rfn.call_ctx.iter().cloned()
-                          .map(|x| if x.ssa_ref.is_some() {
-                              x.ssa_ref.unwrap() } else {
-                                NodeIndex::end()
-                              }).collect()));
-            mssa.run();
-            mssa
-        };
+
+        {
+            // Building memory SSA.
+            let _memory_ssa = {
+                // Generate MemorySSA
+                println!("  [*] Generating Memory SSA");
+                let mut mssa = MemorySSA::new(&rfn.ssa);
+                mssa.gather_variables(&rfn.datarefs, &rfn.locals, 
+                                      &Some(rfn.call_ctx.iter().cloned()
+                                            .map(|x| if x.ssa_ref.is_some() {
+                                                x.ssa_ref.unwrap() } else {
+                                                    NodeIndex::end()
+                                                }).collect()));
+                mssa.run();
+                mssa
+            };
+        }
+
         //if false {
         //    if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
         //        continue;
@@ -153,6 +161,13 @@ fn main() {
         //        println!("Strided Interval: {}", strided_interval);
         //    };
         //}
+        
+        {
+            // Expreimental reference marking pass
+            println!("  [*] Unstable> Marking References");
+            let mut rmark = mark_refs::ReferenceMarker { };
+            rmark.resolve_refs(&mut rfn.ssa);
+        }
 
         let mut fname = PathBuf::from(&dir);
         fname.push(&rfn.name);
