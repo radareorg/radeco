@@ -124,10 +124,10 @@ pub enum NodeType {
 // Implement display helper for NodeData to make it a little nicer to read prefix notation.
 impl fmt::Display for NodeType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match *self {
-            NodeType::Op(op) => format!("{}", op),
-            NodeType::Phi => "Phi".to_owned(),
-            NodeType::Comment(ref s) => s.clone(),
+        let s = match self {
+            &NodeType::Op(ref op) => format!("{}", op),
+            &NodeType::Phi => "Phi".to_owned(),
+            &NodeType::Comment(ref s) => s.clone(),
             // Don't care about these
             _ => String::new(),
         };

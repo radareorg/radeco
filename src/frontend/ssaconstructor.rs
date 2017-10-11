@@ -12,7 +12,7 @@
 // have any
 // instructions after "}" in the same instruction.
 
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use petgraph::graph::NodeIndex;
 use std::{fmt, cmp, u64};
 
@@ -348,6 +348,7 @@ impl<'a, T> SSAConstruct<'a, T>
             // missing just
             // one or two instructions.
             _ => {
+                println!("{:?}", token);
                 unimplemented!();
             }
         };
@@ -500,6 +501,18 @@ impl<'a, T> SSAConstruct<'a, T>
                     self.phiplacer.op_use(&op_call, 0, &call_operand);
                     continue;
                 }
+            }
+
+            // Some overrides as we do not support all esil and don't want to panic.
+            let overrides = &["GOTO", "TRAP", "$", "TODO", "REPEAT"];
+            if esil_str.split(",").any(|x| overrides.contains(&x)) {
+                // Do something else other than asking the parser
+                let err_instr = "ERR OPCODE".to_owned();
+                let instr = op.opcode.as_ref().unwrap_or(&err_instr);
+                let width = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
+                let comment = self.phiplacer.add_comment(current_address, width, instr.clone());
+                // Do not pass the instruction into the parser. Skip and continue.
+                continue;
             }
 
             while let Some(ref token) = p.parse::<_, Tokenizer>(esil_str) {

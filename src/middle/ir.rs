@@ -100,7 +100,7 @@ pub enum MArity {
     Zero,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MOpcode {
     OpAdd,
     OpAnd,
@@ -108,6 +108,7 @@ pub enum MOpcode {
     OpCall,
     OpCmp,
     OpConst(u64),
+    OpCustom(String),
     OpDiv,
     OpEq,
     OpGt,
@@ -200,6 +201,7 @@ impl MOpcode {
             MOpcode::OpCall => (Cow::from("OpCall"), MArity::Unary),
             MOpcode::OpCmp => (Cow::from("OpCmp"), MArity::Binary),
             MOpcode::OpConst(c) => (Cow::from(format!("OpCost({})", c)), MArity::Zero),
+            MOpcode::OpCustom(ref s) => (Cow::from(format!("OpCustom({})", s)), MArity::Zero),
             MOpcode::OpDiv => (Cow::from("OpDiv"), MArity::Binary),
             MOpcode::OpEq => (Cow::from("OpEq"), MArity::Binary),
             MOpcode::OpGt => (Cow::from("OpGt"), MArity::Binary),
@@ -224,6 +226,42 @@ impl MOpcode {
             MOpcode::OpSub => (Cow::from("OpSub"), MArity::Binary),
             MOpcode::OpXor => (Cow::from("OpXor"), MArity::Binary),
             MOpcode::OpZeroExt(_) => (Cow::from("OpZeroExt"), MArity::Unary),
+        }
+    }
+
+    pub fn idx(&self) -> u16 {
+        match * self {
+            MOpcode::OpAdd => 0,
+            MOpcode::OpAnd => 1,
+            MOpcode::OpCJmp => 2,
+            MOpcode::OpCall => 3,
+            MOpcode::OpCmp => 4,
+            MOpcode::OpConst(_) => 5,
+            MOpcode::OpCustom(_) => 6,
+            MOpcode::OpDiv => 7,
+            MOpcode::OpEq => 8,
+            MOpcode::OpGt => 9,
+            MOpcode::OpITE => 10,
+            MOpcode::OpIf => 11,
+            MOpcode::OpInvalid => 12,
+            MOpcode::OpJmp => 13,
+            MOpcode::OpLoad => 14,
+            MOpcode::OpLsl => 15,
+            MOpcode::OpLsr => 16,
+            MOpcode::OpLt => 17,
+            MOpcode::OpMod => 18,
+            MOpcode::OpMul => 19,
+            MOpcode::OpNarrow(_) => 20,
+            MOpcode::OpNop => 21,
+            MOpcode::OpNot => 22,
+            MOpcode::OpOr => 23,
+            MOpcode::OpRol => 24,
+            MOpcode::OpRor => 25,
+            MOpcode::OpSignExt(_) => 26,
+            MOpcode::OpStore => 27,
+            MOpcode::OpSub => 28,
+            MOpcode::OpXor => 29,
+            MOpcode::OpZeroExt(_) => 30,
         }
     }
 }

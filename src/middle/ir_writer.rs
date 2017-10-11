@@ -149,7 +149,7 @@ impl IRWriter {
 
     fn fmt_expression(&mut self,
                       ni: NodeIndex,
-                      opcode: MOpcode,
+                      opcode: &MOpcode,
                       vt: ValueInfo,
                       operands: Vec<String>,
                       ssa: &SSAStorage)
@@ -169,7 +169,7 @@ impl IRWriter {
             "(*?)"
         };
 
-        match opcode {
+        match *opcode {
             MOpcode::OpAdd => format!("%{}: $Unknown{}{}  = {} + {}",
                                       result_idx,
                                       w,
@@ -320,8 +320,8 @@ impl IRWriter {
 
         for node in ssa.inorder_walk() {
             let line = match ssa.g[node] {
-                NodeData::Op(opcode, vt) => {
-                    if let MOpcode::OpConst(_) = opcode {
+                NodeData::Op(ref opcode, vt) => {
+                    if let MOpcode::OpConst(_) = *opcode {
                         String::new()
                     } else {
                         let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);

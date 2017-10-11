@@ -600,7 +600,7 @@ impl<'a, T> PhiPlacer<'a, T>
     // Something like the previous verified_add_op.
 
     pub fn add_op(&mut self, op: &MOpcode, address: &mut MAddress, vt: ValueInfo) -> T::ValueRef {
-        let i = self.ssa.insert_op(*op, vt, None).expect("Cannot insert new values");
+        let i = self.ssa.insert_op(op.clone(), vt, None).expect("Cannot insert new values");
         self.index_to_addr.insert(i, *address); 
         address.offset += 1;
         i
