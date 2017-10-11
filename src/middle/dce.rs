@@ -7,11 +7,11 @@
 
 //! Dead code elimination
 
-use std::collections::VecDeque;
+use middle::ssa::graph_traits::Graph;
 use middle::ssa::ssa_traits::{SSAExtra, SSAMod};
 use middle::ssa::ssa_traits::NodeType;
 use petgraph::graph::NodeIndex;
-use middle::ssa::graph_traits::Graph;
+use std::collections::VecDeque;
 
 /// Removes SSA nodes that are not used by any other node.
 /// The algorithm will not consider whether the uses keeping a node alive
@@ -19,21 +19,20 @@ use middle::ssa::graph_traits::Graph;
 /// look at `analysis::constant_propagation`.
 pub fn collect<T>(ssa: &mut T)
     where T: Clone + SSAExtra +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef> 
+        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
 {
     mark(ssa);
     sweep(ssa);
 }
 
-/// Marks node for removal. This method does not remove nodes
+/// Marks node for removal. This method does not remove nodes.
 pub fn mark<T>(ssa: &mut T)
     where T: Clone + SSAExtra +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef> 
+        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
 {
     let nodes = ssa.values();
     let exit_node = ssa.exit_node().expect("Incomplete CFG graph");
-    let roots = ssa.registers_in(exit_node)
-                        .expect("No register state node found");
+    let roots = ssa.registers_in(exit_node).expect("No register state node found");
     let mut queue = VecDeque::<T::ValueRef>::new();
     for node in &nodes {
         if let Ok(ref result) = ssa.node_data(*node) {
@@ -60,7 +59,7 @@ pub fn mark<T>(ssa: &mut T)
 /// Sweeps away the un-marked nodes
 pub fn sweep<T>(ssa: &mut T)
     where T: Clone + SSAExtra +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef> 
+        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
 {
     for node in &ssa.values() {
         if !ssa.is_marked(node) {
@@ -73,35 +72,33 @@ pub fn sweep<T>(ssa: &mut T)
     let blocks = ssa.blocks();
     for block in &blocks {
         // Do not touch start or exit nodes
-        if *block == ssa.entry_node().expect("Incomplete CFG graph") 
-            || *block == ssa.exit_node().expect("Incomplete CFG graph") {
+        if *block == ssa.entry_node().expect("Incomplete CFG graph") ||
+           *block == ssa.exit_node().expect("Incomplete CFG graph") {
             continue;
         }
 
-        let remove_block = if ssa.exprs_in(*block).is_empty() &&
-            ssa.phis_in(*block).is_empty() {
-                let incoming = ssa.incoming_edges(*block);
-                let outgoing = ssa.outgoing_edges(*block);
-                // Two cases.
-                if outgoing.len() == 1 {
-                    let new_target = ssa.edge_info(outgoing[0].0)
-                                            .expect("Less-endpoints edge").target;
-                    for &(ie, ref i) in &incoming {
-                        let new_src = ssa.edge_info(ie).expect("Less-endpoints edge").source;
-                        ssa.remove_control_edge(ie);
-                        ssa.insert_control_edge(new_src, new_target, *i);
-                    }
-                    ssa.remove_control_edge(outgoing[0].0);
-                    true
-                } else {
-                    // Incoming edge has to be an unconditional,
-                    // else we cannot re-route.
-                    // TODO: This is currently unimplemented!
-                    false
+        let remove_block = if ssa.exprs_in(*block).is_empty() && ssa.phis_in(*block).is_empty() {
+            let incoming = ssa.incoming_edges(*block);
+            let outgoing = ssa.outgoing_edges(*block);
+            // Two cases.
+            if outgoing.len() == 1 {
+                let new_target = ssa.edge_info(outgoing[0].0).expect("Less-endpoints edge").target;
+                for &(ie, ref i) in &incoming {
+                    let new_src = ssa.edge_info(ie).expect("Less-endpoints edge").source;
+                    ssa.remove_control_edge(ie);
+                    ssa.insert_control_edge(new_src, new_target, *i);
                 }
+                ssa.remove_control_edge(outgoing[0].0);
+                true
             } else {
+                // Incoming edge has to be an unconditional,
+                // else we cannot re-route.
+                // TODO: This is currently unimplemented!
                 false
-            };
+            }
+        } else {
+            false
+        };
         if remove_block {
             radeco_trace!("dce_rm_empty|{:?}", block);
             ssa.remove_block(*block);

@@ -337,10 +337,10 @@ where I: Iterator<Item=S::ValueRef>,
                 _ => None,
             }
         };
-        if let Some(op) = opcode {
-            let node = self.ssa.insert_op(op, ValueInfo::new_unresolved(WidthSpec::from(64)), None)
+        if let Some(ref op) = opcode {
+            let node = self.ssa.insert_op(op.clone(), ValueInfo::new_unresolved(WidthSpec::from(64)), None)
                                 .expect("Cannot insert new values");
-            match op {
+            match *op {
                 MOpcode::OpConst(_) => {}
                 _ => {
                     addr.offset += 1;

@@ -123,7 +123,7 @@ impl NodeData {
 impl fmt::Display for NodeData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match *self {
-            NodeData::Op(op, _) => format!("{}", op),
+            NodeData::Op(ref op, _) => format!("{}", op),
             NodeData::Phi(_, _) => "Phi".to_owned(),
             NodeData::Comment(_, ref s) => s.clone(),
             // Don't care about these
@@ -787,9 +787,9 @@ impl SSA for SSAStorage {
 
     fn node_data(&self, i: Self::ValueRef) -> Result<TNodeData, Box<Debug>> {
         match self.g[i] {
-            NodeData::Op(opc, vt) => Ok(TNodeData {
+            NodeData::Op(ref opc, vt) => Ok(TNodeData {
                 vt: vt,
-                nt: TNodeType::Op(opc),
+                nt: TNodeType::Op(opc.clone()),
             }),
             NodeData::Phi(vt, _) => Ok(TNodeData {
                 vt: vt,
