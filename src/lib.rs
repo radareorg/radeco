@@ -56,6 +56,7 @@ extern crate r2pipe;
 extern crate r2api;
 
 extern crate esil;
+extern crate capstone_rust;
 
 #[macro_use] pub mod utils;
 #[macro_use] pub mod middle;
@@ -66,6 +67,7 @@ pub mod frontend {
     pub mod containers;
     pub mod radeco_containers;
     pub mod bindings;
+    pub mod instruction_analyzer;
 }
 
 pub mod backend;
