@@ -12,20 +12,23 @@
 // have any
 // instructions after "}" in the same instruction.
 
-use std::collections::{HashMap};
-use petgraph::graph::NodeIndex;
-use std::{fmt, cmp, u64};
-
-use r2api::structs::{LOpInfo, LRegInfo};
+use esil::lexer::{Token, Tokenizer};
 
 use esil::parser::{Parse, Parser};
-use esil::lexer::{Token, Tokenizer};
+use frontend::instruction_analyzer::{InstructionAnalyzer, X86_CS_IA, IOperand};
 
 use middle::ir::{self, MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
 use middle::ssa::graph_traits::Graph;
+use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
+use petgraph::graph::NodeIndex;
+
+use r2api::structs::{LOpInfo, LRegInfo};
+
+use regex::Regex;
+use std::{fmt, cmp, u64};
+use std::collections::HashMap;
 
 pub type VarId = usize;
 
@@ -34,10 +37,9 @@ const TRUE_EDGE: u8 = 1;
 const UNCOND_EDGE: u8 = 2;
 
 pub struct SSAConstruct<'a, T>
-    where T: 'a + Clone + fmt::Debug + SSAExtra +
-        SSAMod<BBInfo = MAddress,
-                ActionRef = <T as Graph>::GraphNodeRef,
-                CFEdgeRef = <T as Graph>::GraphEdgeRef>
+    where T: 'a + Clone + fmt::Debug + SSAExtra + SSAMod<BBInfo = MAddress,
+                    ActionRef = <T as Graph>::GraphNodeRef,
+                    CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
     phiplacer: PhiPlacer<'a, T>,
     regfile: SubRegisterFile,
@@ -57,10 +59,9 @@ pub struct SSAConstruct<'a, T>
 }
 
 impl<'a, T> SSAConstruct<'a, T>
-    where T: 'a + Clone + fmt::Debug + SSAExtra +
-        SSAMod<BBInfo = MAddress,
-                ActionRef = <T as Graph>::GraphNodeRef,
-                CFEdgeRef = <T as Graph>::GraphEdgeRef>
+    where T: 'a + Clone + fmt::Debug + SSAExtra + SSAMod<BBInfo = MAddress,
+                    ActionRef = <T as Graph>::GraphNodeRef,
+                    CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
     pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruct<'a, T> {
         let regfile = SubRegisterFile::new(reg_info);
@@ -123,9 +124,8 @@ impl<'a, T> SSAConstruct<'a, T>
         let ret = match *var.as_ref().expect("This cannot be `None`") {
             // Since ESIL has no concept of intermediates, the identifier spotted by parser
             // has to be a register.
-            Token::ERegister(ref name) | Token::EIdentifier(ref name) => {
-                self.phiplacer.read_register(address, name)
-            }
+            Token::ERegister(ref name) |
+            Token::EIdentifier(ref name) => self.phiplacer.read_register(address, name),
             // We arrive at this case only when we have popped an operand that we have pushed
             // into the parser. id refers to the id of the var in our intermediates table.
             Token::EEntry(ref id, _) => {
@@ -140,8 +140,10 @@ impl<'a, T> SSAConstruct<'a, T>
                 let value = address.address;
                 self.phiplacer.add_const(address, value, None)
             }
-            _ => panic!("SSAConstruct Error: Found something other than a Var as an operand to \
-                         an instruction!"),
+            _ => {
+                panic!("SSAConstruct Error: Found something other than a Var as an operand to an \
+                        instruction!")
+            }
         };
         Some(ret)
     }
@@ -164,6 +166,7 @@ impl<'a, T> SSAConstruct<'a, T>
             None
         }
     }
+
 
     fn process_op(&mut self,
                   token: &Token,
@@ -193,12 +196,8 @@ impl<'a, T> SSAConstruct<'a, T>
                 let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(result_size));
                 (op, vt)
             }
-            Token::ELt => {
-                (MOpcode::OpLt, ValueInfo::new_scalar(ir::WidthSpec::Known(1)))
-            }
-            Token::EGt => {
-                (MOpcode::OpGt, ValueInfo::new_scalar(ir::WidthSpec::Known(1)))
-            }
+            Token::ELt => (MOpcode::OpLt, ValueInfo::new_scalar(ir::WidthSpec::Known(1))),
+            Token::EGt => (MOpcode::OpGt, ValueInfo::new_scalar(ir::WidthSpec::Known(1))),
             Token::EEq => {
                 // This case is the only one that performs a write_register call. Since all
                 // assignements in ESIL are only possible to registers, it is reasonable to
@@ -213,33 +212,45 @@ impl<'a, T> SSAConstruct<'a, T>
                         // case, we add a new block and label it unresolved. This maybe resolved as
                         // a part of some other analysis. Right now, the only targets we can
                         // determine are the ones where the rhs is a constant.
-                        if let Some(Token::EConstant(target)) = operands[1] { // Direct/known CF tranfer
+                        if let Some(Token::EConstant(target)) = operands[1] {
+                            // Direct/known CF tranfer
                             let target_addr = MAddress::new(target, 0);
                             self.phiplacer
                                 .add_block(target_addr, Some(*address), Some(UNCOND_EDGE));
                             self.needs_new_block = true;
-                        } else { // Indirect CF transfer
+                        } else {
+                            // Indirect CF transfer
                             if let Some(ref jump_idx) = rhs {
                                 self.phiplacer.add_indirect_cf(jump_idx, address, UNCOND_EDGE);
                                 // Next instruction should begin in a new block
                                 self.needs_new_block = true;
                             } else {
-                                radeco_warn!("Found a indirect jump without a corresponding target expression");
+                                radeco_warn!("Found a indirect jump without a corresponding \
+                                              target expression");
                             }
                         }
                     } else {
                         // We are writing into a register.
-                        self.phiplacer.write_register(address, name, rhs.expect("rhs for EEq cannot be `None`"));
+                        self.phiplacer.write_register(address,
+                                                      name,
+                                                      rhs.expect("rhs for EEq cannot be `None`"));
                     }
                 } else {
                     // This means that we're performing a memory write. So we need to emit an
                     // OpStore operation.
                     radeco_trace!("Memory Write");
-                    let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
-                                                        address,
-                                                        ValueInfo::new_scalar(ir::WidthSpec::Known(0)));
-                    self.phiplacer.op_use(&op_node, 0, lhs.as_ref().expect("`addr` of `MemoryWrite` cannot be `None`"));
-                    self.phiplacer.op_use(&op_node, 1, rhs.as_ref().expect("`value` of `MemoryWrite` cannot be `None`"));
+                    let op_node = self.phiplacer
+                        .add_op(&MOpcode::OpStore,
+                                address,
+                                ValueInfo::new_scalar(ir::WidthSpec::Known(0)));
+                    self.phiplacer.op_use(&op_node,
+                                          0,
+                                          lhs.as_ref()
+                                              .expect("`addr` of `MemoryWrite` cannot be `None`"));
+                    self.phiplacer.op_use(&op_node,
+                                          1,
+                                          rhs.as_ref()
+                                              .expect("`value` of `MemoryWrite` cannot be `None`"));
                 }
                 return None;
             }
@@ -257,10 +268,9 @@ impl<'a, T> SSAConstruct<'a, T>
                 // Hence: 0 -> compare statement. 1 -> T. 2 -> F.
                 let true_address = MAddress::new(address.address, address.offset + 1);
                 let _true_block = self.phiplacer
-                                      .add_block(true_address, Some(*address), Some(TRUE_EDGE));
-                let true_comment = self.phiplacer.add_comment(*address,
-                                                              scalar!(0),
-                                                              format!("T: {}", true_address));
+                    .add_block(true_address, Some(*address), Some(TRUE_EDGE));
+                let true_comment = self.phiplacer
+                    .add_comment(*address, scalar!(0), format!("T: {}", true_address));
                 self.phiplacer.op_use(&op_node, 0, lhs.as_ref().expect("lhs cannot be `None`"));
                 self.phiplacer.op_use(&op_node, 1, &true_comment);
                 return None;
@@ -308,9 +318,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 // TODO: rhs has to be cast to size 'n' if it's size is not already n.
                 let mem_id = self.mem_id();
                 let mem = self.phiplacer.read_variable(address, mem_id);
-                let op_node = self.phiplacer.add_op(&MOpcode::OpStore,
-                                                    address,
-                                                    scalar!(0));
+                let op_node = self.phiplacer.add_op(&MOpcode::OpStore, address, scalar!(0));
 
                 self.phiplacer.op_use(&op_node, 0, &mem);
                 self.phiplacer.op_use(&op_node, 1, lhs.as_ref().expect("lhs cannot be `None`"));
@@ -322,23 +330,18 @@ impl<'a, T> SSAConstruct<'a, T>
             Token::EPeek(n) => {
                 let mem_id = self.mem_id();
                 let mem = self.phiplacer.read_variable(address, self.mem_id);
-                let op_node = self.phiplacer.add_op(&MOpcode::OpLoad,
-                                                    address,
-                                                    ValueInfo::new_unresolved(ir::WidthSpec::from(n as u16)));
-                
+                let op_node = self.phiplacer
+                    .add_op(&MOpcode::OpLoad,
+                            address,
+                            ValueInfo::new_unresolved(ir::WidthSpec::from(n as u16)));
+
                 self.phiplacer.op_use(&op_node, 0, &mem);
                 self.phiplacer.op_use(&op_node, 1, lhs.as_ref().expect("lhs cannot be `None`"));
                 return Some(op_node);
             }
-            Token::EPop => {
-                unreachable!()
-            }
-            Token::EGoto => {
-                unimplemented!()
-            }
-            Token::EBreak => {
-                unimplemented!()
-            }
+            Token::EPop => unreachable!(),
+            Token::EGoto => unimplemented!(),
+            Token::EBreak => unimplemented!(),
             Token::EEndIf | Token::ENop => {
                 return None;
             }
@@ -348,7 +351,6 @@ impl<'a, T> SSAConstruct<'a, T>
             // missing just
             // one or two instructions.
             _ => {
-                println!("{:?}", token);
                 unimplemented!();
             }
         };
@@ -359,7 +361,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 cmp::Ordering::Greater => {
                     let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(lhs_size));
                     let casted_rhs = self.phiplacer
-                                         .add_op(&MOpcode::OpZeroExt(lhs_size), address, vt);
+                        .add_op(&MOpcode::OpZeroExt(lhs_size), address, vt);
                     self.phiplacer.op_use(&casted_rhs, 0, rhs.as_ref().expect(""));
                     self.phiplacer.propagate_reginfo(&casted_rhs);
                     (lhs.expect("lhs cannot be `None`"), casted_rhs)
@@ -367,14 +369,13 @@ impl<'a, T> SSAConstruct<'a, T>
                 cmp::Ordering::Less => {
                     let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(rhs_size));
                     let casted_lhs = self.phiplacer
-                                         .add_op(&MOpcode::OpZeroExt(rhs_size), address, vt);
-                    self.phiplacer.op_use(&casted_lhs, 0, lhs.as_ref().expect("lhs cannot be `None`"));
+                        .add_op(&MOpcode::OpZeroExt(rhs_size), address, vt);
+                    self.phiplacer
+                        .op_use(&casted_lhs, 0, lhs.as_ref().expect("lhs cannot be `None`"));
                     self.phiplacer.propagate_reginfo(&casted_lhs);
                     (casted_lhs, rhs.expect(""))
                 }
-                cmp::Ordering::Equal => {
-                    (lhs.expect(""), rhs.expect(""))
-                }
+                cmp::Ordering::Equal => (lhs.expect(""), rhs.expect("")),
             };
             let op_node_ = self.phiplacer.add_op(&op, address, vt);
             self.phiplacer.op_use(&op_node_, 0, &lhs);
@@ -408,9 +409,8 @@ impl<'a, T> SSAConstruct<'a, T>
             // Insert "mem" pseudo variable
             let reglen = self.regfile.whole_names.len();
             self.set_mem_id(reglen as u64);
-            let mem_comment = self.phiplacer.add_comment(start_address,
-                                                         scalar!(0),
-                                                         "mem".to_owned());
+            let mem_comment = self.phiplacer
+                .add_comment(start_address, scalar!(0), "mem".to_owned());
             let mem_id = self.mem_id();
             self.phiplacer.write_variable(start_address, mem_id, mem_comment);
         }
@@ -465,9 +465,8 @@ impl<'a, T> SSAConstruct<'a, T>
             while let Some(ref node) = self.nesting.pop() {
                 let src_address = node.1;
                 let src_node = &node.0;
-                let false_comment = self.phiplacer.add_comment(src_address,
-                                                               scalar!(0),
-                                                               format!("F: {}", current_address));
+                let false_comment = self.phiplacer
+                    .add_comment(src_address, scalar!(0), format!("F: {}", current_address));
                 self.phiplacer.add_block(current_address, Some(src_address), Some(FALSE_EDGE));
                 self.phiplacer.op_use(src_node, 2, &false_comment);
             }
@@ -479,20 +478,24 @@ impl<'a, T> SSAConstruct<'a, T>
             if let Some(ref ty) = op.optype {
                 if ty == "call" {
                     let unknown_str = "unknown".to_owned();
-                    let call_operand = self.phiplacer.add_comment(current_address,
-                                                                  scalar!(0),
-                                                                  op.opcode.clone().unwrap_or(unknown_str));
-                    let op_call = self.phiplacer.add_op(&MOpcode::OpCall,
-                                                        &mut current_address,
-                                                        scalar!(0));
+                    let call_operand =
+                        self.phiplacer.add_comment(current_address,
+                                                   scalar!(0),
+                                                   op.opcode.clone().unwrap_or(unknown_str));
+                    let op_call = self.phiplacer
+                        .add_op(&MOpcode::OpCall, &mut current_address, scalar!(0));
                     // Since we cannot reason about call, a safe assumption is that it reads and
                     // writes every register.
                     for (i, reg) in self.regfile.whole_names.iter().enumerate() {
                         let rnode = self.phiplacer.read_register(&mut current_address, reg);
                         self.phiplacer.op_use(&op_call, (i + 1) as u8, &rnode);
                         let new_register_comment = format!("{}@{}", reg, current_address);
-                        let width = self.regfile.whole_registers.get(i).expect("Unable to find register with index");
-                        let comment_node = self.phiplacer.add_comment(current_address, *width, new_register_comment);
+                        let width = self.regfile
+                            .whole_registers
+                            .get(i)
+                            .expect("Unable to find register with index");
+                        let comment_node = self.phiplacer
+                            .add_comment(current_address, *width, new_register_comment);
                         self.phiplacer.write_register(&mut current_address, reg, comment_node);
                         self.phiplacer.op_use(&comment_node, i as u8, &op_call);
                     }
@@ -506,12 +509,23 @@ impl<'a, T> SSAConstruct<'a, T>
             // Some overrides as we do not support all esil and don't want to panic.
             let overrides = &["GOTO", "TRAP", "$", "TODO", "REPEAT"];
             if esil_str.split(",").any(|x| overrides.contains(&x)) {
-                // Do something else other than asking the parser
-                let err_instr = "ERR OPCODE".to_owned();
-                let instr = op.opcode.as_ref().unwrap_or(&err_instr);
-                let width = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
-                let comment = self.phiplacer.add_comment(current_address, width, instr.clone());
-                // Do not pass the instruction into the parser. Skip and continue.
+                // Do something else other than asking the parserS
+                lazy_static! {
+                    static ref OPRE: Regex = Regex::new(r"[[:xdigit:]][[:xdigit:]]")
+                                                   .expect("Unable to compile regex");
+                }
+
+                let byte_str = op.bytes.as_ref().expect("Invalid bytes for instruction");
+                let bytes = OPRE.captures_iter(byte_str.as_str())
+                    .map(|cap| u8::from_str_radix(&cap[0], 16).expect("Cannot Fail"))
+                    .collect::<Vec<u8>>();
+
+                // TODO/XXX:
+                // This needs to be selected based on the current arch
+                let ia = X86_CS_IA::new(bytes).expect("Unable to instantiate IA");
+
+                self.process_custom(&ia, &mut current_address);
+
                 continue;
             }
 
@@ -526,25 +540,168 @@ impl<'a, T> SSAConstruct<'a, T>
                 current_address.offset += 1;
             }
         }
-        // BUG: The last block may not have the biggest address, which means current_address 
+        // BUG: The last block may not have the biggest address, which means current_address
         // may be not in the last basic block
         // self.phiplacer.add_edge(current_address, MAddress::new(u64::MAX, 0), UNCOND_EDGE);
         self.phiplacer.gather_exits();
         self.phiplacer.finish();
     }
+
+    fn process_memory_op(&mut self,
+                         base: &Option<String>,
+                         index: &Option<String>,
+                         scale: i32,
+                         disp: i64,
+                         addr: &mut MAddress) -> T::ValueRef {
+
+        let base_node = if let Some(ref reg) = *base {
+            self.process_in(&Some(Token::ERegister(reg.clone())), addr)
+        } else {
+            None
+        };
+
+        let index_node = if let Some(ref reg) = *index {
+            // Mulitply the index by the scale and return the resulting node
+            //    <index> '*' <scale>
+            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr).expect("Invalid op");
+            // TODO: s/64/default op size/
+            let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(64));
+            let mult_node = self.phiplacer.add_op(&MOpcode::OpMul, addr, vt);
+            // Make a node for the scale
+            let scale_node = self.phiplacer.add_const(addr, scale as u64, None);
+            self.phiplacer.op_use(&mult_node, 0, &reg_node);
+            self.phiplacer.op_use(&mult_node, 1, &scale_node);
+            Some(mult_node)
+        } else {
+            None
+        };
+
+        let disp_node = if disp != 0 {
+            Some(self.phiplacer.add_const(addr, disp as u64, None))
+        } else {
+            None
+        };
+
+        // Fold them into a single expression that describes the address
+        let mut res = None;
+        for nd in &[base_node, index_node, disp_node] {
+            res = match (res, *nd) {
+                (Some(ref o1), Some(ref o2)) => {
+                    // Join by a '+'
+                    let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(64));
+                    let add_node = self.phiplacer.add_op(&MOpcode::OpAdd, addr, vt);
+                    self.phiplacer.op_use(&add_node, 0, o1);
+                    self.phiplacer.op_use(&add_node, 1, o2);
+                    Some(add_node)
+                },
+                (None, Some(ref o2)) => {
+                    *nd
+                },
+                (_, _) => res,
+            }
+        }
+
+        res.expect("Address is `None`")
+    }
+
+
+    fn process_custom<IA: InstructionAnalyzer>(&mut self, ia: &IA, addr: &mut MAddress) {
+        let mnemonic = ia.mnemonic().clone();
+        let opcode = MOpcode::OpCustom(mnemonic.into_owned());
+        let vt = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
+
+        let custom_opnode = self.phiplacer.add_op(&opcode, addr, vt);
+        let mut opidx: u8 = 0;
+
+        let reg_r = ia.registers_read().iter().map(|&x| if let &IOperand::Register(ref s) = x {
+            let tok = Token::ERegister(s.clone());
+            self.process_in(&Some(tok), addr)
+        } else{
+            None
+        }).filter(|x| x.is_some()).collect::<Vec<_>>();
+
+        // Use read registers as arguments
+        for (i, reg) in reg_r.iter().enumerate() {
+            if let &Some(ref reg_node) = reg {
+                self.phiplacer.op_use(&custom_opnode, i as u8, reg_node);
+            }
+        }
+
+        opidx = reg_r.len() as u8;
+
+        let reg_w = ia.registers_written().iter().map(|&x| if let &IOperand::Register(ref s) = x {
+            Some(s)
+        } else{
+            None
+        }).filter(|x| x.is_some()).collect::<Vec<_>>();
+
+        // Write out modified variables
+        for reg in &reg_w {
+            if let Some(ref rname) = *reg {
+                self.phiplacer.write_register(addr, rname, custom_opnode);
+            }
+        }
+
+        if ia.has_memory_operand() {
+            // <addr> in represented in mem_op, need to extract the mib.
+            // base + index*scale +- disp
+            let (opcode, maddr) = if let Some(mem_op) = ia.memory_written() {
+                // Insert a store
+                let st = MOpcode::OpStore;
+                let addr = if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } = mem_op {
+                    self.process_memory_op(base, index, *scale, *disp, addr)
+                } else {
+                    unreachable!()
+                };
+                (st, addr)
+            } else if let Some(mem_op) = ia.memory_read() {
+                // Insert load
+                let ld = MOpcode::OpLoad;
+                let addr = if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } = mem_op {
+                    self.process_memory_op(base, index, *scale, *disp, addr)
+                } else {
+                    unreachable!()
+                };
+                (ld, addr)
+            } else {
+                // Memory has to be a load or a store operation, cannot be anything else
+                unreachable!()
+            };
+
+            let mem_op = self.phiplacer.add_op(&opcode, addr, vt);
+            let mem_id = self.mem_id();
+            let mem = self.phiplacer.read_variable(addr, self.mem_id);
+
+            // Op[Load/Store](mem, addr)
+            self.phiplacer.op_use(&mem_op, 0, &mem);
+            self.phiplacer.op_use(&mem_op, 1, &maddr);
+            
+            // Do some additional handling, such as associating the written value,
+            // creating new instance of memory etc.
+            if opcode == MOpcode::OpStore {
+                self.phiplacer.op_use(&mem_op, 2, &custom_opnode);
+                // New instance of memory
+                self.phiplacer.write_variable(*addr, self.mem_id, mem_op);
+            } else {
+                // Use memory load in the custom_opnode
+                self.phiplacer.op_use(&custom_opnode, opidx, &mem_op);
+            }
+        }
+    }
+
 } // end impl SSAConstruct
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use analysis::sccp;
+    use middle::{dot, dce};
+    use middle::ir_writer::IRWriter;
+    use middle::ssa::ssastorage::SSAStorage;
+    use r2api::structs::{LFunctionInfo, LRegInfo};
+    use serde_json;
     use std::fs::File;
     use std::io::prelude::*;
-    use serde_json;
-    use r2api::structs::{LFunctionInfo, LRegInfo};
-    use middle::ssa::ssastorage::SSAStorage;
-    use middle::ir_writer::IRWriter;
-    use middle::{dot, dce};
-    use analysis::sccp;
+    use super::*;
 
 
     const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
@@ -566,7 +723,9 @@ mod test {
     fn ssa_simple_test_1() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "test_files/tiny_sccp_test_instructions.json");
+        before_test(&mut reg_profile,
+                    &mut instructions,
+                    "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
@@ -584,7 +743,9 @@ mod test {
     fn ssa_const_prop_test_1() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "test_files/tiny_sccp_test_instructions.json");
+        before_test(&mut reg_profile,
+                    &mut instructions,
+                    "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
@@ -610,7 +771,9 @@ mod test {
     fn ssa_bfs_walk() {
         let mut reg_profile = Default::default();
         let mut instructions = Default::default();
-        before_test(&mut reg_profile, &mut instructions, "test_files/tiny_sccp_test_instructions.json");
+        before_test(&mut reg_profile,
+                    &mut instructions,
+                    "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
