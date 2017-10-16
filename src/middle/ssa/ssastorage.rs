@@ -786,28 +786,30 @@ impl SSA for SSAStorage {
     }
 
     fn node_data(&self, i: Self::ValueRef) -> Result<TNodeData, Box<Debug>> {
-        match self.g[i] {
-            NodeData::Op(ref opc, vt) => Ok(TNodeData {
+
+        match self.g.node_weight(i) {
+            Some(&NodeData::Op(ref opc, vt)) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Op(opc.clone()),
             }),
-            NodeData::Phi(vt, _) => Ok(TNodeData {
+            Some(&NodeData::Phi(vt, _)) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Phi,
             }),
-            NodeData::Comment(vt, ref s) => Ok(TNodeData {
+            Some(&NodeData::Comment(vt, ref s)) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Comment(s.clone()),
             }),
-            NodeData::Undefined(vt) => Ok(TNodeData {
+            Some(&NodeData::Undefined(vt)) => Ok(TNodeData {
                 vt: vt,
                 nt: TNodeType::Undefined,
             }),
-            NodeData::Removed |
-            NodeData::Unreachable |
-            NodeData::BasicBlock(_) |
-            NodeData::DynamicAction |
-            NodeData::RegisterState => Err(Box::new(self.g[i].clone())),
+            Some(&NodeData::Removed) |
+            Some(&NodeData::Unreachable) |
+            Some(&NodeData::BasicBlock(_)) |
+            Some(&NodeData::DynamicAction) |
+            Some(&NodeData::RegisterState) => Err(Box::new(self.g[i].clone())),
+            None => Err(Box::new("Invalid Node Index")),
         }
     }
 

@@ -6,6 +6,16 @@
 // except according to those terms.
 
 //! Structs, Strings and Enums to support trace logging of radeco
+//!
+//! To enable logging support, compile the library with
+//! the `trace_lgo` features, i.e.
+//! `cargo build --features trace_log`
+//!
+//! The consumer should also import `env_logger` and `log` crates
+//! and initialize `env_logger` though:
+//! `env_logger::init()`
+//!
+//! Check minidec/main.rs for an example of the same
 
 use std::fmt::Debug;
 use log::{self, LogLevel, LogMetadata, LogRecord, SetLoggerError};
@@ -76,12 +86,12 @@ impl<'a, T: Debug> ToString for Event<'a, T> {
 macro_rules! radeco_trace {
     ($t: expr) => ({
         if cfg!(feature = "trace_log") {
-            trace!("{}", $t.to_string());
+            debug!("{}", $t.to_string());
         }
     });
     ($fmt:expr, $($arg:tt)*) => ({
         if cfg!(feature = "trace_log") {
-            trace!("{}", format_args!($fmt, $($arg)*));
+            debug!("{}", format_args!($fmt, $($arg)*));
         }
     });
 }
@@ -98,57 +108,4 @@ macro_rules! radeco_warn {
             warn!("{}", format_args!($fmt, $($arg)*));
         }
     });
-}
-
-
-/// Support for consumers to use logger.
-#[derive(Debug)]
-pub struct RadecoLogger<T: AsRef<Path>> {
-    f: Option<T>,
-    level: LogLevel,
-}
-
-impl<T: AsRef<Path> + Send + Sync> log::Log for RadecoLogger<T> {
-    fn enabled(&self, metadata: &LogMetadata) -> bool {
-        metadata.level() <= self.level
-    }
-
-    fn log(&self, record: &LogRecord) {
-        if self.enabled(record.metadata()) {
-            let fmt = format!("{}|{}:{} -> {}\n",
-                              record.level(),
-                              record.location().file(),
-                              record.location().line(),
-                              record.args());
-            if let Some(ref fname) = self.f {
-                let mut f = OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open(fname.as_ref())
-                                .expect("Unable to open log file");
-                f.write_all(fmt.as_bytes()).expect("Write failed");
-            } else {
-                println!("{}", fmt);
-            }
-        }
-    }
-}
-
-pub fn logger_init<T>(f: Option<T>, level: Option<LogLevel>) -> Result<(), SetLoggerError>
-where T: 'static + AsRef<Path> + Send + Sync + Clone {
-    log::set_logger(|max_log_level| {
-        max_log_level.set(level.as_ref().unwrap_or(&LogLevel::Trace).to_log_level_filter());
-        Box::new(RadecoLogger {
-            f: f,
-            level: level.unwrap_or(LogLevel::Trace),
-        })
-    })
-}
-
-#[macro_export]
-macro_rules! enable_logging {
-    () => ($crate::utils::logger::logger_init::<String>(None, None).expect("Logger Init Failed"));
-    ($f: expr) => ($crate::utils::logger::logger_init(Some($f), None).expect("Logger Init Failed"));
-    ($f: expr, $l: expr) => ($crate::utils::logger::logger_init($f, $l).expect("Logger Init Failed"));
-    (stdout $l: expr) => ($crate::utils::logger::logger_init::<String>(None, Some($l)).expect("Logger Init Failed"));
 }
