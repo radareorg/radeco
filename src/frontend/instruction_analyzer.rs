@@ -1,10 +1,14 @@
-//! Module that provides some instruction level analysis
+//! Implements Instruction-level analysis used for lifting when information from radare2 is
+//! insufficient.
+//!
+//! Instruction analysis may be abbreviated as `IA`
 use std::borrow::Cow;
-use capstone_rust::capstone as cs;
 
+use capstone_rust::capstone as cs;
 
 // TODO: Register must be replaced by Register information from arch-rs.
 // This will be a part of a bigger rewrite/refactor.
+/// Describes operands for an instruction
 #[derive(Debug, Clone)]
 pub enum IOperand {
     Register(String),
@@ -17,8 +21,10 @@ pub enum IOperand {
         disp: i64,
     },
     Other,
+    Invalid,
 }
 
+/// Holds analysis information for a single instruction
 #[derive(Debug, Clone, Default)]
 pub struct InstructionInfo {
     mnemonic: Cow<'static, str>,
@@ -26,13 +32,22 @@ pub struct InstructionInfo {
     writes: Vec<IOperand>,
 }
 
-// Can be something more complicated later
-pub type IAError = &'static str;
+/// Errors from Instruction-level Analysis
+pub type IAError = Cow<'static, str>;
 
+/// Trait for a struct to be an Instruction-level analyzer
 pub trait InstructionAnalyzer: Sized {
+    /// Construct the IA
     fn new(bytes: Vec<u8>) -> Result<Self, IAError>;
+
+    /// Return analyzed information
     fn info(&self) -> Result<&InstructionInfo, IAError>;
 
+    fn mnemonic(&self) -> &Cow<'static, str> {
+        &self.info().expect("Unable to get InstructionInfo").mnemonic
+    }
+    
+    /// Return a `Vec` of registers that are read by this instruction
     fn registers_read(&self) -> Vec<&IOperand> {
         self.info().expect("Unable to get InstructionInfo").reads.iter().filter(|&x| match x {
             &IOperand::Register(_) => true,
@@ -40,6 +55,7 @@ pub trait InstructionAnalyzer: Sized {
         }).collect()
     }
 
+    /// Return a `Vec` of registers that are written to by this instruction
     fn registers_written(&self) -> Vec<&IOperand> {
         self.info().expect("Unable to get InstructionInfo").writes.iter().filter(|&x| match x {
             &IOperand::Register(_) => true,
@@ -47,20 +63,27 @@ pub trait InstructionAnalyzer: Sized {
         }).collect()
     }
 
-    fn is_memory_read(&self) -> bool {
+    fn has_memory_operand(&self) -> bool {
+        self.has_memory_read() || self.has_memory_written()
+    }
+
+    /// Return if this instruction reads from memory
+    fn has_memory_read(&self) -> bool {
         self.info().expect("Unable to get InstructionInfo").reads.iter().any(|x| match x { 
             &IOperand::Memory { base: _, index: _, scale: _, disp: _ } => true,
             _ => false,
         })
     }
 
-    fn is_memory_written(&self) -> bool {
+    /// Return if this instruction writes to memory
+    fn has_memory_written(&self) -> bool {
         self.info().expect("Unable to get InstructionInfo").writes.iter().any(|x| match x { 
             &IOperand::Memory { base: _, index: _, scale: _, disp: _ } => true,
             _ => false,
         })
     }
 
+    /// Returns memory written to by the instruction, in standard sib form
     fn memory_written(&self) -> Option<&IOperand> {
         self.info().expect("Unable to get InstructionInfo").writes.iter().find(|&x| match x {
             &IOperand::Memory { base: _, index: _, scale: _, disp: _ } => true,
@@ -68,6 +91,7 @@ pub trait InstructionAnalyzer: Sized {
         })
     }
 
+    /// Returns memory read by the instruction, in standard sib form
     fn memory_read(&self) -> Option<&IOperand> {
         self.info().expect("Unable to get InstructionInfo").reads.iter().find(|&x| match x {
             &IOperand::Memory { base: _, index: _, scale: _, disp: _ } => true,
@@ -76,12 +100,18 @@ pub trait InstructionAnalyzer: Sized {
     }
 }
 
-// Capstone-based x86 instruction analyzer
+/// Capstone-based x86 instruction analyzer
 pub struct X86_CS_IA {
     bytes: Vec<u8>,
     cs: cs::Capstone,
     info: InstructionInfo,
 }
+
+//impl From<cs::CsErr> for IAError {
+    //fn from(err: cs::CsErr) -> IAError {
+        //Cow::from(err.to_string())
+    //}
+//}
 
 impl X86_CS_IA {
 
@@ -90,7 +120,11 @@ impl X86_CS_IA {
     }
 
     fn analyze(&mut self) -> Result<(), IAError> {
-        let buf = self.cs.disasm(self.bytes.as_slice(), 0x100, 0).unwrap();
+        // Disassembly exactly one instruction
+        let buf = match self.cs.disasm(self.bytes.as_slice(), 0x0, 1) {
+            Ok(d) => d,
+            Err(e) => return Err(Cow::from(e.to_string())),
+        };
 
         for instr in buf.iter() {
             // TODO: Look into prefixes for opcode.
@@ -104,8 +138,11 @@ impl X86_CS_IA {
                     let iop: IOperand = match op.type_ {
                         cs::x86_op_type::X86_OP_REG => {
                             let reg: cs::x86_reg = op.reg();
-                            let reg_name = self.reg_name(reg.as_int()).expect("");
-                            IOperand::Register(reg_name)
+                            if let Some(reg_name) = self.reg_name(reg.as_int()) {
+                                IOperand::Register(reg_name)
+                            } else {
+                                IOperand::Invalid
+                            }
                         },
                         cs::x86_op_type::X86_OP_MEM => {
                             let mem: &cs::x86_op_mem = op.mem();
