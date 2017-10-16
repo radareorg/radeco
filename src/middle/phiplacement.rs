@@ -830,14 +830,19 @@ impl<'a, T> PhiPlacer<'a, T>
         // For OpAnd/OpOr, OpLsl, only their first operand coule be register;
         // For Phi node, their operations have the same reginfo;
         // Thus, choosing the first operand is enough. 
+
+        // No arguments, nothing to do.
+        if args.len() == 0 {
+            return;
+        }
+
         let regnames = self.ssa.registers(args[0]);
         if !regnames.is_empty() {
             for regname in &regnames {
                 self.ssa.set_register(node.clone(), regname.clone());
                 // Check whether its child nodes are incomplete 
             }
-            let users = self.ssa.uses_of(*node);
-            for user in users {
+            for user in self.ssa.uses_of(*node) {
                 if let Some(victim) = self.incomplete_propagation.take(&user) {
                     self.propagate_reginfo(&victim);
                 }            

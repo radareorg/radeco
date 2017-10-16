@@ -51,7 +51,10 @@ extern crate petgraph;
 extern crate serde_json;
 extern crate num;
 #[macro_use] extern crate lazy_static;
+
 #[macro_use] extern crate log;
+extern crate env_logger;
+
 extern crate r2pipe;
 extern crate r2api;
 

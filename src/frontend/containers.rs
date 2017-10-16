@@ -1,20 +1,20 @@
 //! Defines `Module` and `Function` that act as containers.
 
-use std::collections::{BTreeSet, HashMap};
-use std::{thread, fmt, sync, hash};
-
-use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
-
-use petgraph::graph::NodeIndex;
+use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
 
 use frontend::source::Source;
 use frontend::ssaconstructor::SSAConstruct;
-use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
-use middle::regfile::SubRegisterFile;
-use middle::ssa::ssastorage::{SSAStorage, Walker};
-use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
-use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
+use middle::regfile::SubRegisterFile;
+use middle::ssa::cfg_traits::CFG;
+use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
+use middle::ssa::ssastorage::{SSAStorage, Walker};
+
+use petgraph::graph::NodeIndex;
+
+use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
+use std::{thread, fmt, sync, hash};
+use std::collections::{BTreeSet, HashMap};
 
 pub struct RadecoModule<'a, F: RFunction> {
     pub functions: HashMap<u64, F>,
@@ -75,7 +75,10 @@ pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<us
     pub ctx_translate: HashMap<Idx, Idx>,
 }
 
-impl<Idx, S> CallContext<Idx, S> where Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>, S: fmt::Debug + Clone {
+impl<Idx, S> CallContext<Idx, S>
+    where Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>,
+          S: fmt::Debug + Clone
+{
     pub fn new(caller: Option<u64>,
                callee: Option<u64>,
                call_site: Option<u64>,
@@ -124,40 +127,38 @@ fn ssa_single_fn(f: &FunctionInfo,
                  instructions: Vec<LOpInfo>,
                  offset: u64)
                  -> DefaultFnTy {
+    radeco_trace!("Construction SSA for: {:?}", f.name);
     let mut rfn = RadecoFunction::construct(reg_info, instructions);
     rfn.name = f.name.as_ref().unwrap().clone();
     if let Some(ref callrefs) = f.callrefs {
         rfn.call_ctx = callrefs.iter()
-                               .filter(|x| {
-                                   match x.call_type {
-                                       Some(ref c) if c == "C" => true,
-                                       _ => false,
-                                   }
-                               })
-                               .map(|x| {
-                                   let call_site = x.source;
-                                   let callee = x.target;
-                                   let caller = Some(offset);
-                                   CallContext::<usize, NodeIndex>::new(caller,
-                                                                        callee,
-                                                                        call_site,
-                                                                        &[])
-                               })
-                               .collect();
+            .filter(|x| {
+                match x.call_type {
+                    Some(ref c) if c == "C" => true,
+                    _ => false,
+                }
+            })
+            .map(|x| {
+                let call_site = x.source;
+                let callee = x.target;
+                let caller = Some(offset);
+                CallContext::<usize, NodeIndex>::new(caller, callee, call_site, &[])
+            })
+            .collect();
     }
 
     if let Some(ref callxrefs) = f.codexrefs {
         rfn.callxrefs = callxrefs.iter()
-                                 .filter(|x| {
-                                     match x.call_type {
-                                         Some(ref c) if c == "C" => true,
-                                         _ => false,
-                                     }
-                                 })
-                                 .map(|x| x.source.expect("Invalid address"))
-                                 .collect::<BTreeSet<_>>()
-                                 .into_iter()
-                                 .collect();
+            .filter(|x| {
+                match x.call_type {
+                    Some(ref c) if c == "C" => true,
+                    _ => false,
+                }
+            })
+            .map(|x| x.source.expect("Invalid address"))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
     }
     rfn
 }
@@ -170,11 +171,8 @@ fn ssa_single_fn(f: &FunctionInfo,
 // as an argument rather than an integer constant (address of the callee). This function iterates
 // through all such call sites and fixes this information.
 fn fix_call_info(rfn: &mut DefaultFnTy) {
-    let mut call_info = rfn.call_ctx
-                           .iter()
-                           .cloned()
-                           .map(|x| (x.call_site.unwrap(), x))
-                           .collect::<HashMap<_, _>>();
+    let mut call_info =
+        rfn.call_ctx.iter().cloned().map(|x| (x.call_site.unwrap(), x)).collect::<HashMap<_, _>>();
     {
         let caller = rfn.offset;
         let ssa = rfn.ssa_mut();
@@ -182,13 +180,12 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
             if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.node_data(node).map(|x| x.nt) {
                 // Fixup the call by converting a comment to a proper argument.
                 let call_node = &node;
-                let call_site = ssa.address(*call_node)
-                                    .expect("No address information found")
-                                    .address;
+                let call_site =
+                    ssa.address(*call_node).expect("No address information found").address;
                 if let Some(info) = call_info.get_mut(&call_site) {
                     if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
                         let target_node = ssa.insert_const(info.callee.unwrap())
-                                                .expect("Cannot insert new constants");
+                            .expect("Cannot insert new constants");
                         ssa.op_unuse(*call_node, *arg_node);
                         ssa.op_use(*call_node, 0, target_node);
                         info.ssa_ref = Some(*call_node);
@@ -198,7 +195,7 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
         }
     }
     rfn.call_ctx = call_info.into_iter().map(|x| x.1).collect();
-    radeco_trace!("{:?}", rfn.call_ctx);
+    //radeco_trace!("{:?}", rfn.call_ctx);
 }
 
 // TODO: Make this a method of SSA Soon to pretty print expression trees.
@@ -217,7 +214,7 @@ fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
 
     let len = args.len();
     for (i, arg) in args.iter().enumerate() {
-        if i == 0{
+        if i == 0 {
             result.push_str(" ")
         }
         if i < len - 1 {
@@ -258,7 +255,8 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
             while let Some(node) = wl.pop() {
                 let data = ssa.node_data(node).map(|x| x.nt);
                 match data {
-                    Ok(NodeType::Op(MOpcode::OpLoad)) | Ok(NodeType::Op(MOpcode::OpStore)) => {
+                    Ok(NodeType::Op(MOpcode::OpLoad)) |
+                    Ok(NodeType::Op(MOpcode::OpStore)) => {
                         let args = ssa.operands_of(node);
                         // If operation is a store it will produce a new memory instance. Hence,
                         // push all uses of new memory to the worklist.
@@ -266,7 +264,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                             wl.extend(&ssa.uses_of(node));
                         }
                         let mem_loc = args.get(1)
-                                          .expect("Load/Store has to have source/destination");
+                            .expect("Load/Store has to have source/destination");
                         let mut bind = if seen_l.contains_key(mem_loc) {
                             seen_l.get_mut(mem_loc).expect("This can never panic")
                         } else {
@@ -277,7 +275,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                                 seen_l.get_mut(&idx).expect("")
                             } else {
                                 if name.clone().contains("main") {
-                                    radeco_trace!("New hash inserted: {:?}", h);
+                                    //radeco_trace!("New hash inserted: {:?}", h);
                                 }
                                 hashes.insert(h, *mem_loc);
                                 let mut b = Binding::default();
@@ -302,23 +300,23 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
         rfn.bindings.insert(b.clone());
     }
 
-    //println!("Printing bindings information: {:?}", rfn.bindings);
+    // println!("Printing bindings information: {:?}", rfn.bindings);
 }
 
 fn load_datarefs(rfn: &mut DefaultFnTy, datarefs: Option<Vec<u64>>) {
-    //println!("Datarefs loaded: {:?}", datarefs);
+    // println!("Datarefs loaded: {:?}", datarefs);
     if datarefs.is_none() {
         return;
     }
     rfn.datarefs = datarefs.clone();
     let datarefs = datarefs.expect("This cannot be 'None'");
     for dataref in datarefs {
-        radeco_trace!("{:?}", dataref);
+        //radeco_trace!("{:?}", dataref);
     }
 }
 
 fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
-    //println!("Locals loaded: {:?}", locals);
+    // println!("Locals loaded: {:?}", locals);
     // TODO
     if locals.is_none() {
         return;
@@ -326,9 +324,9 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
     rfn.locals = locals.clone();
     let locals = locals.expect("This cannot be `None`");
     for l in locals {
-        //println!("[z] Local loaded: {:?}", l);
+        // println!("[z] Local loaded: {:?}", l);
         let reference = l.reference.unwrap();
-        radeco_trace!("{:?} {:?}", reference.base, reference.offset);
+        //radeco_trace!("{:?} {:?}", reference.base, reference.offset);
     }
 }
 
@@ -350,13 +348,13 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                 // TODO: Still keep track of these functions.
                 continue;
             }
-            radeco_trace!("Locals of {:?}: {:?}", f.name, f.locals);
+            //radeco_trace!("Locals of {:?}: {:?}", f.name, f.locals);
             let offset = f.offset.expect("Invalid offset");
             let instructions = source.instructions_at(offset);
             let tx = tx.clone();
             let reg_info = reg_info.clone();
 
-            let handle = thread::spawn(move || {
+            let handle = thread::Builder::new().name(f.name.as_ref().unwrap().to_owned()).spawn(move || {
                 let mut rfn = ssa_single_fn(&f, &reg_info, instructions, offset);
                 // Attach additional information as necessay from `FunctionInfo`.
                 {
@@ -370,17 +368,14 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                     for (i, reg) in regs.iter().enumerate() {
                         let mut bind = Binding::default();
                         bind.mark_register(rfn.ssa
-                                              .regnames
-                                              .get(i)
-                                              .cloned()
-                                              .unwrap_or_else(String::new));
+                            .regnames
+                            .get(i)
+                            .cloned()
+                            .unwrap_or_else(String::new));
                         bind.add_refs(vec![*reg]);
-                        // Set the initial bind as register name, which may be 
+                        // Set the initial bind as register name, which may be
                         // changed after analyzed.
-                        bind.set_name(rfn.ssa.regnames
-                                             .get(i)
-                                             .cloned()
-                                             .unwrap_or_else(String::new));
+                        bind.set_name(rfn.ssa.regnames.get(i).cloned().unwrap_or_else(String::new));
                         rfn.bindings.insert(bind);
                     }
                 }
@@ -389,11 +384,11 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                 load_datarefs(&mut rfn, f.datarefs);
                 load_locals(&mut rfn, f.locals);
                 // Actually, analyze_memory should be done after VSA
-                //analyze_memory(&mut rfn);
+                // analyze_memory(&mut rfn);
                 radeco_trace!("Finished analysis of {:?}.", f.name);
                 tx.send((offset, f.name.unwrap(), rfn)).unwrap();
             });
-            handles.push(handle);
+            handles.push(handle.expect(""));
         }
 
         let mut success = 0;
@@ -424,7 +419,7 @@ impl<'a> RadecoModule<'a, DefaultFnTy> {
 
 /// Trait that defines a `Function`.
 pub trait RFunction {
-    type I: Iterator<Item=<Self::SSA as SSA>::ValueRef>;
+    type I: Iterator<Item = <Self::SSA as SSA>::ValueRef>;
     type SSA: SSAWalk<Self::I> + SSAMod + SSA;
     type B: RBindings;
 
@@ -445,8 +440,8 @@ pub trait RFunction {
     fn set_preserved(&mut self, &[<Self::B as RBindings>::Idx]);
 
     fn call_sites
-                  (&self)
-                   -> Vec<CallContext<<Self::B as RBindings>::Idx, <Self::SSA as SSA>::ValueRef>>;
+        (&self)
+         -> Vec<CallContext<<Self::B as RBindings>::Idx, <Self::SSA as SSA>::ValueRef>>;
     fn callrefs(&self) -> Vec<u64>;
     fn callxrefs(&self) -> Vec<u64>;
 
@@ -628,15 +623,15 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use frontend::source::FileSource;
     use middle::dce;
+    use super::*;
 
     #[test]
     fn module_test() {
-        //let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
-        //r2.init();
-        //let mut fsource = FileSource::from(r2);
+        // let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
+        // r2.init();
+        // let mut fsource = FileSource::from(r2);
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
         for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
@@ -647,7 +642,7 @@ mod test {
             // println!("Local Variable info: {:?}", rfn.bindings);
             // ir_write!(Some(rfn.name.clone()), &rfn.ssa, "/tmp/module_test.ir");
             // let mut writer: IRWriter = Default::default();
-            //println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
+            // println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
         }
     }
 }
