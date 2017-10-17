@@ -46,9 +46,9 @@ use middle::ssa::ssastorage::SSAStorage;
 use frontend::bindings::{Binding, RBindings, RadecoBindings};
 use frontend::source::Source;
 
-pub trait ProjectLoader {
-    fn load<T: AsRef<str>>(T, Option<ProjectOptions>) -> Result<RadecoProject, String>;
-}
+//pub trait ProjectLoader {
+    //fn load<T: AsRef<str>>(T, Option<ProjectOptions>) -> Result<RadecoProject, String>;
+//}
 
 #[derive(Debug, Default)]
 pub struct ProjectOptions {
@@ -101,7 +101,7 @@ pub struct CallRefs {
     call_site_offset: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FunctionType {
     /// Function defined in the current binary
     Function,
@@ -112,7 +112,7 @@ pub enum FunctionType {
 
 pub const UNKNOWN_MODULE: u16 = 0xFFFF;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Container to store information about identified function.
 /// Used as a basic unit in intra-functional analysis.
 pub struct RadecoFunction {
@@ -133,24 +133,78 @@ pub struct RadecoFunction {
     pub name: Cow<'static, str>,
     /// Start address of the function
     pub offset: u64,
-    /// Calls to the function
-    refs: Vec<CallRefs>,
+    // Calls to the function
+    //refs: Vec<CallRefs>,
     /// Size of the function in bytes
     size: u64,
     /// Constructed SSA for the function
     ssa: SSAStorage,
-    /// Calls from the current function to other functions
-    xrefs: Vec<CallRefs>,
+    // Calls from the current function to other functions
+    //xrefs: Vec<CallRefs>,
 }
 
-#[derive(Debug)]
-/// Default project loader that uses r2 and r2pipe
-/// Implements the `ProjectLoader` trait
-pub struct R2ProjectLoader { }
+//#[derive(Debug)]
+// Default project loader that uses r2 and r2pipe
+// Implements the `ProjectLoader` trait
+//pub struct R2ProjectLoader { }
 
-#[derive(Debug)]
-/// Load a RadecoProject from formatted JSON files
-pub struct JSONProjectLoader { }
+//#[derive(Debug)]
+// Load a RadecoProject from formatted JSON files
+//pub struct JSONProjectLoader { }
+
+pub struct ProjectLoader<'a> {
+    load_libs: bool,
+    mloader: Option<ModuleLoader<'a>>,
+}
+
+pub struct ModuleLoader<'a> {
+    source: Box<Source>,
+    floader: Option<FunctionLoader<'a>>,
+    filter: Option<fn (x: RadecoFunction) -> bool>,
+}
+
+pub trait PredicatedLoader {
+    fn predicate(&self, x: &FLResult) -> bool;
+    fn strategy(&self, last: &FLResult, rmod: &RadecoModule) -> FLResult;
+}
+
+impl<T> PredicatedLoader for T
+where T: Fn (&FLResult, &RadecoModule) -> FLResult {
+    fn predicate(&self, x: &FLResult) -> bool { true }
+    fn strategy(&self, last: &FLResult, rmod: &RadecoModule) -> FLResult { 
+        self(last, rmod)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct FLResult {
+    functions: Vec<RadecoFunction>,
+    new: u32,
+}
+
+#[derive(Default)]
+pub struct FunctionLoader<'a> {
+    strategies: Vec<&'a PredicatedLoader>,
+}
+
+impl<'a> FunctionLoader<'a> {
+    pub fn strategy<'b: 'a>(mut self, strat: &'b PredicatedLoader) -> FunctionLoader<'a> {
+        self.strategies.push(strat);
+        self
+    }
+
+    // TODO: Add default strats
+    pub fn load(&mut self, rmod: &RadecoModule) -> FLResult {
+        self.strategies.iter().fold(FLResult::default(), |mut acc, f| {
+            if f.predicate(&acc) {
+                let fl = f.strategy(&acc, rmod);
+                acc.new += fl.new;
+                acc.functions.extend(fl.functions.iter().cloned());
+            }
+            acc
+        })
+    }
+}
 
 impl RadecoProject {
     pub fn new() -> RadecoProject {
@@ -236,10 +290,10 @@ impl RadecoFunction {
             is_recursive: false,
             name: Cow::from(name),
             offset: offset,
-            refs: Vec::new(),
+            //refs: Vec::new(),
             size: size,
             ssa: SSAStorage::new(),
-            xrefs: Vec::new(),
+            //xrefs: Vec::new(),
         }
     }
 
@@ -252,39 +306,72 @@ impl RadecoFunction {
     }
 }
 
-impl ProjectLoader for R2ProjectLoader {
-    fn load<T: AsRef<str>>(bin: T,
-                           options: Option<ProjectOptions>)
-        -> Result<RadecoProject, String>
-    {
-        // TODO: Parse/use option
-        let options = options.unwrap_or(ProjectOptions::default());
-        let bpath = String::from(bin.as_ref());
-        let mut r2 = R2::new(Some(bin.as_ref()))?;
-        r2.init();
-        let mut rp = RadecoProject::new();
-        rp.set_reginfo(r2.reg_info().expect("Unable to load `LRegInfo`"));
-        {
-            // TODO: Setup the project with more information,
-            // such as: arch, platform etc.
-            let mut main_mod = rp.new_module(bpath)?;
-            // TODO: Load more information such as sections, symbol table, global defines,
-            // constant strings etc.
-            main_mod.are_functions_loaded = true;
-            for function in r2.functions() {
-                let name = function.name.as_ref().unwrap();
-                let offset = function.offset.expect("Invalid offset");
-                let ref mut rfn = main_mod.new_function_at(offset)?;
-                rfn.name = Cow::from(name.to_owned());
-                rfn.ftype = if name.contains("sym.imp") {
-                    FunctionType::Import(UNKNOWN_MODULE)
-                } else {
-                    FunctionType::Function
-                };
-                let insts = r2.instructions_at(offset);
-                rfn.instructions = insts;
-            }
-        }
-        Ok(rp)
+//impl ProjectLoader for R2ProjectLoader {
+    //fn load<T: AsRef<str>>(bin: T,
+                           //options: Option<ProjectOptions>)
+        //-> Result<RadecoProject, String>
+    //{
+        //// TODO: Parse/use option
+        //let options = options.unwrap_or(ProjectOptions::default());
+        //let bpath = String::from(bin.as_ref());
+        //let mut r2 = R2::new(Some(bin.as_ref()))?;
+        //r2.init();
+        //let mut rp = RadecoProject::new();
+        //rp.set_reginfo(r2.reg_info().expect("Unable to load `LRegInfo`"));
+        //{
+            //// TODO: Setup the project with more information,
+            //// such as: arch, platform etc.
+            //let mut main_mod = rp.new_module(bpath)?;
+            //// TODO: Load more information such as sections, symbol table, global defines,
+            //// constant strings etc.
+            //main_mod.are_functions_loaded = true;
+            //for function in r2.functions() {
+                //let name = function.name.as_ref().unwrap();
+                //let offset = function.offset.expect("Invalid offset");
+                //let ref mut rfn = main_mod.new_function_at(offset)?;
+                //rfn.name = Cow::from(name.to_owned());
+                //rfn.ftype = if name.contains("sym.imp") {
+                    //FunctionType::Import(UNKNOWN_MODULE)
+                //} else {
+                    //FunctionType::Function
+                //};
+                //let insts = r2.instructions_at(offset);
+                //rfn.instructions = insts;
+            //}
+        //}
+        //Ok(rp)
+    //}
+//}
+
+// Function Loader.
+//
+// Function loader takes in a module, as a part of the module loader process
+// and chunks it down to individual functions.
+// The actual implementation of this may vary depending on the needs,
+// from simply reading off from the symbol table to performing analysis
+// to figure out function boundaries.
+// In any case, at the end of this process, the module should be broken down
+// into several functions.
+//
+// More complex loaders, example: using symbol table when available and performing
+// analysis otherwise, may be composed and built from simpler ones.
+//pub trait FunctionLoader: Sized {
+    //fn function_loader(rmod: &RadecoModule) -> Self;
+    //fn load() -> Self;
+//}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_fn_loader() {
+        let ld = |x: &FLResult, y: &RadecoModule| -> FLResult {
+            unimplemented!()
+        };
+
+        let mut fl = FunctionLoader::default();
+        fl.strategy(&ld);
     }
 }
