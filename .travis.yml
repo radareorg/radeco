@@ -1,17 +1,28 @@
 sudo: false
 dist: trusty
 language: rust
+# No environment varibles by default
+env:
 addons:
   apt:
     packages:
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
+      - binutils-dev
+      - cmake
+    sources:
+      - kalakris-cmake
 
 matrix:
   fast_finish: true
+  include:
+    - rust: stable
+      env: COVERALLS=true
   allow_failures:
     - rust: nightly
+    - env: COVERALLS=true
+
 # run builds for all the trains (and more)
 rust:
   - nightly
@@ -24,16 +35,23 @@ os:
   - linux
 before_script:
   - |
-    pip install 'travis-cargo<0.2' --user &&
-    export PATH=$HOME/.local/bin:$PATH
+    if [ "$COVERALLS" = "true" ]; then cargo install cargo-travis &&
+    export PATH=$HOME/.cargo/bin:$PATH; fi
 script:
   - |
-    travis-cargo build &&
-    travis-cargo test &&
-    travis-cargo bench
+    cargo build &&
+    cargo bench;
+    if [ "$COVERALLS" != "true" ];
+      then cargo test;
+    fi
+# The coveralls env runs tests as part of its run
 after_success:
-  - travis-cargo --only stable coveralls --no-sudo --verify
-  - travis-cargo --only stable doc-upload
+  - |
+    if [ "$COVERALLS" = "true" ]; 
+      then travis_wait 30 cargo coveralls --exclude-pattern tests/; 
+    fi
+# Restore automatic doc updating when cargo-travis gets this feature
+#  travis-cargo --only stable doc-upload
 env:
   global:
   - TRAVIS_CARGO_NIGHTLY_FEATURE=""
