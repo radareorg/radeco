@@ -39,21 +39,25 @@ use std::path::Path;
 use petgraph::graph::NodeIndex;
 
 use r2pipe::r2::R2;
-use r2api::structs::{LOpInfo, LRegInfo};
+use r2api::structs::{LOpInfo, LRegInfo, LSymbolInfo, LRelocInfo, LImportInfo, LExportInfo, LSectionInfo, LEntryInfo};
 use r2api::api_trait::R2Api;
 
 use middle::ssa::ssastorage::SSAStorage;
 use frontend::bindings::{Binding, RBindings, RadecoBindings};
 use frontend::source::Source;
 
-//pub trait ProjectLoader {
-    //fn load<T: AsRef<str>>(T, Option<ProjectOptions>) -> Result<RadecoProject, String>;
-//}
+pub mod strats {
+    use super::{FLResult, PredicatedLoader};
+    use super::RadecoModule;
+    use frontend::source::Source;
 
-#[derive(Debug, Default)]
-pub struct ProjectOptions {
-    load_libs: bool,
-    load_path: Cow<'static, str>,
+    pub fn use_symbols(source: Option<&Box<Source>>, fl: &FLResult, rmod: &RadecoModule) -> FLResult {
+        unimplemented!()
+    }
+
+    pub fn use_source(source: Option<&Box<Source>>, fl: &FLResult, rmod: &RadecoModule) -> FLResult {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]
@@ -66,32 +70,36 @@ pub struct RadecoProject {
     reginfo: LRegInfo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// Container to store information about a single loaded binary or library.
 pub struct RadecoModule {
-    /// Flag to check if functions are loaded/indentified
-    are_functions_loaded: bool,
+    /// Human-readable name for the  module
+    name: Cow<'static, str>,
+    /// Path on disk to the loaded library
+    path: Cow<'static, str>,
+
+    /////////////////////////////////////////////////
+    //// Information from the loader
+    /////////////////////////////////////////////////
+    symbols: Vec<LSymbolInfo>,
+    sections: Vec<LSectionInfo>,
+    imports: Vec<LImportInfo>,
+    exports: Vec<LExportInfo>,
+    relocs: Vec<LRelocInfo>,
+    libs: Vec<String>,
+    entrypoint: Vec<LEntryInfo>,
+
+    //////////////////////////////////////////////////
+    //// Information from early/low-level analysis
+    //////////////////////////////////////////////////
     // TODO: Placeholder. Fix this with real graph.
     /// Call graph for current module
     call_graph: Option<String>,
     /// Map of functions loaded
     functions: BTreeMap<u64, RadecoFunction>,
-    // TODO: This needs to be something better than just a String.
-    /// List of imports for the current module
-    imports: Vec<String>,
-    /// Library name
-    name: Cow<'static, str>,
-    /// Path on disk to the loaded library
-    path: Cow<'static, str>,
-    // TODO:
-    // sections: ,
-    // symbols: ,
-    // loader: ,
-    // imports: ,
-    // exports: ,
 }
 
-#[derive(Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct CallRefs {
     /// Offset of the caller function
     caller_fn_offset: u64,
@@ -110,18 +118,12 @@ pub enum FunctionType {
     Import(u16),
 }
 
-pub const UNKNOWN_MODULE: u16 = 0xFFFF;
-
 #[derive(Debug, Clone)]
 /// Container to store information about identified function.
 /// Used as a basic unit in intra-functional analysis.
 pub struct RadecoFunction {
     /// Identified variable bindings for `RadecoFunction`
     bindings: RadecoBindings<Binding<NodeIndex>>,
-    /// Current module being analyzed, i.e., the index of the module that returned this
-    /// RadecoFunction instance. Note that this is not necessarily
-    /// the module where the function is defined, in case of an import.
-    current_module: u16,
     /// Represents the type of function
     ftype: FunctionType,
     /// Raw instruction information for the current function
@@ -133,50 +135,105 @@ pub struct RadecoFunction {
     pub name: Cow<'static, str>,
     /// Start address of the function
     pub offset: u64,
-    // Calls to the function
+    // TODO: Calls to the function
     //refs: Vec<CallRefs>,
     /// Size of the function in bytes
     size: u64,
     /// Constructed SSA for the function
     ssa: SSAStorage,
-    // Calls from the current function to other functions
+    // TODO: Calls from the current function to other functions
     //xrefs: Vec<CallRefs>,
 }
 
-//#[derive(Debug)]
-// Default project loader that uses r2 and r2pipe
-// Implements the `ProjectLoader` trait
-//pub struct R2ProjectLoader { }
-
-//#[derive(Debug)]
-// Load a RadecoProject from formatted JSON files
-//pub struct JSONProjectLoader { }
-
+#[derive(Default)]
 pub struct ProjectLoader<'a> {
     load_libs: bool,
+    path: Cow<'static, str>,
+    load_library_path: Option<Cow<'static, str>>,
+    filter_modules: Option<fn (&RadecoModule) -> bool>,
+    source: Option<Box<Source>>,
     mloader: Option<ModuleLoader<'a>>,
 }
 
+impl<'a> ProjectLoader<'a> {
+    /// Enable loading of libraries
+    pub fn load_libs(mut self) -> ProjectLoader<'a> {
+        self.load_libs = true;
+        self
+    }
+
+    /// Set path to load from
+    pub fn path<T: AsRef<str>>(mut self, path: T) -> ProjectLoader<'a> {
+        self.path = Cow::from(path.as_ref().to_owned());
+        self
+    }
+
+    /// Setup and configure `ModuleLoader` to use
+    pub fn module_loader<'b: 'a>(mut self, mloader: ModuleLoader<'b>) -> ProjectLoader<'a> {
+        self.mloader = Some(mloader);
+        self
+    }
+
+    /// Set the source to use for loading. This is propagated to every `ModuleLoader`
+    /// unless it is reconfigured.
+    pub fn source(mut self, source: Box<Source>) -> ProjectLoader<'a> {
+        self.source = Some(source);
+        self
+    }
+    
+    /// Set path to look for libraries. The `ProjectLoader` looks for
+    /// matching filenames recursively within this directory.
+    /// Only used if `load_libs` is true.
+    pub fn load_library_path(mut self, path: &'static str) -> ProjectLoader<'a> {
+        self.load_library_path = Some(Cow::from(path));
+        self
+    }
+
+    pub fn filter_modules(mut self, f: fn (&RadecoModule) -> bool) -> ProjectLoader<'a> {
+        self.filter_modules = Some(f);
+        self
+    }
+
+    /// Kick everything off based on the config/defaults
+    pub fn load(&mut self) -> RadecoProject {
+        unimplemented!()
+    }
+}
+
+#[derive(Default)]
 pub struct ModuleLoader<'a> {
-    source: Box<Source>,
+    source: Option<Box<Source>>,
     floader: Option<FunctionLoader<'a>>,
-    filter: Option<fn (x: RadecoFunction) -> bool>,
+    filter: Option<fn (&RadecoFunction) -> bool>,
+}
+
+impl<'a> ModuleLoader<'a> {
+    /// Kick everything off and load module information based on config and defaults
+    pub fn load(&mut self) -> RadecoModule {
+        unimplemented!()
+    }
+
+    /// Filter identified/loaded functions based on filter function
+    pub fn filter(mut self, f: fn (&RadecoFunction) -> bool) -> ModuleLoader<'a> {
+        self.filter = Some(f);
+        self
+    }
 }
 
 pub trait PredicatedLoader {
     fn predicate(&self, x: &FLResult) -> bool;
-    fn strategy(&self, last: &FLResult, rmod: &RadecoModule) -> FLResult;
+    fn strategy(&self, source: Option<&Box<Source>>, last: &FLResult, rmod: &RadecoModule) -> FLResult;
 }
 
 impl<T> PredicatedLoader for T
-where T: Fn (&FLResult, &RadecoModule) -> FLResult {
+where T: Fn (Option<&Box<Source>>, &FLResult, &RadecoModule) -> FLResult {
     fn predicate(&self, x: &FLResult) -> bool { true }
-    fn strategy(&self, last: &FLResult, rmod: &RadecoModule) -> FLResult { 
-        self(last, rmod)
+    fn strategy(&self, source: Option<&Box<Source>>, last: &FLResult, rmod: &RadecoModule) -> FLResult { 
+        self(source, last, rmod)
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct FLResult {
     functions: Vec<RadecoFunction>,
     new: u32,
@@ -184,25 +241,34 @@ pub struct FLResult {
 
 #[derive(Default)]
 pub struct FunctionLoader<'a> {
+    source: Option<Box<Source>>,
     strategies: Vec<&'a PredicatedLoader>,
 }
 
 impl<'a> FunctionLoader<'a> {
+    /// Add a function identification strategy to the pipeline
     pub fn strategy<'b: 'a>(mut self, strat: &'b PredicatedLoader) -> FunctionLoader<'a> {
         self.strategies.push(strat);
         self
     }
 
-    // TODO: Add default strats
+    /// Kick everything off and breakdown a radeco module into functions
     pub fn load(&mut self, rmod: &RadecoModule) -> FLResult {
         self.strategies.iter().fold(FLResult::default(), |mut acc, f| {
             if f.predicate(&acc) {
-                let fl = f.strategy(&acc, rmod);
+                let fl = f.strategy(self.source.as_ref(), &acc, rmod);
                 acc.new += fl.new;
                 acc.functions.extend(fl.functions.iter().cloned());
             }
             acc
         })
+    }
+
+    /// Include default strategies to identify functions in the loaded binary
+    pub fn include_defaults(mut self) -> FunctionLoader<'a> {
+        self.strategies.push(&strats::use_symbols);
+        self.strategies.push(&strats::use_source);
+        self
     }
 }
 
@@ -246,15 +312,9 @@ impl RadecoProject {
 
 impl RadecoModule {
     pub fn new(path: String) -> RadecoModule {
-        RadecoModule {
-            are_functions_loaded: false,
-            call_graph: None,
-            functions: BTreeMap::new(),
-            imports: Vec::new(),
-            name: Cow::from(path.clone()),
-            // FIXME
-            path: Cow::from(path),
-        }
+        let mut rmod = RadecoModule::default();
+        rmod.name =  Cow::from(path.clone());
+        rmod
     }
 
     pub fn new_function_at(&mut self, offset: u64) -> Result<&mut RadecoFunction, &'static str> {
@@ -284,7 +344,6 @@ impl RadecoFunction {
         let name = format!("fun{:x}", offset);
         RadecoFunction {
             bindings: RadecoBindings::new(),
-            current_module: UNKNOWN_MODULE,
             ftype: FunctionType::Function,
             instructions: Vec::new(),
             is_recursive: false,
