@@ -66,8 +66,14 @@ extern crate capstone_rust;
 #[macro_use] pub mod analysis;
 pub mod frontend {
     pub mod ssaconstructor;
+
+    // Old/deprecated
     pub mod source;
     pub mod containers;
+    /*********************/
+
+    // New replacements
+    pub mod radeco_source;
     pub mod radeco_containers;
     pub mod bindings;
     pub mod instruction_analyzer;

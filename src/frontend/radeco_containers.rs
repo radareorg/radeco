@@ -44,19 +44,33 @@ use r2api::api_trait::R2Api;
 
 use middle::ssa::ssastorage::SSAStorage;
 use frontend::bindings::{Binding, RBindings, RadecoBindings};
-use frontend::source::Source;
+use frontend::radeco_source::Source;
 
-pub mod strats {
+pub mod loader_defaults {
     use super::{FLResult, PredicatedLoader};
     use super::RadecoModule;
-    use frontend::source::Source;
+    use frontend::radeco_source::Source;
 
-    pub fn use_symbols(source: Option<&Box<Source>>, fl: &FLResult, rmod: &RadecoModule) -> FLResult {
+    pub fn strat_use_symbols(source: Option<&Box<Source>>, fl: &FLResult, rmod: &RadecoModule) -> FLResult {
         unimplemented!()
     }
 
-    pub fn use_source(source: Option<&Box<Source>>, fl: &FLResult, rmod: &RadecoModule) -> FLResult {
-        unimplemented!()
+    pub fn strat_use_source(source: Option<&Box<Source>>, fl: &FLResult, rmod: &RadecoModule) -> FLResult {
+        // If there was any symbol information, don't use this
+        if fl.new > 0 {
+            fl.clone()
+        } else {
+            // Load function information fom `Source`
+            if let Some(ref src) = source {
+                let new_fl = FLResult::default();
+                for function in &src.functions() {
+
+                }
+                unimplemented!();
+            } else {
+                fl.clone()
+            }
+        }
     }
 }
 
@@ -221,21 +235,23 @@ impl<'a> ModuleLoader<'a> {
 }
 
 pub trait PredicatedLoader {
-    fn predicate(&self, x: &FLResult) -> bool;
+    /// Defaults to true, need not implement if the Loader is not conditional
+    fn predicate(&self, x: &FLResult) -> bool { true }
+    /// Function to execute to breakdown the `RadecoModule`
     fn strategy(&self, source: Option<&Box<Source>>, last: &FLResult, rmod: &RadecoModule) -> FLResult;
 }
 
 impl<T> PredicatedLoader for T
 where T: Fn (Option<&Box<Source>>, &FLResult, &RadecoModule) -> FLResult {
-    fn predicate(&self, x: &FLResult) -> bool { true }
     fn strategy(&self, source: Option<&Box<Source>>, last: &FLResult, rmod: &RadecoModule) -> FLResult { 
         self(source, last, rmod)
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct FLResult {
-    functions: Vec<RadecoFunction>,
+    /// Functions are represented as a pair of (<offset>, <size in bytes>)
+    functions: Vec<(u64, u32)>,
     new: u32,
 }
 
@@ -266,8 +282,9 @@ impl<'a> FunctionLoader<'a> {
 
     /// Include default strategies to identify functions in the loaded binary
     pub fn include_defaults(mut self) -> FunctionLoader<'a> {
-        self.strategies.push(&strats::use_symbols);
-        self.strategies.push(&strats::use_source);
+        // TODO: Append these to the front
+        self.strategies.push(&loader_defaults::strat_use_symbols);
+        self.strategies.push(&loader_defaults::strat_use_source);
         self
     }
 }
