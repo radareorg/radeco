@@ -1,34 +1,34 @@
-//! Defines `RadecoProject`, `RadecoModule` and `RadecoFunction`.
-//! Temporarily defines `Loader` and `Source`.
+//! This module defines `Containers` used to hold results of analysis
 //!
+//! Containers are broken down into three levels of hierarchy to reflect different
+//! levels of program analysis.
 //!
+//! The top-level container, `RadecoProject`, is in most cases, the gateway
+//! to start using radeco-lib. A project essentially contains all the state/information
+//! required for analysis of a binary. A single `RadecoProject` contains several
+//! `RadecoModule`, one module for the main binary and, optionally, one for every
+//! shared library. Lastly, `RadecoModule` is broken down into `RadecoFunction`, which holds
+//! the per-function information for every identified function in a `RadecoModule`.
 //!
-//! Example Usage
-//! ====
+//! Corresponding to each of the containers is a loader that constructs the containers.
+//! Loaders are configurable, with sane defaults, and are designed to work independently 
+//! of loaders above it. Although the loaders are powerful way to interact with the loading
+//! process, the basic process is quite straight forward. Here is a quick example with all
+//! default options:
 //!
-//! Default example:
 //! ```rust
-//! let options = LoadOptions::default();
-//! let mut loader = R2ProjectLoader::new();
-//! let mut rp = loader.load("/bin/ls", load_options);
-//! for mut ref rmod in rp.iter_mod_mut() {
-//!     loader.load_functions(rmod)?;
-//! }
-//!
-//! for mut ref rmod in rp.iter_mod_mut() {
-//!     for mut ref rfn in rmod.iter_fn_mut() {
-//!         // Construct SSA, Do some analysis.
-//!     }
-//! }
+//! # extern crate radeco_lib;
+//! # use radeco_lib::frontend::radeco_containers::{RadecoProject, ProjectLoader};
+//! # fn main() {
+//! let mut rp: RadecoProject = ProjectLoader::default()  // setup the default loader
+//!                                 .path("/bin/ls")      // path to bin to analyze
+//!                                 .load();              // fire-off the loading
+//! # }
 //! ```
 //!
-//! Example with custom function loader/detection:
-//! ```
-//! ...
-//! let mut fident = FunctionIdentifier::new();
-//! let mut ref rmod is rp.itrer_mod_mut() {
-//!     fident.identify_functions(rmod);
-//! }
+//! All default options are defined under `radeco_containers::loader_defaults`.
+//!
+//! For more examples of loading, check the `examples/` directory of this project.
 //! ```
 
 use frontend::bindings::{Binding, RBindings, RadecoBindings};
@@ -49,6 +49,7 @@ use std::collections::{btree_map, hash_map};
 use std::path::Path;
 use std::rc::Rc;
 
+/// Defines sane defaults for the loading process.
 pub mod loader_defaults {
     use frontend::radeco_source::Source;
     use r2api::structs::LSymbolType;
@@ -57,6 +58,7 @@ pub mod loader_defaults {
     use super::{FLResult, PredicatedLoader};
     use super::{RadecoModule, RadecoFunction};
 
+    /// Use symbol information to identify functions
     pub fn strat_use_symbols(source: Option<&Rc<Source>>,
                              fl: &FLResult,
                              rmod: &RadecoModule)
@@ -80,11 +82,11 @@ pub mod loader_defaults {
             })
     }
 
+    /// Use analysis that `Source` provides to identify functions
     pub fn strat_use_source(source: Option<&Rc<Source>>,
                             fl: &FLResult,
                             rmod: &RadecoModule)
                             -> FLResult {
-        // If there was any symbol information, don't use this
         // Load function information fom `Source`
         if let Some(ref src) = source {
             let mut new_fl = FLResult::default();
@@ -106,7 +108,7 @@ pub mod loader_defaults {
 }
 
 #[derive(Debug)]
-/// Top level overall project
+/// Top level container used to hold all analysis
 pub struct RadecoProject {
     /// Map of loaded modules
     modules: HashMap<String, RadecoModule>,
@@ -122,9 +124,7 @@ pub struct RadecoModule {
     name: Cow<'static, str>,
     /// Path on disk to the loaded library
     path: Cow<'static, str>,
-    /// //////////////////////////////////////////////
-    /// / Information from the loader
-    /// //////////////////////////////////////////////
+    // Information from the loader
     symbols: Vec<LSymbolInfo>,
     sections: Vec<LSectionInfo>,
     imports: Vec<LImportInfo>,
@@ -132,9 +132,7 @@ pub struct RadecoModule {
     relocs: Vec<LRelocInfo>,
     libs: Vec<String>,
     entrypoint: Vec<LEntryInfo>,
-    /// ///////////////////////////////////////////////
-    /// / Information from early/low-level analysis
-    /// ///////////////////////////////////////////////
+    // Information from early/low-level analysis
     /// TODO: Placeholder. Fix this with real graph.
     /// Call graph for current module
     call_graph: Option<String>,
@@ -188,6 +186,7 @@ pub struct RadecoFunction {
 }
 
 #[derive(Default)]
+/// Top-level loader used to initialize a `RadecoProject`
 pub struct ProjectLoader<'a> {
     load_libs: bool,
     path: Cow<'static, str>,
@@ -231,6 +230,7 @@ impl<'a> ProjectLoader<'a> {
         self
     }
 
+    /// Filter loading of `RadecoModules` based on `f`
     pub fn filter_modules(mut self, f: fn(&RadecoModule) -> bool) -> ProjectLoader<'a> {
         self.filter_modules = Some(f);
         self
@@ -258,7 +258,7 @@ impl<'a> ProjectLoader<'a> {
         {
             let mod_loader = self.mloader.as_mut().unwrap();
             // TODO: Set name correctly
-            mod_map.insert("main".to_owned(), mod_loader.load());
+            mod_map.insert("main".to_owned(), mod_loader.load(Rc::clone(source)));
         }
 
         // Clear out irrelevant fields in self and move it into project loader
@@ -274,6 +274,7 @@ impl<'a> ProjectLoader<'a> {
 }
 
 #[derive(Default)]
+/// Module-level loader used to construct a `RadecoModule`
 pub struct ModuleLoader<'a> {
     source: Option<Rc<Source>>,
     floader: Option<FunctionLoader<'a>>,
@@ -281,14 +282,20 @@ pub struct ModuleLoader<'a> {
 }
 
 impl<'a> ModuleLoader<'a> {
+    /// Setup `Source` for `ModuleLoader`
     pub fn source<'b: 'a>(mut self, src: Rc<Source>) -> ModuleLoader<'a> {
         self.source = Some(src);
         self
     }
 
     /// Kick everything off and load module information based on config and defaults
-    pub fn load(&mut self) -> RadecoModule {
-        let source = self.source.as_ref().unwrap();
+    pub fn load(&mut self, src: Rc<Source>) -> RadecoModule {
+        let source = if self.source.is_some() {
+            self.source.as_ref().unwrap()
+        } else {
+            &src
+        };
+
         if self.floader.is_none() {
             self.floader = Some(FunctionLoader::default().include_defaults());
         }
@@ -350,6 +357,7 @@ impl<'a> ModuleLoader<'a> {
         rmod
     }
 
+    /// Setup a function loader for the module
     pub fn function_loader(mut self, f: FunctionLoader<'a>) -> ModuleLoader<'a> {
         self.floader = Some(f);
         self
@@ -363,12 +371,16 @@ impl<'a> ModuleLoader<'a> {
 }
 
 #[derive(Default)]
+/// Breaks down `RadecoModule` into functions
+/// Performs low-level function identification.
 pub struct FunctionLoader<'a> {
     source: Option<Rc<Source>>,
     strategies: Vec<&'a PredicatedLoader>,
 }
 
 pub trait PredicatedLoader {
+    /// Decide if the current loading strategy should be executed, based on previous results.
+    ///
     /// Defaults to true, need not implement if the Loader is not conditional
     fn predicate(&self, x: &FLResult) -> bool {
         true
@@ -394,9 +406,11 @@ impl<T> PredicatedLoader for T
 }
 
 #[derive(Default, Clone)]
+/// Results from `FunctionLoader`
 pub struct FLResult {
     /// Map from identified function offset to the RadecoFunction instance
     functions: BTreeMap<u64, RadecoFunction>,
+    /// Number of functions identified
     new: u32,
 }
 

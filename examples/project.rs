@@ -1,4 +1,4 @@
-// Example illustrates project loading
+// Examples to illustrate project loading
 
 extern crate radeco_lib;
 extern crate r2pipe;
@@ -15,15 +15,18 @@ use std::rc::Rc;
 
 
 fn main() {
-    let mut r2 = R2::new(Some("/bin/ls")).expect("Hahahaha");
-    r2.analyze();
-    let src: Rc<Source> = Rc::new(Rc::new(RefCell::new(r2)));
-    let mut p = ProjectLoader::default()
-        .path("/bin/ls")
-        .source(Rc::clone(&src))
-        .module_loader(ModuleLoader::default()
+
+    {
+        let mut r2 = R2::new(Some("/bin/ls")).expect("Failed to load r2");
+        r2.analyze();
+        let src: Rc<Source> = Rc::new(Rc::new(RefCell::new(r2)));
+        let mut p = ProjectLoader::default()
+            .path("/bin/ls")
             .source(Rc::clone(&src))
-            .function_loader(FunctionLoader::default().include_defaults()))
-        .load();
+            .module_loader(ModuleLoader::default()
+                           .source(Rc::clone(&src))
+                           .function_loader(FunctionLoader::default().include_defaults()))
+            .load();
+    }
 
 }
