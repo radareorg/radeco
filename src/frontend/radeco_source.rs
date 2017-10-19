@@ -8,15 +8,26 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::error::Error;
+use std::fmt;
 
 use r2api::api_trait::R2Api;
 use r2pipe::r2::R2;
-use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
+use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
+LImportInfo, LExportInfo, LRelocInfo, LEntryInfo};
 
 #[derive(Debug)]
 pub enum SourceErr {
     SrcErr(&'static str),
     OtherErr(Box<Error>),
+}
+
+impl fmt::Display for SourceErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &SourceErr::SrcErr(s) => write!(f, "{}", s),
+            &SourceErr::OtherErr(ref e) => write!(f, "{}", e),
+        }
+    }
 }
 
 impl<T: 'static + Error> From<T> for SourceErr {
@@ -32,7 +43,13 @@ pub trait Source {
     fn instructions_at(&self, u64) -> Result<Vec<LOpInfo>, SourceErr>;
     fn register_profile(&self) -> Result<LRegInfo, SourceErr>;
     fn flags(&self) -> Result<Vec<LFlagInfo>, SourceErr>;
-    fn section_map(&self) -> Result<Vec<LSectionInfo>, SourceErr>;
+    fn sections(&self) -> Result<Vec<LSectionInfo>, SourceErr>;
+    fn symbols(&self) -> Result<Vec<LSymbolInfo>, SourceErr> { unimplemented!() }
+    fn imports(&self) -> Result<Vec<LImportInfo>, SourceErr> { unimplemented!() }
+    fn exports(&self) -> Result<Vec<LExportInfo>, SourceErr> { unimplemented!() }
+    fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> { unimplemented!() }
+    fn libraries(&self) -> Result<Vec<String>, SourceErr> { unimplemented!() }
+    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> { unimplemented!() }
 
     fn send(&self, _: &str) -> Result<(), SourceErr> { Ok(()) }
 
@@ -76,7 +93,7 @@ pub trait Source {
     }
 
     fn section_of(&self, address: u64) -> Result<LSectionInfo, SourceErr> {
-        for s in self.section_map()? {
+        for s in self.sections()? {
             let addr = s.vaddr.expect("Invalid section");
             let size = s.size.expect("Invalid section size");
             if address >= addr && address < addr + size {
@@ -104,15 +121,8 @@ pub trait Source {
 // r2.
 pub type WrappedR2Api<R> = Rc<RefCell<R>>;
 
-//impl<R: R2Api> From<R> for WrappedR2Api<R> {
-    //// This method takes ownership!
-    //fn from(r2: R) -> WrappedR2Api<R> {
-        //Rc::new(RefCell::new(r2))
-    //}
-//}
-
 // Implementation of `Source` trait for R2.
-impl Source for WrappedR2Api<R2> {
+impl<R: R2Api> Source for WrappedR2Api<R> {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.fn_list()?)
     }
@@ -133,8 +143,32 @@ impl Source for WrappedR2Api<R2> {
         Ok(self.try_borrow_mut()?.flag_info()?)
     }
 
-    fn section_map(&self) -> Result<Vec<LSectionInfo>, SourceErr> {
+    fn sections(&self) -> Result<Vec<LSectionInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.sections()?)
+    }
+
+    fn symbols(&self) -> Result<Vec<LSymbolInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.symbols()?)
+    }
+
+    fn imports(&self) -> Result<Vec<LImportInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.imports()?)
+    }
+
+    fn exports(&self) -> Result<Vec<LExportInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.exports()?)
+    }
+
+    fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.relocs()?)
+    }
+
+    fn libraries(&self) -> Result<Vec<String>, SourceErr> {
+        Ok(self.try_borrow_mut()?.libraries()?)
+    }
+
+    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.entrypoint()?)
     }
 
     fn send(&self, s: &str) -> Result<(), SourceErr> {
@@ -219,13 +253,13 @@ impl Source for FileSource {
         Ok(serde_json::from_str(&self.read_file(suffix::FLAG))?)
     }
 
-    fn section_map(&self) -> Result<Vec<LSectionInfo>, SourceErr> {
+    fn sections(&self) -> Result<Vec<LSectionInfo>, SourceErr> {
         Ok(serde_json::from_str(&self.read_file(suffix::SECTION))?)
     }
 }
 
-impl From<WrappedR2Api<R2>> for FileSource {
-    fn from(mut r2: WrappedR2Api<R2>) -> FileSource {
+impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
+    fn from(mut r2: WrappedR2Api<R>) -> FileSource {
         let bin_info = r2.borrow_mut().bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
         let fname = Path::new(&fname).file_stem().unwrap();
@@ -264,7 +298,7 @@ impl From<WrappedR2Api<R2>> for FileSource {
             }
 
             {
-                let sections = r2.section_map().expect("Failed to load section map");
+                let sections = r2.sections().expect("Failed to load section map");
                 let json_str = serde_json::to_string(&sections).expect("Failed to encode to json");
                 fsource.write_file(suffix::SECTION, &json_str);
             }
