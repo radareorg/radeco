@@ -31,12 +31,18 @@
 //! For more examples of loading, check the `examples/` directory of this project.
 //! ```
 
+use rayon::prelude::*;
+
 use frontend::bindings::{Binding, RBindings, RadecoBindings};
 use frontend::radeco_source::{WrappedR2Api, Source};
+use frontend::llanalyzer;
 
 use middle::ssa::ssastorage::SSAStorage;
+use middle::ir;
+use middle::regfile::SubRegisterFile;
+use frontend::ssaconstructor::SSAConstruct;
 
-use petgraph::graph::NodeIndex;
+use petgraph::graph::{NodeIndex, Graph};
 use r2api::api_trait::R2Api;
 use r2api::structs::{LOpInfo, LRegInfo, LSymbolInfo, LRelocInfo, LImportInfo, LExportInfo,
                      LSectionInfo, LEntryInfo, LSymbolType};
@@ -48,6 +54,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::collections::{btree_map, hash_map};
 use std::path::Path;
 use std::rc::Rc;
+use std::marker::PhantomData;
 
 /// Defines sane defaults for the loading process.
 pub mod loader_defaults {
@@ -111,11 +118,15 @@ pub mod loader_defaults {
 /// Top level container used to hold all analysis
 pub struct RadecoProject {
     /// Map of loaded modules
-    modules: HashMap<String, RadecoModule>,
+    modules: Vec<RadecoModule>,
     /// Register/Arch information for loaded project
-    /// TODO: Discuss and replace with arch
+    // TODO: Discuss and replace with arch
     reginfo: LRegInfo,
 }
+
+// Graph where every node is an Address (function start address) and edges are labeled
+// by the `callsite`, i.e. the actual location of the call.
+pub type CallGraph = Graph<u64, u64>;
 
 #[derive(Debug, Default)]
 /// Container to store information about a single loaded binary or library.
@@ -133,9 +144,9 @@ pub struct RadecoModule {
     libs: Vec<String>,
     entrypoint: Vec<LEntryInfo>,
     // Information from early/low-level analysis
-    /// TODO: Placeholder. Fix this with real graph.
+    // TODO: Placeholder. Fix this with real graph.
     /// Call graph for current module
-    call_graph: Option<String>,
+    callgraph: CallGraph,
     /// Map of functions loaded
     functions: BTreeMap<u64, RadecoFunction>,
 }
@@ -180,6 +191,8 @@ pub struct RadecoFunction {
     // refs: Vec<CallRefs>,
     /// Size of the function in bytes
     size: u64,
+    /// List of (data-) addresses this function references
+    datarefs: Vec<u64>,
     /// Constructed SSA for the function
     ssa: SSAStorage, /* TODO: Calls from the current function to other functions
                       * xrefs: Vec<CallRefs>, */
@@ -197,6 +210,12 @@ pub struct ProjectLoader<'a> {
 }
 
 impl<'a> ProjectLoader<'a> {
+    // TODO:
+    //  - Associate identified bins/libs with their ModuleLoaders
+    //  - Implement loading of libraries
+    //  - Parallelize module loading as they should have different sources
+    //  - Use filter option
+    //  - Setup arch information in `RadecoProject`
     /// Enable loading of libraries
     pub fn load_libs(mut self) -> ProjectLoader<'a> {
         self.load_libs = true;
@@ -253,12 +272,12 @@ impl<'a> ProjectLoader<'a> {
             self.mloader = Some(ModuleLoader::default().source(Rc::clone(source)));
         }
 
-        let mut mod_map = HashMap::new();
+        let mut mod_map = Vec::new();
 
         {
             let mod_loader = self.mloader.as_mut().unwrap();
             // TODO: Set name correctly
-            mod_map.insert("main".to_owned(), mod_loader.load(Rc::clone(source)));
+            mod_map.push(mod_loader.load(Rc::clone(source)));
         }
 
         // Clear out irrelevant fields in self and move it into project loader
@@ -273,18 +292,91 @@ impl<'a> ProjectLoader<'a> {
     }
 }
 
+// Iterators over RadecoProject to yeils RadecoModules
+/// `RadecoModule` with project information `zipped` into it
+pub struct ZippedModule<'m> {
+    project: &'m RadecoProject,
+    module: &'m RadecoModule,
+}
+
+pub struct ModuleIter<'m> {
+    project: &'m RadecoProject,
+    idx: usize,
+}
+
+impl<'m> Iterator for ModuleIter<'m> {
+    type Item = ZippedModule<'m>;
+    fn next(&mut self) -> Option<ZippedModule<'m>> {
+        self.idx = self.idx + 1;
+        if let Some(next) = self.project.nth_module(self.idx) {
+            Some(ZippedModule {
+                project: &self.project,
+                module: next,
+            })
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Default)]
 /// Module-level loader used to construct a `RadecoModule`
 pub struct ModuleLoader<'a> {
     source: Option<Rc<Source>>,
     floader: Option<FunctionLoader<'a>>,
     filter: Option<fn(&RadecoFunction) -> bool>,
+    build_callgraph: bool,
+    build_ssa: bool,
+    load_datarefs: bool,
+    load_locals: bool,
+    parallel: bool,
 }
 
 impl<'a> ModuleLoader<'a> {
+    // TODO: 
+    //  1. Callgraph from source
+    //  2. As a part of above, fill in callrefs and callxrefs in RadecoFunction
+    //  3. Expose SSA Construction as a part of loading process with options
+    //     to parallelize it.
+    //  4. Optionally load datarefs
+    //  5. Optionally load local var information for functions
     /// Setup `Source` for `ModuleLoader`
     pub fn source<'b: 'a>(mut self, src: Rc<Source>) -> ModuleLoader<'a> {
         self.source = Some(src);
+        self
+    }
+
+    /// Builds callgraph. Needs support from `Source`
+    pub fn build_callgraph(mut self) -> ModuleLoader<'a> {
+        self.build_callgraph = true;
+        self
+    }
+
+    /// Builds SSA for loaded functions
+    pub fn build_ssa(mut self) -> ModuleLoader<'a> {
+        self.build_ssa = true;
+        self
+    }
+
+
+    /// Loads information about datareferences for loaded functions.
+    /// Needs support from `Source`
+    pub fn load_datarefs(mut self) -> ModuleLoader<'a> {
+        self.load_datarefs = true;
+        self
+    }
+
+    /// Loads local variable information for loaded functions.
+    /// Needs support from `Source`
+    pub fn load_locals(mut self) -> ModuleLoader<'a> {
+        self.load_locals = true;
+        self
+    }
+
+    /// Executes parallelizable functions in parallel. Uses `num_thread` number
+    /// of threads. Defaults to 8 if `None`.
+    pub fn parallel(mut self) -> ModuleLoader<'a> {
+        self.parallel = true;
         self
     }
 
@@ -349,11 +441,52 @@ impl<'a> ModuleLoader<'a> {
             flresult.functions
         };
 
-        for (x, v) in flresult.functions.iter() {
-            println!("{:#x}: {}", x, v.name);
+        rmod.functions = flresult.functions;
+
+        // Load instructions into functions
+        for (_, rfn) in rmod.functions.iter_mut() {
+            rfn.instructions = source.disassemble_n_bytes(rfn.size, rfn.offset).unwrap_or(Vec::new());
         }
 
-        rmod.functions = flresult.functions;
+        // Load optional information. These need support from `Source` for analysis
+        if self.build_callgraph || self.load_datarefs || self.load_locals {
+            let aux_info = match source.functions() {
+                Ok(info) => info,
+                Err(e) => { radeco_warn!(e); Vec::new() }
+            };
+
+            if self.build_callgraph {
+                rmod.callgraph = llanalyzer::load_call_graph(aux_info.as_slice());
+            }
+
+            if self.load_datarefs {
+                for info in &aux_info {
+                    if let Some(mut rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
+                        rfn.datarefs = info.datarefs.clone().unwrap_or_default();
+                    }
+                }
+            }
+
+            if self.load_locals {
+                unimplemented!()
+            }
+        }
+
+
+        let reg_p = source.register_profile().expect("Unable to load register profile");
+        // Optionally construct the SSA.
+        if self.build_ssa {
+            if self.parallel {
+                rmod.functions.par_iter_mut().for_each(|(_, rfn)| {
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
+                });
+            } else {
+                for (off, rfn) in rmod.functions.iter_mut() {
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
+                }
+            }
+        }
+
         rmod
     }
 
@@ -445,37 +578,25 @@ impl<'a> FunctionLoader<'a> {
 impl RadecoProject {
     pub fn new() -> RadecoProject {
         RadecoProject {
-            modules: HashMap::new(),
+            modules: Vec::new(),
             reginfo: LRegInfo::default(),
         }
     }
 
-    pub fn new_module(&mut self, module_path: String) -> Result<&mut RadecoModule, &'static str> {
-        let module_name = Path::new(&module_path).file_stem().unwrap();
-        let module_name_str = module_name.to_str().unwrap().to_owned();
-        if self.modules.contains_key(&module_name_str) {
-            Err("Module with same name already loaded")
+    pub fn nth_module(&self, idx: usize) -> Option<&RadecoModule> {
+        if self.modules.len() > idx {
+            Some(&self.modules[idx])
         } else {
-            let rmod = RadecoModule::new(module_path.clone());
-            self.modules.insert(module_name_str.clone(), rmod);
-            Ok(self.modules.get_mut(&module_name_str).unwrap())
+            None
         }
     }
 
-    pub fn modules(&self) -> hash_map::Values<String, RadecoModule> {
-        self.modules.values()
-    }
-
-    pub fn modules_mut(&mut self) -> hash_map::ValuesMut<String, RadecoModule> {
-        self.modules.values_mut()
-    }
-
-    pub fn reginfo(&self) -> &LRegInfo {
-        &self.reginfo
-    }
-
-    pub fn set_reginfo(&mut self, reginfo: LRegInfo) {
-        self.reginfo = reginfo;
+    pub fn nth_module_mut<'a>(&mut self, idx: usize) -> Option<&mut RadecoModule> {
+        if self.modules.len() > idx {
+            Some(&mut self.modules[idx])
+        } else {
+            None
+        }
     }
 }
 
@@ -486,42 +607,22 @@ impl RadecoModule {
         rmod
     }
 
-    pub fn new_function_at(&mut self, offset: u64) -> Result<&mut RadecoFunction, &'static str> {
-        if self.functions.contains_key(&offset) {
-            return Err("Function already defined at current `offset`");
-        } else {
-            self.functions.insert(offset, RadecoFunction::new(offset, 0));
-            Ok(self.functions.get_mut(&offset).unwrap())
-        }
+    pub fn function(&self, offset: u64) -> Option<&RadecoFunction> {
+        self.functions.get(&offset)
     }
 
-    pub fn function_at(&self, offset: &u64) -> Option<&RadecoFunction> {
-        self.functions.get(offset)
-    }
-
-    pub fn functions(&self) -> btree_map::Values<u64, RadecoFunction> {
-        self.functions.values()
-    }
-
-    pub fn functions_mut(&mut self) -> btree_map::ValuesMut<u64, RadecoFunction> {
-        self.functions.values_mut()
+    pub fn function_mut(&mut self, offset: u64) -> Option<&mut RadecoFunction> {
+        self.functions.get_mut(&offset)
     }
 }
 
 impl RadecoFunction {
-    pub fn new(offset: u64, size: u64) -> RadecoFunction {
-        let name = format!("fun{:x}", offset);
-        RadecoFunction {
-            // bindings: RadecoBindings::new(),
-            // ftype: FunctionType::Function,
-            instructions: Vec::new(),
-            is_recursive: None,
-            name: Cow::from(name),
-            offset: offset,
-            // refs: Vec::new(),
-            size: size,
-            ssa: SSAStorage::new(), // xrefs: Vec::new(),
-        }
+    pub fn new() -> RadecoFunction {
+        RadecoFunction::default()
+    }
+
+    pub fn instructions(&self) -> &[LOpInfo] {
+        self.instructions.as_slice()
     }
 
     pub fn ssa(&self) -> &SSAStorage {

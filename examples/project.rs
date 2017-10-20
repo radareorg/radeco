@@ -7,12 +7,10 @@ extern crate r2api;
 use r2api::api_trait::R2Api;
 use r2pipe::R2;
 use radeco_lib::frontend::radeco_containers::{ProjectLoader, ModuleLoader, FunctionLoader};
-
 use radeco_lib::frontend::radeco_source::Source;
+
 use std::cell::RefCell;
-
 use std::rc::Rc;
-
 
 fn main() {
 
@@ -24,7 +22,10 @@ fn main() {
             .path("/bin/ls")
             .source(Rc::clone(&src))
             .module_loader(ModuleLoader::default()
-                           .source(Rc::clone(&src))
+                           .parallel()
+                           .build_ssa()
+                           .build_callgraph()
+                           .load_datarefs()
                            .function_loader(FunctionLoader::default().include_defaults()))
             .load();
     }
