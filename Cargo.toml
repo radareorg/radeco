@@ -27,12 +27,18 @@ log = "*"
 docopt = "*"
 env_logger = "*"
 clippy = {version = "0.0.61", optional = true}
+rayon = "0.8.2"
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"
 
 [dependencies.r2api]
 git = "https://github.com/radare/radare2-r2pipe-api"
+#path = "../radare2-r2pipe-api/rust/"
 
 [dependencies.esil]
 git = "https://github.com/radare/esil-rs"
+#path = "../esil-rs"
+
+[dependencies.capstone_rust]
+git = "https://github.com/sushant94/capstone-rust"

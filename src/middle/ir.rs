@@ -48,7 +48,7 @@ impl From<u16> for WidthSpec {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Default, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // New address struct
 pub struct MAddress {
     pub address: u64,

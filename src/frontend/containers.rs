@@ -114,7 +114,7 @@ impl<B: RBindings> RadecoFunction<B> {
         let mut rfn = RadecoFunction::new();
         {
             let mut constructor = SSAConstruct::new(&mut rfn.ssa, reg_profile);
-            constructor.run(insts);
+            constructor.run(insts.as_slice());
         }
         rfn
     }

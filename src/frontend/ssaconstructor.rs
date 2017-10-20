@@ -16,6 +16,7 @@ use esil::lexer::{Token, Tokenizer};
 
 use esil::parser::{Parse, Parser};
 use frontend::instruction_analyzer::{InstructionAnalyzer, X86_CS_IA, IOperand};
+use frontend::radeco_containers::RadecoFunction;
 
 use middle::ir::{self, MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
@@ -99,6 +100,13 @@ impl<'a, T> SSAConstruct<'a, T>
         sc
     }
 
+    // Helper wrapper.
+    pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo) {
+        let instructions = rfn.instructions().to_vec();
+        let mut constr = SSAConstruct::new(rfn.ssa_mut(), &ri);
+        constr.run(instructions.as_slice());
+    }
+
     fn set_mem_id(&mut self, id: u64) {
         assert_eq!(self.mem_id, 0);
         self.mem_id = id;
@@ -108,8 +116,6 @@ impl<'a, T> SSAConstruct<'a, T>
         assert_ne!(self.mem_id, 0);
         self.mem_id
     }
-
-
 
     // If the operand is a Token::Identifier, it has to be a register.
     // This is because we never push in a temporary that we create as a
@@ -427,11 +433,11 @@ impl<'a, T> SSAConstruct<'a, T>
     // ESIL is received, it merely takes this vector of ESIL strings and transforms
     // it into its SSA
     // form.
-    pub fn run(&mut self, op_info: Vec<LOpInfo>) {
+    pub fn run(&mut self, op_info: &[LOpInfo]) {
         let mut p = Parser::init(Some(self.ident_map.clone()), Some(64));
         let mut current_address = MAddress::new(0, 0);
         self.init_blocks();
-        for op in &op_info {
+        for op in op_info {
             if op.esil.is_none() {
                 continue;
             }

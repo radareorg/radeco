@@ -50,6 +50,8 @@ pub trait Source {
     fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> { unimplemented!() }
     fn libraries(&self) -> Result<Vec<String>, SourceErr> { unimplemented!() }
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> { unimplemented!() }
+    fn disassemble_n_bytes(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
+    fn disassemble_n_insts(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
 
     fn send(&self, _: &str) -> Result<(), SourceErr> { Ok(()) }
 
@@ -169,6 +171,14 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
 
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.entrypoint()?)
+    }
+
+    fn disassemble_n_bytes(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.disassemble_n_bytes(n, Some(at))?)
+    }
+
+    fn disassemble_n_insts(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.disassemble_n_insts(n, Some(at))?)
     }
 
     fn send(&self, s: &str) -> Result<(), SourceErr> {

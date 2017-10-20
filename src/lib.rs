@@ -60,23 +60,11 @@ extern crate r2api;
 
 extern crate esil;
 extern crate capstone_rust;
+extern crate rayon;
 
 #[macro_use] pub mod utils;
 #[macro_use] pub mod middle;
 #[macro_use] pub mod analysis;
-pub mod frontend {
-    pub mod ssaconstructor;
 
-    // Old/deprecated
-    pub mod source;
-    pub mod containers;
-    /*********************/
-
-    // New replacements
-    pub mod radeco_source;
-    pub mod radeco_containers;
-    pub mod bindings;
-    pub mod instruction_analyzer;
-}
-
+pub mod frontend;
 pub mod backend;
