@@ -50,6 +50,7 @@ use r2api::structs::{LOpInfo, LRegInfo, LSymbolInfo, LRelocInfo, LImportInfo, LE
 use r2pipe::r2::R2;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::slice;
 use std::collections::{BTreeMap, HashMap};
 use std::collections::{btree_map, hash_map};
 use std::path::Path;
@@ -295,23 +296,46 @@ impl<'a> ProjectLoader<'a> {
 // Iterators over RadecoProject to yeils RadecoModules
 /// `RadecoModule` with project information `zipped` into it
 pub struct ZippedModule<'m> {
-    project: &'m RadecoProject,
-    module: &'m RadecoModule,
+    pub project: &'m RadecoProject,
+    pub module: &'m RadecoModule,
 }
 
 pub struct ModuleIter<'m> {
     project: &'m RadecoProject,
-    idx: usize,
+    iter: slice::Iter<'m, RadecoModule>,
 }
 
 impl<'m> Iterator for ModuleIter<'m> {
     type Item = ZippedModule<'m>;
     fn next(&mut self) -> Option<ZippedModule<'m>> {
-        self.idx = self.idx + 1;
-        if let Some(next) = self.project.nth_module(self.idx) {
+        if let Some(rmod) = self.iter.next() {
             Some(ZippedModule {
                 project: &self.project,
-                module: next,
+                module: rmod,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+pub struct ZippedFunction<'f> {
+    pub module: &'f RadecoModule,
+    pub function: (&'f u64, &'f RadecoFunction),
+}
+
+pub struct FunctionIter<'f> {
+    module: &'f RadecoModule,
+    iter: btree_map::Iter<'f, u64, RadecoFunction>,
+}
+
+impl<'f> Iterator for FunctionIter<'f> {
+    type Item = ZippedFunction<'f>;
+    fn next(&mut self) -> Option<ZippedFunction<'f>> {
+        if let Some(rfn) = self.iter.next() {
+            Some(ZippedFunction {
+                module: self.module,
+                function: rfn,
             })
         } else {
             None
@@ -598,6 +622,13 @@ impl RadecoProject {
             None
         }
     }
+
+    pub fn iter<'a>(&'a self) -> ModuleIter<'a> {
+        ModuleIter {
+            project: &self,
+            iter: self.modules.iter(),
+        }
+    }
 }
 
 impl RadecoModule {
@@ -613,6 +644,13 @@ impl RadecoModule {
 
     pub fn function_mut(&mut self, offset: u64) -> Option<&mut RadecoFunction> {
         self.functions.get_mut(&offset)
+    }
+
+    pub fn iter<'a>(&'a self) -> FunctionIter<'a> {
+        FunctionIter {
+            module: &self,
+            iter: self.functions.iter(),
+        }
     }
 }
 
