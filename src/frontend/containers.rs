@@ -1,5 +1,7 @@
 //! Defines `Module` and `Function` that act as containers.
 
+#![deprecated(since="0.2.0", note="Replace with `radeco_containers`")]
+
 use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
 
 use frontend::source::Source;
