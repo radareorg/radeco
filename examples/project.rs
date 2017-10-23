@@ -18,7 +18,7 @@ fn main() {
         let mut r2 = R2::new(Some("/bin/ls")).expect("Failed to load r2");
         r2.analyze();
         let src: Rc<Source> = Rc::new(Rc::new(RefCell::new(r2)));
-        let mut p = ProjectLoader::default()
+        let p = ProjectLoader::default()
             .path("/bin/ls")
             .source(Rc::clone(&src))
             .module_loader(ModuleLoader::default()
@@ -28,6 +28,12 @@ fn main() {
                            .load_datarefs()
                            .function_loader(FunctionLoader::default().include_defaults()))
             .load();
+
+        for m in p.iter() {
+            for rfn in m.module.iter() {
+                println!("{:#X}", rfn.function.0);
+            }
+        }
     }
 
 }
