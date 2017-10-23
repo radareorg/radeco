@@ -1,5 +1,7 @@
 //! Defines the `Source` Trait.
 
+#![deprecated(since="0.2.0", note="Replace with `radeco_source`")]
+
 use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{Read, Write};
