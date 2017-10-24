@@ -2,7 +2,7 @@
 
 extern crate radeco_lib;
 
-use radeco_lib::analysis::mark_refs::{ConstraintSet, Constraint};
+use radeco_lib::analysis::constraint_set::{ConstraintSet, Constraint};
 use radeco_lib::middle::ssa::ssa_traits::ValueType;
 
 fn main() {
