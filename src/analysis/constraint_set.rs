@@ -14,37 +14,50 @@
 //
 
 use std::fmt::Debug;
-use std::collections::VecDeque;
+use std::slice;
+use std::collections::{HashMap, VecDeque};
+use std::hash::Hash;
+use std::collections::hash_map;
 
 use middle::ssa::ssa_traits::ValueType;
 
 #[derive(Debug, Clone)]
-pub enum Constraint {
-    Union(usize, usize),
+pub enum Constraint<I: Debug + Clone + Copy> {
+    Union(I, I),
     // Solve eq
-    Equality(usize, Box<Constraint>),
+    Equality(I, Box<Constraint<I>>),
     // Solve assert
-    Assertion(Box<Constraint>),
-    Or(Box<Constraint>, Box<Constraint>),
-    And(Box<Constraint>, Box<Constraint>),
+    Assertion(Box<Constraint<I>>),
+    Or(Box<Constraint<I>>, Box<Constraint<I>>),
+    And(Box<Constraint<I>>, Box<Constraint<I>>),
     // No solve
     Value(ValueType),
 }
 
 #[derive(Default, Debug)]
-pub struct ConstraintSet<T: Debug> {
-    bindings: Vec<(T, ValueType)>,
-    set: VecDeque<Constraint>,
+pub struct ConstraintSet<I: Eq + Debug + Hash + Copy> {
+    bindings: HashMap<I, ValueType>,
+    set: VecDeque<Constraint<I>>,
 }
 
-impl<T: Clone + Debug> ConstraintSet<T> {
-    pub fn add_constraint(&mut self, c: Constraint) {
+impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
+    pub fn add_constraint(&mut self, c: Constraint<T>) {
         self.set.push_back(c);
+    }
+
+    pub fn add_union(&mut self, lhs: T, ops: &[T]) {
+        for i in (0..ops.len()-2) {
+            self.add_constraint(Constraint::Equality(lhs, Box::new(Constraint::Union(ops[i], ops[i+1]))));
+        }
+    }
+
+    pub fn add_eq(mut self, lhs: T, vt: ValueType) {
+        self.add_constraint(Constraint::Equality(lhs, Box::new(Constraint::Value(vt))));
     }
 
     pub fn bind(&mut self, n: &[T]) {
         for i in n {
-            self.bindings.push((i.clone(), ValueType::Unresolved));
+            self.bindings.insert(i.clone(), ValueType::Unresolved);
         }
     }
 
@@ -76,20 +89,20 @@ impl<T: Clone + Debug> ConstraintSet<T> {
         }
     }
 
-    fn solve_eq(&mut self, constraint: &Constraint) -> bool {
+    fn solve_eq(&mut self, constraint: &Constraint<T>) -> bool {
         match *constraint {
             Constraint::Equality(ni, box ref cs) => {
                 match *cs {
                     Constraint::Value(vt) => {
-                        self.bindings[ni].1 = vt;
+                        self.bindings.insert(ni, vt);
                         true
                     }
                     Constraint::Union(op1, op2) => {
-                        match self.bindings[ni].1 {
+                        match self.bindings[&ni] {
                             ValueType::Scalar => {
                                 // Both, op1 and op2, are scalars
-                                self.bindings[op1].1 = ValueType::Scalar;
-                                self.bindings[op2].1 = ValueType::Scalar;
+                                self.bindings.insert(op1, ValueType::Scalar);
+                                self.bindings.insert(op2, ValueType::Scalar);
                                 true
                             },
                             ValueType::Reference => {
@@ -105,8 +118,8 @@ impl<T: Clone + Debug> ConstraintSet<T> {
                             },
                             ValueType::Unresolved => {
                                 // Look at the Union
-                                let op1_vt = self.bindings[op1].1;
-                                let op2_vt = self.bindings[op2].1;
+                                let op1_vt = self.bindings[&op1];
+                                let op2_vt = self.bindings[&op2];
                                 let (vt, retval)  = match (op1_vt, op2_vt) {
                                     (ValueType::Invalid, _)
                                     | (_, ValueType::Invalid)
@@ -115,19 +128,19 @@ impl<T: Clone + Debug> ConstraintSet<T> {
                                     }
 
                                     (ValueType::Reference, _) => { 
-                                        self.bindings[op2].1 = ValueType::Scalar;
+                                        self.bindings.insert(op2,  ValueType::Scalar);
                                         (ValueType::Reference , true)
                                     }
 
                                     (_, ValueType::Reference) => {
-                                        self.bindings[op1].1 = ValueType::Scalar;
+                                        self.bindings.insert(op1, ValueType::Scalar);
                                         (ValueType::Reference, true)
                                     },
 
                                     (ValueType::Scalar, ValueType::Scalar) => { (ValueType::Scalar, true) }
                                     (_, _) => { (ValueType::Unresolved, false) }
                                 };
-                                self.bindings[ni].1 = vt;
+                                self.bindings.insert(ni, vt);
                                 retval
                             },
                             _ => { false },
@@ -140,7 +153,7 @@ impl<T: Clone + Debug> ConstraintSet<T> {
         }
     }
 
-    fn solve_assert(&mut self, constraint: &Constraint) -> bool {
+    fn solve_assert(&mut self, constraint: &Constraint<T>) -> bool {
         // Will be of the form, Assertion(<inner>)
         // inner will be of the form Or(<c1>, <c2>)
         if let &Constraint::Assertion(box Constraint::Or(box ref c1, box ref c2)) = constraint {
@@ -150,11 +163,11 @@ impl<T: Clone + Debug> ConstraintSet<T> {
                     box Constraint::Equality(op1, box Constraint::Value(vt1)),
                     box Constraint::Equality(op2, box Constraint::Value(vt2))) = *ci
                 {
-                    if self.bindings[op1].1 == vt1 {
-                        self.bindings[op2].1 = vt2;
+                    if self.bindings[&op1] == vt1 {
+                        self.bindings.insert(op2, vt2);
                         true
-                    } else if self.bindings[op2].1 == vt2 {
-                        self.bindings[op1].1 = vt1;
+                    } else if self.bindings[&op2] == vt2 {
+                        self.bindings.insert(op1, vt1);
                         true
                     } else {
                         false
@@ -166,6 +179,10 @@ impl<T: Clone + Debug> ConstraintSet<T> {
         } else {
             false
         }
+    }
+
+    pub fn iter_bindings<'a>(&'a self) -> hash_map::Iter<'a, T, ValueType> {
+        self.bindings.iter()
     }
 
 }
@@ -185,7 +202,7 @@ mod test {
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
-        assert_eq!(cs.bindings[0].1, ValueType::Reference);
+        assert_eq!(cs.bindings[&0], ValueType::Reference);
     }
 
     #[test]
@@ -198,7 +215,7 @@ mod test {
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
-        assert_eq!(cs.bindings[0].1, ValueType::Invalid);
+        assert_eq!(cs.bindings[&0], ValueType::Invalid);
     }
 
     #[test]
@@ -211,7 +228,7 @@ mod test {
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
-        assert_eq!(cs.bindings[1].1, ValueType::Reference);
+        assert_eq!(cs.bindings[&1], ValueType::Reference);
     }
 
     #[test]
@@ -224,7 +241,7 @@ mod test {
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
-        assert_eq!(cs.bindings[1].1, ValueType::Scalar);
+        assert_eq!(cs.bindings[&1], ValueType::Scalar);
     }
 
     #[test]
@@ -236,8 +253,8 @@ mod test {
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
-        assert_eq!(cs.bindings[1].1, ValueType::Scalar);
-        assert_eq!(cs.bindings[2].1, ValueType::Scalar);
+        assert_eq!(cs.bindings[&1], ValueType::Scalar);
+        assert_eq!(cs.bindings[&2], ValueType::Scalar);
     }
 
     #[test]
@@ -255,7 +272,7 @@ mod test {
 
         cs.solve();
 
-        assert_eq!(cs.bindings[7].1, ValueType::Reference);
-        assert_eq!(cs.bindings[8].1, ValueType::Scalar);
+        assert_eq!(cs.bindings[&7], ValueType::Reference);
+        assert_eq!(cs.bindings[&8], ValueType::Scalar);
     }
 }
