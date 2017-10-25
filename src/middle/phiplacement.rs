@@ -68,14 +68,12 @@ impl<'a, T> PhiPlacer<'a, T>
 
     /// Add a new variable that the phiplacer should know of.
     /// This information is required to place phi-s. Note that the 
-    /// phis are generated only for variabels defined in this list.
+    /// phis are generated only for variables defined in this list.
     ///
     /// This list typically should include all the registers that a part of the
     /// arch and a memory instance.
     pub fn add_variables(&mut self, variable_types: Vec<ValueInfo>) {
-        for _ in &variable_types {
-            self.current_def.push(BTreeMap::new());
-        }
+        self.current_def.extend((0..variable_types.len()).map(|_| BTreeMap::new()));
         self.variable_types.extend(variable_types);
     }
 
@@ -491,17 +489,12 @@ impl<'a, T> PhiPlacer<'a, T>
             if use_ == phi {
                 continue;
             }
-            if true || false { //TODO: Need suggestion
-                match self.ssa.node_data(use_) {
-                    Ok(NodeData {vt: _, nt: NodeType::Phi}) => {
-                        self.try_remove_trivial_phi(use_);
-                    },
-                    _ => {}
-                }
-            } else { //XXX: Remove this?
-                if self.ssa.node_data(use_).is_ok() {
+
+            match self.ssa.node_data(use_) {
+                Ok(NodeData {vt: _, nt: NodeType::Phi}) => {
                     self.try_remove_trivial_phi(use_);
-                }
+                },
+                _ => {}
             }
         }
         same

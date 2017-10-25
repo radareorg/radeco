@@ -81,6 +81,10 @@ impl ValueInfo {
         ValueInfo::new(ValueType::Reference, width)
     }
 
+    pub fn set_value_type(&mut self, vt: ValueType) {
+        self.vty = vt;
+    }
+
     pub fn mark_as_scalar(&mut self) {
         self.vty = ValueType::Scalar;
     }

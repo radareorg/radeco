@@ -100,7 +100,7 @@ impl NodeData {
         }
     }
 
-    pub fn get_valueinfo(&self) -> Option<&ValueInfo> {
+    pub fn valueinfo(&self) -> Option<&ValueInfo> {
         match self {
             &NodeData::Op(_, ref vif) |
             &NodeData::Phi(ref vif, _) |
@@ -109,7 +109,7 @@ impl NodeData {
         }
     }
 
-    pub fn get_valueinfo_mut(&mut self) -> Option<&mut ValueInfo> {
+    pub fn valueinfo_mut(&mut self) -> Option<&mut ValueInfo> {
         match *self {
             NodeData::Op(_, ref mut vif) |
             NodeData::Phi(ref mut vif, _) |
