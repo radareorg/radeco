@@ -735,7 +735,7 @@ mod test {
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
-            constructor.run(instructions.ops.unwrap());
+            constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
             dce::collect(&mut ssa);
@@ -755,7 +755,7 @@ mod test {
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
-            constructor.run(instructions.ops.unwrap());
+            constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
             dce::collect(&mut ssa);
@@ -783,7 +783,7 @@ mod test {
         let mut ssa = SSAStorage::new();
         {
             let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
-            constructor.run(instructions.ops.unwrap());
+            constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
             dce::collect(&mut ssa);
