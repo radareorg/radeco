@@ -48,14 +48,15 @@
 // #![allow(dead_code)]
 // #![allow(unused_variables)]
 
-extern crate cpuprofiler;
 extern crate regex;
 extern crate petgraph;
 extern crate serde_json;
 extern crate num;
 #[macro_use] extern crate lazy_static;
 
+#[cfg(feature="trace_log")]
 #[macro_use] extern crate log;
+#[cfg(feature="trace_log")]
 extern crate env_logger;
 
 extern crate r2pipe;
@@ -64,6 +65,9 @@ extern crate r2api;
 extern crate esil;
 extern crate capstone_rust;
 extern crate rayon;
+
+#[cfg(feature="profile")]
+extern crate cpuprofiler;
 
 #[macro_use] pub mod utils;
 #[macro_use] pub mod middle;

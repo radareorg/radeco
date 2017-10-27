@@ -1,7 +1,8 @@
+#[cfg(feature="trace_log")] extern crate env_logger;
+
 extern crate radeco_lib;
 extern crate r2pipe;
 extern crate r2api;
-extern crate env_logger;
 extern crate petgraph;
 
 mod cli;
@@ -37,7 +38,7 @@ Options:
 ";
 
 fn main() {
-    env_logger::init().unwrap();
+    #[cfg(feature="trace_log")] env_logger::init().unwrap();
 
     let requested_functions = cli::init_for_args(USAGE);
 
@@ -97,7 +98,7 @@ fn main() {
         println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
         {
             println!("  [*] Eliminating Dead Code");
-            //dce::collect(&mut rfn.ssa);
+            dce::collect(&mut rfn.ssa);
         }
         let mut ssa = {
             // Constant Propagation (sccp)
@@ -162,12 +163,12 @@ fn main() {
         //    };
         //}
         
-        {
-            // Expreimental reference marking pass
+        //{
+            //// Expreimental reference marking pass
             //println!("  [*] Unstable> Marking References");
             //let mut rmark = mark_refs::ReferenceMarker { };
             //rmark.resolve_refs(&mut rfn.ssa);
-        }
+        //}
 
         let mut fname = PathBuf::from(&dir);
         fname.push(&rfn.name);

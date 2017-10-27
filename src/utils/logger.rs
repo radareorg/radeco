@@ -18,7 +18,10 @@
 //! Check minidec/main.rs for an example of the same
 
 use std::fmt::Debug;
+
+#[cfg(feature="trace_log")]
 use log::{self, LogLevel, LogMetadata, LogRecord, SetLoggerError};
+
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::io::Write;
@@ -86,11 +89,13 @@ impl<'a, T: Debug> ToString for Event<'a, T> {
 macro_rules! radeco_trace {
     ($t: expr) => ({
         if cfg!(feature = "trace_log") {
+            #[cfg(feature="trace_log")]
             debug!("{}", $t.to_string());
         }
     });
     ($fmt:expr, $($arg:tt)*) => ({
         if cfg!(feature = "trace_log") {
+            #[cfg(feature="trace_log")]
             debug!("{}", format_args!($fmt, $($arg)*));
         }
     });
@@ -100,11 +105,13 @@ macro_rules! radeco_trace {
 macro_rules! radeco_warn {
     ($t: expr) => ({
         if cfg!(feature = "trace_log") {
+            #[cfg(feature="trace_log")]
             warn!("{}", $t.to_string());
         }
     });
     ($fmt:expr, $($arg:tt)*) => ({
         if cfg!(feature = "trace_log") {
+            #[cfg(feature="trace_log")]
             warn!("{}", format_args!($fmt, $($arg)*));
         }
     });
