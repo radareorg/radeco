@@ -115,7 +115,8 @@ impl<B: RBindings> RadecoFunction<B> {
     pub fn construct(reg_profile: &LRegInfo, insts: Vec<LOpInfo>) -> RadecoFunction<B> {
         let mut rfn = RadecoFunction::new();
         {
-            let mut constructor = SSAConstruct::new(&mut rfn.ssa, reg_profile);
+            let regfile = SubRegisterFile::new(reg_profile);
+            let mut constructor = SSAConstruct::new(&mut rfn.ssa, &regfile);
             constructor.run(insts.as_slice());
         }
         rfn

@@ -49,7 +49,7 @@ pub struct SubRegisterFile {
     pub whole_registers: Vec<ValueInfo>,
     /// Contains the respective names for the registers described in `whole_registers`
     pub whole_names: Vec<String>,
-    named_registers: HashMap<String, SubRegister>,
+    pub named_registers: HashMap<String, SubRegister>,
     /// Contains the alias information for some registers.
     pub alias_info: HashMap<String, String>,
     /// Contains the type information for every registers.

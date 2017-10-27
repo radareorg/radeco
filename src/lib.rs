@@ -48,6 +48,7 @@
 // #![allow(dead_code)]
 // #![allow(unused_variables)]
 
+extern crate cpuprofiler;
 extern crate regex;
 extern crate petgraph;
 extern crate serde_json;

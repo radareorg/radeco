@@ -28,6 +28,7 @@ docopt = "*"
 env_logger = "*"
 clippy = {version = "0.0.61", optional = true}
 rayon = "0.8.2"
+cpuprofiler = "*"
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"

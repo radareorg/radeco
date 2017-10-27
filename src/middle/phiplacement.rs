@@ -8,7 +8,8 @@
 //! Implements the SSA construction algorithm described in
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::Bound::{Included, Excluded};
 use std::cmp::Ordering;
 use std::u64;
 
@@ -36,7 +37,7 @@ pub struct PhiPlacer<'a, T>
     pub blocks: BTreeMap<MAddress, T::ActionRef>,
     pub index_to_addr: HashMap<T::ValueRef, MAddress>,
     pub variable_types: Vec<ValueInfo>,
-    regfile: SubRegisterFile,
+    regfile: &'a SubRegisterFile,
     sealed_blocks: HashSet<T::ActionRef>,
     ssa: &'a mut T,
     unexplored_addr: u64,
@@ -50,7 +51,7 @@ impl<'a, T> PhiPlacer<'a, T>
 {
 
     /// Create a new instance of phiplacer
-    pub fn new(ssa: &'a mut T, regfile: SubRegisterFile) -> PhiPlacer<'a, T> {
+    pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) -> PhiPlacer<'a, T> {
         PhiPlacer {
             blocks: BTreeMap::new(),
             current_def: Vec::new(),
@@ -73,7 +74,9 @@ impl<'a, T> PhiPlacer<'a, T>
     /// This list typically should include all the registers that a part of the
     /// arch and a memory instance.
     pub fn add_variables(&mut self, variable_types: Vec<ValueInfo>) {
-        self.current_def.extend((0..variable_types.len()).map(|_| BTreeMap::new()));
+        for _ in &variable_types {
+            self.current_def.push(BTreeMap::new());
+        }
         self.variable_types.extend(variable_types);
     }
 
@@ -90,11 +93,14 @@ impl<'a, T> PhiPlacer<'a, T>
                       address);
 
         if let Some(rname) = self.regfile.whole_names.get(variable as usize) {
+            // XXX
             self.ssa.set_register(value, rname.clone());
         }
 
         self.current_def[variable as usize].insert(address, value);
         self.outputs.insert(value, variable);
+
+        radeco_trace!("Wrote: {:?} <- {:?}", variable, value);
     }
 
     // Returns the address that provides this definition and the corresponding
@@ -128,13 +134,17 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn read_variable(&mut self, address: &mut MAddress, variable: VarId) -> T::ValueRef {
-        match self.current_def_in_block(variable, *address).cloned() {
+        radeco_trace!("Entering read_variable, variable: {:?}", variable);
+        let v = match self.current_def_in_block(variable, *address).cloned() {
             Some(var) => var,
             None => self.read_variable_recursive(variable, address),
-        }
+        };
+        radeco_trace!("Exiting read_variable, return: {:?}", v);
+        v
     }
 
     fn read_variable_recursive(&mut self, variable: VarId, address: &mut MAddress) -> T::ValueRef {
+        radeco_trace!("Entering read_variable_recursive, variable: {:?}", variable);
         let block = self.block_of(*address).unwrap();
         let valtype = self.variable_types[variable as usize];
         let val = if self.sealed_blocks.contains(&block) {
@@ -152,11 +162,11 @@ impl<'a, T> PhiPlacer<'a, T>
             }
         } else {
             // Incomplete CFG
-            let val_ = self.add_phi(address, valtype);
             let block_addr = self.addr_of(&block);
+            let val_ = self.add_phi(address, valtype);
             if let Some(hash) = self.incomplete_phis.get_mut(&block_addr) {
                 match hash.get(&variable).cloned() {
-                    Some(v) => v,
+                    Some(v) => { radeco_trace!("Else Some() {:?}", v);  v },
                     None => {
                         radeco_trace!("phip_rvr|phi({:?})|{}({:?})|{}|{}",
                                       val_,
@@ -164,8 +174,8 @@ impl<'a, T> PhiPlacer<'a, T>
                                       self.regfile.whole_names.get(variable as usize),
                                       address,
                                       block_addr);
-
                         hash.insert(variable, val_);
+                        radeco_trace!("Else None: {:?}", val_);
                         val_
                     }
                 }
@@ -175,6 +185,7 @@ impl<'a, T> PhiPlacer<'a, T>
 
         };
         self.write_variable(*address, variable, val);
+        radeco_trace!("Exiting read_variabel_recursive");
         val
     }
 
@@ -271,7 +282,6 @@ impl<'a, T> PhiPlacer<'a, T>
             self.ssa.insert_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
-            // for (addr, ni) in self.addr_to_index.clone() {
             // For there is no assignment to addr_to_index, the original code will
             // skip the loop below, causing losing necessary phi functions
             for (ni, addr) in self.index_to_addr.clone() {
@@ -375,36 +385,31 @@ impl<'a, T> PhiPlacer<'a, T>
 
     pub fn seal_block(&mut self, block: T::ActionRef) {
         let block_addr = self.addr_of(&block);
-        let inc = self.incomplete_phis[&block_addr].clone();
-        for (variable, node) in inc {
-            let z = node;//.clone();
-            let nx = self.add_phi_operands(block, variable, node);
+        let keys = self.incomplete_phis[&block_addr].keys().cloned().collect::<Vec<_>>();
+        let invalid_value = self.ssa.invalid_value().expect("No invalid value for this ssa!");
 
-
-            if let Some(t) = self.incomplete_phis.get_mut(&block_addr) {
-                t.insert(variable, nx);
+        for variable in keys {
+            let node = *self.incomplete_phis[&block_addr].get(&variable).unwrap_or(&invalid_value);
+            if self.ssa.node_data(node).is_err() {
+                continue;
             }
 
-            {
-                let tmp_incomplete_phis = self.incomplete_phis.clone();
-                for (blkaddr, var) in tmp_incomplete_phis {
-                    for (variable, tmp_node) in var {
-                        if tmp_node.eq(&z) {
-                            if let Some(t) = self.incomplete_phis.get_mut(&blkaddr) {
-                                t.insert(variable, nx);
-                            }
-                        }
-                    }
-                }
+            radeco_trace!("Doing: {:?} {:?}", node, self.ssa.node_data(node));
 
-                let zz = self.current_def[variable as usize].clone();
-                for (key, value) in zz {
-                    if value.eq(&node) {
-                        self.current_def[variable as usize].insert(key, nx);
-                    }
+            let nx = self.add_phi_operands(block, variable, node);
+            if let Some(t) = self.incomplete_phis.get_mut(&block_addr) {
+                if let Ok(NodeType::Phi) = self.ssa.node_data(nx).map(|x| x.nt) {
+                    t.insert(variable, nx);
+                }
+            }
+
+            for (key, value) in self.current_def[variable as usize].iter_mut() {
+                if value == &node {
+                    *value = nx;
                 }
             }
         }
+
         self.sealed_blocks.insert(block);
     }
 
@@ -413,23 +418,28 @@ impl<'a, T> PhiPlacer<'a, T>
                         variable: VarId,
                         phi: T::ValueRef)
                         -> T::ValueRef {
+        radeco_trace!("Entering add_phi_operands, phi: {:?}", phi);
         // Determine operands from predecessors
         let baddr = self.addr_of(&block);
         for pred in self.ssa.preds_of(block) {
             let mut p_addr = self.addr_of(&pred);
-
             radeco_trace!("phip_add_phi_operands|cur:{}|pred:{}", baddr, p_addr);
-
             let datasource = self.read_variable(&mut p_addr, variable);
+            radeco_trace!("datasource: {:?}", datasource);
             self.ssa.phi_use(phi, datasource);
+            radeco_trace!("done with phi_use, phi: {:?}, ds: {:?}", phi, datasource);
             if self.ssa.registers(phi).is_empty() {
                 self.propagate_reginfo(&phi);
             }
         }
-        self.try_remove_trivial_phi(phi)
+
+        let v = self.try_remove_trivial_phi(phi);
+        radeco_trace!("Exiting add phi operands");
+        v
     }
 
     fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
+        radeco_trace!("Entering try_remove_trivial_phi, phi: {:?}", phi);
         let undef = self.ssa.invalid_value().expect("Invalid Value is not defined");
         // The phi is unreachable or in the start block
         let mut same: T::ValueRef = undef;
@@ -440,56 +450,59 @@ impl<'a, T> PhiPlacer<'a, T>
             }
             if same != undef {
                 // The phi merges at least two values: not trivial
+                radeco_trace!("Exiting try_remove_trivial_phi, return: {:?}", phi);
                 return phi;
             }
             same = op
         }
 
+        let phi_addr = self.index_to_addr.get(&phi).cloned().expect("No address for phi");
+        let block = self.block_of(phi_addr).expect("No block for address");
+        let block_addr = self.addr_of(&block);
+
         if same == undef {
-            let phi_addr = self.index_to_addr.get(&phi).cloned().unwrap();
-            let block = self.block_of(phi_addr).unwrap();
+            radeco_trace!("undef: {:?}", undef);
             let valtype = self.ssa
                               .node_data(phi)
                               .expect("No Data associated with this node!")
                               .vt;
-            let block_addr = self.addr_of(&block);
+
             same = self.add_undefined(block_addr, valtype);
         }
 
-        //let users = self.ssa.uses_of(phi); //This works too instead of the code below.
-        let mut users: Vec<T::ValueRef> = Vec::new(); 
-        //I feel this is better is there is no comparison with phi value that is being replaced.
-        // Better not, when node_data called for the phi node, it has been removed, so raise
-        // an error.
-        for uses in self.ssa.uses_of(phi) {
-            if !users.contains(&uses) {
-                users.push(uses);
-            }
-        }
+        radeco_trace!("Replacing: {:?}, {:?}", phi, same);
         // Reroute all uses of phi to same and remove phi
-        self.index_to_addr.remove(&phi);
-        self.ssa.replace_value(phi, same);
-        // TODO: There is a deep-hidden bug: when phi is some variables' residence, we should replace 
-        // these variables' residences from phi to same. Otherwise, later when we call read_variable,
-        // the function will return a deleted node, and cause panic in future work.
-        if let Some(VarId) = self.outputs.remove(&phi) {
-            self.outputs.insert(same, VarId);
+        let users = self.ssa.uses_of(phi).iter().filter(|&&x| x != phi && x != same).cloned().collect::<Vec<_>>();
+        // Remove all uses of the phi.
+        for use_ in &users {
+            self.ssa.op_unuse(*use_, phi);
         }
-        for variable in 0..self.variable_types.len() {
-            let cur_def = self.current_def[variable].clone();
-            let mut pairs = cur_def.iter();
-            while let Some(pair) = pairs.next() {
-                if pair.1 == &phi {
-                    self.current_def[variable].insert(*pair.0, same);
+
+        self.ssa.replace_value(phi, same);
+
+        if let Some(var_id) = self.outputs.remove(&phi) {
+            self.outputs.insert(same, var_id);
+
+            // Remove it from incomplete phis if it is in it.
+            if let Some(block) = self.incomplete_phis.get_mut(&block_addr) {
+                if let Some(ent) = block.get(&var_id).cloned() {
+                    if ent == phi {
+                        block.remove(&var_id);
+                    }
                 }
             }
         }
+
+        for variable in 0..self.variable_types.len() {
+            for (addr, def) in self.current_def[variable].iter_mut() {
+                if def == &phi {
+                    *def = same;
+                }
+            }
+        }
+
         // Try to recursively remove all phi users, which might have become trivial
         for use_ in users {
-            if use_ == phi {
-                continue;
-            }
-
             match self.ssa.node_data(use_) {
                 Ok(NodeData {vt: _, nt: NodeType::Phi}) => {
                     self.try_remove_trivial_phi(use_);
@@ -497,6 +510,7 @@ impl<'a, T> PhiPlacer<'a, T>
                 _ => {}
             }
         }
+        radeco_trace!("Exiting(2) try_remove_trivial_phi, ret: {:?}", same);
         same
     }
 
@@ -781,28 +795,11 @@ impl<'a, T> PhiPlacer<'a, T>
         }
     }  
 
-    // Determine which block as address should belong to.
+    // Determine which block address should belong to.
     // This basically translates to finding the greatest address that is less that
     // `address` in self.blocks. This is fairly simple as self.blocks is sorted.
     pub fn block_of(&self, address: MAddress) -> Option<T::ActionRef> {
-        let mut last = None;
-        let start_address = {
-            let start = self.ssa.entry_node().expect("Incomplete CFG graph");
-            self.addr_of(&start)
-        };
-        for (baddr, index) in self.blocks.iter().rev() {
-            // TODO: Better way to detect start block by using self.ssa.start_block
-            // If this is the start block.
-            if *baddr == start_address && *baddr != address {
-                last = None;
-            } else {
-                last = Some(*index);
-            }
-            if *baddr <= address {
-                break;
-            }
-        }
-        last
+        self.blocks.range((Included(&MAddress::new(0, 0)), Included(&address))).last().map(|(_, &b)| b)
     }
 
     // Return the address corresponding to the block.
@@ -869,9 +866,46 @@ impl<'a, T> PhiPlacer<'a, T>
         // Iterate through blocks and seal them. Also associate nodes with their
         // respective blocks.
         let blocks = self.blocks.clone();
-        for (addr, block) in blocks.iter().rev() {
-            radeco_trace!("phip_seal_block|{:?}|{}", block, addr);
-            self.seal_block(*block);
+
+        let mut wl = VecDeque::new();
+        let mut seen = HashSet::new();
+        let mut wasted_cycles = 0;
+        wl.push_back(self.ssa.entry_node().expect("No entry block!"));
+
+        while !wl.is_empty() {
+            if wasted_cycles > wl.len() {
+                break;
+            }
+            // wl[0] is safe to access
+            let current = wl.pop_front().expect("Cannot be `None`");
+            let preds = self.ssa.preds_of(current);
+            // All preds must be sealed before we process this.
+            let push_current_back = if preds.iter()
+                                        .filter(|&&x| x != current)
+                                        .all(|x| self.sealed_blocks.contains(x)) {
+                // Check if have not already sealed this block
+                if !self.sealed_blocks.contains(&current) {
+                    self.seal_block(current);
+                    wasted_cycles = 0;
+                }
+                false
+            } else {
+                wasted_cycles += 1;
+                true
+            };
+            // If this block was sealed now, add its successors to process.
+            if !seen.contains(&current) {
+                wl.extend(self.ssa.succs_of(current).iter());
+                seen.insert(current);
+            }
+
+            if push_current_back {
+                wl.push_back(current);
+            }
+        }
+
+        for block in wl {
+            self.seal_block(block);
         }
 
         for node in &self.ssa.values() {
@@ -881,9 +915,12 @@ impl<'a, T> PhiPlacer<'a, T>
                 if let Ok(ndata) = self.ssa.node_data(*node) {
                     if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
                         let block = self.block_of(addr);
-                        let cond_node = self.ssa.operands_of(*node)[0];
-                        self.ssa.set_selector(cond_node, block.unwrap());
-                        self.ssa.remove_value(*node);
+                        if let Some(cond_node) = self.ssa.operands_of(*node).get(0) {
+                            self.ssa.set_selector(*cond_node, block.unwrap());
+                            self.ssa.remove_value(*node);
+                        } else {
+                            radeco_warn!("Lost selector!");
+                        }
                     }
                 }
             }
