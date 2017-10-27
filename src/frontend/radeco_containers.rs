@@ -307,12 +307,34 @@ pub struct ModuleIter<'m> {
     iter: slice::Iter<'m, RadecoModule>,
 }
 
+// TODO: Add a way to access the project
+pub struct ZippedModuleMut<'m> {
+    pub module: &'m mut RadecoModule,
+}
+
+pub struct ModuleIterMut<'m> {
+    iter: slice::IterMut<'m, RadecoModule>,
+}
+
 impl<'m> Iterator for ModuleIter<'m> {
     type Item = ZippedModule<'m>;
     fn next(&mut self) -> Option<ZippedModule<'m>> {
         if let Some(rmod) = self.iter.next() {
             Some(ZippedModule {
                 project: &self.project,
+                module: rmod,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'m> Iterator for ModuleIterMut<'m> {
+    type Item = ZippedModuleMut<'m>;
+    fn next(&mut self) -> Option<ZippedModuleMut<'m>> {
+        if let Some(rmod) = self.iter.next() {
+            Some(ZippedModuleMut {
                 module: rmod,
             })
         } else {
@@ -331,6 +353,16 @@ pub struct FunctionIter<'f> {
     iter: btree_map::Iter<'f, u64, RadecoFunction>,
 }
 
+// TODO: Add a way to access module
+pub struct ZippedFunctionMut<'f> {
+    pub function: (&'f u64, &'f mut RadecoFunction),
+}
+
+pub struct FunctionIterMut<'f> {
+    iter: btree_map::IterMut<'f, u64, RadecoFunction>,
+}
+
+
 impl<'f> Iterator for FunctionIter<'f> {
     type Item = ZippedFunction<'f>;
     fn next(&mut self) -> Option<ZippedFunction<'f>> {
@@ -340,6 +372,19 @@ impl<'f> Iterator for FunctionIter<'f> {
                 function: rfn,
             })
         } else {
+            None
+        }
+    }
+}
+
+impl<'f> Iterator for FunctionIterMut<'f> {
+    type Item = ZippedFunctionMut<'f>;
+    fn next(&mut self) -> Option<ZippedFunctionMut<'f>> {
+        if let Some(rfn) = self.iter.next() {
+            Some(ZippedFunctionMut {
+                function: rfn,
+            })
+        } else  {
             None
         }
     }
@@ -635,6 +680,12 @@ impl RadecoProject {
             iter: self.modules.iter(),
         }
     }
+
+    pub fn iter_mut<'a>(&'a mut self) -> ModuleIterMut<'a> {
+        ModuleIterMut {
+            iter: self.modules.iter_mut()
+        }
+    }
 }
 
 impl RadecoModule {
@@ -656,6 +707,12 @@ impl RadecoModule {
         FunctionIter {
             module: &self,
             iter: self.functions.iter(),
+        }
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> FunctionIterMut<'a> {
+        FunctionIterMut {
+            iter: self.functions.iter_mut(),
         }
     }
 }
