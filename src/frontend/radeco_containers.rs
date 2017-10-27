@@ -57,7 +57,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::marker::PhantomData;
 
-use cpuprofiler::PROFILER;
+//use cpuprofiler::PROFILER;
 
 /// Defines sane defaults for the loading process.
 pub mod loader_defaults {

@@ -15,7 +15,9 @@ path = "minidec/main.rs"
 
 [features]
 default = []
-trace_log = []
+trace_log = ["log", "env_logger"]
+profile = ["cpuprofiler"]
+
 
 [dependencies]
 regex = "*"
@@ -23,12 +25,14 @@ petgraph = "^0.4.0"
 num = "*"
 serde_json="*"
 lazy_static = "*"
-log = "*"
 docopt = "*"
-env_logger = "*"
-clippy = {version = "0.0.61", optional = true}
 rayon = "0.8.2"
-cpuprofiler = "*"
+
+log = { version = "*", optional = true }
+env_logger = { version = "*", optional = true }
+
+clippy = {version = "0.0.61", optional = true}
+cpuprofiler = { version = "*", optional = true }
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"
