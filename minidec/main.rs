@@ -164,9 +164,9 @@ fn main() {
         
         {
             // Expreimental reference marking pass
-            println!("  [*] Unstable> Marking References");
-            let mut rmark = mark_refs::ReferenceMarker { };
-            rmark.resolve_refs(&mut rfn.ssa);
+            //println!("  [*] Unstable> Marking References");
+            //let mut rmark = mark_refs::ReferenceMarker { };
+            //rmark.resolve_refs(&mut rfn.ssa);
         }
 
         let mut fname = PathBuf::from(&dir);

@@ -57,6 +57,8 @@ use std::path::Path;
 use std::rc::Rc;
 use std::marker::PhantomData;
 
+use cpuprofiler::PROFILER;
+
 /// Defines sane defaults for the loading process.
 pub mod loader_defaults {
     use frontend::radeco_source::Source;
@@ -505,9 +507,13 @@ impl<'a> ModuleLoader<'a> {
                     SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
                 });
             } else {
+        //PROFILER.lock().unwrap().start("./bzip-profile.profile").expect("Start failed!");
+
                 for (off, rfn) in rmod.functions.iter_mut() {
+        //println!("Here!");
                     SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
                 }
+        //PROFILER.lock().unwrap().stop().expect("Could not stop");
             }
         }
 

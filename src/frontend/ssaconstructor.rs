@@ -43,13 +43,8 @@ pub struct SSAConstruct<'a, T>
                     CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
     phiplacer: PhiPlacer<'a, T>,
-    regfile: SubRegisterFile,
+    regfile: &'a SubRegisterFile,
     intermediates: Vec<T::ValueRef>,
-    // TODO: Combine this information with the registers field.
-    // even better if this is done at the r2pipe level and we expose API to get
-    // alias information.
-    alias_info: HashMap<String, String>,
-    ident_map: HashMap<String, u64>,
     // Used to keep track of esil if-else. The reference to the ITE node and the address of this
     // instruction.
     nesting: Vec<(T::ValueRef, MAddress)>,
@@ -64,34 +59,16 @@ impl<'a, T> SSAConstruct<'a, T>
                     ActionRef = <T as Graph>::GraphNodeRef,
                     CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
-    pub fn new(ssa: &'a mut T, reg_info: &LRegInfo) -> SSAConstruct<'a, T> {
-        let regfile = SubRegisterFile::new(reg_info);
+    pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) -> SSAConstruct<'a, T> {
         let mut sc = SSAConstruct {
-            phiplacer: PhiPlacer::new(ssa, regfile.clone()),
+            phiplacer: PhiPlacer::new(ssa, regfile),
             regfile: regfile,
             intermediates: Vec::new(),
-            alias_info: HashMap::new(),
-            ident_map: HashMap::new(),
             nesting: Vec::new(),
             instruction_offset: 0,
             needs_new_block: true,
             mem_id: 0,
         };
-
-        {
-            // Populate the alias information from reg_info
-            let alias_info = &mut sc.alias_info;
-            for register in &reg_info.alias_info {
-                alias_info.insert(register.reg.clone(), register.role_str.clone());
-            }
-        }
-
-        {
-            let identmap = &mut sc.ident_map;
-            for register in &reg_info.reg_info {
-                identmap.insert(register.name.clone(), register.size as u64);
-            }
-        }
 
         // Add all the registers to the variable list.
         sc.phiplacer.add_variables(sc.regfile.whole_registers.clone());
@@ -103,7 +80,8 @@ impl<'a, T> SSAConstruct<'a, T>
     // Helper wrapper.
     pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo) {
         let instructions = rfn.instructions().to_vec();
-        let mut constr = SSAConstruct::new(rfn.ssa_mut(), &ri);
+        let regfile = SubRegisterFile::new(ri);
+        let mut constr = SSAConstruct::new(rfn.ssa_mut(), &regfile);
         constr.run(instructions.as_slice());
     }
 
@@ -212,7 +190,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 // If the register being written into is "PC" then we emit a jump (jmp) instead
                 // of an assignment.
                 if let Some(Token::EIdentifier(ref name)) = operands[0] {
-                    if Some("PC".to_owned()) == self.alias_info.get(name).cloned() {
+                    if Some("PC".to_owned()) == self.regfile.alias_info.get(name).cloned() {
                         // There is a possibility that the jump target is not a constant and we
                         // don't have enough information right now to resolve this target. In this
                         // case, we add a new block and label it unresolved. This maybe resolved as
@@ -434,7 +412,12 @@ impl<'a, T> SSAConstruct<'a, T>
     // it into its SSA
     // form.
     pub fn run(&mut self, op_info: &[LOpInfo]) {
-        let mut p = Parser::init(Some(self.ident_map.clone()), Some(64));
+        let mut p = Parser::init(Some(self.regfile
+                                        .named_registers
+                                        .iter()
+                                        .map(|(n, v)| (n.clone(), v.width as u64))
+                                        .collect()), Some(64));
+
         let mut current_address = MAddress::new(0, 0);
         self.init_blocks();
         for op in op_info {
@@ -518,7 +501,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 // Do something else other than asking the parserS
                 lazy_static! {
                     static ref OPRE: Regex = Regex::new(r"[[:xdigit:]][[:xdigit:]]")
-                                                   .expect("Unable to compile regex");
+                                                .expect("Unable to compile regex");
                 }
 
                 let byte_str = op.bytes.as_ref().expect("Invalid bytes for instruction");
@@ -529,9 +512,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 // TODO/XXX:
                 // This needs to be selected based on the current arch
                 let ia = X86_CS_IA::new(bytes).expect("Unable to instantiate IA");
-
                 self.process_custom(&ia, &mut current_address);
-
                 continue;
             }
 
