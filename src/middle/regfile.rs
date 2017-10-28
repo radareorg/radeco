@@ -18,7 +18,7 @@ use middle::ssa::ssa_traits::ValueInfo;
 use middle::ir;
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SubRegister {
     pub base: u64,
     pub shift: u64,
@@ -41,7 +41,7 @@ impl SubRegister {
 ///
 /// It can then translate accesses to partial registers to accesses of whole registers.
 /// Shifts and masks are added automatically.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SubRegisterFile {
     /// `ValueType`s of whole registers ready to be added to a `PhiPlacer`.
     /// The index within `PhiPlacer` to the first register is needed

@@ -637,9 +637,9 @@ impl CFGMod for SSAStorage {
 
 }
 
-/// ////////////////////////////////////////////////////////////////////////////
-/// / Implementation of SSA for SSAStorage.
-/// ////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//// Implementation of SSA for SSAStorage.
+///////////////////////////////////////////////////////////////////////////////
 
 impl SSA for SSAStorage {
     type ValueRef = NodeIndex;
@@ -669,6 +669,13 @@ impl SSA for SSAStorage {
             }
         }
         false
+    }
+
+    fn is_comment(&self, exi: Self::ValueRef) -> bool {
+        match self.g[exi] {
+            NodeData::Comment(_, _) => true,
+            _ => false,
+        }
     }
 
     fn address(&self, ni: Self::ValueRef) -> Option<MAddress> {
