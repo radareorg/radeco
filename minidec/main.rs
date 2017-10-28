@@ -27,8 +27,7 @@ use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 use radeco_lib::middle::ssa::verifier;
 
-// Expreimental reference marking
-use radeco_lib::analysis::mark_refs;
+//use radeco_lib::analysis::mark_refs;
 
 const USAGE: &'static str = "
 Usage: minidec [-f <names>...] <target>

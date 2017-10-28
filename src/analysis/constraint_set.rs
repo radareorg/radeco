@@ -17,7 +17,7 @@
 use middle::ssa::ssa_traits::ValueType;
 use std::collections::{HashMap, VecDeque};
 use std::collections::hash_map;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter, Error};
 use std::hash::Hash;
 use std::slice;
 
@@ -59,8 +59,8 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
 
         for i in (0..iter_limit) {
             self.add_constraint(Constraint::Equality(lhs,
-                                                     Box::new(Constraint::Union(ops[i],
-                                                                                ops[i + 1]))));
+                                    Box::new(Constraint::Union(ops[i],
+                                      ops[i + 1]))));
         }
     }
 
@@ -72,12 +72,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         self.add_constraint(Constraint::AssertEquivalence(Vec::from(eq_set)));
     }
 
-    //pub fn bind(&mut self, n: &[T]) {
-        //for i in n {
-            //self.bindings.insert(i.clone(), ValueType::Unresolved);
-        //}
-    //}
-
+    // Retrive binding value for `bind` or insert default if none exist
     fn bvalue(&mut self, bind: T) -> ValueType {
         *self.bindings.entry(bind).or_insert(ValueType::Unresolved)
     }
@@ -209,7 +204,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                     if self.bvalue(op1) == vt1 {
                         self.bindings.insert(op2, vt2);
                         true
-                    } else if self.bindings[&op2] == vt2 {
+                    } else if self.bvalue(op2) == vt2 {
                         self.bindings.insert(op1, vt1);
                         true
                     } else {
@@ -226,6 +221,40 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
 
     pub fn iter_bindings<'a>(&'a self) -> hash_map::Iter<'a, T, ValueType> {
         self.bindings.iter()
+    }
+}
+
+impl<T: Debug + Clone + Copy> Display for Constraint<T> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        let s = match *self {
+            Constraint::Union(op1, op2) => { format!("{:?} U {:?}", op1, op2) },
+            Constraint::Equality(op1, box ref op2) => { format!("{:?} = {}", op1, op2) },
+            Constraint::AssertEquivalence(ref ops) => { ops.iter().fold("Assert ".to_owned(), |mut acc, s| { acc.push_str(&format!("{:?} = ", s)); acc }) },
+            Constraint::Assertion(box ref op) => { format!("Assert {}", op) },
+            Constraint::Or(box ref op1, box ref op2) => { format!("{} \\/ {}", op1, op2) },
+            Constraint::And(box ref op1, box ref op2) => { format!("{} /\\ {}", op1, op2) },
+            Constraint::Value(ref vt) => { format!("{:?}", vt) },
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl<T: Clone + Debug + Hash + Eq + Copy> Display for ConstraintSet<T> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        // First Bindings information.
+        let mut display_str = String::new();
+        for (bind, bval) in &self.bindings {
+            display_str = format!("{}{:?}: {:?}\n", display_str, bind, bval);
+        }
+
+        display_str.push_str("-----------------------\nConstraints:\n");
+
+        for constraint in &self.set {
+            display_str.push_str(&constraint.to_string());
+            display_str.push_str("\n");
+        }
+
+        write!(f, "{}", display_str)
     }
 }
 

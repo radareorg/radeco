@@ -1,12 +1,24 @@
-//! Data flow analysis to mark ssa nodes as references or scalars.
+//! Intra-function data flow analysis to propagate reference information within a function.
+//! This is useful to distinguish between pointer (reference) and non-pointer (scalar) types.
 //!
 //! This analysis makes some assumptions about how references are forged/used:
+//!
 //!   1. Every subtree has exactly one leaf that is a reference,
-//!   that is, two references are never used in an operation (such as add, sub etc.)
-//!   Indeed, there is nothing that prevents someone from code that does this, but is generally
-//!   not an accepted practice.
+//!      that is, two references are never used in an operation (such as add, sub etc.)
+//!      Indeed, there is nothing that prevents someone from code that does this, but is generally
+//!      not an accepted practice.
 //!
 //!   2. References are not used in operations such as mul, left shift, etc.
+//!
+//! We treat the following as sources of information:
+//!
+//!   - Address to read/write (memory operations)
+//!   - Target of a indirect CF-transfer (call/jump).
+//!   - Access to stack using rsp/rbp
+//!   - Arguments to current function                   -- Implicitly get marked as reference
+//!   - Arguments to call                               -- Added from inter-function propagation
+//!   - Return from functions                           -- Added from inter-function propagation
+//!     + Returns from 'well-known' functions that return references, such as malloc.
 
 use analysis::constraint_set::{ConstraintSet, Constraint};
 use frontend::radeco_containers::RadecoFunction;
@@ -22,7 +34,7 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct ReferenceMarker<'r> {
-    cs: ConstraintSet<NodeIndex>,
+    pub cs: ConstraintSet<NodeIndex>,
     regfile: &'r SubRegisterFile,
     sections: &'r [LSectionInfo],
 }
@@ -42,17 +54,6 @@ impl<'r> ReferenceMarker<'r> {
 
     fn mark_node(&self, ssa: &mut SSAStorage, ni: NodeIndex, ty: ValueType) {}
 
-    // Start from sources where this information can originate.
-    // For marking nodes as references, the source of this information
-    // has to be one of:
-    //   - Address to read/write (memory operations)
-    //   - Target of a indirect CF-transfer (call/jump).
-    //   - Access to stack using rsp/rbp
-    //   - Arguments to current function                   -- Implicitly get marked as reference
-    //   - Arguments to call                               -- Added from inter-function propagation
-    //   - Return from functions                           -- Added from inter-function propagation
-    //
-    // Return the number of bindings to create
     fn add_constraints(&mut self, ssa: &SSAStorage) {
         let mut comment_nodes = HashSet::new();
         for idx in ssa.inorder_walk() {
@@ -93,7 +94,7 @@ impl<'r> ReferenceMarker<'r> {
                             if !self.sections.iter().any(|section| {
                                 let base = section.vaddr.unwrap();
                                 let size = section.vsize.unwrap();
-                                if base <= val && val <= base + size {
+                                if base <= val && val < base + size {
                                     true
                                 } else {
                                     false
@@ -148,8 +149,10 @@ impl<'r> ReferenceMarker<'r> {
                 NodeType::Phi => {
                     // Generate a union constraint over all operands of phi-node
                     // same type.
-                    let operands = ssa.operands_of(idx);
-                    self.cs.add_union(idx, operands.as_slice());
+                    let mut operands = ssa.operands_of(idx);
+                    // The phi node should also be equal to all its operands.
+                    operands.push(idx);
+                    self.cs.add_equivalence_assertion(operands.as_slice());
                     comment_nodes.extend(operands.iter().filter(|&&x| ssa.is_comment(x)));
                 }
                 _ => {
