@@ -55,6 +55,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::collections::{btree_map, hash_map};
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::marker::PhantomData;
 
 //use cpuprofiler::PROFILER;
@@ -123,8 +124,7 @@ pub struct RadecoProject {
     /// Map of loaded modules
     modules: Vec<RadecoModule>,
     /// Register/Arch information for loaded project
-    // TODO: Discuss and replace with arch
-    reginfo: LRegInfo,
+    reginfo: Arc<SubRegisterFile>,
 }
 
 // Graph where every node is an Address (function start address) and edges are labeled
@@ -140,7 +140,7 @@ pub struct RadecoModule {
     path: Cow<'static, str>,
     // Information from the loader
     symbols: Vec<LSymbolInfo>,
-    sections: Vec<LSectionInfo>,
+    sections: Arc<Vec<LSectionInfo>>,
     imports: Vec<LImportInfo>,
     exports: Vec<LExportInfo>,
     relocs: Vec<LRelocInfo>,
@@ -286,11 +286,12 @@ impl<'a> ProjectLoader<'a> {
         // Clear out irrelevant fields in self and move it into project loader
         // XXX: Do when needed!
         // self.mod_loader = None;
+        let regfile = SubRegisterFile::new(&source.register_profile().expect("Unable to load register profile"));
 
         RadecoProject {
             modules: mod_map,
             // XXX
-            reginfo: LRegInfo::default(),
+            reginfo: Arc::new(regfile),
         }
     }
 }
@@ -475,7 +476,7 @@ impl<'a> ModuleLoader<'a> {
         }
 
         match source.sections() {
-            Ok(section_info) => rmod.sections = section_info,
+            Ok(section_info) => rmod.sections = Arc::new(section_info),
             Err(e) => radeco_warn!(e),
         }
 
@@ -654,8 +655,12 @@ impl RadecoProject {
     pub fn new() -> RadecoProject {
         RadecoProject {
             modules: Vec::new(),
-            reginfo: LRegInfo::default(),
+            reginfo: Arc::new(SubRegisterFile::default()),
         }
+    }
+
+    pub fn regfile(&self) -> &Arc<SubRegisterFile> {
+        &self.reginfo
     }
 
     pub fn nth_module(&self, idx: usize) -> Option<&RadecoModule> {
@@ -714,6 +719,10 @@ impl RadecoModule {
         FunctionIterMut {
             iter: self.functions.iter_mut(),
         }
+    }
+
+    pub fn sections(&self) -> &Arc<Vec<LSectionInfo>> {
+        &self.sections
     }
 }
 

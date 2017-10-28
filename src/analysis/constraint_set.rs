@@ -13,19 +13,22 @@
 //   R = op1 U op2 => (op1 = R /\ op2 = C) \/ (op1 = C /\ op2 = R)
 //
 
-use std::fmt::Debug;
-use std::slice;
-use std::collections::{HashMap, VecDeque};
-use std::hash::Hash;
-use std::collections::hash_map;
 
 use middle::ssa::ssa_traits::ValueType;
+use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::slice;
 
 #[derive(Debug, Clone)]
 pub enum Constraint<I: Debug + Clone + Copy> {
     Union(I, I),
-    // Solve eq
+    // Solve eq. Equation of form, I = Constraint<I>
     Equality(I, Box<Constraint<I>>),
+    // Equivalence. All elements in Vec<I> have the same value.
+    // Solve equivalence
+    AssertEquivalence(Vec<I>),
     // Solve assert
     Assertion(Box<Constraint<I>>),
     Or(Box<Constraint<I>>, Box<Constraint<I>>),
@@ -46,13 +49,19 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     }
 
     pub fn add_union(&mut self, lhs: T, ops: &[T]) {
-        for i in (0..ops.len()-2) {
-            self.add_constraint(Constraint::Equality(lhs, Box::new(Constraint::Union(ops[i], ops[i+1]))));
+        for i in (0..ops.len() - 2) {
+            self.add_constraint(Constraint::Equality(lhs,
+                                                     Box::new(Constraint::Union(ops[i],
+                                                                                ops[i + 1]))));
         }
     }
 
-    pub fn add_eq(mut self, lhs: T, vt: ValueType) {
+    pub fn add_eq(&mut self, lhs: T, vt: ValueType) {
         self.add_constraint(Constraint::Equality(lhs, Box::new(Constraint::Value(vt))));
+    }
+
+    pub fn add_equivalence_assertion(&mut self, eq_set: &[T]) {
+        self.add_constraint(Constraint::AssertEquivalence(Vec::from(eq_set)));
     }
 
     pub fn bind(&mut self, n: &[T]) {
@@ -76,6 +85,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                 Constraint::Equality(_, _) => self.solve_eq(&constraint),
                 Constraint::Equality(_, box _) => self.solve_eq(&constraint),
                 Constraint::Assertion(_) => self.solve_assert(&constraint),
+                Constraint::AssertEquivalence(_) => self.solve_equivalence(&constraint),
                 _ => false,
             };
 
@@ -86,6 +96,25 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
             } else {
                 first_false = 0;
             }
+        }
+    }
+
+    fn solve_equivalence(&mut self, constraint: &Constraint<T>) -> bool {
+        if let &Constraint::AssertEquivalence(ref list) = constraint {
+            if let Some(found) = list.iter().find(|&var| {
+                // Check if any var has a known value
+                self.bindings[var] != ValueType::Unresolved
+            }) {
+                let vt = self.bindings[found];
+                for var in list {
+                    self.bindings.insert(*var, vt);
+                }
+                true
+            } else {
+                false
+            }
+        } else {
+            false
         }
     }
 
@@ -104,7 +133,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                                 self.bindings.insert(op1, ValueType::Scalar);
                                 self.bindings.insert(op2, ValueType::Scalar);
                                 true
-                            },
+                            }
                             ValueType::Reference => {
                                 // Assert some facts
                                 let cons = Constraint::Or(
@@ -115,41 +144,43 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                                     );
                                 self.set.push_back(Constraint::Assertion(Box::new(cons)));
                                 true
-                            },
+                            }
                             ValueType::Unresolved => {
                                 // Look at the Union
                                 let op1_vt = self.bindings[&op1];
                                 let op2_vt = self.bindings[&op2];
-                                let (vt, retval)  = match (op1_vt, op2_vt) {
-                                    (ValueType::Invalid, _)
-                                    | (_, ValueType::Invalid)
-                                    | (ValueType::Reference, ValueType::Reference) => {
+                                let (vt, retval) = match (op1_vt, op2_vt) {
+                                    (ValueType::Invalid, _) |
+                                    (_, ValueType::Invalid) |
+                                    (ValueType::Reference, ValueType::Reference) => {
                                         (ValueType::Invalid, true)
                                     }
 
-                                    (ValueType::Reference, _) => { 
-                                        self.bindings.insert(op2,  ValueType::Scalar);
-                                        (ValueType::Reference , true)
+                                    (ValueType::Reference, _) => {
+                                        self.bindings.insert(op2, ValueType::Scalar);
+                                        (ValueType::Reference, true)
                                     }
 
                                     (_, ValueType::Reference) => {
                                         self.bindings.insert(op1, ValueType::Scalar);
                                         (ValueType::Reference, true)
-                                    },
+                                    }
 
-                                    (ValueType::Scalar, ValueType::Scalar) => { (ValueType::Scalar, true) }
-                                    (_, _) => { (ValueType::Unresolved, false) }
+                                    (ValueType::Scalar, ValueType::Scalar) => {
+                                        (ValueType::Scalar, true)
+                                    }
+                                    (_, _) => (ValueType::Unresolved, false),
                                 };
                                 self.bindings.insert(ni, vt);
                                 retval
-                            },
-                            _ => { false },
+                            }
+                            _ => false,
                         }
                     }
-                    _ => { false }
+                    _ => false,
                 }
             }
-            _ => { false }
+            _ => false,
         }
     }
 
@@ -159,10 +190,10 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         if let &Constraint::Assertion(box Constraint::Or(box ref c1, box ref c2)) = constraint {
             // c1, c2 will be of the form And(Eq(ci1), Eq(ci2))
             [c1, c2].iter().any(|&ci| {
-                if let Constraint::And(
-                    box Constraint::Equality(op1, box Constraint::Value(vt1)),
-                    box Constraint::Equality(op2, box Constraint::Value(vt2))) = *ci
-                {
+                if let Constraint::And(box Constraint::Equality(op1,
+                                                                box Constraint::Value(vt1)),
+                                       box Constraint::Equality(op2,
+                                                                box Constraint::Value(vt2))) = *ci {
                     if self.bindings[&op1] == vt1 {
                         self.bindings.insert(op2, vt2);
                         true
@@ -184,7 +215,6 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     pub fn iter_bindings<'a>(&'a self) -> hash_map::Iter<'a, T, ValueType> {
         self.bindings.iter()
     }
-
 }
 
 #[cfg(test)]

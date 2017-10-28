@@ -166,6 +166,9 @@ pub trait SSA: CFG {
     /// Returns true if the expression acts as a `Selector` for control flow.
     fn is_selector(&self, i: Self::ValueRef) -> bool;
 
+    /// Returns true if teh node is a comment node
+    fn is_comment(&self, i: Self::ValueRef) -> bool;
+
     /// Get all value nodes in the whole graph.
     fn values(&self) -> Vec<Self::ValueRef>;
 
