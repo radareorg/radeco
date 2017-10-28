@@ -53,12 +53,9 @@ impl<'r> ReferenceMarker<'r> {
     //   - Return from functions                           -- Added from inter-function propagation
     //
     // Return the number of bindings to create
-    fn add_constraints(&mut self, ssa: &SSAStorage) -> HashSet<NodeIndex> {
-        let mut nodes = HashSet::new();
+    fn add_constraints(&mut self, ssa: &SSAStorage) {
         let mut comment_nodes = HashSet::new();
-
         for idx in ssa.inorder_walk() {
-            nodes.insert(idx);
             let nd = ssa.node_data(idx);
             if nd.is_err() {
                 continue;
@@ -167,7 +164,6 @@ impl<'r> ReferenceMarker<'r> {
             match nd.unwrap().nt {
                 NodeType::Comment(ref comm) => {
                     // Generate equality constraint if the comment is the stack pointer
-                    println!("{:?}", self.regfile.alias_info);
                     if let Some(sp_reg) = self.regfile.alias_info.get("SP") {
                         if comm == sp_reg {
                             self.cs.add_eq(idx, ValueType::Reference);
@@ -177,8 +173,6 @@ impl<'r> ReferenceMarker<'r> {
                 _ => unreachable!(),
             }
         }
-
-        nodes
     }
 
     pub fn resolve_references_iterative(&mut self, rfn: &mut RadecoFunction) -> bool {
@@ -192,6 +186,9 @@ impl<'r> ReferenceMarker<'r> {
             }
         }
 
+        // XXX: This should not always be true. The return value should depend: did something
+        // change when we tried to evaluate/solve the constraints? This is to know if we've reached
+        // a fixpoint and if we can infer no more about the ValueTypes of nodes.
         true
     }
 
@@ -207,7 +204,6 @@ impl<'r> ReferenceMarker<'r> {
             cs: ConstraintSet::default(),
         };
         let bn = refmarker.add_constraints(rfn.ssa());
-        refmarker.cs.bind(bn.into_iter().collect::<Vec<_>>().as_slice());
         refmarker.resolve_references_iterative(rfn);
         refmarker
     }

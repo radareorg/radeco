@@ -49,7 +49,15 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     }
 
     pub fn add_union(&mut self, lhs: T, ops: &[T]) {
-        for i in (0..ops.len() - 2) {
+        let n = ops.len();
+
+        let iter_limit = if n > 2 {
+            n - 2
+        } else {
+            0
+        };
+
+        for i in (0..iter_limit) {
             self.add_constraint(Constraint::Equality(lhs,
                                                      Box::new(Constraint::Union(ops[i],
                                                                                 ops[i + 1]))));
@@ -64,10 +72,14 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         self.add_constraint(Constraint::AssertEquivalence(Vec::from(eq_set)));
     }
 
-    pub fn bind(&mut self, n: &[T]) {
-        for i in n {
-            self.bindings.insert(i.clone(), ValueType::Unresolved);
-        }
+    //pub fn bind(&mut self, n: &[T]) {
+        //for i in n {
+            //self.bindings.insert(i.clone(), ValueType::Unresolved);
+        //}
+    //}
+
+    fn bvalue(&mut self, bind: T) -> ValueType {
+        *self.bindings.entry(bind).or_insert(ValueType::Unresolved)
     }
 
     pub fn solve(&mut self) {
@@ -103,9 +115,9 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         if let &Constraint::AssertEquivalence(ref list) = constraint {
             if let Some(found) = list.iter().find(|&var| {
                 // Check if any var has a known value
-                self.bindings[var] != ValueType::Unresolved
+                self.bvalue(*var) != ValueType::Unresolved
             }) {
-                let vt = self.bindings[found];
+                let vt = self.bvalue(*found);
                 for var in list {
                     self.bindings.insert(*var, vt);
                 }
@@ -127,7 +139,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                         true
                     }
                     Constraint::Union(op1, op2) => {
-                        match self.bindings[&ni] {
+                        match self.bvalue(ni) {
                             ValueType::Scalar => {
                                 // Both, op1 and op2, are scalars
                                 self.bindings.insert(op1, ValueType::Scalar);
@@ -147,8 +159,8 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                             }
                             ValueType::Unresolved => {
                                 // Look at the Union
-                                let op1_vt = self.bindings[&op1];
-                                let op2_vt = self.bindings[&op2];
+                                let op1_vt = self.bvalue(op1);
+                                let op2_vt = self.bvalue(op2);
                                 let (vt, retval) = match (op1_vt, op2_vt) {
                                     (ValueType::Invalid, _) |
                                     (_, ValueType::Invalid) |
@@ -194,7 +206,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                                                                 box Constraint::Value(vt1)),
                                        box Constraint::Equality(op2,
                                                                 box Constraint::Value(vt2))) = *ci {
-                    if self.bindings[&op1] == vt1 {
+                    if self.bvalue(op1) == vt1 {
                         self.bindings.insert(op2, vt2);
                         true
                     } else if self.bindings[&op2] == vt2 {
