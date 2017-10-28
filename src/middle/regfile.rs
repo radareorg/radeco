@@ -61,7 +61,7 @@ impl SubRegisterFile {
     pub fn new(reg_info: &LRegInfo) -> SubRegisterFile {
         let mut aliases: HashMap<String, String> = HashMap::new();
         for reg in &reg_info.alias_info {
-            aliases.insert(reg.reg.clone(), reg.role_str.clone());
+            aliases.insert(reg.role_str.clone(), reg.reg.clone());
         }
 
         let mut slices = HashMap::new();
