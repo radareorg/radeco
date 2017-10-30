@@ -59,30 +59,71 @@ pub struct CallSite<T> {
 }
 
 // TODO: Think about implementing this on top of the trait directly rather than a dummy struct
-struct InterProceduralAnalyzer<T: InterProcAnalysis> {
+pub struct InterProceduralAnalyzer<T: InterProcAnalysis> {
     _t: PhantomData<T>,
+}
+
+struct AnalyzerWrapper<T: InterProcAnalysis> {
+    analyzer: T,
+    offset: u64,
+    should_run: bool,
+    times_run: u64,
+}
+
+impl<T: InterProcAnalysis> AnalyzerWrapper<T> {
+    pub fn new(offset: u64, analyzer: T) -> AnalyzerWrapper<T> {
+        AnalyzerWrapper {
+            analyzer: analyzer,
+            offset: offset,
+            should_run: true,
+            times_run: 0,
+        }
+    }
+
+    pub fn analyzer_mut(&mut self) -> &mut T {
+        &mut self.analyzer
+    }
+
+    pub fn analyzer(&self) -> &T {
+        &self.analyzer
+    }
+
+    pub fn should_run(&self) -> bool {
+        self.should_run
+    }
+
+    pub fn increment_run_count(&mut self) {
+        self.times_run += 1;
+    }
+
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+
+    pub fn set_run(&mut self, should_run: bool) {
+        self.should_run = should_run;
+    }
 }
 
 impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
     pub fn analyze(rmod: &mut RadecoModule, regfile: &SubRegisterFile, n_iters: Option<u64>) {
         let sections = Arc::clone(rmod.sections());
-        let mut analyzers: Vec<(u64, T)> = Vec::new();
+        let mut analyzers: Vec<AnalyzerWrapper<T>> = Vec::new();
         let mut fixpoint = false;
 
         // Transfer can be done in (TODO) parallel
         for wrapper in rmod.iter_mut() {
             let (current_offset, current_fn) = wrapper.function;
             let analyzer = T::transfer(current_fn, &regfile, &sections);
-            analyzers.push((*current_offset, analyzer));
+            analyzers.push(AnalyzerWrapper::new(*current_offset, analyzer));
         }
 
-        // TODO: Set fixpoint correctly
         while !fixpoint {
             // Propagation should be done in serial
             let mut infos: HashMap<u64, Vec<T::Info>> = HashMap::new();
             for (i, wrapper) in rmod.iter().enumerate() {
                 let (current_offset, current_fn) = wrapper.function;
-                let &mut (_, ref mut current_analyzer) = analyzers.get_mut(i).expect("");
+                let current_analyzer = analyzers.get_mut(i).map(|a| a.analyzer_mut()).expect("");
                 // Get info about current function
                 if let Some(this_info) = T::summary(current_analyzer) {
                     infos.entry(*current_offset).or_insert(Vec::new()).push(this_info);
@@ -106,22 +147,33 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             for (_, infov) in infos.iter_mut() {
                 // XXX: Avoid allocation
                 *infov = vec![infov.iter()
-                                  .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
+                                .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
             }
 
             // Push the information down to the analyzers.
-            for &mut(offset, ref mut analyzer) in analyzers.iter_mut() {
-                let info = infos.get(&offset);
-                if let Some(ref inf) = info {
-                    T::push(analyzer, Some(&inf[0]));
+            for analyzer_wrapper in analyzers.iter_mut() {
+                let offset = analyzer_wrapper.offset();
+                analyzer_wrapper.should_run = {
+                    let info = infos.get(&offset);
+                    let analyzer = analyzer_wrapper.analyzer_mut();
+                    if let Some(ref inf) = info {
+                        T::push(analyzer, Some(&inf[0]))
+                    } else {
+                        // Assume that the analyzer should be run.
+                        true
+                    }
                 }
             }
 
             // Continue analysis. TODO: Parallelize
             for (wrapper, aw) in rmod.iter_mut().zip(analyzers.iter_mut()) {
-                let &mut(_, ref mut analyzer) = aw;
+                // Check if the analyzer should be run for the current function.
+                if !aw.should_run() { continue; }
+                aw.increment_run_count();
+                let analyzer = aw.analyzer_mut();
                 let (_, current_fn) = wrapper.function;
-                T::transfer_iterative(analyzer, current_fn);
+                let fp = T::transfer_iterative(analyzer, current_fn);
+                fixpoint = fixpoint || fp;
             }
         }
     }
