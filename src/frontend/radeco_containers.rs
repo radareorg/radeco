@@ -724,6 +724,10 @@ impl RadecoModule {
     pub fn sections(&self) -> &Arc<Vec<LSectionInfo>> {
         &self.sections
     }
+
+    pub fn callgraph(&self) -> &CallGraph {
+        &self.callgraph
+    }
 }
 
 impl RadecoFunction {
@@ -741,6 +745,11 @@ impl RadecoFunction {
 
     pub fn ssa_mut(&mut self) -> &mut SSAStorage {
         &mut self.ssa
+    }
+
+    /// Returns the id in the call graph for this function.
+    pub fn cgid(&self) -> NodeIndex {
+        unimplemented!()
     }
 }
 
