@@ -147,21 +147,10 @@ pub struct RadecoModule {
     libs: Vec<String>,
     entrypoint: Vec<LEntryInfo>,
     // Information from early/low-level analysis
-    // TODO: Placeholder. Fix this with real graph.
     /// Call graph for current module
     callgraph: CallGraph,
     /// Map of functions loaded
     functions: BTreeMap<u64, RadecoFunction>,
-}
-
-#[derive(Default, Clone, Debug)]
-pub struct CallRefs {
-    /// Offset of the caller function
-    caller_fn_offset: u64,
-    /// Offset of callee function
-    callee_fn_offset: u64,
-    /// Offset of the call instruction
-    call_site_offset: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -177,8 +166,6 @@ pub enum FunctionType {
 /// Container to store information about identified function.
 /// Used as a basic unit in intra-functional analysis.
 pub struct RadecoFunction {
-    // Identified variable bindings for `RadecoFunction`
-    // bindings: RadecoBindings<Binding<NodeIndex>>,
     // Represents the type of function
     // ftype: FunctionType,
     /// Raw instruction information for the current function
@@ -190,15 +177,16 @@ pub struct RadecoFunction {
     pub name: Cow<'static, str>,
     /// Start address of the function
     pub offset: u64,
-    // TODO: Calls to the function
-    // refs: Vec<CallRefs>,
     /// Size of the function in bytes
     size: u64,
     /// List of (data-) addresses this function references
     datarefs: Vec<u64>,
     /// Constructed SSA for the function
-    ssa: SSAStorage, /* TODO: Calls from the current function to other functions
-                      * xrefs: Vec<CallRefs>, */
+    ssa: SSAStorage,
+    /// Node index in the module-level callgraph
+    cgid: NoodeIndex,
+    /// Variable bindings
+    bindings: Vec<u64>,
 }
 
 #[derive(Default)]

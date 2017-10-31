@@ -9,13 +9,13 @@
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::ir::MAddress;
 use middle::regfile::SubRegisterFile;
+use petgraph::Direction;
+use petgraph::visit::EdgeRef;
 use r2api::structs::LSectionInfo;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use petgraph::visit::EdgeRef;
-use petgraph::Direction;
 
 pub trait InterProcAnalysis: Transfer + Propagate {}
 
@@ -33,11 +33,11 @@ pub trait Transfer {
 }
 
 pub trait Propagate {
-    type Info: Default + Eval;
+    type Info: Default + Eval + Clone;
     // Used to `pull` information, `Info`, relevant in inter-proc analysis computed in
     // the transfer phase.
     fn pull(&mut Self, &RadecoFunction, u64) -> Option<Self::Info>;
-    fn summary(&mut Self) -> Option<Self::Info>;
+    fn summary(&mut Self, &RadecoFunction) -> Option<Self::Info>;
     // Used to aggregate information obtained from various sources/callsites
     fn union(&mut Self, &[Self::Info]) -> Option<Self::Info>;
     // Used to `push` information to the analyzer based on computed InterProc information.
@@ -49,13 +49,6 @@ pub trait Propagate {
 // TODO: Maybe `Eval` can be a part of definition of a lattice later on.
 pub trait Eval: Default {
     fn eval(&Self, &Self) -> Self;
-}
-
-// TODO: Move to a more appropriate place, i.e. `radeco_containers.rs`, once the details are
-// concrete.
-pub struct CallSite<T> {
-    site: MAddress,
-    info: T,
 }
 
 // TODO: Think about implementing this on top of the trait directly rather than a dummy struct
@@ -125,20 +118,22 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 let (current_offset, current_fn) = wrapper.function;
                 let current_analyzer = analyzers.get_mut(i).map(|a| a.analyzer_mut()).expect("");
                 // Get info about current function
-                if let Some(this_info) = T::summary(current_analyzer) {
+                if let Some(this_info) = T::summary(current_analyzer, current_fn) {
                     infos.entry(*current_offset).or_insert(Vec::new()).push(this_info);
                 }
                 // Get callsite information for every callee of current function
                 let callgraph = rmod.callgraph();
                 let current_fn_node = current_fn.cgid();
-                for (callee, info) in callgraph
-                    .edges_directed(current_fn_node, Direction::Outgoing)
+                for (callee, info) in callgraph.edges_directed(current_fn_node, Direction::Outgoing)
                     .map(|call_edge| {
                         let callee = *callgraph.node_weight(call_edge.target()).expect("");
                         let csite = *call_edge.weight();
                         (callee, T::pull(current_analyzer, current_fn, csite))
                     }) {
-                    infos.entry(callee).or_insert(Vec::new()).push(info.unwrap_or_default());
+                    let ref mut e = infos.entry(callee).or_insert(Vec::new());
+                    if let Some(inf) = info {
+                        e.push(inf);
+                    }
                 }
             }
 
@@ -147,7 +142,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             for (_, infov) in infos.iter_mut() {
                 // XXX: Avoid allocation
                 *infov = vec![infov.iter()
-                                .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
+                                  .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
             }
 
             // Push the information down to the analyzers.
@@ -168,7 +163,9 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             // Continue analysis. TODO: Parallelize
             for (wrapper, aw) in rmod.iter_mut().zip(analyzers.iter_mut()) {
                 // Check if the analyzer should be run for the current function.
-                if !aw.should_run() { continue; }
+                if !aw.should_run() {
+                    continue;
+                }
                 aw.increment_run_count();
                 let analyzer = aw.analyzer_mut();
                 let (_, current_fn) = wrapper.function;
