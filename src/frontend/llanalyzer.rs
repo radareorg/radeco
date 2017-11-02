@@ -24,10 +24,8 @@ pub fn load_call_graph(finfos: &[FunctionInfo]) -> CallGraph {
                     Some(ref c) if c != "C" => continue,
                     _ => {}
                 }
-
                 let csite = cs.source.unwrap();
                 let target = node_map.get(&cs.target.unwrap());
-
                 match (fnode, target) {
                     (Some(cn), Some(tn)) => {
                         cg.add_edge(*cn, *tn, csite);
@@ -39,4 +37,13 @@ pub fn load_call_graph(finfos: &[FunctionInfo]) -> CallGraph {
     }
 
     cg
+}
+
+/// Refine the SSA based on calling convention information
+///
+/// This analysis essentially removes the assumption that a callee function takes every
+/// register/memory as argument and clobbers every register/mem. Instead, it assumes that the
+/// function strictly follows the calling convention and refines the SSA based on CC information.
+pub fn assume_cc(cc: &SubRegisterFile, rmod: &mut RadecoModule) -> {
+    unimplemented!()
 }

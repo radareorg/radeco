@@ -62,7 +62,6 @@ pub struct ReferenceMarkerInfo {
     ret: ValueType,
 }
 
-
 impl<'r> Propagate for ReferenceMarker<'r> {
     type Info = ReferenceMarkerInfo;
 

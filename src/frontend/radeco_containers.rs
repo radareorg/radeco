@@ -51,7 +51,7 @@ use r2pipe::r2::R2;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::slice;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::collections::{btree_map, hash_map};
 use std::path::Path;
 use std::rc::Rc;
@@ -162,6 +162,100 @@ pub enum FunctionType {
     Import(u16),
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum BindingType {
+    // Arguments
+    RegisterArgument,
+    StackArgument,
+    // Local variables
+    RegisterLocal,
+    StackLocal,
+    // Return
+    Return,
+    // Unknown
+    Unknown,
+}
+
+impl Default for BindingType {
+    fn default() -> BindingType {
+        BindingType::Unknown
+    }
+}
+
+impl BindingType {
+    pub fn is_argument(&self) -> bool {
+        match *self {
+            BindingType::RegisterArgument | BindingType::StackArgument => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_local(&self) -> bool {
+        match *self {
+            BindingType::RegisterLocal | BindingType::StackLocal => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_return(&self) -> bool {
+        match *self {
+            BindingType::Return => true,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VarBinding {
+    btype: BindingType,
+    name: Cow<'static, str>,
+    idx: NodeIndex,
+    // Some arbitrary, serializable data can be added to these fields later.
+}
+
+impl VarBinding {
+    pub fn new(btype: BindingType, mut name: Option<String>, idx: NodeIndex) -> VarBinding {
+        let name = Cow::from(name.unwrap_or_default());
+        VarBinding {
+            name: name,
+            btype: btype,
+            idx: idx,
+        }
+    }
+
+    pub fn index(&self) -> NodeIndex {
+        self.idx
+    }
+
+    pub fn btype(&self) -> BindingType {
+        self.btype
+    }
+
+    pub fn btype_mut(&mut self) -> &mut BindingType {
+        &mut self.btype
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VarBindings(Vec<VarBinding>);
+
+impl<'a> IntoIterator for &'a VarBindings {
+    type Item = &'a VarBinding;
+    type IntoIter = VarBindingIter<'a>;
+    fn into_iter(self) -> VarBindingIter<'a> {
+        VarBindingIter(self.0.iter())
+    }
+}
+
+pub struct VarBindingIter<'a>(slice::Iter<'a, VarBinding>);
+
+impl<'a> Iterator for VarBindingIter<'a> {
+    type Item = &'a VarBinding;
+    fn next(&mut self) -> Option<&'a VarBinding> {
+        self.0.next()
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 /// Container to store information about identified function.
 /// Used as a basic unit in intra-functional analysis.
@@ -184,9 +278,9 @@ pub struct RadecoFunction {
     /// Constructed SSA for the function
     ssa: SSAStorage,
     /// Node index in the module-level callgraph
-    cgid: NoodeIndex,
+    cgid: NodeIndex,
     /// Variable bindings
-    bindings: Vec<u64>,
+    bindings: VarBindings,
 }
 
 #[derive(Default)]
@@ -517,6 +611,14 @@ impl<'a> ModuleLoader<'a> {
 
             if self.build_callgraph {
                 rmod.callgraph = llanalyzer::load_call_graph(aux_info.as_slice());
+                // Iterate through nodes and associate nodes with the correct functions
+                for nidx in rmod.callgraph.node_indices() {
+                    if let Some(cg_addr) = rmod.callgraph.node_weight(nidx) {
+                        if let Some(rfn) = rmod.functions.get_mut(cg_addr) {
+                            rfn.cgid = nidx;
+                        }
+                    }
+                }
             }
 
             if self.load_datarefs {
@@ -532,7 +634,6 @@ impl<'a> ModuleLoader<'a> {
             }
         }
 
-
         let reg_p = source.register_profile().expect("Unable to load register profile");
         // Optionally construct the SSA.
         if self.build_ssa {
@@ -541,13 +642,9 @@ impl<'a> ModuleLoader<'a> {
                     SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
                 });
             } else {
-        //PROFILER.lock().unwrap().start("./bzip-profile.profile").expect("Start failed!");
-
                 for (off, rfn) in rmod.functions.iter_mut() {
-        //println!("Here!");
                     SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
                 }
-        //PROFILER.lock().unwrap().stop().expect("Could not stop");
             }
         }
 
@@ -737,7 +834,11 @@ impl RadecoFunction {
 
     /// Returns the id in the call graph for this function.
     pub fn cgid(&self) -> NodeIndex {
-        unimplemented!()
+        self.cgid
+    }
+
+    pub fn bindings(&self) -> &VarBindings {
+        &self.bindings
     }
 }
 
