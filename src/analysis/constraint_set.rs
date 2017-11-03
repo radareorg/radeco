@@ -1,4 +1,4 @@
-//! Implements Constaint and ConstraintSet
+//! Implements Constraint and ConstraintSet
 //!
 //! NOTE: Current implementation is limited to work with reference marking.
 //! However, this principle is quite general and can be extended as needed later on.
@@ -73,7 +73,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     }
 
     // Retrive binding value for `bind` or insert default if none exist
-    fn bvalue(&mut self, bind: T) -> ValueType {
+    pub fn bvalue(&mut self, bind: T) -> ValueType {
         *self.bindings.entry(bind).or_insert(ValueType::Unresolved)
     }
 
