@@ -6,7 +6,7 @@
 //!   structure of the analysis is same.
 //!
 
-use frontend::radeco_containers::{RadecoFunction, RadecoModule};
+use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo};
 use middle::ir::MAddress;
 use middle::regfile::SubRegisterFile;
 use petgraph::Direction;
@@ -25,7 +25,7 @@ pub trait Transfer {
     // Generalize to take anything (any information about the context/module)
     // This function is only called the first time the analysis is executed. This function then
     // returns `Self` that contains (partially-)analyzed information.
-    fn transfer(&mut RadecoFunction, &SubRegisterFile, &[LSectionInfo]) -> Self;
+    fn transfer(&mut RadecoFunction, Arc<SubRegisterFile>, Arc<Vec<LSectionInfo>>) -> Self;
     // Called when transfer function needs to be executed iteratively.
     // This function returns a `bool` which indicates if the analysis made any progress on this
     // iteration of call.
@@ -36,7 +36,7 @@ pub trait Propagate {
     type Info: Default + Eval + Clone;
     // Used to `pull` information, `Info`, relevant in inter-proc analysis computed in
     // the transfer phase.
-    fn pull(&mut Self, &RadecoFunction, u64) -> Option<Self::Info>;
+    fn pull(&mut Self, &RadecoFunction, &CallContextInfo) -> Option<Self::Info>;
     fn summary(&mut Self, &RadecoFunction) -> Option<Self::Info>;
     // Used to aggregate information obtained from various sources/callsites
     fn union(&mut Self, &[Self::Info]) -> Option<Self::Info>;
@@ -99,7 +99,7 @@ impl<T: InterProcAnalysis> AnalyzerWrapper<T> {
 }
 
 impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
-    pub fn analyze(rmod: &mut RadecoModule, regfile: &SubRegisterFile, n_iters: Option<u64>) {
+    pub fn analyze(rmod: &mut RadecoModule, regfile: &Arc<SubRegisterFile>, n_iters: Option<u64>) {
         let sections = Arc::clone(rmod.sections());
         let mut analyzers: Vec<AnalyzerWrapper<T>> = Vec::new();
         let mut fixpoint = false;
@@ -107,7 +107,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
         // Transfer can be done in (TODO) parallel
         for wrapper in rmod.iter_mut() {
             let (current_offset, current_fn) = wrapper.function;
-            let analyzer = T::transfer(current_fn, &regfile, &sections);
+            let analyzer = T::transfer(current_fn, Arc::clone(&regfile), Arc::clone(&sections));
             analyzers.push(AnalyzerWrapper::new(*current_offset, analyzer));
         }
 
@@ -127,7 +127,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 for (callee, info) in callgraph.edges_directed(current_fn_node, Direction::Outgoing)
                     .map(|call_edge| {
                         let callee = *callgraph.node_weight(call_edge.target()).expect("");
-                        let csite = *call_edge.weight();
+                        let csite = &call_edge.weight();
                         (callee, T::pull(current_analyzer, current_fn, csite))
                     }) {
                     let ref mut e = infos.entry(callee).or_insert(Vec::new());
@@ -159,6 +159,8 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                     }
                 }
             }
+
+            // TODO: Upward propagation of latest results in callgraph
 
             // Continue analysis. TODO: Parallelize
             for (wrapper, aw) in rmod.iter_mut().zip(analyzers.iter_mut()) {

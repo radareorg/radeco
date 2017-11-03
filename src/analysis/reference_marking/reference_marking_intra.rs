@@ -31,15 +31,16 @@ use petgraph::graph::NodeIndex;
 use r2api::structs::LSectionInfo;
 use std::collections::{HashSet, VecDeque};
 use std::fmt::Debug;
+use std::sync::Arc;
 
 #[derive(Debug)]
-pub struct ReferenceMarker<'r> {
+pub struct ReferenceMarker {
     pub cs: ConstraintSet<NodeIndex>,
-    regfile: &'r SubRegisterFile,
-    sections: &'r [LSectionInfo],
+    regfile: Arc<SubRegisterFile>,
+    sections: Arc<Vec<LSectionInfo>>,
 }
 
-impl<'r> ReferenceMarker<'r> {
+impl ReferenceMarker {
     fn compute_result(&self, op: &[ValueType]) -> ValueType {
         match (op[0], op[1]) {
             (ValueType::Invalid, _) |
@@ -51,8 +52,6 @@ impl<'r> ReferenceMarker<'r> {
             (_, _) => ValueType::Unresolved,
         }
     }
-
-    fn mark_node(&self, ssa: &mut SSAStorage, ni: NodeIndex, ty: ValueType) {}
 
     fn add_constraints(&mut self, ssa: &SSAStorage) {
         let mut comment_nodes = HashSet::new();
@@ -198,9 +197,9 @@ impl<'r> ReferenceMarker<'r> {
     // Used for calling to resolve references the first time. Future calls should call
     // `resolve_references_iterative`.
     pub fn resolve_references(rfn: &mut RadecoFunction,
-                              regfile: &'r SubRegisterFile,
-                              sections: &'r [LSectionInfo])
-                              -> ReferenceMarker<'r> {
+                              regfile: Arc<SubRegisterFile>,
+                              sections: Arc<Vec<LSectionInfo>>)
+                              -> ReferenceMarker {
         let mut refmarker = ReferenceMarker {
             regfile: regfile,
             sections: sections,

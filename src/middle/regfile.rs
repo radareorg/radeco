@@ -8,14 +8,15 @@
 //! Contains the struct `SubRegisterFile` which extends `PhiPlacer`s
 //! functionality by reads and writes to partial registers.
 
+use middle::ir;
+
+use middle::ssa::ssa_traits::ValueInfo;
+
+use r2api::structs::LRegInfo;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::From;
-
-use r2api::structs::LRegInfo;
-
-use middle::ssa::ssa_traits::ValueInfo;
-use middle::ir;
 
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -54,6 +55,24 @@ pub struct SubRegisterFile {
     pub alias_info: HashMap<String, String>,
     /// Contains the type information for every registers.
     pub type_info: HashMap<String, String>,
+}
+
+pub struct RegisterIter(Box<Iterator<Item = (usize, String)>>);
+
+impl<'a> IntoIterator for &'a SubRegisterFile {
+    type Item = (usize, String);
+    type IntoIter = RegisterIter;
+    fn into_iter(self) -> RegisterIter {
+        // XXX: Avoid clones!
+        RegisterIter(Box::new(self.whole_names.clone().into_iter().enumerate()))
+    }
+}
+
+impl Iterator for RegisterIter {
+    type Item = (usize, String);
+    fn next(&mut self) -> Option<(usize, String)> {
+        self.0.next()
+    }
 }
 
 impl SubRegisterFile {
@@ -105,7 +124,8 @@ impl SubRegisterFile {
                 assert!(ev_until <= cur_until);
             }
 
-            let subreg = SubRegister::new(whole.len() as u64 - 1, ev.shift - current.shift, ev.width);
+            let subreg =
+                SubRegister::new(whole.len() as u64 - 1, ev.shift - current.shift, ev.width);
 
             slices.insert(name.clone(), subreg);
         }
@@ -124,9 +144,9 @@ impl SubRegisterFile {
         self.named_registers.get(name).cloned()
     }
 
-    
+
     // API for whole register.
-    
+
     // Get information by id.
     pub fn get_name(&self, id: usize) -> Option<String> {
         Some(self.whole_names[id].clone())
@@ -144,7 +164,7 @@ impl SubRegisterFile {
         }
     }
 
-    // Get information by other way. 
+    // Get information by other way.
     pub fn get_name_by_alias(&self, alias: &String) -> Option<String> {
         for id in 0..self.whole_names.len() {
             if let Some(name) = self.get_name(id) {
@@ -156,4 +176,19 @@ impl SubRegisterFile {
         None
     }
 
+    pub fn iter_args(&self) -> RegisterIter {
+        let args = &["A0", "A1", "A2", "A3", "A4", "A5"];
+        // XXX: Avoid clones!
+        RegisterIter(Box::new(self.alias_info
+            .clone()
+            .into_iter()
+            .map(move |(k, v)| if args.contains(&k.as_str()) {
+                Some(v)
+            } else {
+                None
+            })
+            .enumerate()
+            .filter(|&(_, ref x)| x.is_some())
+            .map(|(i, x)| (i, x.unwrap()))))
+    }
 }

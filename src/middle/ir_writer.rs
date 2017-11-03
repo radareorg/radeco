@@ -151,7 +151,7 @@ impl IRWriter {
                       ni: NodeIndex,
                       opcode: &MOpcode,
                       vt: ValueInfo,
-                      operands: Vec<String>,
+                      mut operands: Vec<String>,
                       ssa: &SSAStorage)
                       -> String {
         let next = self.ctr + 1;
@@ -168,6 +168,11 @@ impl IRWriter {
         } else {
             "(*?)"
         };
+
+        // Quick hack fix
+        operands.push("ERR".to_owned());
+        operands.push("ERR".to_owned());
+        operands.push("ERR".to_owned());
 
         match *opcode {
             MOpcode::OpAdd => format!("%{}: $Unknown{}{}  = {} + {}",

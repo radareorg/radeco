@@ -11,7 +11,7 @@
 //! the per-function information for every identified function in a `RadecoModule`.
 //!
 //! Corresponding to each of the containers is a loader that constructs the containers.
-//! Loaders are configurable, with sane defaults, and are designed to work independently 
+//! Loaders are configurable, with sane defaults, and are designed to work independently
 //! of loaders above it. Although the loaders are powerful way to interact with the loading
 //! process, the basic process is quite straight forward. Here is a quick example with all
 //! default options:
@@ -31,34 +31,36 @@
 //! For more examples of loading, check the `examples/` directory of this project.
 //! ```
 
-use rayon::prelude::*;
 
 use frontend::bindings::{Binding, RBindings, RadecoBindings};
-use frontend::radeco_source::{WrappedR2Api, Source};
 use frontend::llanalyzer;
-
-use middle::ssa::ssastorage::SSAStorage;
+use frontend::radeco_source::{WrappedR2Api, Source};
+use frontend::ssaconstructor::SSAConstruct;
 use middle::ir;
 use middle::regfile::SubRegisterFile;
-use frontend::ssaconstructor::SSAConstruct;
+
+use middle::ssa::ssastorage::SSAStorage;
+use petgraph::Direction;
 
 use petgraph::graph::{NodeIndex, Graph};
+use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
 use r2api::structs::{LOpInfo, LRegInfo, LSymbolInfo, LRelocInfo, LImportInfo, LExportInfo,
                      LSectionInfo, LEntryInfo, LSymbolType};
 
 use r2pipe::r2::R2;
+use rayon::prelude::*;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::slice;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::collections::{btree_map, hash_map};
+use std::marker::PhantomData;
 use std::path::Path;
 use std::rc::Rc;
+use std::slice;
 use std::sync::Arc;
-use std::marker::PhantomData;
 
-//use cpuprofiler::PROFILER;
+// use cpuprofiler::PROFILER;
 
 /// Defines sane defaults for the loading process.
 pub mod loader_defaults {
@@ -128,8 +130,26 @@ pub struct RadecoProject {
 }
 
 // Graph where every node is an Address (function start address) and edges are labeled
-// by the `callsite`, i.e. the actual location of the call.
-pub type CallGraph = Graph<u64, u64>;
+// by the `callsite`, i.e., the actual location of the call.
+pub type CallGraph = Graph<u64, CallContextInfo>;
+pub trait CGInfo {
+    // Return a list of callers to function at offset, along with their callsites
+    fn callers<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a>;
+    // Return (callsite, call target)
+    fn callees<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a>;
+}
+
+impl CGInfo for CallGraph {
+    // Return a list of callers to function at offset, along with their callsites
+    fn callers<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a> {
+        box self.edges_directed(idx, Direction::Incoming).map(|er| (er.weight().csite, er.target()))
+    }
+
+    // Return (callsite, call target)
+    fn callees<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a> {
+        box self.edges_directed(idx, Direction::Outgoing).map(|er| (er.weight().csite, er.target()))
+    }
+}
 
 #[derive(Debug, Default)]
 /// Container to store information about a single loaded binary or library.
@@ -148,9 +168,9 @@ pub struct RadecoModule {
     entrypoint: Vec<LEntryInfo>,
     // Information from early/low-level analysis
     /// Call graph for current module
-    callgraph: CallGraph,
+    pub callgraph: CallGraph,
     /// Map of functions loaded
-    functions: BTreeMap<u64, RadecoFunction>,
+    pub functions: BTreeMap<u64, RadecoFunction>,
 }
 
 #[derive(Debug, Clone)]
@@ -164,12 +184,13 @@ pub enum FunctionType {
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum BindingType {
-    // Arguments
-    RegisterArgument,
-    StackArgument,
+    // Arguments - ith argument
+    RegisterArgument(usize),
+    StackArgument(usize),
     // Local variables
     RegisterLocal,
-    StackLocal,
+    // Stack offset (from "SP")
+    StackLocal(usize),
     // Return
     Return,
     // Unknown
@@ -185,14 +206,16 @@ impl Default for BindingType {
 impl BindingType {
     pub fn is_argument(&self) -> bool {
         match *self {
-            BindingType::RegisterArgument | BindingType::StackArgument => true,
+            BindingType::RegisterArgument(_) |
+            BindingType::StackArgument(_) => true,
             _ => false,
         }
     }
 
     pub fn is_local(&self) -> bool {
         match *self {
-            BindingType::RegisterLocal | BindingType::StackLocal => true,
+            BindingType::RegisterLocal |
+            BindingType::StackLocal(_) => true,
             _ => false,
         }
     }
@@ -207,10 +230,9 @@ impl BindingType {
 
 #[derive(Debug, Clone, Default)]
 pub struct VarBinding {
-    btype: BindingType,
+    pub btype: BindingType,
     name: Cow<'static, str>,
-    idx: NodeIndex,
-    // Some arbitrary, serializable data can be added to these fields later.
+    pub idx: NodeIndex, // Some arbitrary, serializable data can be added to these fields later.
 }
 
 impl VarBinding {
@@ -368,7 +390,8 @@ impl<'a> ProjectLoader<'a> {
         // Clear out irrelevant fields in self and move it into project loader
         // XXX: Do when needed!
         // self.mod_loader = None;
-        let regfile = SubRegisterFile::new(&source.register_profile().expect("Unable to load register profile"));
+        let regfile = SubRegisterFile::new(&source.register_profile()
+            .expect("Unable to load register profile"));
 
         RadecoProject {
             modules: mod_map,
@@ -417,9 +440,7 @@ impl<'m> Iterator for ModuleIterMut<'m> {
     type Item = ZippedModuleMut<'m>;
     fn next(&mut self) -> Option<ZippedModuleMut<'m>> {
         if let Some(rmod) = self.iter.next() {
-            Some(ZippedModuleMut {
-                module: rmod,
-            })
+            Some(ZippedModuleMut { module: rmod })
         } else {
             None
         }
@@ -464,10 +485,8 @@ impl<'f> Iterator for FunctionIterMut<'f> {
     type Item = ZippedFunctionMut<'f>;
     fn next(&mut self) -> Option<ZippedFunctionMut<'f>> {
         if let Some(rfn) = self.iter.next() {
-            Some(ZippedFunctionMut {
-                function: rfn,
-            })
-        } else  {
+            Some(ZippedFunctionMut { function: rfn })
+        } else {
             None
         }
     }
@@ -484,10 +503,11 @@ pub struct ModuleLoader<'a> {
     load_datarefs: bool,
     load_locals: bool,
     parallel: bool,
+    assume_cc: bool,
 }
 
 impl<'a> ModuleLoader<'a> {
-    // TODO: 
+    // TODO:
     //  1. Callgraph from source
     //  2. As a part of above, fill in callrefs and callxrefs in RadecoFunction
     //  3. Expose SSA Construction as a part of loading process with options
@@ -532,6 +552,38 @@ impl<'a> ModuleLoader<'a> {
     pub fn parallel(mut self) -> ModuleLoader<'a> {
         self.parallel = true;
         self
+    }
+
+    /// Assume calling convention information in regfile to be true. This is used for setting up
+    /// bindings for arguments and return values for functions.
+    pub fn assume_cc(mut self) -> ModuleLoader<'a> {
+        self.assume_cc = true;
+        self
+    }
+
+    // TODO: Map to nodes!
+    fn init_fn_bindings(rfn: &mut RadecoFunction, sub_reg_f: &SubRegisterFile) {
+            // Setup binding information for functions based on reg_p. Note that this essential
+            // marks the "potential" arguments without worrying about if they're ever used. Future
+            // analysis can refine this information to make argument recognition more precise.
+            rfn.bindings = VarBindings(sub_reg_f.alias_info
+                .iter()
+                .filter_map(|(x, r)| {
+                    if let &Some(idx) = &["A0", "A1", "A2", "A3", "A4", "A5", "SN"]
+                        .iter()
+                        .position(|f| f == x) {
+                        let mut vb = VarBinding::default();
+                        vb.btype = if idx < 6 {
+                            BindingType::RegisterArgument(idx)
+                        } else {
+                            BindingType::Return
+                        };
+                        Some(vb)
+                    } else {
+                        None
+                    }
+                })
+                .collect());
     }
 
     /// Kick everything off and load module information based on config and defaults
@@ -599,18 +651,37 @@ impl<'a> ModuleLoader<'a> {
 
         // Load instructions into functions
         for (_, rfn) in rmod.functions.iter_mut() {
-            rfn.instructions = source.disassemble_n_bytes(rfn.size, rfn.offset).unwrap_or(Vec::new());
+            rfn.instructions = source.disassemble_n_bytes(rfn.size, rfn.offset)
+                .unwrap_or(Vec::new());
+        }
+
+        // Optionally construct the SSA.
+        let reg_p = source.register_profile().expect("Unable to load register profile");
+        let sub_reg_f = SubRegisterFile::new(&reg_p);
+        if self.build_ssa {
+            if self.parallel {
+                rmod.functions.par_iter_mut().for_each(|(_, rfn)| {
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
+                });
+            } else {
+                for (off, rfn) in rmod.functions.iter_mut() {
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
+                }
+            }
         }
 
         // Load optional information. These need support from `Source` for analysis
         if self.build_callgraph || self.load_datarefs || self.load_locals {
             let aux_info = match source.functions() {
                 Ok(info) => info,
-                Err(e) => { radeco_warn!(e); Vec::new() }
+                Err(e) => {
+                    radeco_warn!(e);
+                    Vec::new()
+                }
             };
 
             if self.build_callgraph {
-                rmod.callgraph = llanalyzer::load_call_graph(aux_info.as_slice());
+                rmod.callgraph = llanalyzer::load_call_graph(aux_info.as_slice(), &rmod);
                 // Iterate through nodes and associate nodes with the correct functions
                 for nidx in rmod.callgraph.node_indices() {
                     if let Some(cg_addr) = rmod.callgraph.node_weight(nidx) {
@@ -634,18 +705,11 @@ impl<'a> ModuleLoader<'a> {
             }
         }
 
-        let reg_p = source.register_profile().expect("Unable to load register profile");
-        // Optionally construct the SSA.
-        if self.build_ssa {
-            if self.parallel {
-                rmod.functions.par_iter_mut().for_each(|(_, rfn)| {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
-                });
-            } else {
-                for (off, rfn) in rmod.functions.iter_mut() {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
-                }
+        if self.build_callgraph && self.assume_cc {
+            for (off, rfn) in rmod.functions.iter_mut() {
+                ModuleLoader::init_fn_bindings(rfn, &sub_reg_f);
             }
+            llanalyzer::init_call_ctx(&mut rmod);
         }
 
         rmod
@@ -772,9 +836,7 @@ impl RadecoProject {
     }
 
     pub fn iter_mut<'a>(&'a mut self) -> ModuleIterMut<'a> {
-        ModuleIterMut {
-            iter: self.modules.iter_mut()
-        }
+        ModuleIterMut { iter: self.modules.iter_mut() }
     }
 }
 
@@ -801,9 +863,7 @@ impl RadecoModule {
     }
 
     pub fn iter_mut<'a>(&'a mut self) -> FunctionIterMut<'a> {
-        FunctionIterMut {
-            iter: self.functions.iter_mut(),
-        }
+        FunctionIterMut { iter: self.functions.iter_mut() }
     }
 
     pub fn sections(&self) -> &Arc<Vec<LSectionInfo>> {
@@ -842,15 +902,25 @@ impl RadecoFunction {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct CallContextInfo {
+    /// NodeIndex mapping from a node in the caller's context to a node in callee's context
+    pub map: Vec<(NodeIndex, NodeIndex)>,
+    /// NodeIndex corresponding to callsite (`OpCall`) in the caller context
+    pub csite_node: NodeIndex,
+    /// Address of callsite
+    pub csite: u64,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_fn_loader() {
-        //let ld = |x: &FLResult, y: &RadecoModule| -> FLResult { unimplemented!() };
+        // let ld = |x: &FLResult, y: &RadecoModule| -> FLResult { unimplemented!() };
 
-        //let mut fl = FunctionLoader::default();
-        //fl.strategy(&ld);
+        // let mut fl = FunctionLoader::default();
+        // fl.strategy(&ld);
     }
 }

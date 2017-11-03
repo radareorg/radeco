@@ -44,6 +44,7 @@
 #![cfg_attr(feature="clippy", plugin(clippy))]
 
 #![feature(box_patterns)]
+#![feature(box_syntax)]
 
 // #![allow(dead_code)]
 // #![allow(unused_variables)]

@@ -52,6 +52,7 @@ pub struct SSAConstruct<'a, T>
     instruction_offset: u64,
     needs_new_block: bool,
     mem_id: u64,
+    assume_cc: bool,
 }
 
 impl<'a, T> SSAConstruct<'a, T>
@@ -68,6 +69,7 @@ impl<'a, T> SSAConstruct<'a, T>
             instruction_offset: 0,
             needs_new_block: true,
             mem_id: 0,
+            assume_cc: false,
         };
 
         // Add all the registers to the variable list.
@@ -190,7 +192,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 // If the register being written into is "PC" then we emit a jump (jmp) instead
                 // of an assignment.
                 if let Some(Token::EIdentifier(ref name)) = operands[0] {
-                    if Some("PC".to_owned()) == self.regfile.alias_info.get(name).cloned() {
+                    if name == self.regfile.alias_info.get("PC").expect("") {
                         // There is a possibility that the jump target is not a constant and we
                         // don't have enough information right now to resolve this target. In this
                         // case, we add a new block and label it unresolved. This maybe resolved as
@@ -413,10 +415,11 @@ impl<'a, T> SSAConstruct<'a, T>
     // form.
     pub fn run(&mut self, op_info: &[LOpInfo]) {
         let mut p = Parser::init(Some(self.regfile
-                                        .named_registers
-                                        .iter()
-                                        .map(|(n, v)| (n.clone(), v.width as u64))
-                                        .collect()), Some(64));
+                                     .named_registers
+                                     .iter()
+                                     .map(|(n, v)| (n.clone(), v.width as u64))
+                                     .collect()),
+                                 Some(64));
 
         let mut current_address = MAddress::new(0, 0);
         self.init_blocks();
@@ -473,21 +476,56 @@ impl<'a, T> SSAConstruct<'a, T>
                                                    op.opcode.clone().unwrap_or(unknown_str));
                     let op_call = self.phiplacer
                         .add_op(&MOpcode::OpCall, &mut current_address, scalar!(0));
-                    // Since we cannot reason about call, a safe assumption is that it reads and
-                    // writes every register.
-                    for (i, reg) in self.regfile.whole_names.iter().enumerate() {
+
+
+                    // If `self.assume_cc` is set, then we assume that the callee strictly obeys the
+                    // calling convention.
+                    let (cargs, retr) = if self.assume_cc {
+                        (self.regfile.iter_args(), self.regfile.alias_info.get("SN"))
+                    } else {
+                        // If we cannot make any assumption about the calling convention, then we
+                        // need to be conservative and assume that the callee takes every register
+                        // as an argument and also clobbers every register.
+                        (self.regfile.into_iter(), None)
+                    };
+
+                    for (i, ref reg) in cargs {
                         let rnode = self.phiplacer.read_register(&mut current_address, reg);
                         self.phiplacer.op_use(&op_call, (i + 1) as u8, &rnode);
+                        // We don't know which register contains the return value. Assume that all
+                        // registers are clobbered and write to them.
+                        if retr.is_none() {
+                            let new_register_comment = format!("{}@{}", reg, current_address);
+                            let width = self.regfile
+                                .whole_registers
+                                .get(i)
+                                .expect("Unable to find register with index");
+                            let comment_node = self.phiplacer
+                                .add_comment(current_address, *width, new_register_comment);
+                            self.phiplacer.write_register(&mut current_address, reg, comment_node);
+                            self.phiplacer.op_use(&comment_node, i as u8, &op_call);
+                        }
+                    }
+
+                    // If we're using CC, we assume that we know the register that corresponds to
+                    // the return value, so we write this register with the output from `OpCall`
+                    if let Some(reg) = retr {
                         let new_register_comment = format!("{}@{}", reg, current_address);
+                        let idx = self.regfile
+                            .whole_names
+                            .iter()
+                            .position(|r| r == reg)
+                            .expect("Invalid register");
                         let width = self.regfile
                             .whole_registers
-                            .get(i)
+                            .get(idx)
                             .expect("Unable to find register with index");
                         let comment_node = self.phiplacer
                             .add_comment(current_address, *width, new_register_comment);
                         self.phiplacer.write_register(&mut current_address, reg, comment_node);
-                        self.phiplacer.op_use(&comment_node, i as u8, &op_call);
+                        self.phiplacer.op_use(&comment_node, 0, &op_call);
                     }
+
                     current_address.offset += 1;
                     self.phiplacer.set_address(&op_call, current_address);
                     self.phiplacer.op_use(&op_call, 0, &call_operand);
@@ -539,7 +577,8 @@ impl<'a, T> SSAConstruct<'a, T>
                          index: &Option<String>,
                          scale: i32,
                          disp: i64,
-                         addr: &mut MAddress) -> T::ValueRef {
+                         addr: &mut MAddress)
+                         -> T::ValueRef {
 
         let base_node = if let Some(ref reg) = *base {
             self.process_in(&Some(Token::ERegister(reg.clone())), addr)
@@ -550,7 +589,8 @@ impl<'a, T> SSAConstruct<'a, T>
         let index_node = if let Some(ref reg) = *index {
             // Mulitply the index by the scale and return the resulting node
             //    <index> '*' <scale>
-            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr).expect("Invalid op");
+            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr)
+                .expect("Invalid op");
             // TODO: s/64/default op size/
             let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(64));
             let mult_node = self.phiplacer.add_op(&MOpcode::OpMul, addr, vt);
@@ -580,10 +620,8 @@ impl<'a, T> SSAConstruct<'a, T>
                     self.phiplacer.op_use(&add_node, 0, o1);
                     self.phiplacer.op_use(&add_node, 1, o2);
                     Some(add_node)
-                },
-                (None, Some(ref o2)) => {
-                    *nd
-                },
+                }
+                (None, Some(ref o2)) => *nd,
                 (_, _) => res,
             }
         }
@@ -600,12 +638,16 @@ impl<'a, T> SSAConstruct<'a, T>
         let custom_opnode = self.phiplacer.add_op(&opcode, addr, vt);
         let mut opidx: u8 = 0;
 
-        let reg_r = ia.registers_read().iter().map(|&x| if let &IOperand::Register(ref s) = x {
-            let tok = Token::ERegister(s.clone());
-            self.process_in(&Some(tok), addr)
-        } else{
-            None
-        }).filter(|x| x.is_some()).collect::<Vec<_>>();
+        let reg_r = ia.registers_read()
+            .iter()
+            .map(|&x| if let &IOperand::Register(ref s) = x {
+                let tok = Token::ERegister(s.clone());
+                self.process_in(&Some(tok), addr)
+            } else {
+                None
+            })
+            .filter(|x| x.is_some())
+            .collect::<Vec<_>>();
 
         // Use read registers as arguments
         for (i, reg) in reg_r.iter().enumerate() {
@@ -616,11 +658,15 @@ impl<'a, T> SSAConstruct<'a, T>
 
         opidx = reg_r.len() as u8;
 
-        let reg_w = ia.registers_written().iter().map(|&x| if let &IOperand::Register(ref s) = x {
-            Some(s)
-        } else{
-            None
-        }).filter(|x| x.is_some()).collect::<Vec<_>>();
+        let reg_w = ia.registers_written()
+            .iter()
+            .map(|&x| if let &IOperand::Register(ref s) = x {
+                Some(s)
+            } else {
+                None
+            })
+            .filter(|x| x.is_some())
+            .collect::<Vec<_>>();
 
         // Write out modified variables
         for reg in &reg_w {
@@ -635,20 +681,24 @@ impl<'a, T> SSAConstruct<'a, T>
             let (opcode, maddr) = if let Some(mem_op) = ia.memory_written() {
                 // Insert a store
                 let st = MOpcode::OpStore;
-                let addr = if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } = mem_op {
-                    self.process_memory_op(base, index, *scale, *disp, addr)
-                } else {
-                    unreachable!()
-                };
+                let addr =
+                    if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } =
+                        mem_op {
+                        self.process_memory_op(base, index, *scale, *disp, addr)
+                    } else {
+                        unreachable!()
+                    };
                 (st, addr)
             } else if let Some(mem_op) = ia.memory_read() {
                 // Insert load
                 let ld = MOpcode::OpLoad;
-                let addr = if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } = mem_op {
-                    self.process_memory_op(base, index, *scale, *disp, addr)
-                } else {
-                    unreachable!()
-                };
+                let addr =
+                    if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } =
+                        mem_op {
+                        self.process_memory_op(base, index, *scale, *disp, addr)
+                    } else {
+                        unreachable!()
+                    };
                 (ld, addr)
             } else {
                 // Memory has to be a load or a store operation, cannot be anything else
@@ -662,7 +712,7 @@ impl<'a, T> SSAConstruct<'a, T>
             // Op[Load/Store](mem, addr)
             self.phiplacer.op_use(&mem_op, 0, &mem);
             self.phiplacer.op_use(&mem_op, 1, &maddr);
-            
+
             // Do some additional handling, such as associating the written value,
             // creating new instance of memory etc.
             if opcode == MOpcode::OpStore {
@@ -675,7 +725,6 @@ impl<'a, T> SSAConstruct<'a, T>
             }
         }
     }
-
 } // end impl SSAConstruct
 
 #[cfg(test)]
