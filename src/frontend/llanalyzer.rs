@@ -1,14 +1,14 @@
 //! Implements some low-level analysis as a part of frontend
 
 use frontend::radeco_containers::{RadecoModule, CallGraph, CGInfo, CallContextInfo, RadecoFunction};
-use middle::ssa::ssa_traits::{SSAWalk, SSA, NodeType};
-use middle::regfile::SubRegisterFile;
 use middle::ir::MOpcode;
-use r2api::structs::FunctionInfo;
-use std::collections::HashMap;
+use middle::regfile::SubRegisterFile;
+use middle::ssa::ssa_traits::{SSAWalk, SSA, NodeType};
+use petgraph::Direction;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
-use petgraph::Direction;
+use r2api::structs::FunctionInfo;
+use std::collections::HashMap;
 
 /// Converts call graph information from `Source`, represented in FunctionInfo,
 /// into an actual graph with links.
@@ -68,7 +68,7 @@ fn analyze_callsite_initial(rfn: &RadecoFunction) -> HashMap<u64, CallContextInf
     let ssa = rfn.ssa();
     for node in ssa.inorder_walk() {
         match ssa.node_data(node) {
-            Ok(ref nd) => { 
+            Ok(ref nd) => {
                 if let NodeType::Op(MOpcode::OpCall) = nd.nt {
                     let offset = ssa.address(node).expect("").address;
                     let mut cctx = CallContextInfo::default();
@@ -77,12 +77,16 @@ fn analyze_callsite_initial(rfn: &RadecoFunction) -> HashMap<u64, CallContextInf
                     // the callee context. These will be resolved later (hopefully)
                     // to be the argument nodes in the callee.
                     cctx.map = args_to_call.iter().map(|&x| (x, NodeIndex::end())).collect();
+                    // One mapping for the return value
+                    cctx.map.push((node, NodeIndex::end()));
                     cctx.csite_node = node;
                     cctx.csite = offset;
                     cctxs.insert(offset, cctx);
                 }
-            },
-            _ => { /* Noop, we only analyze callsites */ }
+            }
+            _ => {
+                // Noop, we only analyze callsites
+            }
         }
     }
     cctxs
@@ -94,20 +98,26 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
         let rfn = wrapper.1;
         let mut csites: HashMap<u64, CallContextInfo> = analyze_callsite_initial(rfn);
         // Iterate through callsites
-        for (csite, callee) in rmod.callgraph.callees(rfn.cgid()) {
+        let mut cgwalker =
+            rmod.callgraph.neighbors_directed(rfn.cgid(), Direction::Outgoing).detach();
+        for (csi, callee) in cgwalker.next(&rmod.callgraph) {
+            let csite = rmod.callgraph[csi].csite;
             // Get args of callee
             if let Some(calleefn) = rmod.functions.get(&rmod.callgraph[callee]) {
-                let mut args = calleefn.bindings().into_iter().filter(|x| x.btype.is_argument());
+                let mut args = calleefn.bindings()
+                    .into_iter()
+                    .filter(|x| x.btype.is_argument() || x.btype.is_return());
                 // Access the actual callsite in rfn.
-                if let Some(cctx) = csites.get_mut(&csite) {
+                if let Some(mut cctx) = csites.remove(&csite) {
                     cctx.map = cctx.map
                         .iter()
                         .map(|&(k, v)| k)
                         .zip(args.into_iter().map(|v| v.idx))
                         .collect();
+                    // Update callsite information in the callgraph.
+                    rmod.callgraph.update_edge(rfn.cgid(), calleefn.cgid(), cctx);
                 }
             }
         }
-        // TODO: Save the csites information in the callgraph
     }
 }

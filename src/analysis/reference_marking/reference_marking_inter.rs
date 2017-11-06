@@ -111,7 +111,10 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             analyzers.push(AnalyzerWrapper::new(*current_offset, analyzer));
         }
 
-        while !fixpoint {
+        let mut max_iterations = n_iters.unwrap_or(u64::max_value());
+
+        while !fixpoint  && max_iterations > 0 {
+            max_iterations -= 1;
             // Propagation should be done in serial
             let mut infos: HashMap<u64, Vec<T::Info>> = HashMap::new();
             for (i, wrapper) in rmod.iter().enumerate() {
