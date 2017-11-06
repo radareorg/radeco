@@ -38,6 +38,8 @@ use frontend::radeco_source::{WrappedR2Api, Source};
 use frontend::ssaconstructor::SSAConstruct;
 use middle::ir;
 use middle::regfile::SubRegisterFile;
+use middle::ssa::ssa_traits::{SSA};
+use middle::ssa::cfg_traits::{CFG};
 
 use middle::ssa::ssastorage::SSAStorage;
 use petgraph::Direction;
@@ -566,18 +568,34 @@ impl<'a> ModuleLoader<'a> {
             // Setup binding information for functions based on reg_p. Note that this essential
             // marks the "potential" arguments without worrying about if they're ever used. Future
             // analysis can refine this information to make argument recognition more precise.
+
+            // Get register state at entry block (for arguments) and at exit block (for returns).
+            let (entry_state, exit_state) = {
+                let ssa = rfn.ssa();
+                let entry = ssa.entry_node().expect("No entry node found for function!");
+                let exit = ssa.exit_node().expect("No exit node found for function!");
+
+                let entry_state = ssa.registers_in(entry).expect("No registers found in entry");
+                let exit_state = ssa.registers_in(exit).expect("No registers found in entry");
+                (ssa.operands_of(entry_state), ssa.operands_of(exit_state))
+            };
+
             rfn.bindings = VarBindings(sub_reg_f.alias_info
                 .iter()
-                .filter_map(|(x, r)| {
+                .enumerate()
+                .filter_map(|(i, reg)| {
+                    let alias = reg.0;
                     if let &Some(idx) = &["A0", "A1", "A2", "A3", "A4", "A5", "SN"]
                         .iter()
-                        .position(|f| f == x) {
+                        .position(|f| f == alias) {
                         let mut vb = VarBinding::default();
-                        vb.btype = if idx < 6 {
-                            BindingType::RegisterArgument(idx)
+                        if idx < 6 {
+                            vb.btype = BindingType::RegisterArgument(idx);
+                            vb.idx = *entry_state.get(i).unwrap_or(&NodeIndex::end());
                         } else {
-                            BindingType::Return
-                        };
+                            vb.btype = BindingType::Return;
+                            vb.idx = *exit_state.get(i).unwrap_or(&NodeIndex::end());
+                        }
                         Some(vb)
                     } else {
                         None

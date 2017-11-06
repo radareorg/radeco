@@ -178,7 +178,7 @@ impl ReferenceMarker {
     }
 
     pub fn resolve_references_iterative(&mut self, rfn: &mut RadecoFunction) -> bool {
-        self.cs.solve();
+        let progress = self.cs.solve();
         for (ni, vt) in self.cs.iter_bindings() {
             let ssa = rfn.ssa_mut();
             if let Some(ref mut nd) = ssa.g.node_weight_mut(*ni) {
@@ -188,10 +188,8 @@ impl ReferenceMarker {
             }
         }
 
-        // XXX: This should not always be true. The return value should depend: did something
-        // change when we tried to evaluate/solve the constraints? This is to know if we've reached
-        // a fixpoint and if we can infer no more about the ValueTypes of nodes.
-        true
+        // Fixpoint = !progress
+        !progress
     }
 
     // Used for calling to resolve references the first time. Future calls should call

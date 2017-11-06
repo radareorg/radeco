@@ -77,8 +77,9 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         *self.bindings.entry(bind).or_insert(ValueType::Unresolved)
     }
 
-    pub fn solve(&mut self) {
+    pub fn solve(&mut self) -> bool {
         let mut first_false = 0;
+        let mut made_progress = false;
         while !self.set.is_empty() {
             let constraint = self.set.pop_front().expect("Cannot be `None`");
             // See if we went a complete circle. If we did, this means that the equations in the
@@ -96,6 +97,8 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                 _ => false,
             };
 
+            made_progress |= res;
+
             if !res {
                 // It wasn't solved. Push it back in.
                 self.set.push_back(constraint);
@@ -104,6 +107,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                 first_false = 0;
             }
         }
+        made_progress
     }
 
     fn solve_equivalence(&mut self, constraint: &Constraint<T>) -> bool {
