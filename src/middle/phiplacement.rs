@@ -474,9 +474,9 @@ impl<'a, T> PhiPlacer<'a, T>
         // Reroute all uses of phi to same and remove phi
         let users = self.ssa.uses_of(phi).iter().filter(|&&x| x != phi && x != same).cloned().collect::<Vec<_>>();
         // Remove all uses of the phi.
-        for use_ in &users {
-            self.ssa.op_unuse(*use_, phi);
-        }
+        //for use_ in &users {
+            //self.ssa.op_unuse(*use_, phi);
+        //}
 
         self.ssa.replace_value(phi, same);
 

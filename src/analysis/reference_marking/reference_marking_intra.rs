@@ -102,6 +102,12 @@ impl ReferenceMarker {
                                 self.cs.add_eq(idx, ValueType::Scalar);
                             }
                         }
+                        &MOpcode::OpCall => {
+                            let operands = ssa.operands_of(idx);
+                            if !operands.is_empty() {
+                                self.cs.add_eq(operands[0], ValueType::Reference);
+                            }
+                        }
                         &MOpcode::OpAnd | &MOpcode::OpDiv | &MOpcode::OpLsl | &MOpcode::OpLsr |
                         &MOpcode::OpMod | &MOpcode::OpMul | &MOpcode::OpRol | &MOpcode::OpRor |
                         &MOpcode::OpSub => {
