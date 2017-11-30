@@ -301,7 +301,9 @@ impl IRWriter {
                                  }
                              }))
             }
-            _ => unreachable!(),
+            _ => {
+                format!("{} {:?}", opcode, operands)
+            },
         }
     }
 

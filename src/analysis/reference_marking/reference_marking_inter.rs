@@ -7,8 +7,7 @@
 //!
 
 use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo};
-use middle::ir::MAddress;
-use middle::regfile::SubRegisterFile;
+use middle::ir::MAddress; use middle::regfile::SubRegisterFile;
 use petgraph::Direction;
 use petgraph::visit::EdgeRef;
 use r2api::structs::LSectionInfo;
@@ -44,6 +43,9 @@ pub trait Propagate {
     // Returns true if something in the internal state of the analyzer changed. This could be used
     // as a hint to determine if the analyzer can make further progress.
     fn push(&mut Self, Option<&Self::Info>) -> bool;
+
+    // XXX: DO NOT COMMIT
+    fn stats(&Self, &RadecoFunction);
 }
 
 // TODO: Maybe `Eval` can be a part of definition of a lattice later on.
@@ -113,7 +115,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
 
         let mut max_iterations = n_iters.unwrap_or(u64::max_value());
 
-        while !fixpoint  && max_iterations > 0 {
+        while !fixpoint && max_iterations > 0 {
             max_iterations -= 1;
             // Propagation should be done in serial
             let mut infos: HashMap<u64, Vec<T::Info>> = HashMap::new();
@@ -177,6 +179,13 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 let fp = T::transfer_iterative(analyzer, current_fn);
                 fixpoint = fixpoint || fp;
             }
+        }
+
+        // XXX: DO NOT COMMIT
+        for (wrapper, aw) in rmod.iter().zip(analyzers.iter()) {
+            let analyzer = aw.analyzer();
+            let rfn = wrapper.function.1;
+            //T::stats(analyzer, rfn);
         }
     }
 }

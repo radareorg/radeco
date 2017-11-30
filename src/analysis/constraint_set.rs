@@ -39,7 +39,7 @@ pub enum Constraint<I: Debug + Clone + Copy> {
 
 #[derive(Default, Debug)]
 pub struct ConstraintSet<I: Eq + Debug + Hash + Copy> {
-    bindings: HashMap<I, ValueType>,
+    pub bindings: HashMap<I, ValueType>,
     set: VecDeque<Constraint<I>>,
 }
 

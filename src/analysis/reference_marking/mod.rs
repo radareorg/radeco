@@ -14,10 +14,11 @@
 pub mod reference_marking_intra;
 pub mod reference_marking_inter;
 
-use petgraph::graph::NodeIndex;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo};
+use middle::ir;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::ValueType;
+use middle::ssa::ssa_traits::{SSA, ValueType};
+use petgraph::graph::NodeIndex;
 use r2api::structs::LSectionInfo;
 // XXX: This will move out sometime in the future
 pub use self::reference_marking_inter::{Transfer, Propagate, Eval};
@@ -60,7 +61,7 @@ impl Eval for ReferenceMarkerInfo {
                  match (op1.0[key], op2.0[key]) {
                      (ValueType::Invalid, _) |
                      (_, ValueType::Invalid) => ValueType::Invalid,
-                     (ValueType::Unresolved, ref op_v) | 
+                     (ValueType::Unresolved, ref op_v) |
                      (ref op_v, ValueType::Unresolved) => *op_v,
                      (ValueType::Scalar, ValueType::Scalar) => ValueType::Scalar,
                      (ValueType::Reference, ValueType::Reference) => ValueType::Reference,
@@ -90,7 +91,8 @@ impl Propagate for ReferenceMarker {
     fn summary(analyzer: &mut ReferenceMarker,
                rfn: &RadecoFunction)
                -> Option<ReferenceMarkerInfo> {
-        Some(ReferenceMarkerInfo(rfn.bindings().into_iter()
+        Some(ReferenceMarkerInfo(rfn.bindings()
+            .into_iter()
             .filter(|x| x.btype.is_argument() || x.btype.is_return())
             .map(|x| (x.idx, analyzer.cs.bvalue(x.idx)))
             .collect()))
@@ -100,13 +102,37 @@ impl Propagate for ReferenceMarker {
         unimplemented!()
     }
 
-    fn push(analyzer: &mut ReferenceMarker, info: Option<&ReferenceMarkerInfo>)
-            -> bool {
+    fn push(analyzer: &mut ReferenceMarker, info: Option<&ReferenceMarkerInfo>) -> bool {
         if let Some(refinfo) = info {
             for (idx, vt) in &refinfo.0 {
                 analyzer.cs.add_eq(*idx, *vt);
             }
         }
         true
+    }
+
+    // Print some stats for debug.
+    // Address Offset Ref?
+    // XXX: Don't commit this!
+    fn stats(analyzer: &ReferenceMarker, rfn: &RadecoFunction) {
+        let instruction_map = rfn.instructions
+            .iter()
+            .map(|x| (x.offset.unwrap_or(0), x.opcode.as_ref().unwrap().clone()))
+            .collect::<HashMap<_, _>>();
+        let ssa = rfn.ssa();
+        for (node, vt) in analyzer.cs
+            .bindings
+            .iter()
+            .filter(|&(_, vt)| *vt == ValueType::Reference) {
+            let maddr = ssa.address(*node).unwrap_or(ir::MAddress::new(0, 0));
+            let ir::MAddress { address: address, offset: offset } = maddr;
+
+            let opcode = if let Some(ref op) = instruction_map.get(&address) {
+                op
+            } else {
+                ""
+            };
+            println!("{:#08x}\t{:#02}\t{:?} ; {}", address, offset, vt, opcode);
+        }
     }
 }

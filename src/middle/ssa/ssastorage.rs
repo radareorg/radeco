@@ -307,6 +307,10 @@ impl Graph for SSAStorage {
     }
 
     fn insert_edge(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef, e: Self::EdgeData) -> Option<Self::GraphEdgeRef> {
+        if !(self.g.contains_node(i) && self.g.contains_node(j)) { 
+            radeco_warn!("Tried to add edge between invalid nodes! {:?} -> {:?}", i, j);
+            return Some(EdgeIndex::end());
+        }
         //Don't insert a duplicate edge between i and j with same EdgeData
         let edges = self.find_edges_between(i, j);
         let mut flag = false;
