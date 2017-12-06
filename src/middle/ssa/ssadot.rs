@@ -166,20 +166,15 @@ impl GraphDot for SSAStorage {
                 if addr.is_some() {
                     r.push_str(">");
                 }
-
-                if let MOpcode::OpConst(_) = opc {
-                    attrs.push(("style".to_owned(), "filled".to_owned()));
-                    attrs.push(("color".to_owned(), "black".to_owned()));
-                    attrs.push(("fillcolor".to_owned(), "yellow".to_owned()));
-                }
-
+                attrs.push(("label".to_string(), r));
+                attrs.push(("style".to_owned(), "filled".to_owned()));
+                attrs.push(("color".to_owned(), "black".to_owned()));
                 if self.is_marked(i) {
-                    attrs.push(("label".to_string(), r));
-                    attrs.push(("style".to_owned(), "filled".to_owned()));
-                    attrs.push(("color".to_owned(), "black".to_owned()));
                     attrs.push(("fillcolor".to_owned(), "green".to_owned()));
+                } else if let MOpcode::OpConst(_) = opc {
+                    attrs.push(("fillcolor".to_owned(), "yellow".to_owned()));
                 } else {
-                    attrs.push(("label".to_string(), r));
+                    attrs.push(("fillcolor".to_owned(), "white".to_owned()));
                 }
                 attrs
             }
@@ -192,9 +187,11 @@ impl GraphDot for SSAStorage {
                     attrs.push(("rank".to_string(), "min".to_string()));
                 }
 
-                attrs.extend([("label".to_string(), label_str),
+                attrs.extend([("style".to_string(), "filled".to_string()),
+                              ("fillcolor".to_string(), "white".to_string()),
+                              ("label".to_string(), label_str),
                               ("shape".to_string(), "box".to_string()),
-                              ("color".to_string(), "\"grey\"".to_string())]
+                              ("color".to_string(), "\"grey\"".to_string()),]
                                  .iter()
                                  .cloned());
                 attrs
@@ -207,6 +204,24 @@ impl GraphDot for SSAStorage {
                      ("color".to_owned(), "black".to_owned()),
                      ("fillcolor".to_owned(), "greenyellow".to_owned())]
             }
+            NodeData::Phi(_, _) => {
+                let mut attrs = Vec::new();
+                let mut label = format!("{:?}", node);
+                label = label.replace("\"", "\\\"");
+                label = format!("\"{}\"", label);
+                if let Some(addr) = self.addr(i) {
+                    label = format!("<<font color=\"black\">{}: </font> {}>", addr, label);
+                }
+                attrs.push(("label".to_string(), label));
+                attrs.push(("style".to_owned(), "filled".to_owned()));
+                attrs.push(("color".to_owned(), "black".to_owned()));
+                if self.is_marked(i) {
+                    attrs.push(("fillcolor".to_owned(), "green".to_owned()));
+                } else {
+                    attrs.push(("fillcolor".to_owned(), "orange".to_owned()));
+                }
+                attrs
+            }
             _ => {
                 let mut attrs = Vec::new();
                 let mut label = format!("{:?}", node);
@@ -216,10 +231,12 @@ impl GraphDot for SSAStorage {
                     label = format!("<<font color=\"grey50\">{}: </font> {}>", addr, label);
                 }
                 attrs.push(("label".to_string(), label));
+                attrs.push(("style".to_owned(), "filled".to_owned()));
+                attrs.push(("color".to_owned(), "black".to_owned()));
                 if self.is_marked(i) {
-                    attrs.push(("style".to_owned(), "filled".to_owned()));
-                    attrs.push(("color".to_owned(), "black".to_owned()));
                     attrs.push(("fillcolor".to_owned(), "green".to_owned()));
+                } else {
+                    attrs.push(("fillcolor".to_owned(), "grey90".to_owned()));
                 }
                 attrs
             }

@@ -144,6 +144,8 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
 
         for (k, v) in &clustermap {
             result.push_str(&*format!("subgraph cluster_{} {{\n", k.to_index()));
+            result.push_str("style=filled;\n");
+            result.push_str("fillcolor=gray;\n");
             result.push_str("rankdir=TB;\n");
             for node in v.iter() {
                 result.push_str(&*g.node_attrs(node).bake());
