@@ -2,7 +2,7 @@
 //!
 //! This module implements methods and structs to perform CSE.
 //! However, this implement doesn't consider much about commutative 
-//! opcodes. One the other hand, considering too much will cause
+//! opcodes. On the other hand, considering too much will cause
 //! a huge memory consume. Thus, a balanced solution should be 
 //! improved.
 
