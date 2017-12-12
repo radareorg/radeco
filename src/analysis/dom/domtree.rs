@@ -303,12 +303,20 @@ impl DomTree {
             nodes_iter.remove(start_index.index());
             nodes_iter.reverse();
             let mut changed = true;
+            //TODO not to use dummy
+            let dummy = InternalIndex::new(0, graph::NodeIndex::new(0));
             while changed {
                 changed = false;
                 for n in &nodes_iter {
                     let node: graph::NodeIndex = n.0;
                     let preds_iter = g.neighbors_directed(node, EdgeDirection::Incoming)
-                                      .map(|x| rmap.get(&x).unwrap());
+                                      .map(|x| {
+                                          rmap.get(&x)
+                                              .unwrap_or_else(|| {
+                                                  radeco_err!("Node not found");
+                                                  &dummy
+                                              })
+                                      });
                     let preds = preds_map.entry(node)
                                          .or_insert_with(|| preds_iter.cloned().collect::<Vec<_>>());
                     let mut new_idom = invalid_index;
