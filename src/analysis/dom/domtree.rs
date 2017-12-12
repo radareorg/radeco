@@ -313,7 +313,7 @@ impl DomTree {
                                       .map(|x| {
                                           rmap.get(&x)
                                               .unwrap_or_else(|| {
-                                                  radeco_err!("Node not found");
+                                                  radeco_err!("DomTree.build_dom_tree: Node not found");
                                                   &dummy
                                               })
                                       });
