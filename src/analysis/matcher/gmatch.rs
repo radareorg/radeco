@@ -110,17 +110,33 @@ where I: Iterator<Item=S::ValueRef>,
                 ',' if depth == 1 => { },
                 ')' => {
                     depth -= 1;
-                    if depth > 0 {
-                        sub_expr.last_mut().unwrap().push(c);
+                    if depth <= 0 {
+                        continue
                     }
+                    if let Some(s) = sub_expr.last_mut() {
+                        s.push(c);
+                    }else {
+                        radeco_err!("parse error");
+                    };
                 }
                 '(' => {
                     depth += 1;
-                    if depth > 1 {
-                        sub_expr.last_mut().unwrap().push(c);
+                    if depth <= 1 {
+                        continue
                     }
+                    if let Some(s) = sub_expr.last_mut() {
+                        s.push(c);
+                    }else {
+                        radeco_err!("parse error");
+                    };
                 }
-                _ => sub_expr.last_mut().unwrap().push(c),
+                _ => {
+                    if let Some(s) = sub_expr.last_mut() {
+                        s.push(c);
+                    }else {
+                        radeco_err!("parse error");
+                    };
+                }
             }
         }
         ParseToken {
@@ -213,9 +229,10 @@ where I: Iterator<Item=S::ValueRef>,
         for node in self.ssa.inorder_walk() {
             // First level of filtering.
             let nh = self.hash_data(node);
-            if first_expr.current().as_ref().unwrap() != &nh {
-                continue;
-            }
+            if first_expr.current().as_ref().is_none()
+                || first_expr.current().as_ref().unwrap() != &nh {
+                    continue;
+                }
             {
                 let args = self.ssa.operands_of(node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
@@ -382,12 +399,20 @@ where I: Iterator<Item=S::ValueRef>,
             t_
         };
 
-        let replace_root = if r.current().as_ref().unwrap().starts_with('%') {
-            *bindings.get(r.current().as_ref().unwrap()).expect("Unknown Binding")
-        } else {
-            self.map_token_to_node(r.current().as_ref().unwrap(),
-                                                  &block,
-                                                  &mut address)
+        let replace_root = {
+            let cur = r.current().as_ref().unwrap_or_else(|| {
+                radeco_err!("Unknow Binding");
+                &String::new()
+            });
+            if cur.starts_with('%') {
+                *bindings.get(cur).unwrap_or_else(|| {
+                    radeco_err!("Unknown Binding");
+                })
+            } else {
+                self.map_token_to_node(cur,
+                &block,
+                &mut address)
+            };
         };
 
         self.ssa.replace_value(root, replace_root);
