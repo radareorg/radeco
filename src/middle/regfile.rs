@@ -56,6 +56,18 @@ pub struct SubRegisterFile {
     pub type_info: HashMap<String, String>,
 }
 
+impl Default for SubRegisterFile {
+    fn default() -> SubRegisterFile {
+        SubRegisterFile {
+            whole_registers: vec![],
+            whole_names: vec![],
+            named_registers: HashMap::new(),
+            alias_info: HashMap::new(),
+            type_info: HashMap::new(),
+        }
+    }
+}
+
 impl SubRegisterFile {
     /// Creates a new SubRegisterFile based on a provided register profile.
     pub fn new(reg_info: &LRegInfo) -> SubRegisterFile {

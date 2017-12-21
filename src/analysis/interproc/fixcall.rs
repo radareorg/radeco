@@ -23,6 +23,7 @@ use frontend::containers::{RadecoFunction, RFunction};
 use frontend::containers::RadecoModule;
 use frontend::containers::CallContext;
 use middle::ir::MOpcode;
+use middle::regfile::SubRegisterFile;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssastorage::SSAStorage;
@@ -48,11 +49,14 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 {
     pub fn new(rmod: &'a mut RadecoModule<'b, RadecoFunction<RadecoBindings<B>>>) 
         -> CallFixer<'a, 'b, B> {
+            let regfile = rmod.regfile.clone()
+                .unwrap_or_else(|| {
+                    radeco_err!("regfile is None");
+                    SubRegisterFile::default()
+                });
             CallFixer {
-                bp_name: rmod.regfile.clone()
-                    .unwrap().get_name_by_alias(&"BP".to_string()),
-                sp_name: rmod.regfile.clone()
-                    .unwrap().get_name_by_alias(&"SP".to_string()),
+                bp_name: regfile.get_name_by_alias(&"BP".to_string()),
+                sp_name: regfile.get_name_by_alias(&"SP".to_string()),
                 rmod: rmod,
                 sp_offsets: HashMap::new(),
             }
@@ -111,7 +115,11 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             // If the SP is not balanced, we will throw a WARN or PANIC.
             // TODO: if the SP is not balanced, please UNDO the fix.
             radeco_trace!("CallFixer|Global stack_offset: {:?}", stack_offset);
-            if let &Some(sp_offset) = self.sp_offsets.get(rfn_addr).unwrap() {
+            let sp_offset_opt = self.sp_offsets.get(rfn_addr).unwrap_or_else(|| {
+                radeco_err!("sp_offsets.get({:?}) == None", rfn_addr);
+                &None
+            });
+            if let &Some(sp_offset) = sp_offset_opt {
                 let mut max_offset: i64 = 0;
                 // The last SP offset should be the biggest
                 for offset in &stack_offset {
@@ -331,7 +339,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                             continue;
                         }
 
-                        let base = exit_offset.get(&operands[1]).unwrap().clone();
+                        let base = exit_offset.get(&operands[1]).unwrap_or_else(|| {
+                            radeco_err!("Invalid operands: {:?}", operands[1]);
+                            &0
+                        }).clone();
                         let names = ssa.registers(arg);
                         for name in names {
                             radeco_trace!("CallFixer|Found {:?} with {:?}", name, base);
@@ -357,9 +368,16 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             -> HashMap<String, i64> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
-        let reg_state = ssa.registers_in(ssa.entry_node()
-                                         .expect("Incomplete CFG graph"))
-                            .expect("No register state node found");
+        let reg_state = {
+            let entry_node = ssa.entry_node().unwrap_or_else(|| {
+                radeco_err!("Incomplete CFG graph");
+                ssa.invalid_action().unwrap()
+            });
+            ssa.registers_in(entry_node).unwrap_or_else(|| {
+                radeco_err!("No register state node found");
+                ssa.invalid_action().unwrap()
+            })
+        };
         let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
             if ssa.comment(*node).is_none(){
@@ -375,7 +393,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                     if Some(MOpcode::OpStore) == ssa.opcode(*user) {
                         let args = ssa.operands_of(*user);
                         if entry_offset.contains_key(&args[1]) {
-                            let num = entry_offset.get(&args[1]).unwrap();
+                            let num = entry_offset.get(&args[1]).unwrap_or_else(|| {
+                                radeco_err!("Error entry_offset.get({:?})", args[1]);
+                                &0
+                            });
                             entry_store.insert(reg_name.clone(), *num);
                         }
                     }
@@ -401,12 +422,20 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
             }
             // If callee is not certain
             if con.callee.is_none() {
-                result.push((con.ssa_ref.unwrap()
-                        , vec![self.sp_name.clone().unwrap_or(String::new())]));
+                let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
+                    radeco_err!("con.ssa_ref == None");
+                    NodeIndex::end()
+                });
+                let sp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
+                result.push((ssa_ref, sp_name));
                 continue;
             }
             let mut preserves: Vec<String> = Vec::new();
-            if let Some(rfn) = self.rmod.functions.get(con.callee.as_ref().unwrap()) {
+            let rfn_opt = self.rmod.functions.get(con.callee.as_ref().unwrap_or_else(|| {
+                radeco_err!("Callee not found");
+                &0
+            }));
+            if let Some(rfn) = rfn_opt {
                 // Callee is man made function
                 let mut bindings = rfn.bindings.bindings();
                 while let Some(bind) = bindings.next() {
@@ -414,11 +443,20 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
                         preserves.push(bind.name());
                     }
                 }
-                result.push((con.ssa_ref.unwrap(), preserves));
+                let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
+                    radeco_err!("con.ssa_ref == None");
+                    NodeIndex::end()
+                });
+                result.push((ssa_ref, preserves));
             } else {
                 // Callee is library function
-                result.push((con.ssa_ref.unwrap()
-                        , vec![self.bp_name.clone().unwrap_or(String::new())]));
+                let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
+                    radeco_err!("con.ssa_ref == None");
+                    NodeIndex::end()
+                });
+                let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
+                result.push((ssa_ref, bp_name));
+
             }
         }
 
