@@ -115,6 +115,7 @@ impl<'a, I, T> Sorter<'a, I, T>
                     MOpcode::OpZeroExt(num)  => (POPWIDEN, num as u64),
                     MOpcode::OpSignExt(num)  => (POPWIDEN1, num as u64),
                     MOpcode::OpXor   => (POPXOR, 0),
+                    MOpcode::Invalid   => (PUNDEFINED, 0),
                 }
             }
         }
