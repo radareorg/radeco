@@ -138,6 +138,7 @@ pub enum MOpcode {
     OpXor,
     // Zero Extend to width
     OpZeroExt(u16),
+    Invalid,
 }
 
 impl MOpcode {
@@ -226,6 +227,7 @@ impl MOpcode {
             MOpcode::OpSub => (Cow::from("OpSub"), MArity::Binary),
             MOpcode::OpXor => (Cow::from("OpXor"), MArity::Binary),
             MOpcode::OpZeroExt(_) => (Cow::from("OpZeroExt"), MArity::Unary),
+            MOpcode::Invalid => (Cow::from("Invalid"), MArity::Zero),
         }
     }
 
