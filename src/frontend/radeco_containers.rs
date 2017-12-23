@@ -162,8 +162,11 @@ impl RadecoProject {
 
     pub fn new_module(&mut self,
                       module_path: String) -> Result<&mut RadecoModule, &'static str> {
-        let module_name = Path::new(&module_path).file_stem().unwrap();
-        let module_name_str = module_name.to_str().unwrap().to_owned();
+        let module_name = Path::new(&module_path).file_stem();
+        if module_name.is_none() {
+            return Err("Module not found");
+        };
+        let module_name_str = module_name.unwrap().to_str().unwrap().to_owned();
         if self.modules.contains_key(&module_name_str) {
             Err("Module with same name already loaded")
         } else {
@@ -271,9 +274,21 @@ impl ProjectLoader for R2ProjectLoader {
             // TODO: Load more information such as sections, symbol table, global defines,
             // constant strings etc.
             main_mod.are_functions_loaded = true;
-            for function in r2.functions() {
-                let name = function.name.as_ref().unwrap();
-                let offset = function.offset.expect("Invalid offset");
+            let fns = r2.functions().unwrap_or_else(|e| {
+                radeco_err!("{:?}", e);
+                Vec::new()
+            });
+            for function in fns {
+                let name_opt = function.name.as_ref();
+                if name_opt.is_none() {
+                    radeco_err!("Function name not found, skip");
+                    continue;
+                };
+                let name = name_opt.unwrap();
+                let offset = function.offset.unwrap_or_else(|| {
+                    ("Invalid offset");
+                    0
+                });
                 let ref mut rfn = main_mod.new_function_at(offset)?;
                 rfn.name = Cow::from(name.to_owned());
                 rfn.ftype = if name.contains("sym.imp") {
@@ -281,7 +296,10 @@ impl ProjectLoader for R2ProjectLoader {
                 } else {
                     FunctionType::Function
                 };
-                let insts = r2.instructions_at(offset);
+                let insts = r2.instructions_at(offset).unwrap_or_else(|e| {
+                    radeco_err!("{:?}", e);
+                    Vec::new()
+                });
                 rfn.instructions = insts;
             }
         }
