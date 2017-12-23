@@ -212,7 +212,15 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         radeco_trace!("MemorrySSA|New comment added into test: {:?}", &comment);
         for var in &self.variables {
             if let VariableType::Local(lvarinfo) = var.clone() {
-                let reg = lvarinfo.reference.unwrap().base.unwrap().clone();
+                let reg = {
+                    let b_opt = lvarinfo.reference.and_then(|r| r.base);
+                    if let Some(b) = b_opt {
+                        b
+                    } else {
+                        radeco_err!("Invalid reference");
+                        continue;
+                    }
+                };
                 let reg_len: usize = reg.len();
                 if comment.len() < reg_len {
                     return false;
@@ -393,7 +401,10 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         self.associated_nodes.insert(mem_node, *ssa_node);
 
         let block = self.ssa.block_for(*ssa_node)
-                            .expect("Value node doesn't belong to any block");
+                            .unwrap_or_else(|| {
+                                radeco_err!("Value node doesn't belong to any block");
+                                self.ssa.invalid_action().unwrap()
+                            });
         self.associated_blocks.insert(mem_node, block.clone());
         return mem_node;
     }
@@ -536,8 +547,15 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
     // Add phi operands, and try to use try_remove_trivial_phi to delete trivial phi node.
     fn add_phi_operands(&mut self, var: VarId, phi: &NodeIndex) -> NodeIndex {
-        let block = self.associated_blocks.get(phi).expect("Phi not found!").clone();
-        let preds = self.ssa.preds_of(block);
+        let preds = self.associated_blocks.get(phi).map_or_else(
+            || {
+                radeco_err!("Phi not found!");
+                vec![self.ssa.invalid_action().unwrap().clone()]
+            },
+            |block| {
+                self.ssa.preds_of(block.clone())
+            },
+        );
         for pred in &preds {
             let target = self.read_variable(var, pred);
             self.add_use(phi, &target);
@@ -614,7 +632,10 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // Main function of MemorySSA, generate Memory SSA using the similar way of 
     // phiplacement.rs
     fn generate(&mut self) {
-        let entry_node = self.ssa.entry_node().expect("Incomplete CFG graph");
+        let entry_node = self.ssa.entry_node().unwrap_or_else(|| {
+            radeco_err!("Incomplete CFG graph");
+            self.ssa.invalid_action().unwrap()
+        });
         let mem_entry_node = self.g.add_node(MemOpcode::MemoryAccess);
         self.associated_blocks.insert(mem_entry_node, entry_node);
         for i in 0..self.variables.len() {
@@ -623,20 +644,26 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         // Init MemorySSA, making MemoryAccess as all variables' define.
 
         for expr in self.ssa.inorder_walk() {
+            let dummy = HashSet::new();
             if let Ok(ndata) = self.ssa.node_data(expr) {
                 radeco_trace!("MemorrySSA|Deal with node: {:?}", expr);
 
                 match ndata.nt {
                     NodeType::Op(MOpcode::OpLoad) => {
                         let set: Vec<VarId> = self.may_aliases.get(&expr)
-                                                                .expect("Cannot find may_alias set!")
-                                                                .iter()
+                                                                .unwrap_or_else(|| {
+                                                                    radeco_err!("Cannot find may_alias set!");
+                                                                    &dummy
+                                                                }).iter()
                                                                 .cloned()
                                                                 .collect();
                         let vuse = self.add_node(&expr, MemOpcode::VUse);
                         for i in set {
                             let block = self.ssa.block_for(expr)
-                                                .expect("Value node doesn't belong to any block");
+                                                .unwrap_or_else(|| {
+                                                    radeco_err!("Value node doesn't belong to any block");
+                                                    self.ssa.invalid_action().unwrap()
+                                                });
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vuse, &arg);
                         }
@@ -644,14 +671,19 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
                     NodeType::Op(MOpcode::OpStore) => {  
                         let set: Vec<VarId> = self.may_aliases.get(&expr)
-                                                                .expect("Cannot find may_alias set!")
-                                                                .iter()
+                                                                .unwrap_or_else(|| {
+                                                                    radeco_err!("Cannot find may_alias set!");
+                                                                    &dummy
+                                                                }).iter()
                                                                 .cloned()
                                                                 .collect();
                         let vdef = self.add_node(&expr, MemOpcode::VDef);
                         for i in set {
                             let block = self.ssa.block_for(expr)
-                                                .expect("Value node doesn't belong to any block");
+                                                .unwrap_or_else(|| {
+                                                    radeco_err!("Value node doesn't belong to any block");
+                                                    self.ssa.invalid_action().unwrap()
+                                                });
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vdef, &arg);
                             self.write_variable(i, &block, &vdef);
