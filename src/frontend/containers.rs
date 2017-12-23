@@ -362,12 +362,19 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
 // the SSA for all the function that it holds and perform basic analysis.
 impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
     fn from(source: &'a mut T) -> RadecoModule<'a, DefaultFnTy> {
-        let reg_info = source.register_profile();
+        let reg_info = source.register_profile().unwrap_or_else(|e| {
+            radeco_err!("{:?}", e);
+            None.unwrap()
+        });
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
         rmod.regfile = Some(SubRegisterFile::new(&reg_info));
         let (tx, rx) = sync::mpsc::channel();
-        for f in source.functions() {
+        let fns = source.functions().unwrap_or_else(|e| {
+            radeco_err!("{:?}", e);
+            Vec::new()
+        });
+        for f in fns {
             if f.name.as_ref().is_none() {
                 radeco_err!("function name not found");
                 continue;
@@ -379,7 +386,10 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
             }
             //radeco_trace!("Locals of {:?}: {:?}", f.name, f.locals);
             let offset = f.offset.expect("Invalid offset");
-            let instructions = source.instructions_at(offset);
+            let instructions = source.instructions_at(offset).unwrap_or_else(|e| {
+                radeco_err!("{:?}", e);
+                Vec::new()
+            });
             let tx = tx.clone();
             let reg_info = reg_info.clone();
 
