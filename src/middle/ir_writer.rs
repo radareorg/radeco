@@ -13,7 +13,7 @@ use middle::ir::{MOpcode};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::ssa_traits::{SSA, SSAWalk, ValueInfo};
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::graph_traits::Graph;
+use middle::ssa::graph_traits::{EdgeInfo, Graph};
 
 const BLOCK_SEP: &'static str = "{";
 const CL_BLOCK_SEP: &'static str = "}";
@@ -35,7 +35,10 @@ macro_rules! ir_write {
             use std::io::prelude::*;
 
             let mut writer = IRWriter::default();
-            let mut f = File::create($f).expect("Unable to create file");
+            let mut f = File::create($f).unwrap_or_else(|e| {
+                radeco_err!("Unable to create file");
+                radeco_err!("{:?}", e);
+            });
             writer.emit_il($n, $ssa, &mut f);
         }
     });
@@ -360,10 +363,15 @@ impl IRWriter {
                     let bbline = if let Some(ref prev_block) = last {
                         let mut jmp_statement = "JMP".to_owned();
                         let outgoing = ssa.outgoing_edges(*prev_block)
-                                          .iter()
-                                          .map(|x| 
-                                            (ssa.edge_info(x.0).expect("Less-endpoints edge").target, x.1))
-                                          .collect::<Vec<_>>();
+                            .iter()
+                            .map(|x| {
+                                let edge_info = ssa.edge_info(x.0)
+                                    .unwrap_or_else(|| {
+                                        radeco_err!("Less-endpoints edge");
+                                        EdgeInfo::new(NodeIndex::end(), NodeIndex::end())
+                                    }).target;
+                                (edge_info, x.1)
+                            }).collect::<Vec<_>>();
                         // This is a conditional jump.
                         if ssa.is_selector(*prev_block) && outgoing.len() > 1 {
                             let condition = self.fmt_operands(&[ssa.selector_in(*prev_block)
@@ -414,9 +422,14 @@ impl IRWriter {
             }
         }
 
-        let exit_node = ssa.exit_node().expect("Incomplete CFG graph");
-        let final_state = ssa.registers_in(exit_node)
-                                .expect("No register state node found");
+        let exit_node = ssa.exit_node().unwrap_or_else(|| {
+            radeco_err!("Incomplete CFG graph");
+            ssa.invalid_action().unwrap()
+        });
+        let final_state = ssa.registers_in(exit_node).unwrap_or_else(|| {
+            radeco_err!("No register state node found");
+            ssa.invalid_value().unwrap()
+        });
         let mem_comment = "mem".to_owned();
 
         for (i, reg) in ssa.operands_of(final_state).iter().enumerate() {
