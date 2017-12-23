@@ -270,7 +270,6 @@ mod test {
     #[test]
     fn scalar_union_reference_is_reference() {
         let mut cs = ConstraintSet::<u64>::default();
-        cs.bind(&[0, 1, 2]);
 
         cs.add_constraint(Constraint::Equality(1, Box::new(Constraint::Value(ValueType::Scalar))));
         cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Reference))));
@@ -283,7 +282,6 @@ mod test {
     #[test]
     fn reference_union_reference_is_invalid() {
         let mut cs = ConstraintSet::<u64>::default();
-        cs.bind(&[0, 1, 2]);
 
         cs.add_constraint(Constraint::Equality(1, Box::new(Constraint::Value(ValueType::Reference))));
         cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Reference))));
@@ -296,7 +294,6 @@ mod test {
     #[test]
     fn know_reference_and_scalar_infer_reference() {
         let mut cs = ConstraintSet::<u64>::default();
-        cs.bind(&[0, 1, 2]);
 
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));
         cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Scalar))));
@@ -309,7 +306,6 @@ mod test {
     #[test]
     fn know_reference_and_reference_infer_scalar() {
         let mut cs = ConstraintSet::<u64>::default();
-        cs.bind(&[0, 1, 2]);
 
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));
         cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Reference))));
@@ -322,7 +318,6 @@ mod test {
     #[test]
     fn know_scalar_infer_scalar_scalar() {
         let mut cs = ConstraintSet::<u64>::default();
-        cs.bind(&[0, 1, 2]);
 
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Scalar))));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
@@ -335,7 +330,6 @@ mod test {
     #[test]
     fn disjoint_tree_infer_references() {
         let mut cs = ConstraintSet::<u64>::default();
-        cs.bind(&[0, 1, 2, 3, 4, 5, 6, 7, 8]);
 
         cs.add_constraint(Constraint::Equality(4, Box::new(Constraint::Value(ValueType::Reference))));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));

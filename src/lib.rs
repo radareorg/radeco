@@ -45,6 +45,7 @@
 
 #![feature(box_patterns)]
 #![feature(box_syntax)]
+#![feature(slice_patterns)]
 
 // #![allow(dead_code)]
 // #![allow(unused_variables)]

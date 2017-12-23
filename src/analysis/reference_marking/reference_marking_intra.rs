@@ -177,6 +177,12 @@ impl ReferenceMarker {
                             self.cs.add_eq(idx, ValueType::Reference);
                         }
                     }
+                    // If it is `rip`, then it can't be a reference
+                    if let Some(ip_reg) = self.regfile.alias_info.get("PC") {
+                        if comm == ip_reg {
+                            self.cs.add_eq(idx, ValueType::Scalar);
+                        }
+                    }
                 }
                 _ => unreachable!(),
             }

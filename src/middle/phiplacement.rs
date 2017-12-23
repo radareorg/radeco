@@ -13,6 +13,8 @@ use std::collections::Bound::{Included, Excluded};
 use std::cmp::Ordering;
 use std::u64;
 
+use r2api::structs::{LOpInfo};
+
 use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueInfo};
 use middle::ssa::graph_traits::{Graph, ConditionInfo};
 use middle::ir::{self, MAddress, MOpcode};
@@ -862,7 +864,7 @@ impl<'a, T> PhiPlacer<'a, T>
 
     // Performs SSA finish operation such as assigning the blocks in the final
     // graph, sealing blocks, running basic dead code elimination etc.
-    pub fn finish(&mut self) {
+    pub fn finish(&mut self, ops: &[LOpInfo]) {
         // Iterate through blocks and seal them. Also associate nodes with their
         // respective blocks.
         let blocks = self.blocks.clone();
@@ -927,5 +929,24 @@ impl<'a, T> PhiPlacer<'a, T>
         }
 
         self.ssa.map_registers(self.regfile.whole_names.clone());
+
+        // Associate basic block with correct block sizes.
+        for opn in ops.windows(2) {
+            let op1 = &opn[0];
+            let op2 = &opn[1];
+            let off1 = MAddress::new(op1.offset.unwrap_or(0), 0);
+            let off2 = MAddress::new(op2.offset.unwrap_or(0), 0);
+
+            match (self.block_of(off1), self.block_of(off2)) {
+                (Some(b1), Some(b2)) if b1 == b2 => { /* Nothing to do */ },
+                (Some(b1), Some(b2)) => {
+                    if let Some(start) = self.ssa.starting_address(b1) {
+                        let size = off1.address - start.address;
+                        self.ssa.set_block_size(b1, size);
+                    }
+                }
+                (_, _) => { }
+            }
+        }
     }
 }

@@ -569,7 +569,7 @@ impl<'a, T> SSAConstruct<'a, T>
         // may be not in the last basic block
         // self.phiplacer.add_edge(current_address, MAddress::new(u64::MAX, 0), UNCOND_EDGE);
         self.phiplacer.gather_exits();
-        self.phiplacer.finish();
+        self.phiplacer.finish(op_info);
     }
 
     fn process_memory_op(&mut self,
@@ -764,7 +764,8 @@ mod test {
                     "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
-            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            let regfile = SubRegisterFile::new(ri);
+            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
@@ -784,7 +785,8 @@ mod test {
                     "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
-            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            let regfile = SubRegisterFile::new(ri);
+            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
@@ -812,7 +814,8 @@ mod test {
                     "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
-            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            let regfile = SubRegisterFile::new(ri);
+            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
