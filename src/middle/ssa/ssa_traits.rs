@@ -9,8 +9,7 @@
 //!
 //! These traits extend upon the ones provided in `cfg_traits`
 //!
-//! # Design
-//!
+//! # Design 
 //!  * `SSA` - Analogous to `CFG` this trait provides __accessors__ to
 //!  the data: Methods to enumerate operations, discovered connected operations,
 //!  determine which operation a basic block is in. etc.
@@ -46,7 +45,7 @@ pub enum ValueType {
 /// Information for a `ValueRef`
 pub struct ValueInfo {
     /// `Type` of value
-    vty: ValueType,
+    pub vty: ValueType,
     /// `width` of the operation, should be in 1, 2, 4, 8, 16, 32, 64, 128
     width: ir::WidthSpec,
 }

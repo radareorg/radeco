@@ -97,6 +97,9 @@ pub trait CFG: Graph {
     /// Starting address of a basic block or dynamic
     fn starting_address(&self, block: Self::ActionRef) -> Option<MAddress>;
 
+    /// Size of this basic block in bytes
+    fn block_size(&self, block: Self::ActionRef) -> Option<u64>;
+
     /// Reference that represents an Invalid control flow edge.
     fn invalid_edge(&self) -> Option<Self::CFEdgeRef>;
 }
@@ -125,4 +128,6 @@ pub trait CFGMod: CFG {
 
     /// Remove a control edge from the graph
     fn remove_control_edge(&mut self, source: Self::CFEdgeRef);
+
+    fn set_block_size(&mut self, bb: Self::ActionRef, last: u64);
 }

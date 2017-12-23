@@ -58,7 +58,7 @@ impl GraphDot for SSAStorage {
     fn node_cluster(&self, i: &Self::NodeIndex) -> Option<usize> {
         let invalid_block = self.invalid_action().expect("Invalid Action is not defined");
         match self.g.node_weight(*i) {
-            Some(&NodeData::BasicBlock(_)) | Some(&NodeData::DynamicAction) => Some(i.index()),
+            Some(&NodeData::BasicBlock(_, _)) | Some(&NodeData::DynamicAction) => Some(i.index()),
             _ => Some(self.block_for(*i).unwrap_or(invalid_block).index()),
         }
     }
@@ -100,7 +100,7 @@ impl GraphDot for SSAStorage {
         prefix.push_str(&format!("n{} -> n{}",
                                  src.index(),
                                  target.index()));
-        let target_is_bb = if let NodeData::BasicBlock(_) = self.g[edge.target()] {
+        let target_is_bb = if let NodeData::BasicBlock(_, _) = self.g[edge.target()] {
             true
         } else {
             false
@@ -182,7 +182,7 @@ impl GraphDot for SSAStorage {
                 }
                 attrs
             }
-            NodeData::BasicBlock(addr) => {
+            NodeData::BasicBlock(addr, _) => {
                 let label_str = format!("<<font color=\"grey50\">Basic Block \
                                          Information<br/>Start Address: {}</font>>",
                                         addr);

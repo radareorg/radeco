@@ -80,7 +80,7 @@ pub enum NodeData {
     /// Placeholder for action nodes.
     Unreachable,
     /// Represents a basic block.
-    BasicBlock(MAddress),
+    BasicBlock(MAddress, u64),
     /// Represents an action that doesn't contain any value nodes, described
     /// by its associated RegisterState (which includes the instruction
     /// pointer).
@@ -138,6 +138,7 @@ impl fmt::Display for NodeData {
 pub enum EdgeData {
     /// Edge from action to action. Represents control flow. The number is
     /// used to distinguish true branch, false branch, etc.
+    /// Second argument represents the jump-site/location.
     Control(u8),
     /// Edge from value or RegisterState to value. Represents data flow. The
     /// number describes the howmanyeth argument of the edge source is encoded
@@ -414,7 +415,7 @@ impl CFG for SSAStorage {
     type CFEdgeRef = <SSAStorage as Graph>::GraphEdgeRef;
 
     fn is_block(&self, node: Self::ActionRef) -> bool {
-        if let NodeData::BasicBlock(_) = self.g[node] {
+        if let NodeData::BasicBlock(_, _) = self.g[node] {
             true
         } else {
             false
@@ -423,7 +424,7 @@ impl CFG for SSAStorage {
 
     fn is_action(&self, action: Self::ActionRef) -> bool {
         match self.g[action] {
-            NodeData::BasicBlock(_) | NodeData::DynamicAction => true,
+            NodeData::BasicBlock(_, _) | NodeData::DynamicAction => true,
             _ => false,
         }
     }
@@ -547,10 +548,18 @@ impl CFG for SSAStorage {
     }
 
     fn starting_address(&self, si: Self::ActionRef) -> Option<MAddress> {
-        if let NodeData::BasicBlock(ref addr) = self.g[si] {
+        if let NodeData::BasicBlock(ref addr, _) = self.g[si] {
             Some(*addr)
         } else if let NodeData::DynamicAction = self.g[si] {
             Some(MAddress::new(u64::MAX, 0))
+        } else {
+            None
+        }
+    }
+
+    fn block_size(&self, si: Self::ActionRef) -> Option<u64> {
+        if let NodeData::BasicBlock(_, sz) = self.g[si] {
+            Some(sz)
         } else {
             None
         }
@@ -574,7 +583,8 @@ impl CFGMod for SSAStorage {
     }
 
     fn insert_block(&mut self, info: Self::BBInfo) -> Option<Self::ActionRef> {
-        let bb = self.insert_node(NodeData::BasicBlock(info)).expect("Cannot insert new nodes");
+        // XXX: TODO, Add the correct second argument to BasicBlock
+        let bb = self.insert_node(NodeData::BasicBlock(info, 0)).expect("Cannot insert new nodes");
         let rs = self.insert_node(NodeData::RegisterState).expect("Cannot insert new nodes");
         self.insert_edge(bb, rs, EdgeData::RegisterState);
         self.insert_edge(rs, bb, EdgeData::ContainedInBB(info));
@@ -590,6 +600,7 @@ impl CFGMod for SSAStorage {
     }
 
     fn insert_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) -> Option<Self::CFEdgeRef> {
+        // XXX: TODO
         self.insert_edge(source, target, EdgeData::Control(index))
     }
 
@@ -637,6 +648,12 @@ impl CFGMod for SSAStorage {
 
     fn remove_control_edge(&mut self, edge: Self::CFEdgeRef) {
         self.g.remove_edge(edge);
+    }
+
+    fn set_block_size(&mut self, bb: Self::ActionRef, size: u64) {
+        if let Some(&mut NodeData::BasicBlock(_, ref mut x)) = self.g.node_weight_mut(bb) {
+            *x = size;
+        }
     }
 
 }
@@ -817,7 +834,7 @@ impl SSA for SSAStorage {
             }),
             Some(&NodeData::Removed) |
             Some(&NodeData::Unreachable) |
-            Some(&NodeData::BasicBlock(_)) |
+            Some(&NodeData::BasicBlock(_, _)) |
             Some(&NodeData::DynamicAction) |
             Some(&NodeData::RegisterState) => Err(Box::new(self.g[i].clone())),
             None => Err(Box::new("Invalid Node Index")),
@@ -1017,6 +1034,7 @@ impl SSAMod for SSAStorage {
         if let Some(oe) = other_edge {
             if oe != EdgeIndex::end() {
                 let wt = self.g.edge_weight_mut(oe).expect("No weight found!");
+                // XXX: TODO
                 *wt = EdgeData::Control(2);
             }
         }

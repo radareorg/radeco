@@ -25,7 +25,7 @@ macro_rules! ir_write {
             use $crate::middle::ir_writer::IRWriter;
 
             let mut writer = IRWriter::default();
-            writer.emit_il($n, $ssa, &mut io::stdout());
+            writer.emit_il($n, $ssa)
         }
     });
     ($n: expr, $ssa: expr, $f: expr) => ({
@@ -130,7 +130,7 @@ impl IRWriter {
         let mut result = Vec::new();
         for operand in operands {
             match ssa.g[*operand] {
-                NodeData::BasicBlock(addr) => result.push(format!("{}", addr)),
+                NodeData::BasicBlock(addr, _) => result.push(format!("{}", addr)),
                 NodeData::DynamicAction => result.push("dynamic_action".to_owned()),
                 NodeData::Op(MOpcode::OpConst(ref value), _) => result.push(fmt_const!(value)),
                 NodeData::Comment(_, ref named) => result.push(named.clone()),
@@ -315,8 +315,7 @@ impl IRWriter {
         indent
     }
 
-    pub fn emit_il(&mut self, fn_name: Option<String>, ssa: &SSAStorage) -> String
-    {
+    pub fn emit_il(&mut self, fn_name: Option<String>, ssa: &SSAStorage) -> String {
         let mut last = None;
         let mut text_il = String::new();
         let fn_name = if fn_name.is_some() {
@@ -355,7 +354,7 @@ impl IRWriter {
                 NodeData::Undefined(_) => {
                     "Undefined".to_owned()
                 }
-                NodeData::BasicBlock(addr) => {
+                NodeData::BasicBlock(addr, _) => {
                     let bbline = if let Some(ref prev_block) = last {
                         let mut jmp_statement = "JMP".to_owned();
                         let outgoing = ssa.outgoing_edges(*prev_block)
