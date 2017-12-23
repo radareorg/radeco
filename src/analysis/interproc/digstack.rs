@@ -146,9 +146,17 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     {
-        let reg_state = ssa.registers_in(ssa.entry_node()
-                                                .expect("Incomplete CFG graph"))
-                            .expect("No register state node found");
+        let reg_state_opt = ssa.registers_in(ssa.entry_node()
+                                            .unwrap_or_else(|| {
+                                                radeco_err!("Incomplete CFG graph");
+                                                ssa.invalid_value().unwrap()
+                                            })
+                                        );
+        let reg_state = reg_state_opt.unwrap_or_else(|| {
+            radeco_err!("No register state node found");
+            ssa.invalid_value().unwrap()
+        });
+
         let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
             if ssa.comment(*node) != Some(sp_name.clone()) {

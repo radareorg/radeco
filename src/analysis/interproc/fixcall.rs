@@ -96,8 +96,12 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     pub fn reanalysis(&mut self, rfn_addr: &u64) {
         // Sort operands for commutative opcode first.
         {
-            let rfn = self.rmod.functions.get_mut(rfn_addr)
-                            .expect("RadecoFunction Not Found!");
+            let rfn = self.rmod.functions.get_mut(rfn_addr);
+            if rfn.is_none() {
+                radeco_err!("RadecoFunction Not Found!");
+                return;
+            };
+            let rfn = rfn.unwrap();
             radeco_trace!("CallFixer|RadecoFunction: {:?}", rfn.name);
             let ssa = rfn.ssa_mut();
             let mut sorter = Sorter::new(ssa);
@@ -105,8 +109,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         }
 
         let (entry_store, exit_load) = {
-            let rfn = self.rmod.functions.get(rfn_addr)
-                                .expect("RadecoFunction Not Found!");
+            let rfn = self.rmod.functions.get(rfn_addr).unwrap();
             let ssa = rfn.ssa_ref();
             let sp_name = self.sp_name.clone().unwrap_or(String::new());
             let bp_name = self.bp_name.clone().unwrap_or(String::new());
@@ -155,10 +158,13 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     pub fn analysis(&mut self, rfn_addr: &u64) {
         radeco_trace!("CallFixer|Analyze {:#}", rfn_addr);
 
+        if self.rmod.functions.get_mut(rfn_addr).is_none() {
+            radeco_err!("RadecoFunction Not Found!");
+            return;
+        }
         // Sort operands for commutative opcode first.
         {
-            let rfn = self.rmod.functions.get_mut(rfn_addr)
-                            .expect("RadecoFunction Not Found!");
+            let rfn = self.rmod.functions.get_mut(rfn_addr).unwrap();
             radeco_trace!("CallFixer|RadecoFunction: {:?}", rfn.name);
             let ssa = rfn.ssa_mut();
             let mut sorter = Sorter::new(ssa);
@@ -169,8 +175,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         // at entry_point and exit_point. So we only analyze entry block and 
         // exit block separately.
         let (entry_store, exit_load) = {
-            let rfn = self.rmod.functions.get(rfn_addr)
-                                .expect("RadecoFunction Not Found!");
+            let rfn = self.rmod.functions.get(rfn_addr).unwrap();
             let ssa = rfn.ssa_ref();
 
                 // analysis entry block
@@ -197,16 +202,18 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     // Fix the call_site with the callees' preserved register,
     // which will make later analysis much easier.
     pub fn fix(&mut self, rfn_addr: &u64) {
+        if self.rmod.functions.get(rfn_addr).is_none() {
+            radeco_err!("RadecoFunction Not Found!");
+            return;
+        }
         let call_info: Vec<(LValueRef, Vec<String>)> = {
-            let rfn = self.rmod.functions.get(rfn_addr)
-                            .expect("RadecoFunction Not Found!");
+            let rfn = self.rmod.functions.get(rfn_addr).unwrap();
             self.preserves_for_call_context(rfn.call_sites())
         };
         radeco_trace!("CallFixer|Call site: {:?}", call_info);
 
         {
-            let rfn = self.rmod.functions.get_mut(rfn_addr)
-                            .expect("RadecoFunction Not Found!");
+            let rfn = self.rmod.functions.get_mut(rfn_addr).unwrap();
             let ssa = rfn.ssa_mut();
 
             for (node, mut regs) in call_info {
@@ -251,6 +258,10 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
     // check it in the reanalysis stage.
     fn mark_preserved(&mut self, rfn_addr: &u64, entry_store: HashMap<String, i64>,
                             exit_load: HashMap<String, i64>) -> Option<i64> {
+        if self.rmod.functions.get_mut(rfn_addr).is_none() {
+            radeco_err!("RadecoFunction Not Found!");
+            return None;
+        }
         let (preserves, sp_offset) = { 
             let mut sp_offset: Option<i64> = None;
             let mut preserves: HashSet<String> = HashSet::new();
@@ -280,8 +291,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 
         // Store data into RadecoFunction
         {
-            let rfn = self.rmod.functions.get_mut(rfn_addr)
-                            .expect("RadecoFunction Not Found!");
+            let rfn = self.rmod.functions.get_mut(rfn_addr).unwrap();
             let mut bindings = rfn.bindings.bindings_mut();
             while let Some(bind) = bindings.next() {
                 if preserves.contains(&bind.name()) {
@@ -305,8 +315,14 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
         let mut visited: HashSet<LValueRef> = HashSet::new();
 
         let reg_state = ssa.registers_in(ssa.exit_node()
-                                         .expect("Incomplete CFG graph"))
-                            .expect("No register state node found");
+                                         .unwrap_or_else(|| {
+                                            radeco_err!("Incomplete CFG graph");
+                                            ssa.invalid_action().unwrap()
+                                         }))
+                            .unwrap_or_else(|| {
+                                radeco_err!("No register state node found");
+                                ssa.invalid_value().unwrap()
+                            });
         worklist.push_back(reg_state);
         
         while let Some(node) = worklist.pop_front() {
