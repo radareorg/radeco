@@ -9,6 +9,7 @@
 
 use petgraph::graph;
 use petgraph::visit::{IntoEdgeReferences, EdgeRef};
+use petgraph::graph::NodeIndex;
 
 use middle::ir::MOpcode;
 use middle::dot::{DotAttrBlock, GraphDot};
@@ -64,7 +65,12 @@ impl GraphDot for SSAStorage {
     }
 
     fn edge_source(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
-        let edge = &self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
+        let edge_opt = &self.g.edge_references().find(|x| x.id() == *i);
+        if edge_opt.is_none() {
+            radeco_err!("Invalid edge index");
+            return NodeIndex::end();
+        };
+        let edge = edge_opt.unwrap();
         match *edge.weight() {
             EdgeData::Data(_) => edge.target(),
             _ => edge.source(),
@@ -72,7 +78,12 @@ impl GraphDot for SSAStorage {
     }
 
     fn edge_target(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
-        let edge = &self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
+        let edge_opt = &self.g.edge_references().find(|x| x.id() == *i);
+        if edge_opt.is_none() {
+            radeco_err!("Invalid edge index");
+            return NodeIndex::end();
+        };
+        let edge = edge_opt.unwrap();
          match *edge.weight() {
             EdgeData::Data(_) => edge.source(),
             _ => edge.target(),
@@ -80,7 +91,12 @@ impl GraphDot for SSAStorage {
     }
 
     fn edge_skip(&self, i: &Self::EdgeIndex) -> bool {
-        let edge = &self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
+        let edge_opt = &self.g.edge_references().find(|x| x.id() == *i);
+        if edge_opt.is_none() {
+            radeco_err!("Invalid edge index");
+            return false;
+        };
+        let edge = edge_opt.unwrap();
         match *edge.weight() {
             EdgeData::ContainedInBB(_) | EdgeData::RegisterState => true,
             _ => false,
@@ -91,8 +107,12 @@ impl GraphDot for SSAStorage {
     // bottom in some
     // cases.
     fn edge_attrs(&self, i: &Self::EdgeIndex) -> DotAttrBlock {
-        // TODO: Error Handling
-        let edge = self.g.edge_references().find(|x| x.id() == *i).expect("Invalid edge index");
+        let edge_opt = &self.g.edge_references().find(|x| x.id() == *i);
+        if edge_opt.is_none() {
+            radeco_err!("Invalid edge index");
+            return DotAttrBlock::Raw(String::new());
+        };
+        let edge = edge_opt.unwrap();
         let mut prefix = String::new();
         let src = edge.source();
         let target = edge.target();
@@ -183,9 +203,11 @@ impl GraphDot for SSAStorage {
                                          Information<br/>Start Address: {}</font>>",
                                         addr);
                 let mut attrs = Vec::new();
-                if self.entry_node().expect("Incomplete CFG graph") == *i {
-                    attrs.push(("rank".to_string(), "min".to_string()));
-                }
+                if let Some(e) = self.entry_node() {
+                    if *i == e {
+                        attrs.push(("rank".to_string(), "min".to_string()));
+                    }
+                };
 
                 attrs.extend([("style".to_string(), "filled".to_string()),
                               ("fillcolor".to_string(), "white".to_string()),
