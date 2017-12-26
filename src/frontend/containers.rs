@@ -280,7 +280,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                         }
                         let mem_loc = args.get(1)
                                           .expect("Load/Store has to have source/destination");
-                        let mut bind = if seen_l.contains_key(mem_loc) {
+                        let bind = if seen_l.contains_key(mem_loc) {
                             seen_l.get_mut(mem_loc).expect("This can never panic")
                         } else {
                             let h = hash_subtree(ssa, mem_loc);

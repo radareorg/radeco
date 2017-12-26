@@ -270,7 +270,7 @@ impl ProjectLoader for R2ProjectLoader {
         {
             // TODO: Setup the project with more information,
             // such as: arch, platform etc.
-            let mut main_mod = rp.new_module(bpath)?;
+            let main_mod = rp.new_module(bpath)?;
             // TODO: Load more information such as sections, symbol table, global defines,
             // constant strings etc.
             main_mod.are_functions_loaded = true;
