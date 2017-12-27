@@ -9,10 +9,12 @@ use serde_json;
 
 use r2api::api_trait::R2Api;
 use r2pipe::r2::R2;
-use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
+use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo};
 
 pub trait Source {
     fn functions(&mut self) -> Result<Vec<FunctionInfo>, &'static str>;
+    fn syms(&mut self) -> Result<Vec<LSymbolInfo>, &'static str>;
+    fn strs(&mut self) -> Result<Vec<LStringInfo>, &'static str>;
     fn instructions_at(&mut self, u64) -> Result<Vec<LOpInfo>, &'static str>;
     fn register_profile(&mut self) -> Result<LRegInfo, &'static str>;
     fn flags(&mut self) -> Result<Vec<LFlagInfo>, &'static str>;
@@ -101,6 +103,26 @@ impl Source for R2 where R2: R2Api {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to load funtion info from r2")
+            },
+        }
+    }
+
+    fn syms(&mut self) -> Result<Vec<LSymbolInfo>, &'static str> {
+        match self.symbols() {
+            Ok(s) => Ok(s),
+            Err(e) => {
+                radeco_err!("{:?}", e);
+                Err("Failed to load symbols from r2")
+            },
+        }
+    }
+
+    fn strs(&mut self) -> Result<Vec<LStringInfo>, &'static str> {
+        match self.strings(true) {
+            Ok(s) => Ok(s),
+            Err(e) => {
+                radeco_err!("{:?}", e);
+                Err("Failed to load strings from r2")
             },
         }
     }
@@ -204,6 +226,7 @@ mod suffix {
     pub const FLAG: &'static str = "flags";
     pub const SECTION: &'static str = "sections";
     pub const STRING: &'static str = "strings";
+    pub const SYMBOL: &'static str = "symbols";
 }
 
 impl FileSource {
@@ -248,6 +271,20 @@ impl Source for FileSource {
                 Err("Failed to decode json")
             },
         }
+    }
+
+    fn syms(&mut self) -> Result<Vec<LSymbolInfo>, &'static str> {
+        match serde_json::from_str(&self.read_file(suffix::SYMBOL)) {
+            Ok(syms) => Ok(syms),
+            Err(e) => {
+                radeco_err!("{:?}", e);
+                Err("Failed to load symbols from r2")
+            },
+        }
+    }
+
+    fn strs(&mut self) -> Result<Vec<LStringInfo>, &'static str> {
+        Ok(self.strings())
     }
 
     fn instructions_at(&mut self, address: u64) -> Result<Vec<LOpInfo>, &'static str> {
