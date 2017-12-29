@@ -20,6 +20,7 @@ use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
 use middle::ssa::graph_traits::{Graph, ConditionInfo};
 use middle::ir::{MArity, MOpcode, WidthSpec, MAddress};
 
+#[macro_export]
 macro_rules! node_data_from_g {
     ($self:ident, $i:ident) => {
         $self.g.node_data(*$i).unwrap_or_else(|x| {
