@@ -35,8 +35,21 @@ os:
   - linux
 before_script:
   - |
-    if [ "$COVERALLS" = "true" ]; then cargo install cargo-travis &&
-    export PATH=$HOME/.cargo/bin:$PATH; fi
+    pip install 'travis-cargo<0.2' --user &&
+    export PATH=$HOME/.local/bin:$PATH
+  # Clone and build radare2
+  - |
+      git clone https://github.com/radare/radare2.git &&
+      cd ./radare2 && ./sys/install.sh && cd ../
+
+script:
+  - |
+    travis-cargo build &&
+    travis-cargo test &&
+    travis-cargo bench
+after_success:
+  - travis-cargo --only stable coveralls --no-sudo --verify
+  - travis-cargo --only stable doc-upload
 script:
   - |
     cargo build &&
