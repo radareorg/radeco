@@ -1,4 +1,4 @@
-sudo: false
+sudo: true
 dist: trusty
 language: rust
 # No environment varibles by default
@@ -41,6 +41,10 @@ before_script:
   - |
       git clone https://github.com/radare/radare2.git &&
       cd ./radare2 && ./sys/install.sh && cd ../
+  # Clone and build capstone
+  - |
+      git clone https://github.com/aquynh/capstone.git &&
+      cd ./capstone && ./make.sh && sudo ./make.sh install && cd ../
 
 script:
   - |
