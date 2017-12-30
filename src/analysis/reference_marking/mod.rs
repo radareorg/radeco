@@ -52,7 +52,6 @@ impl Default for ReferenceMarkerInfo {
 /// More precise information is used and propagated for each of the arguments and return values
 impl Eval for ReferenceMarkerInfo {
     fn eval(op1: &ReferenceMarkerInfo, op2: &ReferenceMarkerInfo) -> ReferenceMarkerInfo {
-        //println!("Union: {:?},\n\t{:?}", op1, op2);
         if op1.0.is_empty() {
             op2.clone()
         } else if op2.0.is_empty() {
@@ -129,30 +128,5 @@ impl Propagate for ReferenceMarker {
             }
         }
         true
-    }
-
-    // Print some stats for debug.
-    // Address Offset Ref?
-    // XXX: Don't commit this!
-    fn stats(analyzer: &ReferenceMarker, rfn: &RadecoFunction) {
-        let instruction_map = rfn.instructions
-            .iter()
-            .map(|x| (x.offset.unwrap_or(0), x.opcode.as_ref().unwrap().clone()))
-            .collect::<HashMap<_, _>>();
-        let ssa = rfn.ssa();
-        for (node, vt) in analyzer.cs
-            .bindings
-            .iter()
-            .filter(|&(_, vt)| *vt == ValueType::Reference) {
-            let maddr = ssa.address(*node).unwrap_or(ir::MAddress::new(0, 0));
-            let ir::MAddress { address: address, offset: offset } = maddr;
-
-            let opcode = if let Some(ref op) = instruction_map.get(&address) {
-                op
-            } else {
-                ""
-            };
-            //println!("{:#08x}\t{:#02}\t{:?} ; {}", address, offset, vt, opcode);
-        }
     }
 }
