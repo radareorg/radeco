@@ -17,9 +17,9 @@ use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
 
 pub struct RadecoModule<'a, F: RFunction> {
-    pub functions: HashMap<u64, F>,
+    functions: HashMap<u64, F>,
     fname: HashMap<String, u64>,
-    pub src: Option<&'a mut Source>,
+    src: Option<&'a mut Source>,
     pub regfile: Option<SubRegisterFile>,
 }
 
