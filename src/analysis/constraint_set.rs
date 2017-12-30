@@ -51,16 +51,18 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     pub fn add_union(&mut self, lhs: T, ops: &[T]) {
         let n = ops.len();
 
-        let iter_limit = if n > 2 {
-            n - 2
+        if (n == 0) {
+            // Nothing to do
+        } else if (n == 1) {
+            // Add a single equality constraint
+            self.add_equivalence_assertion(&[lhs, ops[0]]);
         } else {
-            0
-        };
-
-        for i in (0..iter_limit) {
-            self.add_constraint(Constraint::Equality(lhs,
-                                    Box::new(Constraint::Union(ops[i],
-                                      ops[i + 1]))));
+            let iter_limit = n - 1;
+            for i in (0..iter_limit) {
+                self.add_constraint(Constraint::Equality(lhs,
+                                        Box::new(Constraint::Union(ops[i],
+                                                    ops[i + 1]))));
+            }
         }
     }
 
@@ -81,17 +83,17 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         let mut first_false = 0;
         let mut made_progress = false;
         while !self.set.is_empty() {
-            let constraint = self.set.pop_front().expect("Cannot be `None`");
             // See if we went a complete circle. If we did, this means that the equations in the
             // set are no longer solvable.
             if first_false > self.set.len() {
                 break;
             }
 
+            let constraint = self.set.pop_front().expect("Cannot be `None`");
             // Match to see if this is an Eq constraint or an assert
             let res = match constraint {
-                Constraint::Equality(_, _) => self.solve_eq(&constraint),
                 Constraint::Equality(_, box _) => self.solve_eq(&constraint),
+                Constraint::Equality(_, _) => self.solve_eq(&constraint),
                 Constraint::Assertion(_) => self.solve_assert(&constraint),
                 Constraint::AssertEquivalence(_) => self.solve_equivalence(&constraint),
                 _ => false,
@@ -231,13 +233,18 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
 impl<T: Debug + Clone + Copy> Display for Constraint<T> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         let s = match *self {
-            Constraint::Union(op1, op2) => { format!("{:?} U {:?}", op1, op2) },
-            Constraint::Equality(op1, box ref op2) => { format!("{:?} = {}", op1, op2) },
-            Constraint::AssertEquivalence(ref ops) => { ops.iter().fold("Assert ".to_owned(), |mut acc, s| { acc.push_str(&format!("{:?} = ", s)); acc }) },
-            Constraint::Assertion(box ref op) => { format!("Assert {}", op) },
-            Constraint::Or(box ref op1, box ref op2) => { format!("{} \\/ {}", op1, op2) },
-            Constraint::And(box ref op1, box ref op2) => { format!("{} /\\ {}", op1, op2) },
-            Constraint::Value(ref vt) => { format!("{:?}", vt) },
+            Constraint::Union(op1, op2) => format!("{:?} U {:?}", op1, op2),
+            Constraint::Equality(op1, box ref op2) => format!("{:?} = {}", op1, op2),
+            Constraint::AssertEquivalence(ref ops) => {
+                ops.iter().fold("Assert ".to_owned(), |mut acc, s| {
+                    acc.push_str(&format!("{:?} = ", s));
+                    acc
+                })
+            }
+            Constraint::Assertion(box ref op) => format!("Assert {}", op),
+            Constraint::Or(box ref op1, box ref op2) => format!("{} \\/ {}", op1, op2),
+            Constraint::And(box ref op1, box ref op2) => format!("{} /\\ {}", op1, op2),
+            Constraint::Value(ref vt) => format!("{:?}", vt),
         };
         write!(f, "{}", s)
     }
@@ -295,9 +302,10 @@ mod test {
     fn know_reference_and_scalar_infer_reference() {
         let mut cs = ConstraintSet::<u64>::default();
 
+        cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));
         cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Scalar))));
-        cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
+
         cs.solve();
 
         assert_eq!(cs.bindings[&1], ValueType::Reference);
@@ -343,5 +351,18 @@ mod test {
 
         assert_eq!(cs.bindings[&7], ValueType::Reference);
         assert_eq!(cs.bindings[&8], ValueType::Scalar);
+    }
+
+
+    #[test]
+    fn unsolvable_constraints_remain_in_set() {
+        let mut cs = ConstraintSet::<u64>::default();
+
+        let constraint = Constraint::Equality(0, Box::new(Constraint::Union(1, 2)));
+        cs.add_constraint(constraint);
+
+        cs.solve();
+
+        assert!(!cs.set.is_empty());
     }
 }

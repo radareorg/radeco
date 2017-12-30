@@ -38,8 +38,8 @@ use frontend::radeco_source::{WrappedR2Api, Source};
 use frontend::ssaconstructor::SSAConstruct;
 use middle::ir;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{SSA};
-use middle::ssa::cfg_traits::{CFG};
+use middle::ssa::cfg_traits::CFG;
+use middle::ssa::ssa_traits::{SSA, NodeData, NodeType};
 
 use middle::ssa::ssastorage::SSAStorage;
 use petgraph::Direction;
@@ -54,6 +54,7 @@ use r2pipe::r2::R2;
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::collections::{btree_map, hash_map};
 use std::marker::PhantomData;
@@ -234,16 +235,19 @@ impl BindingType {
 pub struct VarBinding {
     pub btype: BindingType,
     name: Cow<'static, str>,
+    // Index of the register in regfile that represents this varbinding
+    pub ridx: Option<u64>,
     pub idx: NodeIndex, // Some arbitrary, serializable data can be added to these fields later.
 }
 
 impl VarBinding {
-    pub fn new(btype: BindingType, mut name: Option<String>, idx: NodeIndex) -> VarBinding {
+    pub fn new(btype: BindingType, mut name: Option<String>, idx: NodeIndex, ridx: Option<u64>) -> VarBinding {
         let name = Cow::from(name.unwrap_or_default());
         VarBinding {
             name: name,
             btype: btype,
             idx: idx,
+            ridx: ridx,
         }
     }
 
@@ -565,43 +569,75 @@ impl<'a> ModuleLoader<'a> {
 
     // TODO: Map to nodes!
     fn init_fn_bindings(rfn: &mut RadecoFunction, sub_reg_f: &SubRegisterFile) {
-            // Setup binding information for functions based on reg_p. Note that this essential
-            // marks the "potential" arguments without worrying about if they're ever used. Future
-            // analysis can refine this information to make argument recognition more precise.
+        // Setup binding information for functions based on reg_p. Note that this essential
+        // marks the "potential" arguments without worrying about if they're ever used. Future
+        // analysis can refine this information to make argument recognition more precise.
 
-            // Get register state at entry block (for arguments) and at exit block (for returns).
-            let (entry_state, exit_state) = {
-                let ssa = rfn.ssa();
-                let entry = ssa.entry_node().expect("No entry node found for function!");
-                let exit = ssa.exit_node().expect("No exit node found for function!");
+        // Get register state at entry block (for arguments) and at exit block (for returns).
+        let (entry_state, exit_state) = {
+            let ssa = rfn.ssa();
+            let entry = ssa.entry_node().expect("No entry node found for function!");
+            let exit = ssa.exit_node().expect("No exit node found for function!");
 
-                let entry_state = ssa.registers_in(entry).expect("No registers found in entry");
-                let exit_state = ssa.registers_in(exit).expect("No registers found in entry");
-                (ssa.operands_of(entry_state), ssa.operands_of(exit_state))
-            };
+            let entry_state = ssa.registers_in(entry).expect("No registers found in entry");
+            let exit_state = ssa.registers_in(exit).expect("No registers found in entry");
+            (ssa.operands_of(entry_state), ssa.operands_of(exit_state))
+        };
 
-            rfn.bindings = VarBindings(sub_reg_f.alias_info
-                .iter()
-                .enumerate()
-                .filter_map(|(i, reg)| {
-                    let alias = reg.0;
-                    if let &Some(idx) = &["A0", "A1", "A2", "A3", "A4", "A5", "SN"]
-                        .iter()
-                        .position(|f| f == alias) {
-                        let mut vb = VarBinding::default();
-                        if idx < 6 {
-                            vb.btype = BindingType::RegisterArgument(idx);
-                            vb.idx = *entry_state.get(i).unwrap_or(&NodeIndex::end());
-                        } else {
-                            vb.btype = BindingType::Return;
-                            vb.idx = *exit_state.get(i).unwrap_or(&NodeIndex::end());
-                        }
-                        Some(vb)
+        let mut tbindings: Vec<VarBinding> = sub_reg_f.alias_info
+            .iter()
+            .enumerate()
+            .filter_map(|(i, reg)| {
+                let alias = reg.0;
+                if let &Some(idx) = &["A0", "A1", "A2", "A3", "A4", "A5", "SN"]
+                    .iter()
+                    .position(|f| f == alias) {
+                    let mut vb = VarBinding::default();
+                    if idx < 6 {
+                        vb.btype = BindingType::RegisterArgument(idx);
+                        vb.idx = *entry_state.iter()
+                            .find(|&&ridx| {
+                                if let Ok(NodeType::Comment(ref s)) =
+                                    rfn.ssa().node_data(ridx).map(|n| n.nt) {
+                                    if s == reg.1 { true } else { false }
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap_or(&NodeIndex::end());
                     } else {
-                        None
+                        vb.btype = BindingType::Return;
+                        vb.idx = *exit_state.iter()
+                            .find(|&&ridx| {
+                                if let Ok(NodeType::Comment(ref s)) =
+                                    rfn.ssa().node_data(ridx).map(|n| n.nt) {
+                                    if s == reg.1 { true } else { false }
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap_or(&NodeIndex::end());
                     }
-                })
-                .collect());
+                    vb.ridx = sub_reg_f.register_id_by_alias(alias);
+                    Some(vb)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        tbindings.sort_by(|x, y| {
+            match (x.btype, y.btype) {
+                (BindingType::RegisterArgument(i), BindingType::RegisterArgument(ref j)) => {
+                    i.cmp(j)
+                }
+                (BindingType::RegisterArgument(_), _) => Ordering::Less,
+                (_, BindingType::RegisterArgument(_)) => Ordering::Greater, 
+                (_, _) => Ordering::Equal,
+            }
+        });
+
+        rfn.bindings = VarBindings(tbindings);
     }
 
     /// Kick everything off and load module information based on config and defaults
@@ -678,12 +714,13 @@ impl<'a> ModuleLoader<'a> {
         let sub_reg_f = SubRegisterFile::new(&reg_p);
         if self.build_ssa {
             if self.parallel {
+                let ascc = self.assume_cc;
                 rmod.functions.par_iter_mut().for_each(|(_, rfn)| {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, ascc);
                 });
             } else {
                 for (off, rfn) in rmod.functions.iter_mut() {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p);
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, self.assume_cc);
                 }
             }
         }

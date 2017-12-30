@@ -7,12 +7,15 @@
 //!
 
 use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo};
-use middle::ir::MAddress; use middle::regfile::SubRegisterFile;
+use middle::ir::MAddress;
+use middle::regfile::SubRegisterFile;
 use petgraph::Direction;
 use petgraph::visit::EdgeRef;
 use r2api::structs::LSectionInfo;
 use rayon::prelude::*;
 use std::collections::HashMap;
+// TODO: Remove this
+use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -32,7 +35,7 @@ pub trait Transfer {
 }
 
 pub trait Propagate {
-    type Info: Default + Eval + Clone;
+    type Info: Default + Eval + Clone + fmt::Debug;
     // Used to `pull` information, `Info`, relevant in inter-proc analysis computed in
     // the transfer phase.
     fn pull(&mut Self, &RadecoFunction, &CallContextInfo) -> Option<Self::Info>;
@@ -124,6 +127,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 let current_analyzer = analyzers.get_mut(i).map(|a| a.analyzer_mut()).expect("");
                 // Get info about current function
                 if let Some(this_info) = T::summary(current_analyzer, current_fn) {
+                    // println!("Summary for function {} {}: {:?}", current_offset, current_fn.name, this_info);
                     infos.entry(*current_offset).or_insert(Vec::new()).push(this_info);
                 }
                 // Get callsite information for every callee of current function
@@ -140,14 +144,38 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                         e.push(inf);
                     }
                 }
+
+                //println!("{} at offset {:#x}", current_fn.name, current_offset);
+
+                // Propagate argument information to the callsite of every caller of this function.
+                for (caller, info) in callgraph.edges_directed(current_fn_node, Direction::Incoming)
+                    .map(|call_edge| {
+                        let caller = *callgraph.node_weight(call_edge.source()).expect("");
+                        let csite = &call_edge.weight();
+                        //let caller_analyzer = analyzers.get_mut(caller).map(|a| a.analyzer_mut()).expect("");
+                        let rcsite = CallContextInfo {
+                            map: csite.map.iter().map(|&(x, y)| (y, x)).collect(),
+                            csite: 0,
+                            csite_node: csite.csite_node,
+                        };
+                        (caller, T::pull(current_analyzer, current_fn, &rcsite))
+                    }) {
+                        let ref mut e = infos.entry(caller).or_insert(Vec::new());
+                        if let Some(inf) = info {
+                            e.push(inf);
+                        }
+                    }
             }
 
             // Union all infos collected for a function. TODO: Parallelize as there is no
             // dependency.
-            for (_, infov) in infos.iter_mut() {
+            for (current_offset, infov) in infos.iter_mut() {
                 // XXX: Avoid allocation
                 *infov = vec![infov.iter()
                                   .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
+                //println!("Consolidated summary for function {:#x}: {:?}",
+                         //current_offset,
+                         //*infov);
             }
 
             // Push the information down to the analyzers.
@@ -185,7 +213,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
         for (wrapper, aw) in rmod.iter().zip(analyzers.iter()) {
             let analyzer = aw.analyzer();
             let rfn = wrapper.function.1;
-            //T::stats(analyzer, rfn);
+            // T::stats(analyzer, rfn);
         }
     }
 }

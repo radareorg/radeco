@@ -699,6 +699,20 @@ impl SSA for SSAStorage {
         }
     }
 
+    fn is_constant(&self, exi: Self::ValueRef) -> bool {
+        match self.g[exi] {
+            NodeData::Op(MOpcode::OpConst(_), _) => true,
+            _ => false,
+        }
+    }
+
+    fn constant_value(&self, exi: Self::ValueRef) -> Option<u64> {
+        match self.g[exi] {
+            NodeData::Op(MOpcode::OpConst(ref v), _) => Some(*v),
+            _ => None,
+        }
+    }
+
     fn address(&self, ni: Self::ValueRef) -> Option<MAddress> {
         for edge in self.g.edges(ni) {
             if let EdgeData::ContainedInBB(addr) = *edge.weight() {

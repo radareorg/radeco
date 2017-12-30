@@ -168,6 +168,9 @@ pub trait SSA: CFG {
     /// Returns true if the node is a comment node
     fn is_comment(&self, i: Self::ValueRef) -> bool;
 
+    fn is_constant(&self, exi: Self::ValueRef) -> bool;
+    fn constant_value(&self, exi: Self::ValueRef) -> Option<u64>;
+
     /// Get all value nodes in the whole graph.
     fn values(&self) -> Vec<Self::ValueRef>;
 
