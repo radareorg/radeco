@@ -14,7 +14,7 @@ use middle::ssa::ssastorage::{SSAStorage, Walker};
 
 use petgraph::graph::NodeIndex;
 
-use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
+use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo, LVarRef};
 use std::{thread, fmt, sync, hash};
 use std::collections::{BTreeSet, HashMap};
 
