@@ -6,7 +6,7 @@
 // except according to those terms.
 
 //! This Module gathers basic information from first analysis of RadecoFunction.
-//! It aims at gathering preserved registers and fix OpCall node. Resule will be
+//! It aims at gathering preserved registers and fix OpCall node. Results will be
 //! Used in VSA.
 //!
 //! More detais will be accessible at:
@@ -220,7 +220,7 @@ impl<'a, 'b: 'a, B> CallFixer<'a, 'b, B>
 
                     if replace_pair.len() != 2 {
                         radeco_trace!("CallFixer|{:?} with {:?} Not Found!", node, reg);
-                        radeco_trace!("CallFixer|Foudn replace_pair {:?}", replace_pair);
+                        radeco_trace!("CallFixer| Found replace_pair {:?}", replace_pair);
                         continue;
                     }
 
@@ -488,6 +488,7 @@ mod test {
     use frontend::containers::RadecoModule;
 
     #[test]
+    #[ignore]
     fn analysis_test() {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
@@ -505,6 +506,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn fix_test() {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
@@ -525,6 +527,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn reanalysis_test() {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
@@ -548,6 +551,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn rounded_analysis_test() {
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
         let mut rmod = RadecoModule::from(&mut fsource);
@@ -560,6 +564,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn bin_file_rounded_analysis_test() {
         //let mut r2 = R2::new(Some("./test_files/bin_file")).expect("Failed to open r2");
         //r2.init();
