@@ -53,6 +53,19 @@ impl ReferenceMarker {
         }
     }
 
+    fn is_constant_scalar(&self, val: u64) -> bool {
+        !self.sections.iter().any(|section| {
+            let base = section.vaddr.unwrap();
+            let size = section.vsize.unwrap();
+            // XXX: Hack!
+            if base > 0 && base <= val && val < base + size {
+                true
+            } else {
+                false
+            }
+        })
+    }
+
     fn add_constraints(&mut self, ssa: &SSAStorage) {
         let mut comment_nodes = HashSet::new();
         for idx in ssa.inorder_walk() {
@@ -74,6 +87,9 @@ impl ReferenceMarker {
                         &MOpcode::OpNarrow(_) |
                         &MOpcode::OpSignExt(_) |
                         &MOpcode::OpZeroExt(_) |
+                        &MOpcode::OpAnd | &MOpcode::OpDiv | &MOpcode::OpLsl | &MOpcode::OpLsr |
+                        &MOpcode::OpMod | &MOpcode::OpMul | &MOpcode::OpRol | &MOpcode::OpRor |
+                        &MOpcode::OpSub |
                         &MOpcode::OpXor => {
                             // All operands are allowed to be references
                             let operands = ssa.operands_of(idx);
@@ -81,6 +97,12 @@ impl ReferenceMarker {
                             self.cs.add_union(idx, operands.as_slice());
                             // Check if they of the operands are comments
                             comment_nodes.extend(operands.iter().filter(|&&x| ssa.is_comment(x)));
+                            for (cidx, cval) in operands.iter()
+                                .filter_map(|&x| ssa.constant_value(x).map(|v| (x, v))) {
+                                if self.is_constant_scalar(cval) {
+                                    self.cs.add_eq(cidx, ValueType::Scalar);
+                                }
+                            }
                         }
                         &MOpcode::OpConst(val) => {
                             // Special case handling for const opcodes
@@ -90,15 +112,7 @@ impl ReferenceMarker {
                             //  one of the valid sections in the binary.
                             //  - If it does not, it certainly is not a reference.
                             //  XXX: Can be a bit more efficient/intelligent here
-                            if !self.sections.iter().any(|section| {
-                                let base = section.vaddr.unwrap();
-                                let size = section.vsize.unwrap();
-                                if base <= val && val < base + size {
-                                    true
-                                } else {
-                                    false
-                                }
-                            }) {
+                            if self.is_constant_scalar(val) {
                                 self.cs.add_eq(idx, ValueType::Scalar);
                             }
                         }
@@ -108,18 +122,18 @@ impl ReferenceMarker {
                                 self.cs.add_eq(operands[0], ValueType::Reference);
                             }
                         }
-                        &MOpcode::OpAnd | &MOpcode::OpDiv | &MOpcode::OpLsl | &MOpcode::OpLsr |
-                        &MOpcode::OpMod | &MOpcode::OpMul | &MOpcode::OpRol | &MOpcode::OpRor |
-                        &MOpcode::OpSub => {
-                            // op2 is not allowed to be a reference
-                            let operands = ssa.operands_of(idx);
-                            self.cs.add_union(idx, operands.as_slice());
-                            comment_nodes.extend(operands.iter().filter(|&&x| ssa.is_comment(x)));
-                            // Add additional constraint that the second operands is a scalar
-                            if let Some(op2) = operands.get(1) {
-                                self.cs.add_eq(*op2, ValueType::Scalar);
-                            }
-                        }
+                        //&MOpcode::OpAnd | &MOpcode::OpDiv | &MOpcode::OpLsl | &MOpcode::OpLsr |
+                        //&MOpcode::OpMod | &MOpcode::OpMul | &MOpcode::OpRol | &MOpcode::OpRor |
+                        //&MOpcode::OpSub => {
+                            //// op2 is not allowed to be a reference
+                            //let operands = ssa.operands_of(idx);
+                            //self.cs.add_union(idx, operands.as_slice());
+                            //comment_nodes.extend(operands.iter().filter(|&&x| ssa.is_comment(x)));
+                            //// Add additional constraint that the second operands is a scalar
+                            //if let Some(op2) = operands.get(1) {
+                                //self.cs.add_eq(*op2, ValueType::Scalar);
+                            //}
+                        //}
                         &MOpcode::OpLoad |
                         &MOpcode::OpStore => {
                             // Special case for load/store
@@ -190,7 +204,12 @@ impl ReferenceMarker {
     }
 
     pub fn resolve_references_iterative(&mut self, rfn: &mut RadecoFunction) -> bool {
+        //println!("***** BEFORE SOLVE Dump for {} ******", rfn.name);
+        //println!("{}", self.cs);
         let progress = self.cs.solve();
+        // println!("***** Dump for {} ******", rfn.name);
+        // println!("{}", self.cs);
+
         for (ni, vt) in self.cs.iter_bindings() {
             let ssa = rfn.ssa_mut();
             if let Some(ref mut nd) = ssa.g.node_weight_mut(*ni) {
@@ -200,7 +219,7 @@ impl ReferenceMarker {
             }
         }
 
-        // Fixpoint = !progress
+        // fixpoint = !progress
         !progress
     }
 

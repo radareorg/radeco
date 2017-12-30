@@ -10,6 +10,7 @@ use petgraph::visit::EdgeRef;
 use r2api::structs::FunctionInfo;
 use std::collections::HashMap;
 
+use std::cmp::Ordering;
 /// Converts call graph information from `Source`, represented in FunctionInfo,
 /// into an actual graph with links.
 pub fn load_call_graph(finfos: &[FunctionInfo], rmod: &RadecoModule) -> CallGraph {
@@ -106,7 +107,13 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
             if let Some(calleefn) = rmod.functions.get(&rmod.callgraph[callee]) {
                 let mut args = calleefn.bindings()
                     .into_iter()
-                    .filter(|x| x.btype.is_argument() || x.btype.is_return());
+                    .filter(|x| x.btype.is_argument() || x.btype.is_return())
+                    .collect::<Vec<_>>();
+                args.sort_by(|x, y| { match (x.ridx, y.ridx) {
+                    (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
+                    (_, _) => unreachable!(),
+                }
+                });
                 // Access the actual callsite in rfn.
                 if let Some(mut cctx) = csites.remove(&csite) {
                     cctx.map = cctx.map

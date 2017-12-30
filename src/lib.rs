@@ -49,7 +49,7 @@
 
 // #![allow(dead_code)]
 // #![allow(unused_variables)]
-
+#![allow(warnings)]
 extern crate regex;
 extern crate petgraph;
 extern crate serde_json;

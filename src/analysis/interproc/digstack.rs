@@ -266,6 +266,7 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
 
+    use middle::regfile::SubRegisterFile;
     use frontend::ssaconstructor::SSAConstruct;
     use middle::ssa::ssastorage::SSAStorage;
     use middle::dce;
@@ -287,7 +288,8 @@ mod test {
         instructions = serde_json::from_str(&*s).unwrap();
         let mut ssa = SSAStorage::new();
         {
-            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            let regfile = SubRegisterFile::new(&reg_profile);
+            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
@@ -312,7 +314,8 @@ mod test {
         instructions = serde_json::from_str(&*s).unwrap();
         let mut ssa = SSAStorage::new();
         {
-            let mut constructor = SSAConstruct::new(&mut ssa, &reg_profile);
+            let regfile = SubRegisterFile::new(&reg_profile);
+            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
         {

@@ -144,6 +144,20 @@ impl SubRegisterFile {
         self.named_registers.get(name).cloned()
     }
 
+    // Get id for a register named `reg`
+    pub fn register_id_by_name(&self, reg: &str) -> Option<u64> {
+        self.named_registers.get(reg).map(|sr| sr.base)
+    }
+
+    // Get id for register by alias/role
+    pub fn register_id_by_alias(&self, alias: &str) -> Option<u64> {
+        if let Some(rname) = self.alias_info.get(alias) {
+            self.register_id_by_name(rname)
+        } else {
+            None
+        }
+    }
+
 
     // API for whole register.
 
@@ -178,17 +192,15 @@ impl SubRegisterFile {
 
     pub fn iter_args(&self) -> RegisterIter {
         let args = &["A0", "A1", "A2", "A3", "A4", "A5"];
+        let whiter: HashMap<String, usize> = self.whole_names.iter().enumerate().map(|(i, x)| (x.clone(), i)).collect();
         // XXX: Avoid clones!
         RegisterIter(Box::new(self.alias_info
             .clone()
             .into_iter()
-            .map(move |(k, v)| if args.contains(&k.as_str()) {
-                Some(v)
+            .filter_map(move |r| if args.contains(&r.0.as_str()) {
+                Some((whiter[&r.1], r.1))
             } else {
                 None
-            })
-            .enumerate()
-            .filter(|&(_, ref x)| x.is_some())
-            .map(|(i, x)| (i, x.unwrap()))))
+            })))
     }
 }

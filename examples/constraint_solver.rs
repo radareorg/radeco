@@ -8,7 +8,7 @@ use radeco_lib::middle::ssa::ssa_traits::ValueType;
 fn main() {
     {
         let mut cs = ConstraintSet::<u64>::default();
-        cs.bind(&[0, 1, 2, 3, 4, 5, 6, 7, 8]);
+        //cs.bind(&[0, 1, 2, 3, 4, 5, 6, 7, 8]);
 
         cs.add_constraint(Constraint::Equality(4, Box::new(Constraint::Value(ValueType::Reference))));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));

@@ -52,23 +52,43 @@ impl Default for ReferenceMarkerInfo {
 /// More precise information is used and propagated for each of the arguments and return values
 impl Eval for ReferenceMarkerInfo {
     fn eval(op1: &ReferenceMarkerInfo, op2: &ReferenceMarkerInfo) -> ReferenceMarkerInfo {
-        ReferenceMarkerInfo(op1.0
-            .keys()
-            .collect::<HashSet<_>>()
-            .intersection(&op2.0.keys().collect())
-            .map(|&key| {
-                (*key,
-                 match (op1.0[key], op2.0[key]) {
-                     (ValueType::Invalid, _) |
-                     (_, ValueType::Invalid) => ValueType::Invalid,
-                     (ValueType::Unresolved, ref op_v) |
-                     (ref op_v, ValueType::Unresolved) => *op_v,
-                     (ValueType::Scalar, ValueType::Scalar) => ValueType::Scalar,
-                     (ValueType::Reference, ValueType::Reference) => ValueType::Reference,
-                     (_, _) => ValueType::Invalid,
-                 })
-            })
-            .collect())
+        //println!("Union: {:?},\n\t{:?}", op1, op2);
+        if op1.0.is_empty() {
+            op2.clone()
+        } else if op2.0.is_empty() {
+            op1.clone()
+        } else {
+            let unioned_result: HashMap<NodeIndex, ValueType> = op1.0
+                .keys()
+                .collect::<HashSet<_>>()
+                .intersection(&op2.0.keys().collect())
+                // Union values that are common in op1 and op2
+                .map(|&key| {
+                    (*key,
+                     match (op1.0[key], op2.0[key]) {
+                         (ValueType::Invalid, _) |
+                         (_, ValueType::Invalid) => ValueType::Invalid,
+                         (ValueType::Unresolved, ref op_v) |
+                         (ref op_v, ValueType::Unresolved) => *op_v,
+                         (ValueType::Scalar, ValueType::Scalar) => ValueType::Scalar,
+                         (ValueType::Reference, ValueType::Reference) => ValueType::Reference,
+                         (_, _) => ValueType::Invalid,
+                     })
+                })
+                // Include values that are not present in either one of the two operands,
+                // copying over the inferred value
+                .chain(op1.0
+                    .keys()
+                    .collect::<HashSet<_>>()
+                    .symmetric_difference(&op2.0.keys().collect())
+                    .map(|&k| if op1.0.contains_key(k) {
+                        (*k, op1.0[k])
+                    } else {
+                        (*k, op2.0[k])
+                    }))
+                .collect();
+            ReferenceMarkerInfo(unioned_result)
+        }
     }
 }
 
@@ -132,7 +152,7 @@ impl Propagate for ReferenceMarker {
             } else {
                 ""
             };
-            println!("{:#08x}\t{:#02}\t{:?} ; {}", address, offset, vt, opcode);
+            //println!("{:#08x}\t{:#02}\t{:?} ; {}", address, offset, vt, opcode);
         }
     }
 }

@@ -80,10 +80,11 @@ impl<'a, T> SSAConstruct<'a, T>
     }
 
     // Helper wrapper.
-    pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo) {
+    pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo, assume_cc: bool) {
         let instructions = rfn.instructions().to_vec();
         let regfile = SubRegisterFile::new(ri);
         let mut constr = SSAConstruct::new(rfn.ssa_mut(), &regfile);
+        constr.assume_cc = assume_cc;
         constr.run(instructions.as_slice());
     }
 
@@ -489,7 +490,10 @@ impl<'a, T> SSAConstruct<'a, T>
                         (self.regfile.into_iter(), None)
                     };
 
+                    //println!("{:?}", self.regfile);
+
                     for (i, ref reg) in cargs {
+                        //println!("Adding register at callsite: ({}, {})", i, reg);
                         let rnode = self.phiplacer.read_register(&mut current_address, reg);
                         self.phiplacer.op_use(&op_call, (i + 1) as u8, &rnode);
                         // We don't know which register contains the return value. Assume that all
@@ -764,7 +768,7 @@ mod test {
                     "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
-            let regfile = SubRegisterFile::new(ri);
+            let regfile = SubRegisterFile::new(&reg_profile);
             let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
@@ -785,7 +789,7 @@ mod test {
                     "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
-            let regfile = SubRegisterFile::new(ri);
+            let regfile = SubRegisterFile::new(&reg_profile);
             let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
@@ -814,7 +818,7 @@ mod test {
                     "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
-            let regfile = SubRegisterFile::new(ri);
+            let regfile = SubRegisterFile::new(&reg_profile);
             let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
