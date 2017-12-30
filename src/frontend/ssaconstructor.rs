@@ -490,10 +490,7 @@ impl<'a, T> SSAConstruct<'a, T>
                         (self.regfile.into_iter(), None)
                     };
 
-                    //println!("{:?}", self.regfile);
-
                     for (i, ref reg) in cargs {
-                        //println!("Adding register at callsite: ({}, {})", i, reg);
                         let rnode = self.phiplacer.read_register(&mut current_address, reg);
                         self.phiplacer.op_use(&op_call, (i + 1) as u8, &rnode);
                         // We don't know which register contains the return value. Assume that all

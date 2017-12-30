@@ -204,12 +204,7 @@ impl ReferenceMarker {
     }
 
     pub fn resolve_references_iterative(&mut self, rfn: &mut RadecoFunction) -> bool {
-        //println!("***** BEFORE SOLVE Dump for {} ******", rfn.name);
-        //println!("{}", self.cs);
         let progress = self.cs.solve();
-        // println!("***** Dump for {} ******", rfn.name);
-        // println!("{}", self.cs);
-
         for (ni, vt) in self.cs.iter_bindings() {
             let ssa = rfn.ssa_mut();
             if let Some(ref mut nd) = ssa.g.node_weight_mut(*ni) {

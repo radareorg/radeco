@@ -127,7 +127,6 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 let current_analyzer = analyzers.get_mut(i).map(|a| a.analyzer_mut()).expect("");
                 // Get info about current function
                 if let Some(this_info) = T::summary(current_analyzer, current_fn) {
-                    // println!("Summary for function {} {}: {:?}", current_offset, current_fn.name, this_info);
                     infos.entry(*current_offset).or_insert(Vec::new()).push(this_info);
                 }
                 // Get callsite information for every callee of current function
@@ -144,8 +143,6 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                         e.push(inf);
                     }
                 }
-
-                //println!("{} at offset {:#x}", current_fn.name, current_offset);
 
                 // Propagate argument information to the callsite of every caller of this function.
                 for (caller, info) in callgraph.edges_directed(current_fn_node, Direction::Incoming)
@@ -173,9 +170,6 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 // XXX: Avoid allocation
                 *infov = vec![infov.iter()
                                   .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
-                //println!("Consolidated summary for function {:#x}: {:?}",
-                         //current_offset,
-                         //*infov);
             }
 
             // Push the information down to the analyzers.
