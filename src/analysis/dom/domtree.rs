@@ -555,7 +555,7 @@ mod test {
         let mut dom = DomTree::build_dom_tree(&mut g, a);
         dom.compute_dominance_frontier();
 
-        let res = dom.dom_frontier(f);
+        let res = dom.dom_frontier(f).unwrap();
         let mut dom_front_f = HashSet::new();
         dom_front_f.insert(_g);
 
@@ -564,7 +564,7 @@ mod test {
             assert_eq!(*i.0, i.1);
         }
 
-        let res = dom.dom_frontier(d);
+        let res = dom.dom_frontier(d).unwrap();
         let mut dom_front_d = HashSet::new();
         dom_front_d.insert(e);
 
