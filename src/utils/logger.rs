@@ -100,6 +100,19 @@ macro_rules! radeco_warn {
     });
 }
 
+#[macro_export]
+macro_rules! radeco_err {
+    ($t: expr) => ({
+        if cfg!(feature = "trace_log") {
+            warn!("{}", $t.to_string());
+        }
+    });
+    ($fmt:expr, $($arg:tt)*) => ({
+        if cfg!(feature = "trace_log") {
+            warn!("{}", format_args!($fmt, $($arg)*));
+        }
+    });
+}
 
 /// Support for consumers to use logger.
 #[derive(Debug)]

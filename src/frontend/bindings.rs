@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::process;
 use std::ops::{Index, IndexMut};
 use std::hash::Hash;
 
@@ -87,13 +88,19 @@ pub struct RadecoBindings<T: RBind> {
 impl<BTy: RBind> Index<usize> for RadecoBindings<BTy> {
     type Output = BTy;
     fn index(&self, index: usize) -> &Self::Output {
-        self.binding(&index).unwrap()
+        self.binding(&index).unwrap_or_else(|| {
+            radeco_err!("Binding not found, aborting...");
+            process::abort();
+        })
     }
 }
 
 impl<BTy: RBind> IndexMut<usize> for RadecoBindings<BTy> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        self.binding_mut(&index).unwrap()
+        self.binding_mut(&index).unwrap_or_else(|| {
+            radeco_err!("Binding not found, aborting...");
+            process::abort();
+        })
     }
 }
 

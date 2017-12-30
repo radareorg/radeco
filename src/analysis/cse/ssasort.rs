@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use middle::ssa::ssa_traits::{SSA, SSAMod, SSAWalk};
 use middle::ssa::ssa_traits::{NodeType, NodeData};
-use middle::ir::MOpcode;
+use middle::ir::{MOpcode, MAddress};
 
 
 // NOTE: I am not sure where to put this file, in analysis or in middle End.
@@ -115,6 +115,7 @@ impl<'a, I, T> Sorter<'a, I, T>
                     MOpcode::OpZeroExt(num)  => (POPWIDEN, num as u64),
                     MOpcode::OpSignExt(num)  => (POPWIDEN1, num as u64),
                     MOpcode::OpXor   => (POPXOR, 0),
+                    MOpcode::Invalid   => (PUNDEFINED, 0),
                 }
             }
         }
@@ -156,8 +157,13 @@ impl<'a, I, T> Sorter<'a, I, T>
         if !self.sorted.contains_key(&op2) {
             self.sort_operands(op2);
         }
-        let node_data1 = self.ssa.node_data(op1).expect("Operand node not found!");
-        let node_data2 = self.ssa.node_data(op2).expect("Operand node not found!");
+        if self.ssa.node_data(op1).is_err()
+        || self.ssa.node_data(op2).is_err() {
+            radeco_err!("Operand node not found");
+            return Ordering::Equal;
+        };
+        let node_data1 = self.ssa.node_data(op1).unwrap();
+        let node_data2 = self.ssa.node_data(op2).unwrap();
         let priority1 = self.get_priority(node_data1);
         let priority2 = self.get_priority(node_data2);
 
@@ -180,9 +186,15 @@ impl<'a, I, T> Sorter<'a, I, T>
             POPSTORE |
             POPITE => { 
                 let addr1 = self.ssa.address(op1)
-                                        .expect("No address information found");
+                                        .unwrap_or_else(|| {
+                                            radeco_err!("No address information found");
+                                            MAddress::new(0, 0)
+                                        });
                 let addr2 = self.ssa.address(op2)
-                                        .expect("No address information found");
+                                        .unwrap_or_else(|| {
+                                            radeco_err!("No address information found");
+                                            MAddress::new(0, 0)
+                                        });
                 return self.return_value(addr1.cmp(&addr2), op1, op2);
             }
             POPCONST => {

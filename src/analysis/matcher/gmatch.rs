@@ -110,17 +110,33 @@ where I: Iterator<Item=S::ValueRef>,
                 ',' if depth == 1 => { },
                 ')' => {
                     depth -= 1;
-                    if depth > 0 {
-                        sub_expr.last_mut().unwrap().push(c);
+                    if depth <= 0 {
+                        continue
                     }
+                    if let Some(s) = sub_expr.last_mut() {
+                        s.push(c);
+                    }else {
+                        radeco_err!("parse error");
+                    };
                 }
                 '(' => {
                     depth += 1;
-                    if depth > 1 {
-                        sub_expr.last_mut().unwrap().push(c);
+                    if depth <= 1 {
+                        continue
                     }
+                    if let Some(s) = sub_expr.last_mut() {
+                        s.push(c);
+                    }else {
+                        radeco_err!("parse error");
+                    };
                 }
-                _ => sub_expr.last_mut().unwrap().push(c),
+                _ => {
+                    if let Some(s) = sub_expr.last_mut() {
+                        s.push(c);
+                    }else {
+                        radeco_err!("parse error");
+                    };
+                }
             }
         }
         ParseToken {
@@ -213,9 +229,10 @@ where I: Iterator<Item=S::ValueRef>,
         for node in self.ssa.inorder_walk() {
             // First level of filtering.
             let nh = self.hash_data(node);
-            if first_expr.current().as_ref().unwrap() != &nh {
-                continue;
-            }
+            if first_expr.current().as_ref().is_none()
+                || first_expr.current().as_ref().unwrap() != &nh {
+                    continue;
+                }
             {
                 let args = self.ssa.operands_of(node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
@@ -382,17 +399,27 @@ where I: Iterator<Item=S::ValueRef>,
             t_
         };
 
-        let replace_root = if r.current().as_ref().unwrap().starts_with('%') {
-            *bindings.get(r.current().as_ref().unwrap()).expect("Unknown Binding")
-        } else {
-            self.map_token_to_node(r.current().as_ref().unwrap(),
-                                                  &block,
-                                                  &mut address)
-        };
+        let replace_root = if r.current().as_ref().map_or(false, |x| x.starts_with('%')) {
+                                *bindings.get(r.current().as_ref().unwrap()).unwrap_or_else(|| {
+                                    radeco_err!("Unknown Binding");
+                                    &found.root
+                                })
+                            } else if r.current().as_ref().is_some() {
+                                self.map_token_to_node(r.current().as_ref().unwrap(),
+                                   &block,
+                                   &mut address)
+                            } else {
+                                radeco_err!("r.current().as_ref() == None");
+                                found.root
+                            };
 
         self.ssa.replace_value(root, replace_root);
         for i in 0..r.len() {
-            worklist.push((replace_root, i as u8, r.op(i + 1).unwrap()));
+            let p = r.op(i + 1).unwrap_or_else(|| {
+                radeco_err!("parse error");
+                String::new()
+            });
+            worklist.push((replace_root, i as u8, p));
         }
 
         while let Some((parent, edge_idx, subexpr)) = worklist.pop() {
@@ -403,14 +430,25 @@ where I: Iterator<Item=S::ValueRef>,
                 self.seen.insert(subexpr, t_.clone());
                 t_
             };
-            let current = pt.current().unwrap();
+            let current = pt.current().unwrap_or_else(|| {
+                radeco_err!("parse error");
+                String::new()
+            });
             let inner_node = if current.starts_with('%') {
-                *bindings.get(&current).expect("Unknown Binding")
+                *bindings.get(&current).unwrap_or_else(|| {
+                    radeco_err!("Unknown Binding");
+                    //TODO
+                    None.unwrap()
+                })
             } else {
                 self.map_token_to_node(&current, &block, &mut address)
             };
             self.ssa.op_use(parent, edge_idx, inner_node);
             for i in 0..pt.len() {
+                let p = r.op(i + 1).unwrap_or_else(|| {
+                    radeco_err!("parse error");
+                    String::new()
+                });
                 worklist.push((inner_node, i as u8, pt.op(i + 1).unwrap()));
             }
         }

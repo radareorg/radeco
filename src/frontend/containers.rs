@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::{thread, fmt, sync, hash};
 
-use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo};
+use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo, LVarRef};
 
 use petgraph::graph::NodeIndex;
 
@@ -17,9 +17,9 @@ use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
 
 pub struct RadecoModule<'a, F: RFunction> {
-    pub functions: HashMap<u64, F>,
+    functions: HashMap<u64, F>,
     fname: HashMap<String, u64>,
-    pub src: Option<&'a mut Source>,
+    src: Option<&'a mut Source>,
     pub regfile: Option<SubRegisterFile>,
 }
 
@@ -125,7 +125,12 @@ fn ssa_single_fn(f: &FunctionInfo,
                  offset: u64)
                  -> DefaultFnTy {
     let mut rfn = RadecoFunction::construct(reg_info, instructions);
-    rfn.name = f.name.as_ref().unwrap().clone();
+    rfn.name = if let Some(name) = f.name.as_ref() {
+        name.clone()
+    } else {
+        radeco_err!("Function name not found");
+        "Unknown".to_string()
+    };
     if let Some(ref callrefs) = f.callrefs {
         rfn.call_ctx = callrefs.iter()
                                .filter(|x| {
@@ -173,7 +178,10 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
     let mut call_info = rfn.call_ctx
                            .iter()
                            .cloned()
-                           .map(|x| (x.call_site.unwrap(), x))
+                           .map(|x| (x.call_site.unwrap_or_else(|| {
+                               radeco_err!("call_site not found");
+                               0
+                           }), x))
                            .collect::<HashMap<_, _>>();
     {
         let caller = rfn.offset;
@@ -187,8 +195,13 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
                                     .address;
                 if let Some(info) = call_info.get_mut(&call_site) {
                     if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
-                        let target_node = ssa.insert_const(info.callee.unwrap())
-                                                .expect("Cannot insert new constants");
+                        let target_node = ssa.insert_const(info.callee.unwrap_or_else(|| {
+                            radeco_err!("info.callee is None");
+                            0
+                        })).unwrap_or_else(|| {
+                            radeco_err!("Cannot insert new constants");
+                            ssa.invalid_value().unwrap()
+                        });
                         ssa.op_unuse(*call_node, *arg_node);
                         ssa.op_use(*call_node, 0, target_node);
                         info.ssa_ref = Some(*call_node);
@@ -267,7 +280,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                         }
                         let mem_loc = args.get(1)
                                           .expect("Load/Store has to have source/destination");
-                        let mut bind = if seen_l.contains_key(mem_loc) {
+                        let bind = if seen_l.contains_key(mem_loc) {
                             seen_l.get_mut(mem_loc).expect("This can never panic")
                         } else {
                             let h = hash_subtree(ssa, mem_loc);
@@ -327,7 +340,13 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
     let locals = locals.expect("This cannot be `None`");
     for l in locals {
         //println!("[z] Local loaded: {:?}", l);
-        let reference = l.reference.unwrap();
+        let reference = l.reference.unwrap_or_else(|| {
+            radeco_err!("Reference not found");
+            LVarRef {
+                base: None,
+                offset: None,
+            }
+        });
         radeco_trace!("{:?} {:?}", reference.base, reference.offset);
     }
 }
@@ -339,12 +358,23 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
 // the SSA for all the function that it holds and perform basic analysis.
 impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
     fn from(source: &'a mut T) -> RadecoModule<'a, DefaultFnTy> {
-        let reg_info = source.register_profile();
+        let reg_info = source.register_profile().unwrap_or_else(|e| {
+            radeco_err!("{:?}", e);
+            None.unwrap()
+        });
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
         rmod.regfile = Some(SubRegisterFile::new(&reg_info));
         let (tx, rx) = sync::mpsc::channel();
-        for f in source.functions() {
+        let fns = source.functions().unwrap_or_else(|e| {
+            radeco_err!("{:?}", e);
+            Vec::new()
+        });
+        for f in fns {
+            if f.name.as_ref().is_none() {
+                radeco_err!("function name not found");
+                continue;
+            }
             if f.name.as_ref().unwrap().contains("sym.imp") {
                 // Do not analyze/construct for imports.
                 // TODO: Still keep track of these functions.
@@ -352,7 +382,10 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
             }
             radeco_trace!("Locals of {:?}: {:?}", f.name, f.locals);
             let offset = f.offset.expect("Invalid offset");
-            let instructions = source.instructions_at(offset);
+            let instructions = source.instructions_at(offset).unwrap_or_else(|e| {
+                radeco_err!("{:?}", e);
+                Vec::new()
+            });
             let tx = tx.clone();
             let reg_info = reg_info.clone();
 
@@ -391,7 +424,13 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
                 // Actually, analyze_memory should be done after VSA
                 //analyze_memory(&mut rfn);
                 radeco_trace!("Finished analysis of {:?}.", f.name);
-                tx.send((offset, f.name.unwrap(), rfn)).unwrap();
+                let func_name = f.name.unwrap_or_else(|| {
+                    radeco_err!("function name not found");
+                    "Unknown".to_string()
+                });
+                if tx.send((offset, func_name, rfn)).is_err() {
+                    radeco_err!("send failed");
+                };
             });
             handles.push(handle);
         }
@@ -405,7 +444,10 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
         }
 
         for _ in 0..success {
-            let (offset, name, rfn) = rx.recv().unwrap();
+            let (offset, name, rfn) = rx.recv().unwrap_or_else(|x| {
+                radeco_err!("recv failed");
+                (0, "Unknown".to_string(), RadecoFunction::new())
+            });
             rmod.functions.insert(offset, rfn);
             rmod.fname.insert(name, offset);
         }

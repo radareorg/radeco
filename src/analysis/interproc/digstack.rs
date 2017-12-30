@@ -9,6 +9,7 @@
 //! which will help other modules analyze.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use petgraph::graph::NodeIndex;
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAWalk};
@@ -27,9 +28,16 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
     let mut visited: HashSet<LValueRef> = HashSet::new();
 
     // Initial the last SP register offset to ZERO.
-    let reg_state = ssa.registers_in(ssa.exit_node()
-                                            .expect("Incomplete CFG graph"))
-                        .expect("No register state node found");
+    let reg_state = {
+        let exit_node = ssa.exit_node().unwrap_or_else(||{
+                radeco_err!("Incomplete CFG graph");
+                ssa.invalid_action().unwrap()
+            });
+        ssa.registers_in(exit_node)
+    }.unwrap_or_else(|| {
+        radeco_err!("No register state node found");
+        ssa.invalid_action().unwrap()
+    });
     let nodes = ssa.operands_of(reg_state);
     for node in &nodes {
         if ssa.registers(*node).contains(&sp_name) {
@@ -45,7 +53,11 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
             continue;
         }
 
-        let base = stack_offset.get(&node).unwrap().clone();
+        let base = stack_offset.get(&node).map(|x| x.clone())
+            .unwrap_or_else(|| {
+                radeco_err!("node not found from stack_offset");
+                0
+            });
         let args = ssa.operands_of(node);
 
         let users = ssa.uses_of(node);
@@ -134,9 +146,17 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     {
-        let reg_state = ssa.registers_in(ssa.entry_node()
-                                                .expect("Incomplete CFG graph"))
-                            .expect("No register state node found");
+        let reg_state_opt = ssa.registers_in(ssa.entry_node()
+                                            .unwrap_or_else(|| {
+                                                radeco_err!("Incomplete CFG graph");
+                                                ssa.invalid_value().unwrap()
+                                            })
+                                        );
+        let reg_state = reg_state_opt.unwrap_or_else(|| {
+            radeco_err!("No register state node found");
+            ssa.invalid_value().unwrap()
+        });
+
         let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
             if ssa.comment(*node) != Some(sp_name.clone()) {
@@ -155,7 +175,11 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         }
         nodes
     } else {
-        let blocks = ssa.succs_of(ssa.entry_node().expect("Incomplete CFG graph"));
+        let blocks = ssa.succs_of(ssa.entry_node().
+                                  unwrap_or_else(|| {
+                                      radeco_err!("Incomplete CFG graph");
+                                      ssa.invalid_action().unwrap()
+                                  }));
         assert_eq!(blocks.len(), 1);
         ssa.exprs_in(blocks[0])
     };
@@ -171,8 +195,10 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
                     let args = ssa.operands_of(*node);
                     if stack_offset.contains_key(&args[0]) {
                         let num = stack_offset.get(&args[0])
-                                                .unwrap()
-                                                .clone();
+                                                .unwrap_or_else(|| {
+                                                    radeco_err!("Stack offset not found");
+                                                    &0
+                                                }).clone();
                         stack_offset.insert(*node, num);
                         continue;
                     }
@@ -226,8 +252,10 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
                         continue;
                     }
                     let base = stack_offset.get(&args[opcode_arg as usize])
-                                                            .unwrap()
-                                                            .clone() as i64;
+                                                            .unwrap_or_else(|| {
+                                                                radeco_err!("Stack offset not found");
+                                                                &0
+                                                            }).clone() as i64;
                     stack_offset.insert(*node, 
                                 base + (opcode_arg - const_arg) * (num as i64));
                     continue;
@@ -242,7 +270,10 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
             let mut nums: Vec<i64> = Vec::new();
             for arg in &args {
                 if stack_offset.contains_key(arg) {
-                    let num = stack_offset.get(arg).unwrap().clone();
+                    let num = stack_offset.get(arg).unwrap_or_else(|| {
+                            radeco_err!("Stack offset not found");
+                            &0
+                        }).clone();
                     if !nums.contains(&num) {
                         nums.push(num);
                     }

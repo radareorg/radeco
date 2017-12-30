@@ -136,8 +136,11 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
         let mut clustermap = HashMap::<T::NodeIndex, Vec<T::NodeIndex>>::new();
 
         for i in &nodes {
-            let block = g.node_cluster(i);
-            clustermap.entry(T::node_index_new(block.unwrap()))
+            let block = g.node_cluster(i).unwrap_or_else(|| {
+                radeco_err!("Block not found");
+                0
+            });
+            clustermap.entry(T::node_index_new(block))
                       .or_insert_with(Vec::new)
                       .push(i.clone());
         }

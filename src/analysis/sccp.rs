@@ -14,10 +14,23 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::u64;
+use petgraph::graph::NodeIndex;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
-use middle::ssa::ssa_traits::NodeType;
+use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
 use middle::ssa::graph_traits::{Graph, ConditionInfo};
-use middle::ir::{MArity, MOpcode};
+use middle::ir::{MArity, MOpcode, WidthSpec, MAddress};
+
+macro_rules! node_data_from_g {
+    ($self:ident, $i:ident) => {
+        $self.g.node_data(*$i).unwrap_or_else(|x| {
+            radeco_err!("RegisterState found, {:?}", x);
+            NodeData {
+                vt: ValueInfo::new(ValueType::Invalid, WidthSpec::Unknown),
+                nt: NodeType::Undefined,
+            }
+        })
+    };
+}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum LatticeValue {
@@ -146,7 +159,10 @@ impl<T> Analyzer<T>
         assert!(self.g.is_selector(*i));
 
         let cond_val = self.get_value(i);
-        let block = self.g.selector_for(*i).expect("Victim value is not a selector");
+        let block = self.g.selector_for(*i).unwrap_or_else(|| {
+                        radeco_err!("Victim value is not a selector");
+                        self.g.invalid_action().unwrap()
+        });
         let invalid_edge = self.g.invalid_edge().expect("Invalid Edge is not defined");
         let conditional_branches = 
             if let Some(branches) = self.g.conditional_edges(block) {
@@ -211,7 +227,7 @@ impl<T> Analyzer<T>
         };
 
         // We should consider width.
-        let ndata = self.g.node_data(*i).unwrap();
+        let ndata = node_data_from_g!(self, i);
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
@@ -301,7 +317,7 @@ impl<T> Analyzer<T>
         };
 
         // We should consider width.
-        let ndata = self.g.node_data(*i).unwrap();
+        let ndata = node_data_from_g!(self, i);
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
@@ -311,11 +327,18 @@ impl<T> Analyzer<T>
     }
 
     fn visit_expression(&mut self, i: &T::ValueRef) -> LatticeValue {
-        let expr = self.g.node_data(*i).unwrap();
+        let expr = self.g.node_data(*i).unwrap_or_else(|x| {
+            radeco_err!("RegisterState found, {:?}", x);
+            NodeData {
+                vt: ValueInfo::new(ValueType::Invalid, WidthSpec::Unknown),
+                nt: NodeType::Undefined,
+            }
+        });
         let opcode = if let NodeType::Op(opcode) = expr.nt {
             opcode
         } else {
-            panic!("Found something other than an expression!");
+            radeco_err!("Found something other than an expression!");
+            MOpcode::Invalid
         };
 
         if let MOpcode::OpConst(v) = opcode {
@@ -343,7 +366,10 @@ impl<T> Analyzer<T>
     pub fn analyze(&mut self) {
 
         {
-            let entry_node = self.g.entry_node().expect("Incomplete CFG graph");
+            let entry_node = self.g.entry_node().unwrap_or_else(|| {
+                                radeco_err!("Incomplete CFG graph");
+                                self.g.invalid_action().unwrap()
+            });
             let edges = self.g.outgoing_edges(entry_node);
             for &(ref next, _) in &edges {
                 self.cfgwl_push(next);
@@ -354,7 +380,9 @@ impl<T> Analyzer<T>
             while let Some(edge) = self.cfg_worklist.pop_front() {
                 if !self.is_executable(&edge) {
                     self.mark_executable(&edge);
-                    let block = self.g.edge_info(edge).unwrap().target;
+                    let block = self.g.edge_info(edge).unwrap_or_else(|| {
+                        self.g.edge_info(self.g.invalid_edge().unwrap()).unwrap()
+                    }).target;
                     let phis = self.g.phis_in(block);
                     for phi in &phis {
                         let v = self.visit_phi(phi);
@@ -389,7 +417,10 @@ impl<T> Analyzer<T>
             while let Some(e) = self.ssa_worklist.pop_front() {
                 let t = if self.g.is_expr(e) {
                     let block_of = self.g.block_for(e)
-                                            .expect("Value node doesn't belong to any block");
+                                            .unwrap_or_else(|| {
+                                            radeco_err!("Value node doesn't belong to any block");
+                                            self.g.invalid_action().unwrap()
+                    });
                     if self.is_block_executable(&block_of) {
                         self.visit_expression(&e)
                     } else {
@@ -419,8 +450,11 @@ impl<T> Analyzer<T>
                               k, self.g.node_data(*k), val);
                 // BUG: Width may be changed just using a simple replace.
                 let const_node = self.g.insert_const(val)
-                                        .expect("Cannot insert new constants");
-                let ndata = self.g.node_data(*k).unwrap();
+                                    .unwrap_or_else(|| {
+                                        radeco_err!("Cannot insert new constants");
+                                        self.g.invalid_value().unwrap()
+                                    });
+                let ndata = node_data_from_g!(self, k);
                 let w = ndata.vt.width().get_width().unwrap_or(64);
                 let new_node = if w == 64 {
                     const_node
@@ -428,10 +462,16 @@ impl<T> Analyzer<T>
                     // val should not be larger than the k node could be.  
                     assert!(w < 64 && val < (1 << (w)));
                     let address = self.g.address(*k)
-                                        .expect("No address information found");
+                                        .unwrap_or_else(|| {
+                                            radeco_err!("No address information found");
+                                            MAddress::invalid_address()
+                                        });
                     let opcode = MOpcode::OpNarrow(w as u16);
                     let new_node = self.g.insert_op(opcode, ndata.vt, None)
-                                            .expect("Cannot insert new values");
+                                        .unwrap_or_else(|| {
+                                            radeco_err!("Cannot insert new values");
+                                            self.g.invalid_value().unwrap()
+                                        });
                     self.g.set_address(new_node, address);
                     self.g.op_use(new_node, 0, const_node);
                     new_node
@@ -478,6 +518,7 @@ impl<T> Analyzer<T>
 
     // Determines the Initial value
     fn init_val(&self, i: &T::ValueRef) -> LatticeValue {
+        //TODO replace unwrap
         let node_data = self.g.node_data(*i).unwrap();
         match node_data.nt {
             NodeType::Op(MOpcode::OpConst(v)) => LatticeValue::Const(v),
@@ -503,7 +544,10 @@ impl<T> Analyzer<T>
 
     fn is_block_executable(&self, i: &T::ActionRef) -> bool {
         // entry_node is always reachable.
-        if *i == self.g.entry_node().expect("Incomplete CFG graph") {
+        if *i == self.g.entry_node().unwrap_or_else(|| {
+                    radeco_err!("Incomplete CFG graph");
+                    self.g.invalid_action().unwrap()
+                }){
             return true;
         }
         let incoming = self.g.incoming_edges(*i);
@@ -520,7 +564,10 @@ impl<T> Analyzer<T>
             return;
         }
         let owner_block = self.g.block_for(*i)
-                                .expect("Value node doesn't belong to any block");
+                                .unwrap_or_else(|| {
+                                    radeco_err!("Value node doesn't belong to any block");
+                                    self.g.invalid_action().unwrap()
+                                });
         if self.is_block_executable(&owner_block) {
             self.ssa_worklist.push_back(*i);
         }

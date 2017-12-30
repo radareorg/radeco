@@ -120,49 +120,49 @@ impl DomInfo {
     }
 
     /// Returns all the dominators of the node with graph::NodeIndex `i`.
-    pub fn doms(&self, i: graph::NodeIndex) -> Vec<graph::NodeIndex> {
+    pub fn doms(&self, i: graph::NodeIndex) -> Result<Vec<graph::NodeIndex>, &'static str> {
         match self.dom {
-            None => panic!("dom not computed."),
-            Some(ref d) => d.doms(i),
+            None => Err("dom not computed."),
+            Some(ref d) => Ok(d.doms(i)),
         }
     }
 
     /// Returns the immediate dominator of the node with graph::NodeIndex `i`.
-    pub fn idom(&self, i: graph::NodeIndex) -> graph::NodeIndex {
+    pub fn idom(&self, i: graph::NodeIndex) -> Result<graph::NodeIndex, &'static str> {
         match self.dom {
-            None => panic!("dom not computed."),
-            Some(ref d) => d.idom(i),
+            None => Err("dom not computed."),
+            Some(ref d) => Ok(d.idom(i)),
         }
     }
 
     /// Returns all nodes in the dominance frontier of `i`.
-    pub fn dom_frontier(&self, i: graph::NodeIndex) -> HashSet<graph::NodeIndex> {
+    pub fn dom_frontier(&self, i: graph::NodeIndex) -> Result<HashSet<graph::NodeIndex>, &'static str>  {
         match self.dom {
-            None => panic!("dom not computed."),
+            None => Err("dom not computed."),
             Some(ref d) => d.dom_frontier(i),
         }
     }
 
     /// Returns all postdominators of `i`.
-    pub fn postdoms(&self, i: graph::NodeIndex) -> Vec<graph::NodeIndex> {
+    pub fn postdoms(&self, i: graph::NodeIndex) -> Result<Vec<graph::NodeIndex>, &'static str> {
         match self.postdom {
-            None => panic!("postdom not computed."),
-            Some(ref d) => d.doms(i),
+            None => Err("postdom not computed."),
+            Some(ref d) => Ok(d.doms(i)),
         }
     }
 
     /// Returns the immediate postdominator of `i`.
-    pub fn ipostdom(&self, i: graph::NodeIndex) -> graph::NodeIndex {
+    pub fn ipostdom(&self, i: graph::NodeIndex) -> Result<graph::NodeIndex, &'static str> {
         match self.postdom {
-            None => panic!("postdom not computed."),
-            Some(ref d) => d.idom(i),
+            None => Err("postdom not computed."),
+            Some(ref d) => Ok(d.idom(i)),
         }
     }
 
     /// Returns all nodes in the postdominance frontier of `i`.
-    pub fn postdom_frontier(&self, i: graph::NodeIndex) -> HashSet<graph::NodeIndex> {
+    pub fn postdom_frontier(&self, i: graph::NodeIndex) -> Result<HashSet<graph::NodeIndex>, &'static str> {
         match self.postdom {
-            None => panic!("postdom not computed."),
+            None => Err("postdom not computed."),
             Some(ref d) => d.dom_frontier(i),
         }
     }
@@ -303,12 +303,20 @@ impl DomTree {
             nodes_iter.remove(start_index.index());
             nodes_iter.reverse();
             let mut changed = true;
+            //TODO not to use dummy
+            let dummy = InternalIndex::new(0, graph::NodeIndex::new(0));
             while changed {
                 changed = false;
                 for n in &nodes_iter {
                     let node: graph::NodeIndex = n.0;
                     let preds_iter = g.neighbors_directed(node, EdgeDirection::Incoming)
-                                      .map(|x| rmap.get(&x).unwrap());
+                                      .map(|x| {
+                                          rmap.get(&x)
+                                              .unwrap_or_else(|| {
+                                                  radeco_err!("DomTree.build_dom_tree: Node not found");
+                                                  &dummy
+                                              })
+                                      });
                     let preds = preds_map.entry(node)
                                          .or_insert_with(|| preds_iter.cloned().collect::<Vec<_>>());
                     let mut new_idom = invalid_index;
@@ -372,9 +380,11 @@ impl DomTree {
         self.dom_frontier = Some(frontier_map);
     }
 
-    pub fn dom_frontier(&self, n: graph::NodeIndex) -> HashSet<graph::NodeIndex> {
+    pub fn dom_frontier(&self, n: graph::NodeIndex) -> Result<HashSet<graph::NodeIndex>, &'static str> {
         assert_ne!(self.dom_frontier, None, "Uninitialized dom_frontier.");
-        self.dom_frontier.clone().unwrap()[&n].clone()
+        self.dom_frontier.clone()
+            .ok_or("DomTree dom_frontier: failed to clone")
+            .map(|d| d[&n].clone())
     }
 }
 
