@@ -46,9 +46,6 @@ pub trait Propagate {
     // Returns true if something in the internal state of the analyzer changed. This could be used
     // as a hint to determine if the analyzer can make further progress.
     fn push(&mut Self, Option<&Self::Info>) -> bool;
-
-    // XXX: DO NOT COMMIT
-    fn stats(&Self, &RadecoFunction);
 }
 
 // TODO: Maybe `Eval` can be a part of definition of a lattice later on.
@@ -207,7 +204,6 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
         for (wrapper, aw) in rmod.iter().zip(analyzers.iter()) {
             let analyzer = aw.analyzer();
             let rfn = wrapper.function.1;
-            // T::stats(analyzer, rfn);
         }
     }
 }
