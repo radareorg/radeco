@@ -622,30 +622,3 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.callxrefs.clone()
     }
 }
-
-
-#[cfg(test)]
-mod test {
-    use frontend::source::FileSource;
-    use middle::dce;
-    use super::*;
-
-    #[test]
-    fn module_test() {
-        // let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
-        // r2.init();
-        // let mut fsource = FileSource::from(r2);
-        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
-        let mut rmod = RadecoModule::from(&mut fsource);
-        for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
-            {
-                dce::collect(&mut rfn.ssa);
-            }
-            // println!("Local Variable info: {:?}", rfn.locals);
-            // println!("Local Variable info: {:?}", rfn.bindings);
-            // ir_write!(Some(rfn.name.clone()), &rfn.ssa, "/tmp/module_test.ir");
-            // let mut writer: IRWriter = Default::default();
-            // println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
-        }
-    }
-}
