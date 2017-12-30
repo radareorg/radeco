@@ -264,6 +264,7 @@ impl MOpcode {
             MOpcode::OpSub => 28,
             MOpcode::OpXor => 29,
             MOpcode::OpZeroExt(_) => 30,
+            MOpcode::Invalid => 31,
         }
     }
 }

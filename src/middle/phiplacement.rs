@@ -666,7 +666,7 @@ impl<'a, T> PhiPlacer<'a, T>
     // Something like the previous verified_add_op.
 
     pub fn add_op(&mut self, op: &MOpcode, address: &mut MAddress, vt: ValueInfo) -> T::ValueRef {
-        let i = self.ssa.insert_op(*op, vt, None).unwrap_or_else(|| {
+        let i = self.ssa.insert_op(op.clone(), vt, None).unwrap_or_else(|| {
             radeco_err!("Cannot insert new values");
             self.ssa.invalid_value().unwrap()
         });
