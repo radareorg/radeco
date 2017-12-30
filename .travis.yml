@@ -14,20 +14,9 @@ addons:
     sources:
       - kalakris-cmake
 
-matrix:
-  fast_finish: true
-  include:
-    - rust: stable
-      env: COVERALLS=true
-  allow_failures:
-    - rust: nightly
-    - env: COVERALLS=true
-
-# run builds for all the trains (and more)
 rust:
   - nightly
-  - beta
-  - stable
+
 notifications:
   irc: chat.freenode.net#radare-rsoc
   email: false
@@ -52,23 +41,8 @@ script:
     travis-cargo test &&
     travis-cargo bench
 after_success:
-  - travis-cargo --only stable coveralls --no-sudo --verify
-  - travis-cargo --only stable doc-upload
-script:
-  - |
-    cargo build &&
-    cargo bench;
-    if [ "$COVERALLS" != "true" ];
-      then cargo test;
-    fi
-# The coveralls env runs tests as part of its run
-after_success:
-  - |
-    if [ "$COVERALLS" = "true" ]; 
-      then travis_wait 30 cargo coveralls --exclude-pattern tests/; 
-    fi
-# Restore automatic doc updating when cargo-travis gets this feature
-#  travis-cargo --only stable doc-upload
+  - travis-cargo --only nightly coveralls --no-sudo --verify
+  - travis-cargo --only nightly doc-upload
 env:
   global:
   - TRAVIS_CARGO_NIGHTLY_FEATURE=""
