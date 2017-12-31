@@ -20,7 +20,7 @@ profile = ["cpuprofiler"]
 
 
 [dependencies]
-regex = "*"
+regex = "0.2.2"
 petgraph = "^0.4.0"
 num = "*"
 serde_json="*"
