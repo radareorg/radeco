@@ -8,9 +8,9 @@ use petgraph::Direction;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use r2api::structs::FunctionInfo;
-use std::collections::HashMap;
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 /// Converts call graph information from `Source`, represented in FunctionInfo,
 /// into an actual graph with links.
 pub fn load_call_graph(finfos: &[FunctionInfo], rmod: &RadecoModule) -> CallGraph {
@@ -104,16 +104,39 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
         for (csi, callee) in cgwalker.next(&rmod.callgraph) {
             let csite = rmod.callgraph[csi].csite;
             // Get args of callee
-            if let Some(calleefn) = rmod.functions.get(&rmod.callgraph[callee]) {
+            let callee_off = rmod.callgraph[callee];
+
+            let callee_info = if let Some(calleefn) = rmod.functions.get(&callee_off) {
                 let mut args = calleefn.bindings()
                     .into_iter()
                     .filter(|x| x.btype.is_argument() || x.btype.is_return())
+                    .cloned()
                     .collect::<Vec<_>>();
-                args.sort_by(|x, y| { match (x.ridx, y.ridx) {
-                    (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
-                    (_, _) => unreachable!(),
-                }
+                args.sort_by(|x, y| {
+                    match (x.ridx, y.ridx) {
+                        (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
+                        (_, _) => unreachable!(),
+                    }
                 });
+                Some((calleefn.cgid(), args))
+            } else if let Some(calleefn) = rmod.imports.get(&callee_off).map(|ifn| ifn.rfn.borrow()) {
+                let mut args = calleefn.bindings()
+                    .into_iter()
+                    .filter(|x| x.btype.is_argument() || x.btype.is_return())
+                    .cloned()
+                    .collect::<Vec<_>>();
+                args.sort_by(|x, y| {
+                    match (x.ridx, y.ridx) {
+                        (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
+                        (_, _) => unreachable!(),
+                    }
+                });
+                Some((calleefn.cgid(), args))
+            } else {
+                None
+            };
+
+            if let Some((callee_cgid, args)) = callee_info {
                 // Access the actual callsite in rfn.
                 if let Some(mut cctx) = csites.remove(&csite) {
                     cctx.map = cctx.map
@@ -122,7 +145,7 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
                         .zip(args.into_iter().map(|v| v.idx))
                         .collect();
                     // Update callsite information in the callgraph.
-                    rmod.callgraph.update_edge(rfn.cgid(), calleefn.cgid(), cctx);
+                    rmod.callgraph.update_edge(rfn.cgid(), callee_cgid, cctx);
                 }
             }
         }
