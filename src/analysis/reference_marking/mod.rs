@@ -97,14 +97,24 @@ pub struct ReferenceMarkerInfo(HashMap<NodeIndex, ValueType>);
 impl Propagate for ReferenceMarker {
     type Info = ReferenceMarkerInfo;
 
-    fn pull(analyzer: &mut ReferenceMarker,
+    fn pull(analyzer: &mut Option<&mut ReferenceMarker>,
             rfn: &RadecoFunction,
             callsite: &CallContextInfo)
             -> Option<ReferenceMarkerInfo> {
-        Some(ReferenceMarkerInfo(callsite.map
-            .iter()
-            .map(|&(caller, callee)| (callee, analyzer.cs.bvalue(caller)))
-            .collect()))
+        if let &mut Some(ref mut ana) = analyzer {
+            Some(ReferenceMarkerInfo(callsite.map
+                .iter()
+                .map(|&(caller, callee)| (callee, ana.cs.bvalue(caller)))
+                .collect()))
+        } else {
+            // Handle imports
+            Some(ReferenceMarkerInfo(callsite.map
+                .iter()
+                .filter_map(|&(caller, callee)| {
+                    rfn.ssa().node_data(caller).map(|n| (callee, n.vt.vty)).ok()
+                })
+                .collect()))
+        }
     }
 
     fn summary(analyzer: &mut ReferenceMarker,

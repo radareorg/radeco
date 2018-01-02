@@ -6,10 +6,11 @@
 //!   structure of the analysis is same.
 //!
 
-use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo};
+use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo, CallGraph};
 use middle::ir::MAddress;
 use middle::regfile::SubRegisterFile;
 use petgraph::Direction;
+use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use r2api::structs::LSectionInfo;
 use rayon::prelude::*;
@@ -38,7 +39,8 @@ pub trait Propagate {
     type Info: Default + Eval + Clone + fmt::Debug;
     // Used to `pull` information, `Info`, relevant in inter-proc analysis computed in
     // the transfer phase.
-    fn pull(&mut Self, &RadecoFunction, &CallContextInfo) -> Option<Self::Info>;
+    // For imports, the first argument, the analyzer, is passed as None.
+    fn pull(&mut Option<&mut Self>, &RadecoFunction, &CallContextInfo) -> Option<Self::Info>;
     fn summary(&mut Self, &RadecoFunction) -> Option<Self::Info>;
     // Used to aggregate information obtained from various sources/callsites
     fn union(&mut Self, &[Self::Info]) -> Option<Self::Info>;
@@ -101,6 +103,53 @@ impl<T: InterProcAnalysis> AnalyzerWrapper<T> {
 }
 
 impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
+    // Propagate argument information to the callsite of every caller of this function.
+    // current_fn -> callers of current_fn
+    fn propagate_up_callgraph(current_fn_node: &NodeIndex,
+                              current_fn: &RadecoFunction,
+                              mut current_analyzer: Option<&mut T>,
+                              callgraph: &CallGraph,
+                              infos: &mut HashMap<u64, Vec<T::Info>>) {
+        for (caller, info) in callgraph.edges_directed(*current_fn_node, Direction::Incoming)
+            .map(|call_edge| {
+                let caller = *callgraph.node_weight(call_edge.source()).expect("");
+                let csite = &call_edge.weight();
+                //let caller_analyzer = analyzers.get_mut(caller).map(|a| a.analyzer_mut()).expect("");
+                let rcsite = CallContextInfo {
+                    map: csite.map.iter().map(|&(x, y)| (y, x)).collect(),
+                    csite: 0,
+                    csite_node: csite.csite_node,
+                };
+                (caller, T::pull(&mut current_analyzer, current_fn, &rcsite))
+            }) {
+            let ref mut e = infos.entry(caller).or_insert(Vec::new());
+            if let Some(inf) = info {
+                e.push(inf);
+            }
+        }
+    }
+
+    // Propagate argument information to the callsite of every callee of this function.
+    // current_fn -> callees of current_fn
+    fn propagate_down_callgraph(current_fn_node: &NodeIndex,
+                                current_fn: &RadecoFunction,
+                                mut current_analyzer: Option<&mut T>,
+                                callgraph: &CallGraph,
+                                infos: &mut HashMap<u64, Vec<T::Info>>) {
+        let mut callee_info_map = Vec::new();
+        for call_edge in callgraph.edges_directed(*current_fn_node, Direction::Outgoing) {
+            let callee = *callgraph.node_weight(call_edge.target()).expect("");
+            let csite = &call_edge.weight();
+            callee_info_map.push((callee, T::pull(&mut current_analyzer, current_fn, csite)));
+        }
+        for (callee, info) in callee_info_map.into_iter() {
+            let ref mut e = infos.entry(callee).or_insert(Vec::new());
+            if let Some(inf) = info {
+                e.push(inf);
+            }
+        }
+    }
+
     pub fn analyze(rmod: &mut RadecoModule, regfile: &Arc<SubRegisterFile>, n_iters: Option<u64>) {
         let sections = Arc::clone(rmod.sections());
         let mut analyzers: Vec<AnalyzerWrapper<T>> = Vec::new();
@@ -113,12 +162,34 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             analyzers.push(AnalyzerWrapper::new(*current_offset, analyzer));
         }
 
+        let mut infos: HashMap<u64, Vec<T::Info>> = HashMap::new();
+
+        {
+            // Push information from imports (if any). Since this analysis (currently) cannot modify
+            // information of any function that is outside the current module, the analysis information
+            // for imports cannot change and we cannot gain new information about them. So it is
+            // sufficient to do this once (and not iteratively).
+            //
+            // TODO: Currently, there is nothing to set this information inside radeco-lib (as we do
+            // not analyze dependencies yet). This phase is only useful if another analysis pass
+            // already preloads this information.
+            let callgraph = rmod.callgraph();
+            for (plt, imp) in rmod.imports.iter() {
+                let current_fn = imp.rfn.borrow_mut();
+                let current_fn_node = current_fn.cgid();
+                Self::propagate_up_callgraph(&current_fn_node,
+                                             &current_fn,
+                                             None,
+                                             &callgraph,
+                                             &mut infos);
+            }
+        }
+
         let mut max_iterations = n_iters.unwrap_or(u64::max_value());
 
         while !fixpoint && max_iterations > 0 {
             max_iterations -= 1;
             // Propagation should be done in serial
-            let mut infos: HashMap<u64, Vec<T::Info>> = HashMap::new();
             for (i, wrapper) in rmod.iter().enumerate() {
                 let (current_offset, current_fn) = wrapper.function;
                 let current_analyzer = analyzers.get_mut(i).map(|a| a.analyzer_mut()).expect("");
@@ -129,36 +200,18 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 // Get callsite information for every callee of current function
                 let callgraph = rmod.callgraph();
                 let current_fn_node = current_fn.cgid();
-                for (callee, info) in callgraph.edges_directed(current_fn_node, Direction::Outgoing)
-                    .map(|call_edge| {
-                        let callee = *callgraph.node_weight(call_edge.target()).expect("");
-                        let csite = &call_edge.weight();
-                        (callee, T::pull(current_analyzer, current_fn, csite))
-                    }) {
-                    let ref mut e = infos.entry(callee).or_insert(Vec::new());
-                    if let Some(inf) = info {
-                        e.push(inf);
-                    }
-                }
 
-                // Propagate argument information to the callsite of every caller of this function.
-                for (caller, info) in callgraph.edges_directed(current_fn_node, Direction::Incoming)
-                    .map(|call_edge| {
-                        let caller = *callgraph.node_weight(call_edge.source()).expect("");
-                        let csite = &call_edge.weight();
-                        //let caller_analyzer = analyzers.get_mut(caller).map(|a| a.analyzer_mut()).expect("");
-                        let rcsite = CallContextInfo {
-                            map: csite.map.iter().map(|&(x, y)| (y, x)).collect(),
-                            csite: 0,
-                            csite_node: csite.csite_node,
-                        };
-                        (caller, T::pull(current_analyzer, current_fn, &rcsite))
-                    }) {
-                        let ref mut e = infos.entry(caller).or_insert(Vec::new());
-                        if let Some(inf) = info {
-                            e.push(inf);
-                        }
-                    }
+                Self::propagate_down_callgraph(&current_fn_node,
+                                               current_fn,
+                                               Some(current_analyzer),
+                                               &callgraph,
+                                               &mut infos);
+
+                Self::propagate_up_callgraph(&current_fn_node,
+                                             current_fn,
+                                             Some(current_analyzer),
+                                             &callgraph,
+                                             &mut infos);
             }
 
             // Union all infos collected for a function. TODO: Parallelize as there is no
@@ -184,8 +237,6 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 }
             }
 
-            // TODO: Upward propagation of latest results in callgraph
-
             // Continue analysis. TODO: Parallelize
             for (wrapper, aw) in rmod.iter_mut().zip(analyzers.iter_mut()) {
                 // Check if the analyzer should be run for the current function.
@@ -198,12 +249,8 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 let fp = T::transfer_iterative(analyzer, current_fn);
                 fixpoint = fixpoint || fp;
             }
-        }
 
-        // XXX: DO NOT COMMIT
-        for (wrapper, aw) in rmod.iter().zip(analyzers.iter()) {
-            let analyzer = aw.analyzer();
-            let rfn = wrapper.function.1;
+            infos.clear();
         }
     }
 }

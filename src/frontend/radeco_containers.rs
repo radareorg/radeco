@@ -36,6 +36,8 @@ use frontend::bindings::{Binding, RBindings, RadecoBindings};
 use frontend::llanalyzer;
 use frontend::radeco_source::{WrappedR2Api, Source};
 use frontend::ssaconstructor::SSAConstruct;
+use frontend::imports::ImportInfo;
+
 use middle::ir;
 use middle::regfile::SubRegisterFile;
 use middle::ssa::cfg_traits::CFG;
@@ -164,7 +166,8 @@ pub struct RadecoModule {
     // Information from the loader
     symbols: Vec<LSymbolInfo>,
     sections: Arc<Vec<LSectionInfo>>,
-    imports: Vec<LImportInfo>,
+    // Map from PLT entry address to `ImportInfo` for an import
+    pub imports: HashMap<u64, ImportInfo>,
     exports: Vec<LExportInfo>,
     relocs: Vec<LRelocInfo>,
     libs: Vec<String>,
@@ -510,6 +513,7 @@ pub struct ModuleLoader<'a> {
     load_locals: bool,
     parallel: bool,
     assume_cc: bool,
+    stub_imports: bool,
 }
 
 impl<'a> ModuleLoader<'a> {
@@ -537,7 +541,6 @@ impl<'a> ModuleLoader<'a> {
         self.build_ssa = true;
         self
     }
-
 
     /// Loads information about datareferences for loaded functions.
     /// Needs support from `Source`
@@ -567,7 +570,13 @@ impl<'a> ModuleLoader<'a> {
         self
     }
 
-    // TODO: Map to nodes!
+    /// Create blank, stub entries for imported functions.
+    /// Required for load-libs, auto set when load_libs is true for the project loader.
+    pub fn stub_imports(mut self) -> ModuleLoader<'a> {
+        self.stub_imports = true;
+        self
+    }
+
     fn init_fn_bindings(rfn: &mut RadecoFunction, sub_reg_f: &SubRegisterFile) {
         // Setup binding information for functions based on reg_p. Note that this essential
         // marks the "potential" arguments without worrying about if they're ever used. Future
@@ -669,7 +678,16 @@ impl<'a> ModuleLoader<'a> {
         }
 
         match source.imports() {
-            Ok(import_info) => rmod.imports = import_info,
+            // TODO: Set the node in callgraph, either now or later.
+            Ok(import_info) => {
+                rmod.imports = import_info.iter().filter_map(|ii| {
+                    if let Some(plt) = ii.plt {
+                        Some((plt, ImportInfo::new_stub(plt, Cow::from(ii.name.as_ref().unwrap().clone()))))
+                    } else {
+                        None
+                    }
+                }).collect();
+            },
             Err(e) => radeco_warn!(e),
         }
 
@@ -725,6 +743,12 @@ impl<'a> ModuleLoader<'a> {
             }
         }
 
+        if self.stub_imports {
+            for (off, ifn) in rmod.imports.iter_mut() {
+                SSAConstruct::<SSAStorage>::construct(&mut ifn.rfn.borrow_mut(), &reg_p, self.assume_cc);
+            }
+        }
+
         // Load optional information. These need support from `Source` for analysis
         if self.build_callgraph || self.load_datarefs || self.load_locals {
             let aux_info = match source.functions() {
@@ -741,7 +765,11 @@ impl<'a> ModuleLoader<'a> {
                 for nidx in rmod.callgraph.node_indices() {
                     if let Some(cg_addr) = rmod.callgraph.node_weight(nidx) {
                         if let Some(rfn) = rmod.functions.get_mut(cg_addr) {
+                            // Functions defined in this binary
                             rfn.cgid = nidx;
+                        } else if let Some(ifn) = rmod.imports.get_mut(cg_addr) {
+                            // Handle imports
+                            ifn.rfn.borrow_mut().cgid = nidx;
                         }
                     }
                 }
@@ -764,6 +792,11 @@ impl<'a> ModuleLoader<'a> {
             for (off, rfn) in rmod.functions.iter_mut() {
                 ModuleLoader::init_fn_bindings(rfn, &sub_reg_f);
             }
+            // Do the same for imports.
+            for (plt, ifn) in rmod.imports.iter_mut() {
+                ModuleLoader::init_fn_bindings(&mut ifn.rfn.borrow_mut(), &sub_reg_f);
+            }
+
             llanalyzer::init_call_ctx(&mut rmod);
         }
 
