@@ -6,14 +6,18 @@
 //! The text based
 //! representation is inspired from (and probably similar) LLVM IR.
 
-use std::collections::HashMap;
-use std::default;
-use petgraph::graph::NodeIndex;
+
+use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MOpcode};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::ssa_traits::{SSA, SSAWalk, ValueInfo};
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::graph_traits::{EdgeInfo, Graph};
+
+
+use std::collections::HashMap;
+use std::default;
+use petgraph::graph::NodeIndex;
 
 const BLOCK_SEP: &'static str = "{";
 const CL_BLOCK_SEP: &'static str = "}";
@@ -92,20 +96,6 @@ macro_rules! fmtarg {
 macro_rules! indent {
     ($n:expr, $s:expr) => { format!("{}{}", IRWriter::fmt_indent($n), $s); }
 }
-
-// TODO before implementing this. This will also help in writing the pseudo C
-// output.
-// 1. Associate nodes and addresses. Currently, addresses are not stored with
-// the nodes. This is
-// trivial to implement as the phiplacer has the requisite information and
-// this can be
-//    associated in finish_block.
-// 2. Write an iterator for SSAStorage that yeilds nodes "inorder" i.e. ordered
-// by their
-//    corresponding instruction addresses in the original binary.
-// 3. Add a pass to load symbols and flags from radare2. This will produce more
-// readable output in
-//    both the cases.
 
 #[derive(Clone, Debug)]
 pub struct IRWriter {
@@ -318,6 +308,22 @@ impl IRWriter {
             indent.push_str("    ");
         }
         indent
+    }
+
+    // TODO: expose width
+    pub fn pretty_print_function_proto(rfn: &RadecoFunction) -> String {
+        let mut args = rfn.bindings()
+            .into_iter()
+            .filter(|&x| x.btype().is_argument())
+            .filter_map(|x| rfn.ssa().node_data(x.idx).map(|v| (x.idx, v.vt)).ok())
+            .fold(String::new(), |acc, x| {
+                if acc.is_empty() {
+                    format!("{}{:?}", acc, x.1.vty)
+                } else {
+                    format!("{}, {:?}", acc, x.1.vty)
+                }
+            });
+        format!("{} ({})", rfn.name, args)
     }
 
     pub fn emit_il(&mut self, fn_name: Option<String>, ssa: &SSAStorage) -> String {

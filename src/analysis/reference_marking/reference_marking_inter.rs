@@ -9,6 +9,8 @@
 use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo, CallGraph};
 use middle::ir::MAddress;
 use middle::regfile::SubRegisterFile;
+use middle::ir_writer::IRWriter;
+
 use petgraph::Direction;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
