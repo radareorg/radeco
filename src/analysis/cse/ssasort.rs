@@ -124,7 +124,8 @@ impl<'a, I, T> Sorter<'a, I, T>
                 MOpcode::OpNop => {
                     return self.return_value(Ordering::Equal, op1, op2);
                 }
-                MOpcode::OpCall | MOpcode::OpLoad | MOpcode::OpStore | MOpcode::OpITE => {
+                MOpcode::OpCall | MOpcode::OpUCall | MOpcode::OpLoad 
+                    | MOpcode::OpStore | MOpcode::OpITE => {
                     let addr1 = self.ssa.address(op1).expect("No address information found");
                     let addr2 = self.ssa.address(op2).expect("No address information found");
                     return self.return_value(addr1.cmp(&addr2), op1, op2);

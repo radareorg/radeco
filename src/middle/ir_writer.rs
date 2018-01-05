@@ -295,6 +295,25 @@ impl IRWriter {
                                      x
                                  }
                              }))
+            },
+            //FIXME share code with OpCall
+            MOpcode::OpUCall => {
+                let mem = "mem".to_owned();
+                let mut operands_idx: Vec<u8> = (ssa.sparse_operands_of(ni).iter().map(|x| x.0).collect());
+                operands_idx.sort();
+                format!("CALL [{}]({})",
+                        operands[0],
+                        &operands[1..]
+                             .iter()
+                             .zip(&operands_idx[1..])
+                             .map(|i| format!("{}={}", ssa.regnames.get((*i.1 - 1) as usize).unwrap_or(&mem), i.0))
+                             .fold(String::new(), |acc, x| {
+                                 if !acc.is_empty() {
+                                     format!("{}, {}", acc, x)
+                                 } else {
+                                     x
+                                 }
+                             }))
             }
             _ => {
                 format!("{} {:?}", opcode, operands)

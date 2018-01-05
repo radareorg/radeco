@@ -194,7 +194,8 @@ impl Verify for SSAStorage {
 
                     // TODO: OpStore is unclear that it could be binary or ternary.
                     if opcode != MOpcode::OpStore &&
-                        opcode != MOpcode::OpCall {
+                        opcode != MOpcode::OpCall &&
+                        opcode != MOpcode::OpUCall {
                         check!(op_len == n, SSAErr::WrongNumOperands(*exi, n, op_len));
                     }
 
@@ -229,7 +230,7 @@ impl Verify for SSAStorage {
                             check!(w == 1, SSAErr::IncompatibleWidth(*exi, 1, w));
                         }
                         // TODO: Width of OpStore and OpLoad now is not certain.
-                        MOpcode::OpCall | MOpcode::OpStore | MOpcode::OpLoad => {}
+                        MOpcode::OpCall | MOpcode::OpUCall | MOpcode::OpStore | MOpcode::OpLoad => {}
                         _ => {
                             // All operands to an expr must have the same width.
                             let w0 = self.node_data(operands[0]).map(|vi| vi.vt.width().get_width().unwrap_or(64)).unwrap();

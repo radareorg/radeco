@@ -469,14 +469,19 @@ impl<'a, T> SSAConstruct<'a, T>
             // Handle call separately.
             // NOTE: This is a hack.
             if let Some(ref ty) = op.optype {
-                if ty == "call" {
+                if ty == "call" || ty == "ucall" {
                     let unknown_str = "unknown".to_owned();
                     let call_operand =
                         self.phiplacer.add_comment(current_address,
                                                    scalar!(0),
                                                    op.opcode.clone().unwrap_or(unknown_str));
+                    let mop_call = match ty.as_ref() {
+                        "call" => MOpcode::OpCall,
+                        "ucall" => MOpcode::OpUCall,
+                        _ => unreachable!(),
+                    };
                     let op_call = self.phiplacer
-                        .add_op(&MOpcode::OpCall, &mut current_address, scalar!(0));
+                        .add_op(&mop_call, &mut current_address, scalar!(0));
 
 
                     // If `self.assume_cc` is set, then we assume that the callee strictly obeys the

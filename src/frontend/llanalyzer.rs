@@ -70,6 +70,7 @@ fn analyze_callsite_initial(rfn: &RadecoFunction) -> HashMap<u64, CallContextInf
     for node in ssa.inorder_walk() {
         match ssa.node_data(node) {
             Ok(ref nd) => {
+                //TODO OpUCall
                 if let NodeType::Op(MOpcode::OpCall) = nd.nt {
                     let offset = ssa.address(node).expect("").address;
                     let mut cctx = CallContextInfo::default();
