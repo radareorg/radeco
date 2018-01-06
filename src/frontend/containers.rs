@@ -191,25 +191,29 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
         let caller = rfn.offset;
         let ssa = rfn.ssa_mut();
         for node in ssa.inorder_walk() {
-            if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.node_data(node).map(|x| x.nt) {
-                // Fixup the call by converting a comment to a proper argument.
-                let call_node = &node;
-                let call_site =
-                    ssa.address(*call_node).expect("No address information found").address;
-                if let Some(info) = call_info.get_mut(&call_site) {
-                    if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
-                        let target_node = ssa.insert_const(info.callee.unwrap_or_else(|| {
-                            radeco_err!("info.callee is None");
-                            0
-                        })).unwrap_or_else(|| {
-                            radeco_err!("Cannot insert new constants");
-                            ssa.invalid_value().unwrap()
-                        });
-                        ssa.op_unuse(*call_node, *arg_node);
-                        ssa.op_use(*call_node, 0, target_node);
-                        info.ssa_ref = Some(*call_node);
+            match ssa.node_data(node).map(|x| x.nt) {
+                Ok(NodeType::Op(MOpcode::OpCall))
+                | Ok(NodeType::Op(MOpcode::OpUCall)) => {
+                    // Fixup the call by converting a comment to a proper argument.
+                    let call_node = &node;
+                    let call_site =
+                        ssa.address(*call_node).expect("No address information found").address;
+                    if let Some(info) = call_info.get_mut(&call_site) {
+                        if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
+                            let target_node = ssa.insert_const(info.callee.unwrap_or_else(|| {
+                                radeco_err!("info.callee is None");
+                                0
+                            })).unwrap_or_else(|| {
+                                radeco_err!("Cannot insert new constants");
+                                ssa.invalid_value().unwrap()
+                            });
+                            ssa.op_unuse(*call_node, *arg_node);
+                            ssa.op_use(*call_node, 0, target_node);
+                            info.ssa_ref = Some(*call_node);
+                        }
                     }
-                }
+                },
+                _ => {},
             }
         }
     }
@@ -229,7 +233,9 @@ fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
     let mut args = ssa.operands_of(*n);
     if let NodeType::Op(MOpcode::OpCall) = nt {
         args.truncate(1);
-    }
+    } else if let NodeType::Op(MOpcode::OpUCall) = nt {
+        args.truncate(1);
+    };
 
     let len = args.len();
     for (i, arg) in args.iter().enumerate() {

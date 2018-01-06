@@ -224,6 +224,9 @@ impl<T> Analyzer<T>
             MOpcode::OpCall => {
                 return LatticeValue::Bottom;
             }
+            MOpcode::OpUCall => {
+                return LatticeValue::Bottom;
+            }
             _ => unreachable!(),
         };
 

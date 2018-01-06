@@ -186,7 +186,8 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
 
     for node in &nodes {
         if let Some(opc) = ssa.opcode(*node) {
-            if opc == MOpcode::OpCall && !is_global {
+            if (opc == MOpcode::OpCall || opc == MOpcode::OpUCall)
+                && !is_global {
                 break;
             }
 

@@ -208,6 +208,7 @@ where I: Iterator<Item=S::ValueRef>,
                     MOpcode::OpNarrow(w) => format!("OpNarrow{}", w),
                     MOpcode::OpZeroExt(w) => format!("OpZeroExt{}", w),
                     MOpcode::OpCall => "OpCall".to_owned(),
+                    MOpcode::OpUCall => "OpUCall".to_owned(),
                     _ => unreachable!(),
                 });
             } else if let NodeType::Comment(s) = node_data.nt {
@@ -351,6 +352,7 @@ where I: Iterator<Item=S::ValueRef>,
                 "OpLoad" => Some(MOpcode::OpLoad),
                 "OpStore" => Some(MOpcode::OpStore),
                 "OpCall" => Some(MOpcode::OpCall),
+                "OpUCall" => Some(MOpcode::OpUCall),
                 _ => None,
             }
         };
