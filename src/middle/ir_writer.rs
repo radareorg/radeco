@@ -97,6 +97,27 @@ macro_rules! indent {
     ($n:expr, $s:expr) => { format!("{}{}", IRWriter::fmt_indent($n), $s); }
 }
 
+macro_rules! fmt_call {
+    ($fmt:expr, $operands:ident, $ssa:ident, $ni:ident) => {{
+        let mem = "mem".to_owned();
+        let mut operands_idx: Vec<u8> = ($ssa.sparse_operands_of($ni).iter().map(|x| x.0).collect());
+        operands_idx.sort();
+        format!($fmt,
+        $operands[0],
+        &$operands[1..]
+        .iter()
+        .zip(&operands_idx[1..])
+        .map(|i| format!("{}={}", $ssa.regnames.get((*i.1 - 1) as usize).unwrap_or(&mem), i.0))
+        .fold(String::new(), |acc, x| {
+            if !acc.is_empty() {
+                format!("{}, {}", acc, x)
+            } else {
+                x
+            }
+        }))
+    }};
+}
+
 #[derive(Clone, Debug)]
 pub struct IRWriter {
     seen: HashMap<NodeIndex, u64>,
@@ -279,41 +300,10 @@ impl IRWriter {
                                             wd,
                                             operands[0]),
             MOpcode::OpCall => {
-                let mem = "mem".to_owned();
-                let mut operands_idx: Vec<u8> = (ssa.sparse_operands_of(ni).iter().map(|x| x.0).collect());
-                operands_idx.sort();
-                format!("CALL {}({})",
-                        operands[0],
-                        &operands[1..]
-                             .iter()
-                             .zip(&operands_idx[1..])
-                             .map(|i| format!("{}={}", ssa.regnames.get((*i.1 - 1) as usize).unwrap_or(&mem), i.0))
-                             .fold(String::new(), |acc, x| {
-                                 if !acc.is_empty() {
-                                     format!("{}, {}", acc, x)
-                                 } else {
-                                     x
-                                 }
-                             }))
+                fmt_call!("CALL {}({})", operands, ssa, ni)
             },
-            //FIXME share code with OpCall
             MOpcode::OpUCall => {
-                let mem = "mem".to_owned();
-                let mut operands_idx: Vec<u8> = (ssa.sparse_operands_of(ni).iter().map(|x| x.0).collect());
-                operands_idx.sort();
-                format!("CALL [{}]({})",
-                        operands[0],
-                        &operands[1..]
-                             .iter()
-                             .zip(&operands_idx[1..])
-                             .map(|i| format!("{}={}", ssa.regnames.get((*i.1 - 1) as usize).unwrap_or(&mem), i.0))
-                             .fold(String::new(), |acc, x| {
-                                 if !acc.is_empty() {
-                                     format!("{}, {}", acc, x)
-                                 } else {
-                                     x
-                                 }
-                             }))
+                fmt_call!("CALL [{}]({})", operands, ssa, ni)
             }
             _ => {
                 format!("{} {:?}", opcode, operands)
