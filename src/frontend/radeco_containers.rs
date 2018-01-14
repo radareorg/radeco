@@ -125,7 +125,6 @@ pub mod loader_defaults {
     }
 }
 
-#[derive(Debug)]
 /// Top level container used to hold all analysis
 pub struct RadecoProject {
     /// Map of loaded modules
@@ -156,7 +155,7 @@ impl CGInfo for CallGraph {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 /// Container to store information about a single loaded binary or library.
 pub struct RadecoModule {
     /// Human-readable name for the  module
@@ -177,6 +176,8 @@ pub struct RadecoModule {
     pub callgraph: CallGraph,
     /// Map of functions loaded
     pub functions: BTreeMap<u64, RadecoFunction>,
+    /// Source used to load this module
+    pub source: Option<Rc<Source>>,
 }
 
 #[derive(Debug, Clone)]
@@ -799,6 +800,9 @@ impl<'a> ModuleLoader<'a> {
 
             llanalyzer::init_call_ctx(&mut rmod);
         }
+
+        // Set source
+        rmod.source = Some(Rc::clone(&source));
 
         rmod
     }
