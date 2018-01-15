@@ -471,10 +471,9 @@ impl<'a, T> SSAConstruct<'a, T>
             if let Some(ref ty) = op.optype {
                 if ty == "call" || ty == "ucall" {
                     let unknown_str = "unknown".to_owned();
-                    let call_operand = if ty == "call" {
-                        self.phiplacer.add_comment(current_address,
-                                                   scalar!(0),
-                                                   op.opcode.clone().unwrap_or(unknown_str))
+
+                    let value_type = if ty == "call" {
+                        scalar!(0)
                     } else {
                         //FIXME
                         let size = {
@@ -482,13 +481,16 @@ impl<'a, T> SSAConstruct<'a, T>
                             //get_width(esil)
                             4
                         };
-                        self.phiplacer.add_comment(current_address,
-                                                   reference!(size),
-                                                   op.opcode.clone().unwrap_or(unknown_str))
+                        reference!(size)
                     };
 
+                    let call_operand = 
+                        self.phiplacer.add_comment(current_address,
+                                                   value_type,
+                                                   op.opcode.clone().unwrap_or(unknown_str));
+
                     let op_call = self.phiplacer
-                        .add_op(&MOpcode::OpCall, &mut current_address, scalar!(0));
+                        .add_op(&MOpcode::OpCall, &mut current_address, value_type);
 
 
                     // If `self.assume_cc` is set, then we assume that the callee strictly obeys the
