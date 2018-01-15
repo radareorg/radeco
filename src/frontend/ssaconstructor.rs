@@ -469,12 +469,24 @@ impl<'a, T> SSAConstruct<'a, T>
             // Handle call separately.
             // NOTE: This is a hack.
             if let Some(ref ty) = op.optype {
-                if ty == "call" {
+                if ty == "call" || ty == "ucall" {
                     let unknown_str = "unknown".to_owned();
-                    let call_operand =
+                    let call_operand = if ty == "call" {
                         self.phiplacer.add_comment(current_address,
                                                    scalar!(0),
-                                                   op.opcode.clone().unwrap_or(unknown_str));
+                                                   op.opcode.clone().unwrap_or(unknown_str))
+                    } else {
+                        //FIXME
+                        let size = {
+                            let esil = op.esil.as_ref().unwrap().clone();
+                            //get_width(esil)
+                            4
+                        };
+                        self.phiplacer.add_comment(current_address,
+                                                   reference!(size),
+                                                   op.opcode.clone().unwrap_or(unknown_str))
+                    };
+
                     let op_call = self.phiplacer
                         .add_op(&MOpcode::OpCall, &mut current_address, scalar!(0));
 

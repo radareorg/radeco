@@ -56,6 +56,12 @@ macro_rules! scalar {
     }
 }
 
+macro_rules! reference {
+    ($w:expr) => {
+        ValueInfo::new($crate::middle::ssa::ssa_traits::ValueType::Reference, ir::WidthSpec::new_known($w))
+    }
+}
+
 impl ValueInfo {
     pub fn new(vty: ValueType, width: ir::WidthSpec) -> ValueInfo {
         ValueInfo {
