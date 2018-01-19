@@ -475,16 +475,11 @@ impl<'a, T> SSAConstruct<'a, T>
                     let value_type = if ty == "call" {
                         scalar!(0)
                     } else {
-                        //FIXME
-                        let size = {
-                            let esil = op.esil.as_ref().unwrap().clone();
-                            //get_width(esil)
-                            4
-                        };
-                        reference!(size)
+                        //TODO Specify WidthSpec from esil
+                        reference!()
                     };
 
-                    let call_operand = 
+                    let call_operand =
                         self.phiplacer.add_comment(current_address,
                                                    value_type,
                                                    op.opcode.clone().unwrap_or(unknown_str));

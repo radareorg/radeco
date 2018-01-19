@@ -57,6 +57,9 @@ macro_rules! scalar {
 }
 
 macro_rules! reference {
+    () => {
+        ValueInfo::new($crate::middle::ssa::ssa_traits::ValueType::Reference, ir::WidthSpec::Unknown)
+    };
     ($w:expr) => {
         ValueInfo::new($crate::middle::ssa::ssa_traits::ValueType::Reference, ir::WidthSpec::new_known($w))
     }
