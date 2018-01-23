@@ -16,7 +16,7 @@
 //! process, the basic process is quite straight forward. Here is a quick example with all
 //! default options:
 //!
-//! ```rust
+//! ```rust ignore
 //! # extern crate radeco_lib;
 //! # use radeco_lib::frontend::radeco_containers::{RadecoProject, ProjectLoader};
 //! # fn main() {
@@ -29,7 +29,6 @@
 //! All default options are defined under `radeco_containers::loader_defaults`.
 //!
 //! For more examples of loading, check the `examples/` directory of this project.
-//! ```
 
 
 use frontend::bindings::{Binding, RBindings, RadecoBindings};
