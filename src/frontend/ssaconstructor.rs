@@ -105,7 +105,7 @@ impl<'a, T> SSAConstruct<'a, T>
     // encounters
     // it, we always push in a Token::Register or a Token::Intermediate.
     fn process_in(&mut self, var: &Option<Token>, address: &mut MAddress,
-                  length: Option<u64>) -> Option<T::ValueRef> {
+                  length: Option<u64>, replace_pc: bool) -> Option<T::ValueRef> {
         if var.is_none() {
             return None;
         }
@@ -114,7 +114,7 @@ impl<'a, T> SSAConstruct<'a, T>
             // has to be a register.
             Token::ERegister(ref name) |
             Token::EIdentifier(ref name) => {
-                if name == self.regfile.alias_info.get("PC").unwrap()
+                if replace_pc && name == self.regfile.alias_info.get("PC").unwrap()
                     && length.is_some() {
                     // PC is a constant value at given address
                     let value = address.address + length.unwrap();
@@ -176,8 +176,9 @@ impl<'a, T> SSAConstruct<'a, T>
         // handles assignments
         // and jumps as these are cases that need to be handled a bit differently from
         // the rest of the opcodes.
-        let mut lhs = self.process_in(&operands[0], address, Some(op_length));
-        let mut rhs = self.process_in(&operands[1], address, Some(op_length));
+        let replace_pc = true;
+        let mut lhs = self.process_in(&operands[0], address, Some(op_length), replace_pc);
+        let mut rhs = self.process_in(&operands[1], address, Some(op_length), replace_pc);
 
         self.phiplacer.narrow_const_operand(address, &mut lhs, &mut rhs);
 
@@ -602,7 +603,7 @@ impl<'a, T> SSAConstruct<'a, T>
                          -> T::ValueRef {
 
         let base_node = if let Some(ref reg) = *base {
-            self.process_in(&Some(Token::ERegister(reg.clone())), addr, None)
+            self.process_in(&Some(Token::ERegister(reg.clone())), addr, None, false)
         } else {
             None
         };
@@ -610,7 +611,7 @@ impl<'a, T> SSAConstruct<'a, T>
         let index_node = if let Some(ref reg) = *index {
             // Mulitply the index by the scale and return the resulting node
             //    <index> '*' <scale>
-            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr, None)
+            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr, None, false)
                 .expect("Invalid op");
             // TODO: s/64/default op size/
             let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(64));
@@ -663,7 +664,7 @@ impl<'a, T> SSAConstruct<'a, T>
             .iter()
             .map(|&x| if let &IOperand::Register(ref s) = x {
                 let tok = Token::ERegister(s.clone());
-                self.process_in(&Some(tok), addr, None)
+                self.process_in(&Some(tok), addr, None, false)
             } else {
                 None
             })
