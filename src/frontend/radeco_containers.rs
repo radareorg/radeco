@@ -734,18 +734,18 @@ impl<'a> ModuleLoader<'a> {
             if self.parallel {
                 let ascc = self.assume_cc;
                 rmod.functions.par_iter_mut().for_each(|(_, rfn)| {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, ascc);
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, ascc, true);
                 });
             } else {
                 for (off, rfn) in rmod.functions.iter_mut() {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, self.assume_cc);
+                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, self.assume_cc, true);
                 }
             }
         }
 
         if self.stub_imports {
             for (off, ifn) in rmod.imports.iter_mut() {
-                SSAConstruct::<SSAStorage>::construct(&mut ifn.rfn.borrow_mut(), &reg_p, self.assume_cc);
+                SSAConstruct::<SSAStorage>::construct(&mut ifn.rfn.borrow_mut(), &reg_p, self.assume_cc, true);
             }
         }
 

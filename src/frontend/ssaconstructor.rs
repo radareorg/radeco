@@ -53,6 +53,7 @@ pub struct SSAConstruct<'a, T>
     needs_new_block: bool,
     mem_id: u64,
     assume_cc: bool,
+    replace_pc: bool,
 }
 
 impl<'a, T> SSAConstruct<'a, T>
@@ -70,6 +71,7 @@ impl<'a, T> SSAConstruct<'a, T>
             needs_new_block: true,
             mem_id: 0,
             assume_cc: false,
+            replace_pc: true,
         };
 
         // Add all the registers to the variable list.
@@ -80,11 +82,12 @@ impl<'a, T> SSAConstruct<'a, T>
     }
 
     // Helper wrapper.
-    pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo, assume_cc: bool) {
+    pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo, assume_cc: bool, replace_pc: bool) {
         let instructions = rfn.instructions().to_vec();
         let regfile = SubRegisterFile::new(ri);
         let mut constr = SSAConstruct::new(rfn.ssa_mut(), &regfile);
         constr.assume_cc = assume_cc;
+        constr.replace_pc = replace_pc;
         constr.run(instructions.as_slice());
     }
 
@@ -105,7 +108,7 @@ impl<'a, T> SSAConstruct<'a, T>
     // encounters
     // it, we always push in a Token::Register or a Token::Intermediate.
     fn process_in(&mut self, var: &Option<Token>, address: &mut MAddress,
-                  length: Option<u64>, replace_pc: bool) -> Option<T::ValueRef> {
+                  length: Option<u64>) -> Option<T::ValueRef> {
         if var.is_none() {
             return None;
         }
@@ -114,7 +117,7 @@ impl<'a, T> SSAConstruct<'a, T>
             // has to be a register.
             Token::ERegister(ref name) |
             Token::EIdentifier(ref name) => {
-                if replace_pc && name == self.regfile.alias_info.get("PC").unwrap()
+                if self.replace_pc && name == self.regfile.alias_info.get("PC").unwrap()
                     && length.is_some() {
                     // PC is a constant value at given address
                     let value = address.address + length.unwrap();
@@ -177,8 +180,8 @@ impl<'a, T> SSAConstruct<'a, T>
         // and jumps as these are cases that need to be handled a bit differently from
         // the rest of the opcodes.
         let replace_pc = true;
-        let mut lhs = self.process_in(&operands[0], address, Some(op_length), replace_pc);
-        let mut rhs = self.process_in(&operands[1], address, Some(op_length), replace_pc);
+        let mut lhs = self.process_in(&operands[0], address, Some(op_length));
+        let mut rhs = self.process_in(&operands[1], address, Some(op_length));
 
         self.phiplacer.narrow_const_operand(address, &mut lhs, &mut rhs);
 
@@ -603,7 +606,7 @@ impl<'a, T> SSAConstruct<'a, T>
                          -> T::ValueRef {
 
         let base_node = if let Some(ref reg) = *base {
-            self.process_in(&Some(Token::ERegister(reg.clone())), addr, None, false)
+            self.process_in(&Some(Token::ERegister(reg.clone())), addr, None)
         } else {
             None
         };
@@ -611,7 +614,7 @@ impl<'a, T> SSAConstruct<'a, T>
         let index_node = if let Some(ref reg) = *index {
             // Mulitply the index by the scale and return the resulting node
             //    <index> '*' <scale>
-            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr, None, false)
+            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr, None)
                 .expect("Invalid op");
             // TODO: s/64/default op size/
             let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(64));
@@ -664,7 +667,7 @@ impl<'a, T> SSAConstruct<'a, T>
             .iter()
             .map(|&x| if let &IOperand::Register(ref s) = x {
                 let tok = Token::ERegister(s.clone());
-                self.process_in(&Some(tok), addr, None, false)
+                self.process_in(&Some(tok), addr, None)
             } else {
                 None
             })
