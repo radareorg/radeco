@@ -53,6 +53,7 @@ pub struct SSAConstruct<'a, T>
     needs_new_block: bool,
     mem_id: u64,
     assume_cc: bool,
+    replace_pc: bool,
 }
 
 impl<'a, T> SSAConstruct<'a, T>
@@ -70,6 +71,7 @@ impl<'a, T> SSAConstruct<'a, T>
             needs_new_block: true,
             mem_id: 0,
             assume_cc: false,
+            replace_pc: true,
         };
 
         // Add all the registers to the variable list.
@@ -80,11 +82,12 @@ impl<'a, T> SSAConstruct<'a, T>
     }
 
     // Helper wrapper.
-    pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo, assume_cc: bool) {
+    pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo, assume_cc: bool, replace_pc: bool) {
         let instructions = rfn.instructions().to_vec();
         let regfile = SubRegisterFile::new(ri);
         let mut constr = SSAConstruct::new(rfn.ssa_mut(), &regfile);
         constr.assume_cc = assume_cc;
+        constr.replace_pc = replace_pc;
         constr.run(instructions.as_slice());
     }
 
@@ -104,7 +107,8 @@ impl<'a, T> SSAConstruct<'a, T>
     // It will remain as a Token::Identifier only the first time the parser
     // encounters
     // it, we always push in a Token::Register or a Token::Intermediate.
-    fn process_in(&mut self, var: &Option<Token>, address: &mut MAddress) -> Option<T::ValueRef> {
+    fn process_in(&mut self, var: &Option<Token>, address: &mut MAddress,
+                  length: Option<u64>) -> Option<T::ValueRef> {
         if var.is_none() {
             return None;
         }
@@ -112,7 +116,16 @@ impl<'a, T> SSAConstruct<'a, T>
             // Since ESIL has no concept of intermediates, the identifier spotted by parser
             // has to be a register.
             Token::ERegister(ref name) |
-            Token::EIdentifier(ref name) => self.phiplacer.read_register(address, name),
+            Token::EIdentifier(ref name) => {
+                if self.replace_pc && name == self.regfile.alias_info.get("PC").unwrap()
+                    && length.is_some() {
+                    // PC is a constant value at given address
+                    let value = address.address + length.unwrap();
+                    self.phiplacer.add_const(address, value, None)
+                } else {
+                    self.phiplacer.read_register(address, name)
+                }
+            },
             // We arrive at this case only when we have popped an operand that we have pushed
             // into the parser. id refers to the id of the var in our intermediates table.
             Token::EEntry(ref id, _) => {
@@ -158,15 +171,17 @@ impl<'a, T> SSAConstruct<'a, T>
     fn process_op(&mut self,
                   token: &Token,
                   address: &mut MAddress,
-                  operands: &[Option<Token>; 2])
+                  operands: &[Option<Token>; 2],
+                  op_length: u64)
                   -> Option<T::ValueRef> {
         // This is where the real transformation from ESIL to radeco IL happens. This
         // method choose the opcodes to translate from ESIL to radecoIL and also
         // handles assignments
         // and jumps as these are cases that need to be handled a bit differently from
         // the rest of the opcodes.
-        let mut lhs = self.process_in(&operands[0], address);
-        let mut rhs = self.process_in(&operands[1], address);
+        let replace_pc = true;
+        let mut lhs = self.process_in(&operands[0], address, Some(op_length));
+        let mut rhs = self.process_in(&operands[1], address, Some(op_length));
 
         self.phiplacer.narrow_const_operand(address, &mut lhs, &mut rhs);
 
@@ -568,7 +583,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
                 let (lhs, rhs) = p.fetch_operands(token);
                 // Determine what to do with the operands and get the result.
-                let result = self.process_op(token, &mut current_address, &[lhs, rhs]);
+                let result = self.process_op(token, &mut current_address, &[lhs, rhs], op.size.unwrap_or(0));
                 if let Some(result_) = self.process_out(result, current_address) {
                     p.push(result_);
                 }
@@ -591,7 +606,7 @@ impl<'a, T> SSAConstruct<'a, T>
                          -> T::ValueRef {
 
         let base_node = if let Some(ref reg) = *base {
-            self.process_in(&Some(Token::ERegister(reg.clone())), addr)
+            self.process_in(&Some(Token::ERegister(reg.clone())), addr, None)
         } else {
             None
         };
@@ -599,7 +614,7 @@ impl<'a, T> SSAConstruct<'a, T>
         let index_node = if let Some(ref reg) = *index {
             // Mulitply the index by the scale and return the resulting node
             //    <index> '*' <scale>
-            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr)
+            let reg_node = self.process_in(&Some(Token::ERegister(reg.clone())), addr, None)
                 .expect("Invalid op");
             // TODO: s/64/default op size/
             let vt = ValueInfo::new_scalar(ir::WidthSpec::Known(64));
@@ -652,7 +667,7 @@ impl<'a, T> SSAConstruct<'a, T>
             .iter()
             .map(|&x| if let &IOperand::Register(ref s) = x {
                 let tok = Token::ERegister(s.clone());
-                self.process_in(&Some(tok), addr)
+                self.process_in(&Some(tok), addr, None)
             } else {
                 None
             })
