@@ -49,10 +49,11 @@ use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
 use r2api::structs::{LOpInfo, LRegInfo, LSymbolInfo, LRelocInfo, LImportInfo, LExportInfo,
-                     LSectionInfo, LEntryInfo, LSymbolType};
+                     LSectionInfo, LEntryInfo, LSymbolType, LVarInfo};
 
 use r2pipe::r2::R2;
 use rayon::prelude::*;
+use std::fmt;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -179,6 +180,12 @@ pub struct RadecoModule {
     pub source: Option<Rc<Source>>,
 }
 
+impl fmt::Debug for RadecoModule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unimplemented!()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum FunctionType {
     /// Function defined in the current binary
@@ -264,6 +271,21 @@ impl VarBinding {
 
     pub fn btype_mut(&mut self) -> &mut BindingType {
         &mut self.btype
+    }
+
+    //XXX issue119
+    pub fn name(&self) -> &str {
+        &*self.name
+    }
+
+    //TODO issue119
+    pub fn is_preserved(&self) -> bool {
+        unimplemented!()
+    }
+
+    //TODO issue119
+    pub fn mark_preserved(&self) {
+        unimplemented!()
     }
 }
 
@@ -991,12 +1013,34 @@ impl RadecoFunction {
     pub fn bindings(&self) -> &VarBindings {
         &self.bindings
     }
+
+    //XXX? issue119
+    pub fn bindings_mut(&mut self) -> &mut VarBindings {
+        &mut self.bindings
+    }
+
+    //TODO
+    pub fn call_sites(&self) -> &Vec<CallContextInfo> {
+        unimplemented!()
+    }
+
+    //XXX issue119
+    pub fn datarefs(&self) -> &Vec<u64> {
+        &self.datarefs
+    }
+
+    //XXX issue119
+    pub fn locals(&self) -> &Vec<LVarInfo> {
+        unimplemented!()
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct CallContextInfo {
     /// NodeIndex mapping from a node in the caller's context to a node in callee's context
+    //TODO issue119
     pub map: Vec<(NodeIndex, NodeIndex)>,
+    // pub map: HashMap<NodeIndex, NodeIndex>,
     /// NodeIndex corresponding to callsite (`OpCall`) in the caller context
     pub csite_node: NodeIndex,
     /// Address of callsite
