@@ -22,6 +22,7 @@ use std::marker::PhantomData;
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
+use frontend::radeco_containers::CallContextInfo;
 
 use r2api::structs::LVarInfo;
 
@@ -145,44 +146,36 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     //      extra: for every call statement generate an extra variable.
     /// Use information from RadecoFunctoin to gather basic variables' information.
     pub fn gather_variables(&mut self,
-                        datafers: &Option<Vec<u64>>,
-                        locals: &Option<Vec<LVarInfo>>,
-                        callrefs: &Option<Vec<NodeIndex>>) {
+                        datafers: &Vec<u64>,
+                        locals: &Vec<LVarInfo>,
+                        callrefs: &Vec<CallContextInfo>) {
         radeco_trace!("MemorrySSA|Get datafers: {:?}", datafers);
         // datafers is coming from RadecoFunctoin::datafers
-        if !datafers.is_none() {
-            let mut gvars: Vec<VariableType> 
-                = datafers.clone()
-                            .unwrap()
-                            .iter()
-                            .map(|x| VariableType::Global(x.clone()))
-                            .collect();
-            self.variables.append(&mut gvars);
-        }
+        let mut gvars: Vec<VariableType> 
+            = datafers.clone()
+            .iter()
+            .map(|x| VariableType::Global(x.clone()))
+            .collect();
+        self.variables.append(&mut gvars);
 
         radeco_trace!("MemorrySSA|Get locals: {:?}", locals);
         // locals is coming from RadecoFunctoin::locals
-        if !locals.is_none() {
-            let mut lvars: Vec<VariableType>
-                = locals.clone()
-                            .unwrap()
-                            .iter()
-                            .map(|x| VariableType::Local(x.clone()))
-                            .collect();
-            self.variables.append(&mut lvars);
-        }
+        let mut lvars: Vec<VariableType>
+            = locals.clone()
+            .iter()
+            .map(|x| VariableType::Local(x.clone()))
+            .collect();
+        self.variables.append(&mut lvars);
 
         radeco_trace!("MemorrySSA|Get callrefs: {:?}", callrefs);
-        // callrefs is coming from RadecoFunctoin::call_ctx::ssa_ref
-        if !callrefs.is_none() {
-            let mut evars: Vec<VariableType>
-                = callrefs.clone()
-                            .unwrap()
-                            .iter()
-                            .map(|x| VariableType::Extra(x.clone()))
-                            .collect();
-            self.variables.append(&mut evars);
-        }
+    // callrefs is coming from RadecoFunctoin::call_ctx::ssa_ref
+        //TODO issue119
+        // let mut evars: Vec<VariableType>
+        //     = callrefs.clone()
+        //                 .iter()
+        //                 .map(|x| VariableType::Extra(x.clone()))
+        //                 .collect();
+        // self.variables.append(&mut evars);
 
         radeco_trace!("MemorrySSA|Gather variables: {:?}", self.variables);
 

@@ -183,7 +183,8 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
     }
 
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {
-        Ok(self.try_borrow_mut()?.raw(cmd))
+        // Ok(self.try_borrow_mut()?.raw(cmd))
+        Ok("".to_string())
     }
 
     fn send(&self, s: &str) -> Result<(), SourceErr> {
