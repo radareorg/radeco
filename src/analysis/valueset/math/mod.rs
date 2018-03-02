@@ -60,13 +60,40 @@ pub fn multiplicative_inverse(mut a: u64, n: u64) -> Option<u64> {
     let mut nr: u64 = a;
 
     while nr != 0 {
-        // TODO: make sure q*nt never overflows
+        
         let (ot, or) = (nt, nr);
-        let q = r / nr;
+        let q = match r.checked_div(nr) {
+            Some(x) => x,
+            None => return Option::None;
+        };
 
-        // TODO: make sure this doesn't overflow
-        nt = (t + q * (n - nt)) % n;
-        nr = r - q * nr;
+        //nt = (t + q * (n - nt)) % n;
+        
+        nt = match (match t.checked_add(q) {
+            Some(layer1) => {
+                match layer1.checked_mul(match n.checked_sub(nt) {
+                    Some(layer2) => layer2,
+                    None => return Option::None
+                }) {
+                    Some(layer2) => layer2,
+                    None => return Option::None
+                }
+            },
+            None => return Option::None
+        }).checked_rem(n) {
+            Some(x) => x,
+            None => return Option::None
+        };
+        
+        // nr = r - q * nr;
+        
+        nr = match r.checked_sub(match q.checked_mul(nr) {
+            Some(x) => x,
+            None => return Option::None
+        }) {
+            Some(x) => x,
+            None => return Option::None
+        };
         t = ot;
         r = or;
     }
