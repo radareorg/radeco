@@ -49,6 +49,7 @@ fn main() {
 
     //TODO use ProjectLoader
     let mut rproj = RadecoProject::new();
+    let regfile = rproj.regfile().clone();
     for mut xy in rproj.iter_mut() {
         let rmod = &mut xy.module;
         //TODO issue119
@@ -71,7 +72,14 @@ fn main() {
         // TODO issue119
         // let functions = rmod.iter().collect::<Vec<_>>.clone();
    
-
+        // Analyze preserved for all functions.
+        {
+            println!("[*] Fixing Callee Information");
+            let bp_name = regfile.get_name_by_alias(&"BP".to_string());
+            let sp_name = regfile.get_name_by_alias(&"SP".to_string());
+            let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
+            callfixer.rounded_analysis();
+        }
         // Filter the data if the user provided some args to be matched upon
         let matched_func_addrs = if requested_functions.len() != 0 {
  
@@ -82,13 +90,7 @@ fn main() {
                     (f.offset.clone(), &*f.name)
                 }).collect();
                 // rmod.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
-            //TODO issue119
-            // Analyze preserved for all functions.
-            // {
-            //     println!("[*] Fixing Callee Information");
-            //     let mut callfixer = CallFixer::new(rmod, None, None);
-            //     callfixer.rounded_analysis();
-            // }
+
             let all_func_names: Vec<(&str)> =
                 matched_func_vec.iter().map(|&(_, name)| name).collect();
             matched_func_vec = filter_with(&matched_func_vec,
