@@ -43,12 +43,6 @@ pub struct CallFixer<'a> {
 impl<'a> CallFixer<'a> {
     //TODO sp_name, bp_name issue119
     pub fn new(rmod: &'a mut RadecoModule, bp_name: Option<String>, sp_name: Option<String>) -> CallFixer<'a> {
-    // pub fn new(rmod: &'a mut RadecoModule) -> CallFixer<'a> {
-            // let regfile = rmod.regfile.clone()
-            //     .unwrap_or_else(|| {
-            //         radeco_err!("regfile is None");
-            //         SubRegisterFile::default()
-            //     });
             CallFixer {
                 bp_name: bp_name,
                 sp_name: sp_name,
