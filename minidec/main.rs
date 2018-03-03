@@ -147,15 +147,15 @@ fn main() {
                     Ok(_) => {  }
                 }
             }
-            //TODO issue119
             {
                 // Building memory SSA.
                 let _memory_ssa = {
                     // Generate MemorySSA
                     println!("  [*] Generating Memory SSA");
                     let mut mssa = MemorySSA::new(rfn.ssa());
+                    //TODO issue119
                     mssa.gather_variables(rfn.datarefs(), rfn.locals(),
-                                          rfn.call_sites());
+                                          &rfn.call_sites(&rmod.callgraph));
                     mssa.run();
                     mssa
                 };

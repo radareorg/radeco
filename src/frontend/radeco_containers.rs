@@ -1000,8 +1000,9 @@ impl RadecoFunction {
     }
 
     //TODO issue119
-    pub fn call_sites(&self) -> &Vec<CallContextInfo> {
+    pub fn call_sites(&self, call_graph: &CallGraph) -> CallContextInfo {
         unimplemented!()
+        // call_graph.get(self.offset)
     }
 
     pub fn datarefs(&self) -> &Vec<u64> {
