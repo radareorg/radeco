@@ -273,7 +273,6 @@ impl VarBinding {
         &mut self.btype
     }
 
-    //XXX issue119
     pub fn name(&self) -> &str {
         &*self.name
     }
@@ -1014,17 +1013,15 @@ impl RadecoFunction {
         &self.bindings
     }
 
-    //XXX? issue119
     pub fn bindings_mut(&mut self) -> &mut VarBindings {
         &mut self.bindings
     }
 
-    //TODO
+    //TODO issue119
     pub fn call_sites(&self) -> &Vec<CallContextInfo> {
         unimplemented!()
     }
 
-    //XXX issue119
     pub fn datarefs(&self) -> &Vec<u64> {
         &self.datarefs
     }
@@ -1038,9 +1035,7 @@ impl RadecoFunction {
 #[derive(Clone, Debug, Default)]
 pub struct CallContextInfo {
     /// NodeIndex mapping from a node in the caller's context to a node in callee's context
-    //TODO issue119
     pub map: Vec<(NodeIndex, NodeIndex)>,
-    // pub map: HashMap<NodeIndex, NodeIndex>,
     /// NodeIndex corresponding to callsite (`OpCall`) in the caller context
     pub csite_node: NodeIndex,
     /// Address of callsite
