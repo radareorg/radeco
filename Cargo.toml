@@ -5,6 +5,7 @@ authors = [
 	"David Kreuter <dkreuter@gmail.com>",
 	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
 ]
+build = "build.rs"
 
 [lib]
 path = "src/lib.rs"
@@ -18,6 +19,8 @@ default = []
 trace_log = ["log", "env_logger"]
 profile = ["cpuprofiler"]
 
+[build-dependencies]
+lalrpop = "0.14.0"
 
 [dependencies]
 regex = "0.2.2"
@@ -27,6 +30,7 @@ serde_json="*"
 lazy_static = "*"
 docopt = "*"
 rayon = "0.8.2"
+lalrpop-util = "0.14.0"
 
 log = { version = "*", optional = true }
 env_logger = { version = "*", optional = true }

@@ -46,6 +46,7 @@
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(slice_patterns)]
+#![feature(try_trait)]
 
 // #![allow(dead_code)]
 // #![allow(unused_variables)]
@@ -70,6 +71,8 @@ extern crate rayon;
 
 #[cfg(feature="profile")]
 extern crate cpuprofiler;
+
+extern crate lalrpop_util;
 
 #[macro_use] pub mod utils;
 #[macro_use] pub mod middle;

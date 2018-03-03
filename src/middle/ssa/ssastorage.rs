@@ -146,7 +146,7 @@ pub enum EdgeData {
     Data(u8),
     /// Edge from value to BasicBlock.
     ContainedInBB(MAddress),
-    /// Edeg from value or RegisterState to comment. Represent register infor-
+    /// Edge from value or RegisterState to comment. Represent register infor-
     /// mation for every value.
     RegisterInfo,
     /// Edge from BasicBlock to value. Points from a basic block with multiple
@@ -1230,7 +1230,7 @@ impl SSAWalk<Walker> for SSAStorage {
                 nodes.push_back(*block);
                 let mut exprs = self.exprs_in(*block)
                                     .iter()
-                                    .chain(self.phis_in(*block).iter())
+                                    .chain(self.phis_in(*block).iter().rev())
                                     .cloned()
                                     .collect::<Vec<NodeIndex>>();
 

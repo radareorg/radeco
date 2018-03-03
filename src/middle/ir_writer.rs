@@ -107,7 +107,7 @@ macro_rules! fmt_call {
             &$operands[1..]
             .iter()
             .zip(&operands_idx[1..])
-            .map(|i| format!("{}={}", $ssa.regnames.get((*i.1 - 1) as usize).unwrap_or(&mem), i.0))
+            .map(|i| format!("${}={}", $ssa.regnames.get((*i.1 - 1) as usize).unwrap_or(&mem), i.0))
             .fold(String::new(), |acc, x| {
                 if !acc.is_empty() {
                     format!("{}, {}", acc, x)
@@ -136,8 +136,13 @@ impl default::Default for IRWriter {
 }
 
 impl IRWriter {
-    pub fn parse<T: AsRef<str>>(_il: T) -> SSAStorage {
-        unimplemented!();
+    fn node_idx(&mut self, node: NodeIndex) -> u64 {
+        let next = self.ctr + 1;
+        let node_idx = *self.seen.entry(node).or_insert(next);
+        if node_idx == next {
+            self.ctr += 1;
+        }
+        node_idx
     }
 
     fn fmt_operands(&mut self, operands: &[NodeIndex], ssa: &SSAStorage) -> Vec<String> {
@@ -149,21 +154,13 @@ impl IRWriter {
                 NodeData::Op(MOpcode::OpConst(ref value), _) => result.push(fmt_const!(value)),
                 NodeData::Op(MOpcode::OpCall, _) => {
                     println!("unchi");
-                    let next = self.ctr + 1;
-                    let op_i = self.seen.entry(*operand).or_insert(next);
-                    if *op_i == next {
-                        self.ctr += 1;
-                    }
+                    let op_i = self.node_idx(*operand);
                     panic!("ncahrc.,uh.,r");
                     result.push(format!("%{}", op_i));
                 },
-                NodeData::Comment(_, ref named) => result.push(named.clone()),
+                NodeData::Comment(_, ref named) => result.push(format!("{{{}}}", named.clone())),
                 _ => {
-                    let next = self.ctr + 1;
-                    let op_i = self.seen.entry(*operand).or_insert(next);
-                    if *op_i == next {
-                        self.ctr += 1;
-                    }
+                    let op_i = self.node_idx(*operand);
                     result.push(format!("%{}", op_i));
                 }
             }
@@ -171,19 +168,7 @@ impl IRWriter {
         result
     }
 
-    fn fmt_expression(&mut self,
-                      ni: NodeIndex,
-                      opcode: &MOpcode,
-                      vt: ValueInfo,
-                      mut operands: Vec<String>,
-                      ssa: &SSAStorage)
-                      -> String {
-        let next = self.ctr + 1;
-        let result_idx = self.seen.entry(ni).or_insert(next);
-        if *result_idx == next {
-            self.ctr += 1;
-        }
-
+    fn fmt_valueinfo(&self, vt: ValueInfo) -> String {
         let w = vt.width().get_width().unwrap_or(64);
         let is_reference = if vt.is_reference() {
             "(*)"
@@ -193,127 +178,118 @@ impl IRWriter {
             "(*?)"
         };
 
+        format!("$Unknown{}{}", w, is_reference)
+    }
+
+    fn fmt_expression(&mut self,
+                      ni: NodeIndex,
+                      opcode: &MOpcode,
+                      vt: ValueInfo,
+                      mut operands: Vec<String>,
+                      ssa: &SSAStorage)
+                      -> String {
+        let result_idx = self.node_idx(ni);
+        let vi_str = self.fmt_valueinfo(vt);
+
         // Quick hack fix
         operands.push("ERR".to_owned());
         operands.push("ERR".to_owned());
         operands.push("ERR".to_owned());
 
-        match *opcode {
-            MOpcode::OpAdd => format!("%{}: $Unknown{}{}  = {} + {}",
+        let op_line = match *opcode {
+            MOpcode::OpAdd => format!("%{}: {} = {} + {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpSub => format!("%{}: $Unknown{}{} = {} - {}",
+            MOpcode::OpSub => format!("%{}: {} = {} - {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpMul => format!("%{}: $Unknown{}{} = {} * {}",
+            MOpcode::OpMul => format!("%{}: {} = {} * {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpDiv => format!("%{}: $Unknown{}{} = {} / {}",
+            MOpcode::OpDiv => format!("%{}: {} = {} / {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpMod => format!("%{}: $Unknown{}{} = {} % {}",
+            MOpcode::OpMod => format!("%{}: {} = {} % {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpAnd => format!("%{}: $Unknown{}{} = {} & {}",
+            MOpcode::OpAnd => format!("%{}: {} = {} & {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpOr => format!("%{}: $Unknown{}{} = {} | {}",
+            MOpcode::OpOr => format!("%{}: {} = {} | {}",
                                      result_idx,
-                                     w,
-                                     is_reference,
+                                     vi_str,
                                      operands[0],
                                      operands[1]),
-            MOpcode::OpXor => format!("%{}: $Unknown{}{} = {} ^ {}",
+            MOpcode::OpXor => format!("%{}: {} = {} ^ {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpNot => format!("%{}: $Unknown{}{} = !{}", result_idx, w, is_reference, operands[0]),
-            MOpcode::OpCmp => format!("%{}: $Unknown{}{} = {} == {}",
+            MOpcode::OpNot => format!("%{}: {} = !{}", result_idx, vi_str, operands[0]),
+            MOpcode::OpCmp => format!("%{}: {} = {} == {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpGt => format!("%{}: $Unknown{}{} = {} > {}",
+            MOpcode::OpGt => format!("%{}: {} = {} > {}",
                                      result_idx,
-                                     w,
-                                     is_reference,
+                                     vi_str,
                                      operands[0],
                                      operands[1]),
-            MOpcode::OpLt => format!("%{}: $Unknown{}{} = {} < {}",
+            MOpcode::OpLt => format!("%{}: {} = {} < {}",
                                      result_idx,
-                                     w,
-                                     is_reference,
+                                     vi_str,
                                      operands[0],
                                      operands[1]),
-            MOpcode::OpLsl => format!("%{}: $Unknown{}{} = {} << {}",
+            MOpcode::OpLsl => format!("%{}: {} = {} << {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpLsr => format!("%{}: $Unknown{}{} = {} >> {}",
+            MOpcode::OpLsr => format!("%{}: {} = {} >> {}",
                                       result_idx,
-                                      w,
-                                      is_reference,
+                                      vi_str,
                                       operands[0],
                                       operands[1]),
-            MOpcode::OpLoad => format!("%{}: $Unknown{}{} = Load({}, {})",
+            MOpcode::OpLoad => format!("%{}: {} = Load({}, {})",
                                        result_idx,
-                                       w,
-                                       is_reference,
+                                       vi_str,
                                        operands[0],
                                        operands[1]),
-            MOpcode::OpStore => format!("%{}: $Unknown{}{} = Store({}, {}, {})",
+            MOpcode::OpStore => format!("%{}: {} = Store({}, {}, {})",
                                         result_idx,
-                                        w,
-                                        is_reference,
+                                        vi_str,
                                         operands[0],
                                         operands[1],
                                         operands[2]),
-            MOpcode::OpNarrow(wd) => format!("%{}: $Unknown{}{} = Narrow{}({})",
+            MOpcode::OpNarrow(wd) => format!("%{}: {} = Narrow{}({})",
                                              result_idx,
-                                             w,
-                                             is_reference,
+                                             vi_str,
                                              wd,
                                              operands[0]),
-            MOpcode::OpSignExt(wd) => format!("%{}: $Unknown{}{} = SignExt{}({})",
-                                            result_idx,
-                                            w,
-                                            is_reference,
-                                            wd,
-                                            operands[0]),
-            MOpcode::OpZeroExt(wd) => format!("%{}: $Unknown{}{} = ZeroExt{}({})",
-                                            result_idx,
-                                            w,
-                                            is_reference,
-                                            wd,
-                                            operands[0]),
+            MOpcode::OpSignExt(wd) => format!("%{}: {} = SignExt{}({})",
+                                              result_idx,
+                                              vi_str,
+                                              wd,
+                                              operands[0]),
+            MOpcode::OpZeroExt(wd) => format!("%{}: {} = ZeroExt{}({})",
+                                              result_idx,
+                                              vi_str,
+                                              wd,
+                                              operands[0]),
             MOpcode::OpCall => {
-                let mem = "mem".to_owned();
-                let mut operands_idx: Vec<u8> = (ssa.sparse_operands_of(ni).iter().map(|x| x.0).collect());
-                operands_idx.sort();
-
                 if vt.is_reference() {
                     fmt_call!("CALL *({})({})", operands, ssa, ni)
                 } else {
@@ -323,6 +299,11 @@ impl IRWriter {
             _ => {
                 format!("{} {:?}", opcode, operands)
             },
+        };
+        if let Some(addr) = ssa.address(ni) {
+            format!("[@{}] {};", addr, op_line)
+        } else {
+            format!("{};", op_line)
         }
     }
 
@@ -370,20 +351,17 @@ impl IRWriter {
                                 self.fmt_expression(node, opcode, vt, operands, &ssa))
                     }
                 }
-                NodeData::Phi(_, _) => {
+                NodeData::Phi(vt, _) => {
                     let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
-                    let next = self.ctr + 1;
-                    let result_idx = self.seen.entry(node).or_insert(next);
-                    if *result_idx == next {
-                        self.ctr += 1;
-                    }
-                    let mut phi_line = format!("%{} = Phi(", result_idx);
+                    let result_idx = self.node_idx(node);
+                    let vi_str = self.fmt_valueinfo(vt);
+                    let mut phi_line = format!("%{}: {} = Phi(", result_idx, vi_str);
                     for operand in operands {
                         phi_line = format!("{}{}, ", phi_line, operand);
                     }
                     let len = phi_line.len();
                     phi_line.truncate(len - 2);
-                    phi_line.push_str(")");
+                    phi_line.push_str(");");
                     indent!(self.indent, phi_line)
                 }
                 NodeData::Undefined(_) => {
@@ -403,11 +381,11 @@ impl IRWriter {
                                 (edge_info, x.1)
                             }).collect::<Vec<_>>();
                         // This is a conditional jump.
-                        if ssa.is_selector(*prev_block) && outgoing.len() > 1 {
-                            let condition = self.fmt_operands(&[ssa.selector_in(*prev_block)
-                                                                   .unwrap()],
-                                                              ssa);
-                            jmp_statement = format!("{} IF {}", jmp_statement, condition[0]);
+                        if outgoing.len() > 1 {
+                            if let Some(selector) = ssa.selector_in(*prev_block) {
+                                let condition = self.fmt_operands(&[selector], ssa);
+                                jmp_statement = format!("{} IF {}", jmp_statement, condition[0]);
+                            }
                         }
 
                         let mut target_string = String::new();
@@ -428,16 +406,27 @@ impl IRWriter {
                                                     self.fmt_operands(&[target], &ssa)[0]);
                         }
 
-                        if target_string.is_empty() {
-                            indent!(self.indent - 1, bb!(addr))
-                        } else {
+                        if !target_string.is_empty() {
                             concat_str!(jmp_statement, target_string);
                             concat_strln!(text_il, indent!(self.indent, jmp_statement));
-                            indent!(self.indent - 1, bb!(addr))
                         }
+                        indent!(self.indent - 1, bb!(addr))
                     } else {
+                        // first block of function, actually a "fake" block
+                        // we use it as the marker for the beginning of the function
                         self.indent += 1;
-                        fmt_fn!(fn_name)
+                        let mut fn_line = fmt_fn!(fn_name);
+                        let mut reg_list_line = indent!(self.indent - 1, "registers: ");
+                        for regname in &ssa.regnames {
+                            reg_list_line.push('$');
+                            reg_list_line.push_str(regname);
+                            reg_list_line.push(',');
+                        }
+                        reg_list_line.pop();
+                        reg_list_line.push(';');
+
+                        concat_strln!(fn_line, reg_list_line);
+                        fn_line
                     };
                     last = Some(node);
                     bbline
@@ -462,11 +451,13 @@ impl IRWriter {
         });
         let mem_comment = "mem".to_owned();
 
+        concat_strln!(text_il, &indent!(self.indent - 1, "final-register-state:"));
+
         for (i, reg) in ssa.operands_of(final_state).iter().enumerate() {
             let reg_assign = match ssa.g[*reg] {
                 NodeData::Comment(_, _) => String::new(),
                 _ => {
-                    format!("{} = {}",
+                    format!("${} = {};",
                             ssa.regnames.get(i).unwrap_or_else(|| {
                                 assert_eq!(i, ssa.regnames.len());
                                 &mem_comment

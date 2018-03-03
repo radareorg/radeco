@@ -1,0 +1,136 @@
+use middle::ir_reader::parser_util::*;
+use middle::ir_reader::simple_ast::*;
+use middle::ir;
+use std::str::FromStr;
+
+grammar;
+
+pub Function: Function =
+    <name:FuncHeader>
+    "{"
+    <register_list:RegisterList>
+    <basic_blocks:BasicBlock*>
+    <final_reg_state:FinalRegState>
+    "}"                                                     => Function { <> };
+
+FuncHeader: String =
+    <hdr:r"define-fun [[:alpha:]_]+\(unknown\) -> unknown"> => hdr[11..hdr.len()-20].to_owned();
+
+RegisterList: Vec<PhysReg> =
+    "registers: " <Comma<PhysReg>> ";"                      => <>;
+
+BasicBlock: BasicBlock =
+    <addr:BBHeader> <ops:Operation*> <jump:Jump?>           => BasicBlock { <> };
+
+BBHeader: ir::MAddress =
+    "bb_" <MAddress> "(" ")" ":"                            => <>;
+
+Operation: Operation = <Operation0> ";";
+
+Operation0: Operation = {
+    <ValueRef> ":" <Type> "=" <Phi>                         => Operation::Phi(<>),
+    <OpAddr?> <ValueRef> ":" <Type> "=" <Expr>              => Operation::Assign(<>),
+    <OpAddr?> "CALL" "*" "(" <Operand> ")" <CallArgs>       => Operation::Call(<>),
+    <OpAddr?> "CALL" <Operand> <CallArgs>                   => Operation::Call(<>),
+};
+
+OpAddr: ir::MAddress =
+    "[@" <MAddress> "]"                                     => <>;
+
+CallArgs: Vec<CallArg> =
+    "(" <Comma<CallArg>> ")"                                => <>;
+
+CallArg: CallArg =
+    <formal:PhysReg> "=" <actual:Operand>                   => CallArg { <> };
+
+Phi: Vec<Operand> =
+    "Phi" "(" <Comma<Operand>> ")"                          => <>;
+
+Expr: Expr = {
+    <Operand> <InfixOp> <Operand>                           => Expr::Infix(<>),
+    <PrefixOp> <Operand>                                    => Expr::Prefix(<>),
+    "Load" "(" <Operand> "," <Operand> ")"                  => Expr::Load(<>),
+    "Store" "(" <Operand> "," <Operand> "," <Operand> ")"   => Expr::Store(<>),
+    <ResizeType> <WidthSpec> "(" <Operand> ")"              => Expr::Resize(<>),
+};
+
+Jump: Jump = {
+    "JMP" <MAddress>                                        => Jump::Uncond(<>),
+    "JMP" "IF" <Operand> <MAddress> <("ELSE" <MAddress>)?>  => Jump::Cond(<>),
+};
+
+FinalRegState: Vec<(PhysReg, Operand)> =
+    "final-register-state:" <FinalRegState0*>               => <>;
+
+FinalRegState0: (PhysReg, Operand) =
+    <PhysReg> "=" <Operand> ";"                             => (<>);
+
+Operand: Operand = {
+    Comment                                                 => Operand::Comment(<>),
+    ValueRef                                                => Operand::ValueRef(<>),
+    Const                                                   => Operand::Const(<>),
+};
+
+ResizeType: ResizeType = {
+    "Narrow"                                                => ResizeType::Narrow,
+    "SignExt"                                               => ResizeType::SignExt,
+    "ZeroExt"                                               => ResizeType::ZeroExt,
+};
+
+PrefixOp: PrefixOp = {
+    "!"                                                     => PrefixOp::Not,
+};
+
+InfixOp: InfixOp = {
+    "+"                                                     => InfixOp::Add,
+    "-"                                                     => InfixOp::Sub,
+    "*"                                                     => InfixOp::Mul,
+    "/"                                                     => InfixOp::Div,
+    "%"                                                     => InfixOp::Mod,
+    "&"                                                     => InfixOp::And,
+    "|"                                                     => InfixOp::Or,
+    "^"                                                     => InfixOp::Xor,
+    "=="                                                    => InfixOp::Eq,
+    ">"                                                     => InfixOp::Gt,
+    "<"                                                     => InfixOp::Lt,
+    "<<"                                                    => InfixOp::Lsl,
+    ">>"                                                    => InfixOp::Lsr,
+};
+
+Type: Type =
+    "$Unknown" <WidthSpec> <RefSpec>                        => Type(<>);
+
+RefSpec: RefSpec =
+    <RefSpec0?>                                             => <>.unwrap_or(RefSpec::Scalar);
+
+RefSpec0: RefSpec = {
+    "(" "*" ")"                                             => RefSpec::Reference,
+    "(" "*" "?" ")"                                         => RefSpec::Unknown,
+};
+
+WidthSpec: WidthSpec =
+    r"[[:digit:]]+"                                         => WidthSpec(str_to_u16(<>, 10));
+
+Comment: String =
+    <s:r"\{[^}\s]*\}">                                      => s[1..s.len()-1].to_owned();
+
+PhysReg: PhysReg =
+    r"\$[a-z_][a-z0-9_]*"                                   => PhysReg(<>[1..].to_owned());
+
+ValueRef: ValueRef =
+    r"%[[:digit:]]+"                                        => ValueRef(str_to_u64(&<>[1..], 10));
+
+Const: u64 =
+    r"#x[[:xdigit:]]+"                                      => str_to_u64(&<>[2..], 16);
+
+MAddress: ir::MAddress =
+    <s:r"0x([[:xdigit:]]{6,})\.[[:xdigit:]]{4,}">
+        => {
+            let dot_idx = s.find('.').unwrap();
+            ir::MAddress::new(str_to_u64(&s[2..dot_idx], 16),
+                              str_to_u64(&s[dot_idx+1..], 16))
+        };
+
+Comma<E>: Vec<E> = {
+    <v0:(<E> ",")*> <e:E>                                   => { let mut v = v0; v.push(e); v },
+};
