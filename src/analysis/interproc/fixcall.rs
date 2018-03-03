@@ -41,7 +41,6 @@ pub struct CallFixer<'a> {
 }
 
 impl<'a> CallFixer<'a> {
-    //TODO sp_name, bp_name issue119
     pub fn new(rmod: &'a mut RadecoModule, bp_name: Option<String>, sp_name: Option<String>) -> CallFixer<'a> {
             CallFixer {
                 bp_name: bp_name,
@@ -197,7 +196,6 @@ impl<'a> CallFixer<'a> {
         }
         let call_info: Vec<(LValueRef, Vec<String>)> = {
             let rfn = self.rmod.functions.get(rfn_addr).unwrap();
-            //TODO issue119
             self.preserves_for_call_context(rfn.call_sites().clone())
         };
         radeco_trace!("CallFixer|Call site: {:?}", call_info);
@@ -429,50 +427,34 @@ impl<'a> CallFixer<'a> {
             //     continue;
             // }
             
-            // TODO issue119
-            // If callee is not certain
-            // if con.callee.is_none() {
-            //     let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
-            //         radeco_err!("con.ssa_ref == None");
-            //         NodeIndex::end()
-            //     });
-            //     let sp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
-            //     result.push((ssa_ref, sp_name));
-            //     continue;
-            // }
-            let mut preserves: Vec<String> = Vec::new();
-            //TODO issue119
-            let rfn_opt: Option<RadecoFunction> = None;
-            // let rfn_opt = self.rmod.functions.get(con.callee.as_ref().unwrap_or_else(|| {
-            //     radeco_err!("Callee not found");
-            //     &0
-            // }));
-            if let Some(rfn) = rfn_opt {
-                // Callee is man made function
-                let mut bindings = rfn.bindings().into_iter();
-                while let Some(bind) = bindings.next() {
-                    if bind.is_preserved() {
-                        preserves.push(bind.name().to_string());
+            for (caller, callee) in con.map {
+                let mut preserves: Vec<String> = Vec::new();
+                let rfn_opt = self.rmod.functions.get(&con.csite);
+                if let Some(rfn) = rfn_opt {
+                    // Callee is man made function
+                    let mut bindings = rfn.bindings().into_iter();
+                    while let Some(bind) = bindings.next() {
+                        if bind.is_preserved() {
+                            preserves.push(bind.name().to_string());
+                        }
                     }
+                    //TODO issue119
+                    // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
+                    //     radeco_err!("con.ssa_ref == None");
+                    //     NodeIndex::end()
+                    // });
+                    // result.push((ssa_ref, preserves));
+                } else {
+                    // Callee is library function
+                    //TODO issue119
+                    unimplemented!()
+                    // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
+                    //     radeco_err!("con.ssa_ref == None");
+                    //     NodeIndex::end()
+                    // });
+                    // let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
+                    // result.push((ssa_ref, bp_name));
                 }
-                //TODO issue119
-                unimplemented!();
-                // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
-                //     radeco_err!("con.ssa_ref == None");
-                //     NodeIndex::end()
-                // });
-                // result.push((ssa_ref, preserves));
-            } else {
-                // Callee is library function
-                //TODO issue119
-                unimplemented!()
-                // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
-                //     radeco_err!("con.ssa_ref == None");
-                //     NodeIndex::end()
-                // });
-                // let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
-                // result.push((ssa_ref, bp_name));
-
             }
         }
 
