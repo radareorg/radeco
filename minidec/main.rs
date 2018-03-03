@@ -21,7 +21,7 @@ use radeco_lib::analysis::sccp;
 //use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
 //use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
-use radeco_lib::frontend::radeco_containers::{RadecoProject, RadecoModule};
+use radeco_lib::frontend::radeco_containers::{ProjectLoader, RadecoProject, RadecoModule};
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ssa::memoryssa::MemorySSA;
@@ -41,36 +41,20 @@ fn main() {
 
     let requested_functions = cli::init_for_args(USAGE);
 
-    //TODO issue119
-    let dir = PathBuf::from(".");
-    // let mut r2 = R2::new::<String>(env::args().nth(env::args().len() - 1))
-    //     .expect("Unable to open r2");
-    // r2.init();
-
-    //TODO use ProjectLoader
-    let mut rproj = RadecoProject::new();
+    let proj_name = env::args().nth(env::args().len() -1).unwrap();
+    let mut rproj = {
+        ProjectLoader::new().path(&proj_name).load()
+    };
     let regfile = rproj.regfile().clone();
     for mut xy in rproj.iter_mut() {
         let rmod = &mut xy.module;
-        //TODO issue119
-        // let mut rmod = {
-        //     let bin_info = r2.bin_info().expect("Failed to load bin_info");
-        //     let fname = bin_info.core.unwrap().file.unwrap();
-        //     let fname = Path::new(&fname).file_stem().unwrap();
-        //     let fname = format!("{}_out", fname.to_str().unwrap());
-        //     dir = PathBuf::from(".");
-        //     dir.push(&fname);
-        //     fs::create_dir_all(&dir).expect("Failed to create directory");
-        //     println!("[*] Constructing ...");
-        //     RadecoModule::from(&mut r2)
-        // };
+        let mut dir = PathBuf::from(".");
+        dir.push(format!("{}_out", proj_name));
+        dir.push(format!("{}_out", rmod.name()));
+        fs::create_dir_all(&dir).expect("Failed to create directory");
 
         // Reduce the complexity of rmod.functions to just a vec of (u64,&String)
         // for easier extraction and matching
-        //
-        // Extract all exsisting function addresses and names
-        // TODO issue119
-        // let functions = rmod.iter().collect::<Vec<_>>.clone();
    
         // Analyze preserved for all functions.
         {

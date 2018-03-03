@@ -329,6 +329,17 @@ pub struct ProjectLoader<'a> {
 }
 
 impl<'a> ProjectLoader<'a> {
+
+    pub fn new() -> ProjectLoader<'a> {
+        ProjectLoader {
+            load_libs: false,
+            path: Cow::from(""),
+            load_library_path: None,
+            filter_modules: None,
+            source: None,
+            mloader: None,
+        }
+    }
     // TODO:
     //  - Associate identified bins/libs with their ModuleLoaders
     //  - Implement loading of libraries
@@ -939,6 +950,10 @@ impl RadecoModule {
         let mut rmod = RadecoModule::default();
         rmod.name = Cow::from(path.clone());
         rmod
+    }
+
+    pub fn name(&self) -> &str {
+        &*self.name
     }
 
     pub fn function(&self, offset: u64) -> Option<&RadecoFunction> {
