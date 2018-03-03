@@ -20,7 +20,7 @@
 use std::fmt::Debug;
 
 #[cfg(feature="trace_log")]
-use log::{self, LogLevel, LogMetadata, LogRecord, SetLoggerError};
+use log::{self, SetLoggerError};
 
 use std::fs::OpenOptions;
 use std::path::Path;

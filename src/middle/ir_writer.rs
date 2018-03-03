@@ -344,6 +344,7 @@ impl IRWriter {
             let line = match ssa.g[node] {
                 NodeData::Op(ref opcode, vt) => {
                     if let MOpcode::OpConst(_) = *opcode {
+                        radeco_err!("found const");
                         String::new()
                     } else {
                         let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
@@ -431,7 +432,8 @@ impl IRWriter {
                     last = Some(node);
                     bbline
                 }
-                _ => {
+                ref n@_ => {
+                    radeco_err!("Unknown node: {:?}", n);
                     String::new()
                 }
             };
