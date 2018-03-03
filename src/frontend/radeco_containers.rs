@@ -248,6 +248,7 @@ pub struct VarBinding {
     // Index of the register in regfile that represents this varbinding
     pub ridx: Option<u64>,
     pub idx: NodeIndex, // Some arbitrary, serializable data can be added to these fields later.
+    is_preserved: bool,
 }
 
 impl VarBinding {
@@ -258,6 +259,7 @@ impl VarBinding {
             btype: btype,
             idx: idx,
             ridx: ridx,
+            is_preserved: false,
         }
     }
 
@@ -277,36 +279,16 @@ impl VarBinding {
         &*self.name
     }
 
-    //TODO issue119
     pub fn is_preserved(&self) -> bool {
-        unimplemented!()
+        self.is_preserved
     }
 
-    //TODO issue119
-    pub fn mark_preserved(&self) {
-        unimplemented!()
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct VarBindings(Vec<VarBinding>);
-
-impl<'a> IntoIterator for &'a VarBindings {
-    type Item = &'a VarBinding;
-    type IntoIter = VarBindingIter<'a>;
-    fn into_iter(self) -> VarBindingIter<'a> {
-        VarBindingIter(self.0.iter())
+    pub fn mark_preserved(&mut self) {
+        self.is_preserved = true;
     }
 }
 
-pub struct VarBindingIter<'a>(slice::Iter<'a, VarBinding>);
-
-impl<'a> Iterator for VarBindingIter<'a> {
-    type Item = &'a VarBinding;
-    fn next(&mut self) -> Option<&'a VarBinding> {
-        self.0.next()
-    }
-}
+pub type VarBindings = Vec<VarBinding>;
 
 #[derive(Debug, Clone, Default)]
 /// Container to store information about identified function.
@@ -667,7 +649,7 @@ impl<'a> ModuleLoader<'a> {
             }
         });
 
-        rfn.bindings = VarBindings(tbindings);
+        rfn.bindings = tbindings;
     }
 
     /// Kick everything off and load module information based on config and defaults

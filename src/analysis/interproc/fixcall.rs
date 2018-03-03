@@ -280,9 +280,8 @@ impl<'a> CallFixer<'a> {
         // Store data into RadecoFunction
         {
             let rfn = self.rmod.functions.get_mut(rfn_addr).unwrap();
-            let mut bindings = rfn.bindings_mut().into_iter();
-            while let Some(bind) = bindings.next() {
-                if preserves.contains(&*bind.name()) {
+            for mut bind in rfn.bindings_mut().into_iter() {
+                if preserves.contains(bind.name()) {
                     bind.mark_preserved();
                 }
                 radeco_trace!("CallFixer|Bind: {:?}", bind);
