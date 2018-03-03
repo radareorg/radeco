@@ -38,7 +38,7 @@ Options:
 ";
 
 fn main() {
-    #[cfg(feature="trace_log")] env_logger::init().unwrap();
+    #[cfg(feature="trace_log")] env_logger::init();
 
     let requested_functions = cli::init_for_args(USAGE);
 
