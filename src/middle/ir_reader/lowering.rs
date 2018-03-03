@@ -91,16 +91,30 @@ impl<'a> LowerSsa<'a> {
                 .insert_control_edge(entry_node, exit_node, UNCOND_EDGE);
         }
 
-        let final_state = self.ssa.registers_in(exit_node)?;
+        let mut sfinal_state: Vec<Option<SSAValue>> = vec![None; self.regnames.len() + 1];
         for (sreg, sop) in sfn.final_reg_state {
             // a bit of a hack...
             let reg_idx = if sreg.0 != "mem" {
-                self.index_of_reg(&sreg)?
+                self.index_of_reg(&sreg)? as usize
             } else {
-                self.regnames.len() as u8
+                self.regnames.len()
             };
             let op = self.lower_operand(sop)?;
-            self.ssa.op_use(final_state, reg_idx, op);
+            sfinal_state[reg_idx] = Some(op);
+        }
+        let final_state = self.ssa.registers_in(exit_node)?;
+        for (reg_i, opt_op) in sfinal_state.into_iter().enumerate() {
+            let op = if let Some(op) = opt_op {
+                op
+            } else {
+                let cmnt = if reg_i != self.regnames.len() {
+                    self.regnames[reg_i].0.clone()
+                } else {
+                    "mem".to_owned()
+                };
+                self.lower_operand(sast::Operand::Comment(cmnt))?
+            };
+            self.ssa.op_use(final_state, reg_i as u8, op);
         }
 
         self.ssa
