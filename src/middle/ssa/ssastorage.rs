@@ -262,22 +262,22 @@ impl Graph for SSAStorage {
 
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Data(d) = self.g[edge] {
+            if let Some(&EdgeData::Data(d)) = self.g.edge_weight(edge) {
                 if othernode == j {
                     // Avoid recursion use
                     self.g.remove_edge(edge);
                     continue;
                 }
-                match self.g[othernode] {
-                    NodeData::Op(_, _) | NodeData::RegisterState => {
+                match self.g.node_weight(othernode) {
+                    Some(&NodeData::Op(_, _)) | Some(&NodeData::RegisterState) => {
                         self.op_use(othernode, d, j);
                     }
-                    NodeData::Phi(_, _) => {
+                    Some(&NodeData::Phi(_, _)) => {
                         self.phi_use(othernode, j);
                     }
                     _ => {  }
                 }
-            } else if let EdgeData::Selector = self.g[edge] {
+            } else if let Some(&EdgeData::Selector) = self.g.edge_weight(edge) {
                 let bb = self.block_for(i)
                              .expect("Value node does'n belong to any block");
                 self.set_selector(j, bb);
@@ -287,8 +287,8 @@ impl Graph for SSAStorage {
 
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            match self.g[edge] {
-                EdgeData::RegisterInfo => {
+            match self.g.edge_weight(edge) {
+                Some(&EdgeData::RegisterInfo) => {
                     if othernode == j {
                         self.g.remove_edge(edge);
                         continue;
@@ -317,9 +317,9 @@ impl Graph for SSAStorage {
         let mut exist_edge: EdgeIndex = EdgeIndex::end();
         for edge in edges {
             if edge != self.invalid_edge().expect("Invalid Edge is not defined") {
-                flag = match (self.g[edge], e) {
-                    (EdgeData::Control(i), EdgeData::Control(j)) |
-                    (EdgeData::Data(i), EdgeData::Data(j)) => {
+                flag = match (self.g.edge_weight(edge), e) {
+                    (Some(&EdgeData::Control(i)), EdgeData::Control(j)) |
+                    (Some(&EdgeData::Data(i)), EdgeData::Data(j)) => {
                         if i == j {
                             exist_edge = edge;
                             true
@@ -327,7 +327,7 @@ impl Graph for SSAStorage {
                             false
                         }
                     },
-                    (EdgeData::ContainedInBB(i), EdgeData::ContainedInBB(j)) => {
+                    (Some(&EdgeData::ContainedInBB(i)), EdgeData::ContainedInBB(j)) => {
                         if i == j {
                             exist_edge = edge;
                             true
@@ -335,10 +335,10 @@ impl Graph for SSAStorage {
                             false
                         }
                     },
-                    (EdgeData::RegisterInfo, EdgeData::RegisterInfo) |
-                    (EdgeData::Selector, EdgeData::Selector) |
-                    (EdgeData::RegisterState, EdgeData::RegisterState) |
-                    (EdgeData::ReplacedBy, EdgeData::ReplacedBy) => {
+                    (Some(&EdgeData::RegisterInfo), EdgeData::RegisterInfo) |
+                    (Some(&EdgeData::Selector), EdgeData::Selector) |
+                    (Some(&EdgeData::RegisterState), EdgeData::RegisterState) |
+                    (Some(&EdgeData::ReplacedBy), EdgeData::ReplacedBy) => {
                         exist_edge = edge;
                         true
                     },
@@ -394,9 +394,9 @@ impl Graph for SSAStorage {
         let mut adjacent = Vec::new();
         let mut walk = self.g.neighbors_directed(node, direction).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            match (data, self.g[edge]) {
-                (true, EdgeData::Data(i)) |
-                (false, EdgeData::Control(i)) => adjacent.push((i, othernode)),
+            match (data, self.g.edge_weight(edge)) {
+                (true, Some(&EdgeData::Data(i))) |
+                (false, Some(&EdgeData::Control(i))) => adjacent.push((i, othernode)),
                 _ => {}
             }
         }
@@ -414,7 +414,7 @@ impl CFG for SSAStorage {
     type CFEdgeRef = <SSAStorage as Graph>::GraphEdgeRef;
 
     fn is_block(&self, node: Self::ActionRef) -> bool {
-        if let NodeData::BasicBlock(_, _) = self.g[node] {
+        if let Some(&NodeData::BasicBlock(_, _)) = self.g.node_weight(node) {
             true
         } else {
             false
@@ -422,8 +422,8 @@ impl CFG for SSAStorage {
     }
 
     fn is_action(&self, action: Self::ActionRef) -> bool {
-        match self.g[action] {
-            NodeData::BasicBlock(_, _) | NodeData::DynamicAction => true,
+        match self.g.node_weight(action) {
+            Some(&NodeData::BasicBlock(_, _)) | Some(&NodeData::DynamicAction) => true,
             _ => false,
         }
     }
@@ -461,7 +461,7 @@ impl CFG for SSAStorage {
     fn unconditional_block(&self, i: Self::ActionRef) -> Option<Self::ActionRef> {
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Control(2) = self.g[edge] {
+            if let Some(&EdgeData::Control(2)) = self.g.edge_weight(edge) {
                 return Some(othernode);
             }
         }
@@ -473,10 +473,10 @@ impl CFG for SSAStorage {
         let mut false_block = NodeIndex::end();
         let mut true_block = NodeIndex::end();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            match self.g[edge] {
-                EdgeData::Control(0) => false_block = othernode,
-                EdgeData::Control(1) => true_block = othernode,
-                EdgeData::Control(_) => return None,
+            match self.g.edge_weight(edge) {
+                Some(&EdgeData::Control(0)) => false_block = othernode,
+                Some(&EdgeData::Control(1)) => true_block = othernode,
+                Some(&EdgeData::Control(_)) => return None,
                 _ => {},
             } 
         }
@@ -500,10 +500,10 @@ impl CFG for SSAStorage {
         let mut false_edge = EdgeIndex::end();
         let mut true_edge = EdgeIndex::end();
         while let Some((edge, _)) = walk.next(&self.g) {
-            match self.g[edge] {
-                EdgeData::Control(0) => false_edge = edge,
-                EdgeData::Control(1) => true_edge = edge,
-                EdgeData::Control(_) => return None,
+            match self.g.edge_weight(edge) {
+                Some(&EdgeData::Control(0)) => false_edge = edge,
+                Some(&EdgeData::Control(1)) => true_edge = edge,
+                Some(&EdgeData::Control(_)) => return None,
                 _ => {},
             } 
         }
@@ -528,7 +528,7 @@ impl CFG for SSAStorage {
         let mut edges = Vec::new();
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, _)) = walk.next(&self.g) {
-            if let EdgeData::Control(i) = self.g[edge] {
+            if let Some(&EdgeData::Control(i)) = self.g.edge_weight(edge) {
                 edges.push((edge, i));
             }
         }
@@ -539,7 +539,7 @@ impl CFG for SSAStorage {
         let mut edges = Vec::new();
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, _)) = walk.next(&self.g) {
-            if let EdgeData::Control(i) = self.g[edge] {
+            if let Some(&EdgeData::Control(i)) = self.g.edge_weight(edge) {
                 edges.push((edge, i));
             }
         }
@@ -547,9 +547,9 @@ impl CFG for SSAStorage {
     }
 
     fn starting_address(&self, si: Self::ActionRef) -> Option<MAddress> {
-        if let NodeData::BasicBlock(ref addr, _) = self.g[si] {
+        if let Some(&NodeData::BasicBlock(ref addr, _)) = self.g.node_weight(si) {
             Some(*addr)
-        } else if let NodeData::DynamicAction = self.g[si] {
+        } else if let Some(&NodeData::DynamicAction) = self.g.node_weight(si) {
             Some(MAddress::new(u64::MAX, 0))
         } else {
             None
@@ -557,7 +557,7 @@ impl CFG for SSAStorage {
     }
 
     fn block_size(&self, si: Self::ActionRef) -> Option<u64> {
-        if let NodeData::BasicBlock(_, sz) = self.g[si] {
+        if let Some(&NodeData::BasicBlock(_, sz)) = self.g.node_weight(si) {
             Some(sz)
         } else {
             None
@@ -614,7 +614,7 @@ impl CFGMod for SSAStorage {
         let mut expressions = Vec::<NodeIndex>::new();
         let mut walk = self.g.neighbors_directed(node, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB(_) = self.g[edge] {
+            if let Some(&EdgeData::ContainedInBB(_)) = self.g.edge_weight(edge) {
                 expressions.push(othernode);
             }
         }
@@ -633,7 +633,7 @@ impl CFGMod for SSAStorage {
                 let mut walk = self.g.neighbors_directed(pred, EdgeDirection::Incoming).detach();
                 let mut seledge = None;
                 while let Some((edge, _)) = walk.next(&self.g) {
-                    if let EdgeData::Selector = self.g[edge] {
+                    if let Some(&EdgeData::Selector) = self.g.edge_weight(edge) {
                         seledge = Some(edge);
                         break;
                     }
@@ -666,16 +666,16 @@ impl SSA for SSAStorage {
 
     fn is_expr(&self, exi: Self::ValueRef) -> bool {
         let i = exi;
-        match self.g[i] {
-            NodeData::Op(_, _) => true,
+        match self.g.node_weight(i) {
+            Some(&NodeData::Op(_, _)) => true,
             _ => false,
         }
     }
 
     fn is_phi(&self, exi: Self::ValueRef) -> bool {
         let i = exi;
-        match self.g[i] {
-            NodeData::Phi(_, _) => true,
+        match self.g.node_weight(i) {
+            Some(&NodeData::Phi(_, _)) => true,
             _ => false,
         }
     }
@@ -684,7 +684,7 @@ impl SSA for SSAStorage {
         let i = exi;
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, _)) = walk.next(&self.g) {
-            if let EdgeData::Selector = self.g[edge] {
+            if let Some(&EdgeData::Selector) = self.g.edge_weight(edge) {
                 return true;
             }
         }
@@ -692,22 +692,22 @@ impl SSA for SSAStorage {
     }
 
     fn is_comment(&self, exi: Self::ValueRef) -> bool {
-        match self.g[exi] {
-            NodeData::Comment(_, _) => true,
+        match self.g.node_weight(exi) {
+            Some(&NodeData::Comment(_, _)) => true,
             _ => false,
         }
     }
 
     fn is_constant(&self, exi: Self::ValueRef) -> bool {
-        match self.g[exi] {
-            NodeData::Op(MOpcode::OpConst(_), _) => true,
+        match self.g.node_weight(exi) {
+            Some(&NodeData::Op(MOpcode::OpConst(_), _)) => true,
             _ => false,
         }
     }
 
     fn constant_value(&self, exi: Self::ValueRef) -> Option<u64> {
-        match self.g[exi] {
-            NodeData::Op(MOpcode::OpConst(ref v), _) => Some(*v),
+        match self.g.node_weight(exi) {
+            Some(&NodeData::Op(MOpcode::OpConst(ref v), _)) => Some(*v),
             _ => None,
         }
     }
@@ -731,8 +731,8 @@ impl SSA for SSAStorage {
         let mut expressions = Vec::new();
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB(addr) = self.g[edge] {
-                if let NodeData::Op(_, _) = self.g[othernode] {
+            if let Some(&EdgeData::ContainedInBB(addr)) = self.g.edge_weight(edge) {
+                if let Some(&NodeData::Op(_, _)) = self.g.node_weight(othernode) {
                     expressions.push((othernode, addr));
                 }
             }
@@ -753,8 +753,8 @@ impl SSA for SSAStorage {
         let mut phis = Vec::<NodeIndex>::new();
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB(_) = self.g[edge] {
-                if let NodeData::Phi(_, _) = self.g[othernode] {
+            if let Some(&EdgeData::ContainedInBB(_)) = self.g.edge_weight(edge) {
+                if let Some(&NodeData::Phi(_, _)) = self.g.node_weight(othernode) {
                     phis.push(othernode);
                 }
             }
@@ -767,7 +767,7 @@ impl SSA for SSAStorage {
         let i = exi;
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::RegisterState = self.g[edge] {
+            if let Some(&EdgeData::RegisterState) = self.g.edge_weight(edge) {
                 return Some(othernode);
             }
         }
@@ -777,7 +777,7 @@ impl SSA for SSAStorage {
     fn selector_in(&self, i: Self::ActionRef) -> Option<Self::ValueRef> {
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Selector = self.g[edge] {
+            if let Some(&EdgeData::Selector) = self.g.edge_weight(edge) {
                 return Some(othernode);
             }
         }
@@ -787,7 +787,7 @@ impl SSA for SSAStorage {
     fn selector_for(&self, i: Self::ValueRef) -> Option<Self::ActionRef> {
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Incoming).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Selector = self.g[edge] {
+            if let Some(&EdgeData::Selector) = self.g.edge_weight(edge) {
                 return Some(othernode);
             }
         }
@@ -809,7 +809,7 @@ impl SSA for SSAStorage {
         let mut args = Vec::new();
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::Data(index) = self.g[edge] {
+            if let Some(&EdgeData::Data(index)) = self.g.edge_weight(edge) {
                 args.push((index, othernode));
             }
         }
@@ -819,7 +819,7 @@ impl SSA for SSAStorage {
     fn block_for(&self, i: Self::ValueRef) -> Option<Self::ActionRef> {
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            if let EdgeData::ContainedInBB(_) = self.g[edge] {
+            if let Some(&EdgeData::ContainedInBB(_)) = self.g.edge_weight(edge) {
                 return Some(othernode);
             }
         }
@@ -855,7 +855,7 @@ impl SSA for SSAStorage {
     }
 
     fn constant(&self, ni: Self::ValueRef) -> Option<u64> {
-        if let NodeData::Op(MOpcode::OpConst(n), _) = self.g[ni] {
+        if let Some(&NodeData::Op(MOpcode::OpConst(n), _)) = self.g.node_weight(ni) {
             Some(n)
         } else {
             None
@@ -885,8 +885,8 @@ impl SSA for SSAStorage {
         } 
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            match self.g[edge] {
-                EdgeData::RegisterInfo => {
+            match self.g.edge_weight(edge) {
+                Some(&EdgeData::RegisterInfo) => {
                     if let Some(regname) = self.comment(othernode) {
                         regs.push(regname);
                     }
@@ -925,7 +925,7 @@ impl SSAMod for SSAStorage {
         }
 
         if let Some(edge) = e {
-            if let &mut EdgeData::ContainedInBB(ref mut x) = &mut self.g[edge] {
+            if let Some(&mut EdgeData::ContainedInBB(ref mut x)) = self.g.edge_weight_mut(edge) {
                 *x = addr;
             }
         }
@@ -1032,8 +1032,8 @@ impl SSAMod for SSAStorage {
             } else {
                 ConditionInfo::new(invalid_edge, invalid_edge)
             };
-        let other_edge = match self.g[i] {
-            EdgeData::Control(j) if j <= 2 => {
+        let other_edge = match self.g.edge_weight(i) {
+            Some(&EdgeData::Control(j)) if j <= 2 => {
                 match j {
                     0 => Some(conditional_branches.true_side),
                     1 => Some(conditional_branches.false_side),
@@ -1174,7 +1174,10 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = VecDeque::new();
-            explorer.push_back(self.entry_node().expect("Incomplete CFG graph"));
+            explorer.push_back(self.entry_node().unwrap_or_else(|| {
+                radeco_err!("Incomplete CFG graph");
+                self.invalid_value().unwrap()
+            }));
             let nodes = &mut walker.nodes;
             while let Some(ref block) = explorer.pop_front() {
                 if visited.contains(block) {
@@ -1212,7 +1215,11 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = BinaryHeap::<InorderKey>::new();
-            explorer.push(InorderKey::new(MAddress::new(0, 0), self.entry_node().expect("Incomplete CFG graph")));
+            explorer.push(InorderKey::new(MAddress::new(0, 0),
+                self.entry_node().unwrap_or_else(|| {
+                    radeco_err!("Incomplete CFG graph");
+                    self.invalid_value().unwrap()
+                })));
             let nodes = &mut walker.nodes;
             while let Some(ref key) = explorer.pop() {
                 let block = &key.value;
