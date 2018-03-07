@@ -517,20 +517,19 @@ impl<'a> CallFixer<'a> {
 mod test {
     use super::*;
     use frontend::source::FileSource;
-    use frontend::containers::RadecoModule;
+    use frontend::radeco_containers::RadecoModule;
 
     #[test]
     #[ignore]
     fn analysis_test() {
-        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
-        let mut rmod = RadecoModule::from(&mut fsource);
+        let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
         let matched_func_vec: Vec<u64> =
             functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
 
         // Analyze preserved for all functions.
         {
-            let mut callfixer = CallFixer::new(&mut rmod);
+            let mut callfixer = CallFixer::new(&mut rmod, None, None);
             for func in &matched_func_vec {
                 callfixer.analysis(&func);
             }    
@@ -540,15 +539,14 @@ mod test {
     #[test]
     #[ignore]
     fn fix_test() {
-        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
-        let mut rmod = RadecoModule::from(&mut fsource);
+        let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
         let matched_func_vec: Vec<u64> =
             functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
 
         // Analyze preserved for all functions.
         {
-            let mut callfixer = CallFixer::new(&mut rmod);
+            let mut callfixer = CallFixer::new(&mut rmod, None, None);
             for func in &matched_func_vec {
                 callfixer.analysis(&func);
             }    
@@ -561,15 +559,14 @@ mod test {
     #[test]
     #[ignore]
     fn reanalysis_test() {
-        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
-        let mut rmod = RadecoModule::from(&mut fsource);
+        let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
         let matched_func_vec: Vec<u64> =
             functions.iter().map(|(fn_addr, _)| fn_addr.clone()).collect();
 
         // Analyze preserved for all functions.
         {
-            let mut callfixer = CallFixer::new(&mut rmod);
+            let mut callfixer = CallFixer::new(&mut rmod, None, None);
             for func in &matched_func_vec {
                 callfixer.analysis(&func);
             }    
@@ -585,12 +582,11 @@ mod test {
     #[test]
     #[ignore]
     fn rounded_analysis_test() {
-        let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
-        let mut rmod = RadecoModule::from(&mut fsource);
+        let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
 
         // Analyze preserved for all functions.
         {
-            let mut callfixer = CallFixer::new(&mut rmod);
+            let mut callfixer = CallFixer::new(&mut rmod, None, None);
             callfixer.rounded_analysis();
         }
     }
@@ -598,13 +594,9 @@ mod test {
     #[test]
     #[ignore]
     fn bin_file_rounded_analysis_test() {
-        //let mut r2 = R2::new(Some("./test_files/bin_file")).expect("Failed to open r2");
-        //r2.init();
-        //let mut fsource = FileSource::from(r2);
-        let mut fsource = FileSource::open(Some("./test_files/bin_file/bin_file"));
-        let mut rmod = RadecoModule::from(&mut fsource);
+        let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         {
-            let mut callfixer = CallFixer::new(&mut rmod);
+            let mut callfixer = CallFixer::new(&mut rmod, None, None);
             callfixer.rounded_analysis();
         }
     } 
