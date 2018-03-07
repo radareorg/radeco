@@ -65,7 +65,7 @@ pub type AssociatedData = HashMap<NodeIndex, AdditionalData>;
 /// `RegisterState` is neither.
 /// Value nodes have a `ValueInfo` that can be extracted with
 /// `SSA::get_node_data`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeData {
     /// Represents on operation.
     Op(MOpcode, ValueInfo),
