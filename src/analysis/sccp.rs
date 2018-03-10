@@ -462,6 +462,11 @@ impl<T> Analyzer<T>
                 } else {
                     // val should not be larger than the k node could be.  
                     assert!(w < 64 && val < (1 << (w)));
+                    let block = self.g.block_for(*k)
+                                        .unwrap_or_else(|| {
+                                            radeco_err!("No block information found");
+                                            self.g.invalid_action().unwrap()
+                                        });
                     let address = self.g.address(*k)
                                         .unwrap_or_else(|| {
                                             radeco_err!("No address information found");
@@ -473,7 +478,7 @@ impl<T> Analyzer<T>
                                             radeco_err!("Cannot insert new values");
                                             self.g.invalid_value().unwrap()
                                         });
-                    self.g.set_address(new_node, address);
+                    self.g.insert_into_block(new_node, block, address);
                     self.g.op_use(new_node, 0, const_node);
                     new_node
                 };
