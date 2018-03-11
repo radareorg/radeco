@@ -42,7 +42,7 @@ fn main() {
 
     let requested_functions = cli::init_for_args(USAGE);
 
-    let proj_name = env::args().nth(env::args().len() -1).unwrap();
+    let proj_name = env::args().nth(env::args().len() - 1).unwrap();
     let mut rproj = {
         ProjectLoader::new().path(&proj_name).load()
     };
@@ -59,11 +59,11 @@ fn main() {
    
         // Analyze preserved for all functions.
         {
-            println!("[*] Fixing Callee Information");
-            let bp_name = regfile.get_name_by_alias(&"BP".to_string());
-            let sp_name = regfile.get_name_by_alias(&"SP".to_string());
-            let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
-            callfixer.rounded_analysis();
+            // println!("[*] Fixing Callee Information");
+            // let bp_name = regfile.get_name_by_alias(&"BP".to_string());
+            // let sp_name = regfile.get_name_by_alias(&"SP".to_string());
+            // let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
+            // callfixer.rounded_analysis();
         }
         // Filter the data if the user provided some args to be matched upon
         let matched_func_addrs = if requested_functions.len() != 0 {
