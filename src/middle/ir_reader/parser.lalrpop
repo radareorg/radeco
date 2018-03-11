@@ -14,7 +14,7 @@ pub Function: Function =
     "}"                                                     => Function { <> };
 
 FuncHeader: String =
-    <s:r"define-fun [[:alpha:]_.]+\(unknown\) -> unknown">  => s[11..s.len()-20].to_owned();
+    <s:r"define-fun [[:alnum:]_.]+\(unknown\) -> unknown">  => s[11..s.len()-20].to_owned();
 
 RegisterList: Vec<PhysReg> =
     "registers: " <Comma<PhysReg>> ";"                      => <>;
