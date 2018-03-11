@@ -307,6 +307,35 @@ impl IRWriter {
         }
     }
 
+    fn fmt_jump(&mut self, ssa: &SSAStorage, prev_blk: NodeIndex, next_blk: NodeIndex) -> String {
+        if let Some(selector) = ssa.selector_in(prev_blk) {
+            if let Some(cond_info_blk) = ssa.conditional_blocks(prev_blk) {
+                if cond_info_blk.false_side == next_blk {
+                    let ops = self.fmt_operands(&[selector, cond_info_blk.true_side], ssa);
+                    format!("JMP IF {} {}", ops[0], ops[1])
+                } else {
+                    let ops = self.fmt_operands(&[selector, cond_info_blk.true_side, cond_info_blk.false_side], ssa);
+                    format!("JMP IF {} {} ELSE {}", ops[0], ops[1], ops[2])
+                }
+            } else {
+                radeco_err!("block with selector has no conditional successors");
+                "[[invalid SSA for jump]]".to_owned()
+            }
+        } else {
+            if let Some(blk) = ssa.unconditional_block(prev_blk) {
+                if blk == next_blk {
+                    String::new()
+                } else {
+                    let ops = self.fmt_operands(&[blk], ssa);
+                    format!("JMP {}", ops[0])
+                }
+            } else {
+                radeco_err!("block without selector has no unconditional successor");
+                "[[invalid SSA for jump]]".to_owned()
+            }
+        }
+    }
+
     fn fmt_indent(by: u64) -> String {
         let mut indent = String::new();
         for _ in 0..by {
@@ -369,47 +398,10 @@ impl IRWriter {
                     "Undefined".to_owned()
                 }
                 NodeData::BasicBlock(addr, _) => {
-                    let bbline = if let Some(ref prev_block) = last {
-                        let mut jmp_statement = "JMP".to_owned();
-                        let outgoing = ssa.outgoing_edges(*prev_block)
-                            .iter()
-                            .map(|x| {
-                                let edge_info = ssa.edge_info(x.0)
-                                    .unwrap_or_else(|| {
-                                        radeco_err!("Less-endpoints edge");
-                                        EdgeInfo::new(NodeIndex::end(), NodeIndex::end())
-                                    }).target;
-                                (edge_info, x.1)
-                            }).collect::<Vec<_>>();
-                        // This is a conditional jump.
-                        if outgoing.len() > 1 {
-                            if let Some(selector) = ssa.selector_in(*prev_block) {
-                                let condition = self.fmt_operands(&[selector], ssa);
-                                jmp_statement = format!("{} IF {}", jmp_statement, condition[0]);
-                            }
-                        }
-
-                        let mut target_string = String::new();
-                        for (target, edge_type) in outgoing {
-                            if target == node && (edge_type == 0 || edge_type == 2) {
-                                continue;
-                            }
-
-                            let join = if edge_type == 0 {
-                                " ELSE "
-                            } else {
-                                " "
-                            };
-
-                            target_string = format!("{}{}{}",
-                                                    target_string,
-                                                    join,
-                                                    self.fmt_operands(&[target], &ssa)[0]);
-                        }
-
-                        if !target_string.is_empty() {
-                            concat_str!(jmp_statement, target_string);
-                            concat_strln!(text_il, indent!(self.indent, jmp_statement));
+                    let bbline = if let Some(prev_block) = last {
+                        let jmp = self.fmt_jump(ssa, prev_block, node);
+                        if !jmp.is_empty() {
+                            concat_strln!(text_il, indent!(self.indent, jmp));
                         }
                         indent!(self.indent - 1, bb!(addr))
                     } else {
