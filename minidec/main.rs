@@ -9,7 +9,7 @@ mod cli;
 
 use std::env;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process;
 use petgraph::graph::NodeIndex;
@@ -171,7 +171,7 @@ fn main() {
             let mut fname = PathBuf::from(&dir);
             fname.push(rfn.name.as_ref());
 
-            {
+            let fn_ir_str = {
                 ///////////////////////////
                 // Write out the IR file
                 //////////////////////////
@@ -183,20 +183,18 @@ fn main() {
                 writeln!(ffm, "{}", res).expect("Error writing to file");
                 // Set as a comment in radare2
                 rmod.source.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
-            }
+                res
+            };
         
             {
                 //////////////////////////////
                 // Try parsing the IR file
                 /////////////////////////////
                 println!("  [*] Testing IR parser");
-                let mut ir_file = File::open(&fname).expect("Unable to open file");
-                let mut file_contents = String::new();
-                ir_file.read_to_string(&mut file_contents).expect("Error reading file");
-                let parsed = parse_il(&file_contents);
+                let parsed = parse_il(&fn_ir_str);
                 let mut writer: IRWriter = Default::default();
                 let res = writer.emit_il(Some((*rfn.name).to_owned()), &parsed);
-                for (orig, roundtrip) in file_contents.lines().zip(res.lines()) {
+                for (orig, roundtrip) in fn_ir_str.lines().zip(res.lines()) {
                     if orig != roundtrip {
                         println!("  FAILED TO ROUND-TRIP: \"{}\" => \"{}\"", orig, roundtrip);
                     }
