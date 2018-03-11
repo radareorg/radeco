@@ -112,7 +112,7 @@ WidthSpec: WidthSpec =
     r"[[:digit:]]+"                                         => WidthSpec(str_to_u16(<>, 10));
 
 Comment: String =
-    <s:r"\{[^}\s]*\}">                                      => s[1..s.len()-1].to_owned();
+    <s:r"\{[^}\n]*\}">                                      => s[1..s.len()-1].to_owned();
 
 PhysReg: PhysReg =
     r"\$[a-z_][a-z0-9_]*"                                   => PhysReg(<>[1..].to_owned());
