@@ -1022,7 +1022,10 @@ impl SSAMod for SSAStorage {
     fn remove_data_edge(&mut self, i: Self::CFEdgeRef) {
         let src_node = self.edge_info(i).expect("Less-endpoints edge").source;
         if let Some(selector) = self.selector_in(src_node) {
-            self.remove_value(selector);
+            self.remove_edges_between(src_node, selector);
+            if self.uses_of(selector).is_empty() {
+                self.remove_value(selector);
+            }
         }
 
         let invalid_edge = self.invalid_edge().expect("Invalid Edge is not defined");
