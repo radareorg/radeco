@@ -606,8 +606,7 @@ impl CFGMod for SSAStorage {
     fn remove_block(&mut self, exi: Self::ActionRef) {
         assert!(self.is_block(exi));
 
-        let regstate = self.registers_in(exi)
-                                .expect("No register state node found");
+        let regstate = registers_in_err!(self, exi);
         self.remove_value(regstate);
 
         let node = exi;
@@ -935,8 +934,7 @@ impl SSAMod for SSAStorage {
     }
 
     fn set_register(&mut self, i: Self::ValueRef, regname: String) {
-        let reg_state = self.registers_in(self.entry_node)
-                                .expect("No register state node found");
+        let reg_state = registers_in_err!(self, self.entry_node);
         let operands = self.operands_of(reg_state);
         for op in operands {
             if Some(regname.clone()) == self.comment(op) {

@@ -559,10 +559,8 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn sync_register_state(&mut self, block: T::ActionRef) {
-        let rs = self.ssa.registers_in(block).unwrap_or_else(|| {
-            radeco_err!("No register state node found");
-            self.ssa.invalid_value().unwrap()
-        });
+        let rs = registers_in_err!(self.ssa, block,
+            self.ssa.invalid_value().unwrap());
         for var in 0..self.variable_types.len() {
             let mut addr = self.addr_of(&block);
             let val = self.read_variable(&mut addr, var as u64);

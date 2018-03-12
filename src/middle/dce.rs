@@ -30,13 +30,8 @@ pub fn mark<T>(ssa: &mut T)
         SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
 {
     let nodes = ssa.values();
-    let exit_node = exit_node_err!(ssa);
-    let roots = ssa.registers_in(exit_node);
-    if roots.is_none() {
-        radeco_warn!("No register state node found");
-        return
-    }
-    let roots = roots.unwrap();
+    let roots = registers_in_err!(ssa, exit_node_err!(ssa),
+        ssa.invalid_value().unwrap());
     let mut queue = VecDeque::<T::ValueRef>::new();
     for node in &nodes {
         if let Ok(ref result) = ssa.node_data(*node) {

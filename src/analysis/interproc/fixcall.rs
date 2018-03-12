@@ -301,11 +301,7 @@ impl<'a> CallFixer<'a> {
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
         let mut visited: HashSet<LValueRef> = HashSet::new();
 
-        let reg_state = ssa.registers_in(exit_node_err!(ssa))
-                            .unwrap_or_else(|| {
-                                radeco_err!("No register state node found");
-                                ssa.invalid_value().unwrap()
-                            });
+        let reg_state = registers_in_err!(ssa, exit_node_err!(ssa));
         worklist.push_back(reg_state);
         
         while let Some(node) = worklist.pop_front() {
@@ -367,13 +363,7 @@ impl<'a> CallFixer<'a> {
             -> HashMap<String, i64> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
-        let reg_state = {
-            let entry_node = entry_node_err!(ssa);
-            ssa.registers_in(entry_node).unwrap_or_else(|| {
-                radeco_err!("No register state node found");
-                ssa.invalid_action().unwrap()
-            })
-        };
+        let reg_state = registers_in_err!(ssa, entry_node_err!(ssa));
         let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
             if ssa.comment(*node).is_none(){

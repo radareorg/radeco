@@ -498,10 +498,8 @@ impl IRWriter {
             radeco_err!("Incomplete CFG graph");
             ssa.invalid_action().unwrap()
         });
-        let final_state = ssa.registers_in(exit_node).unwrap_or_else(|| {
-            radeco_err!("No register state node found");
-            ssa.invalid_value().unwrap()
-        });
+        let final_state = registers_in_err!(ssa, exit_node_err!(ssa),
+            ssa.invalid_value().unwrap());
         let mem_comment = "mem".to_owned();
 
         concat_strln!(text_il, &indent!(self.indent - 1, "final-register-state:"));
