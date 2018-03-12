@@ -301,11 +301,7 @@ impl<'a> CallFixer<'a> {
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
         let mut visited: HashSet<LValueRef> = HashSet::new();
 
-        let reg_state = ssa.registers_in(ssa.exit_node()
-                                         .unwrap_or_else(|| {
-                                            radeco_err!("Incomplete CFG graph");
-                                            ssa.invalid_action().unwrap()
-                                         }))
+        let reg_state = ssa.registers_in(exit_node_warn!(ssa))
                             .unwrap_or_else(|| {
                                 radeco_err!("No register state node found");
                                 ssa.invalid_value().unwrap()
@@ -372,10 +368,7 @@ impl<'a> CallFixer<'a> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
         let reg_state = {
-            let entry_node = ssa.entry_node().unwrap_or_else(|| {
-                radeco_err!("Incomplete CFG graph");
-                ssa.invalid_action().unwrap()
-            });
+            let entry_node = entry_node_warn!(ssa);
             ssa.registers_in(entry_node).unwrap_or_else(|| {
                 radeco_err!("No register state node found");
                 ssa.invalid_action().unwrap()

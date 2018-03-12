@@ -27,6 +27,7 @@ pub enum SSAErr<T: SSA + Debug> {
     UnreachablePhiSCC(Vec<T::ValueRef>),
     UnrecordedConstant(u64),
     MultiConstantCopy(u64, T::ValueRef, T::ValueRef),
+    Other(&'static str),
 }
 
 impl fmt::Display for SSAErr<SSAStorage> {
@@ -79,6 +80,9 @@ impl fmt::Display for SSAErr<SSAStorage> {
             }
             SSAErr::MultiConstantCopy(con, ref i, ref j) => {
                 format!("Found more than one copy of {:#}, with {:?} an {:?}", con, i, j)
+            }
+            SSAErr::Other(s) => {
+                format!("{}", s)
             }
         };
         write!(f, "{}.", err)

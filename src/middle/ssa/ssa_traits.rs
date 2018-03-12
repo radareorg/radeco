@@ -27,6 +27,26 @@ use std::fmt::{self, Debug};
 use middle::ir;
 use super::cfg_traits::{CFG, CFGMod};
 
+#[macro_export]
+macro_rules! entry_node_warn {
+    ($ssa:expr) => {
+        $ssa.entry_node().unwrap_or_else(|| {
+            radeco_warn!("Incomplete CFG graph");
+            $ssa.invalid_action().unwrap()
+        })
+    }
+}
+
+#[macro_export]
+macro_rules! exit_node_warn {
+    ($ssa:expr) => {
+        $ssa.exit_node().unwrap_or_else(|| {
+            radeco_warn!("Incomplete CFG graph");
+            $ssa.invalid_action().unwrap()
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Defines the high level `type` of value for a node. It is only used to differentiate between
 /// references and non-reference (scalar) types.

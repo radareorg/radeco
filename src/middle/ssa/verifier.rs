@@ -348,8 +348,12 @@ pub fn verify<T>(ssa: &T) -> VResult<T>
 
     // Find the start point. RegisterState for exit_node could be the best choose.
     // Because it could reach all the nodes in SSA.
-    let exi = ssa.exit_node().expect("Incomplete CFG graph");
-    let register = ssa.registers_in(exi).expect("No register state node found");
+    let exi = exit_node_warn!(ssa);
+    let register = ssa.registers_in(exi);
+    if register.is_none() {
+        return Err(SSAErr::Other("No register state node found"));
+    }
+    let register = register.unwrap();
     try!(ssa.verify_SCC(&register, &mut timestamp, &mut DFN, &mut LOW, &mut stack));
     Ok(())
 }

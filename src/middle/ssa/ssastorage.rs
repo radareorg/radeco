@@ -763,7 +763,10 @@ impl SSA for SSAStorage {
     }
 
     fn registers_in(&self, exi: Self::ActionRef) -> Option<Self::ValueRef> {
-        assert!(self.is_action(exi));
+        if !self.is_action(exi) {
+            radeco_err!("Error: {:?} should be action", exi);
+            return None;
+        }
         let i = exi;
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
@@ -1177,10 +1180,7 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = VecDeque::new();
-            explorer.push_back(self.entry_node().unwrap_or_else(|| {
-                radeco_err!("Incomplete CFG graph");
-                self.invalid_value().unwrap()
-            }));
+            explorer.push_back(entry_node_warn!(self));
             let nodes = &mut walker.nodes;
             while let Some(ref block) = explorer.pop_front() {
                 if visited.contains(block) {
@@ -1219,10 +1219,7 @@ impl SSAWalk<Walker> for SSAStorage {
             let mut visited = HashSet::new();
             let mut explorer = BinaryHeap::<InorderKey>::new();
             explorer.push(InorderKey::new(MAddress::new(0, 0),
-                self.entry_node().unwrap_or_else(|| {
-                    radeco_err!("Incomplete CFG graph");
-                    self.invalid_value().unwrap()
-                })));
+                entry_node_warn!(self)));
             let nodes = &mut walker.nodes;
             while let Some(ref key) = explorer.pop() {
                 let block = &key.value;

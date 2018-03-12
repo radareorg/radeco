@@ -39,10 +39,7 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
             {
                 let locals = rfn.locals().iter().map(|x| x.0).collect::<HashSet<_>>();
                 let ssa = rfn.ssa_ref();
-                let start_block = ssa.entry_node().unwrap_or_else(|| {
-                    radeco_err!("Incomplete CFG graph");
-                    ssa.invalid_action().unwrap()
-                });
+                let start_block = entry_node_warn!(ssa);
                 // Get register state at the start block.
                 let rs = ssa.registers_in(start_block).unwrap_or_else(|| {
                                     radeco_err!("No register state node found");
@@ -74,10 +71,7 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                         }
                     }
                 }
-                let exit_block = ssa.exit_node().unwrap_or_else(|| {
-                    radeco_err!("Incomplete CFG graph");
-                    ssa.invalid_action().unwrap()
-                });
+                let exit_block = exit_node_warn!(ssa);
                 let rs = ssa.registers_in(exit_block).unwrap_or_else(|| {
                     radeco_err!("No register state node found");
                     ssa.invalid_value().unwrap()
