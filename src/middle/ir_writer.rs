@@ -400,8 +400,8 @@ impl IRWriter {
         };
 
         for node in ssa.inorder_walk() {
-            let line = match ssa.g[node] {
-                NodeData::Op(ref opcode, vt) => {
+            let line = match ssa.g.node_weight(node) {
+                Some(&NodeData::Op(ref opcode, vt)) => {
                     if let MOpcode::OpConst(_) = *opcode {
                         radeco_err!("found const");
                         String::new()
@@ -411,7 +411,7 @@ impl IRWriter {
                                 self.fmt_expression(node, opcode, vt, operands, &ssa))
                     }
                 }
-                NodeData::Phi(vt, _) => {
+                Some(&NodeData::Phi(_, _)) => {
                     let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
                     let result_idx = self.node_idx(node);
                     let vi_str = self.fmt_valueinfo(vt);
@@ -424,10 +424,10 @@ impl IRWriter {
                     phi_line.push_str(");");
                     indent!(self.indent, phi_line)
                 }
-                NodeData::Undefined(_) => {
+                Some(&NodeData::Undefined(_)) => {
                     "Undefined".to_owned()
                 }
-                NodeData::BasicBlock(addr, _) => {
+                Some(&NodeData::BasicBlock(addr, _)) => {
                     let bbline = if let Some(prev_block) = last {
                         let jmp = self.fmt_jump(ssa, prev_block, Some(node));
                         if !jmp.is_empty() {
@@ -453,8 +453,8 @@ impl IRWriter {
                     };
                     last = Some(node);
                     bbline
-                }
-                NodeData::DynamicAction => {
+                },
+                Some(&NodeData::DynamicAction) => {
                     if let Some(prev_block) = last {
                         let jmp = self.fmt_jump(ssa, prev_block, Some(node));
                         if !jmp.is_empty() {
@@ -472,9 +472,16 @@ impl IRWriter {
                         "[[dynamic_action]]:"
                     };
                     indent!(self.indent - 1, block_label)
-                }
-                ref n@_ => {
+                },
+                Some(ref n@_) => {
                     radeco_err!("Unknown node: {:?}", n);
+                    String::new()
+                },
+                None => {
+                    radeco_err!("Invalid node");
+                    String::new()
+                },
+                _ => {
                     String::new()
                 }
             };
