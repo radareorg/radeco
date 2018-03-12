@@ -390,7 +390,9 @@ impl<'a> ProjectLoader<'a> {
         if self.source.is_none() {
             // Load r2 source.
             let mut r2 = R2::new(Some(&self.path)).expect("Unable to open r2");
-            let mut r2w: WrappedR2Api<R2> = Rc::new(RefCell::new(r2));
+            //New r2 process is launched thus it needs to analyze
+            r2.analyze_all();
+            let mut r2w: WrappedR2Api = Rc::new(RefCell::new(r2));
             self.source = Some(Rc::new(r2w));
         };
 

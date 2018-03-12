@@ -122,10 +122,13 @@ pub trait Source {
 // sense to have some sort of cached information so that concurrent reads can occur. This should
 // be invalidated whenever some information is exported back to radare or some analysis is run on 
 // r2.
-pub type WrappedR2Api<R> = Rc<RefCell<R>>;
+//TODO Use generic type instead of Rc<RefCell<R2>>
+// pub type WrappedR2Api<R> = Rc<RefCell<R>>;
+pub type WrappedR2Api = Rc<RefCell<R2>>;
 
 // Implementation of `Source` trait for R2.
-impl<R: R2Api> Source for WrappedR2Api<R> {
+//TODO impl<R: R2Api> Source for WrappedR2Api<R> {
+impl Source for WrappedR2Api {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.fn_list()?)
     }
@@ -183,14 +186,16 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
     }
 
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {
-        //TODO issue119
+        //FIXME issue119
         // Ok(self.try_borrow_mut()?.raw(cmd))
         Ok("".to_string())
     }
 
     fn send(&self, s: &str) -> Result<(), SourceErr> {
-        //TODO issue119
-        unimplemented!()
+        //XXX Sould return Result<String, SourceErr>?
+        let mut self_mut = self.try_borrow_mut()?;
+        R2::send(&mut self_mut, s);
+        Ok(())
     }
 }
 
@@ -276,8 +281,10 @@ impl Source for FileSource {
     }
 }
 
-impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
-    fn from(mut r2: WrappedR2Api<R>) -> FileSource {
+// impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
+//     fn from(mut r2: WrappedR2Api<R>) -> FileSource {
+impl From<WrappedR2Api> for FileSource {
+    fn from(mut r2: WrappedR2Api) -> FileSource {
         let bin_info = r2.borrow_mut().bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
         let fname = Path::new(&fname).file_stem().unwrap();
