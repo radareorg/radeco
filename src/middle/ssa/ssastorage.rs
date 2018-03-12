@@ -1180,7 +1180,7 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = VecDeque::new();
-            explorer.push_back(entry_node_warn!(self));
+            explorer.push_back(entry_node_err!(self));
             let nodes = &mut walker.nodes;
             while let Some(ref block) = explorer.pop_front() {
                 if visited.contains(block) {
@@ -1219,7 +1219,7 @@ impl SSAWalk<Walker> for SSAStorage {
             let mut visited = HashSet::new();
             let mut explorer = BinaryHeap::<InorderKey>::new();
             explorer.push(InorderKey::new(MAddress::new(0, 0),
-                entry_node_warn!(self)));
+                entry_node_err!(self)));
             let nodes = &mut walker.nodes;
             while let Some(ref key) = explorer.pop() {
                 let block = &key.value;

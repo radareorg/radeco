@@ -30,7 +30,7 @@ pub fn mark<T>(ssa: &mut T)
         SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
 {
     let nodes = ssa.values();
-    let exit_node = exit_node_warn!(ssa);
+    let exit_node = exit_node_err!(ssa);
     let roots = ssa.registers_in(exit_node);
     if roots.is_none() {
         radeco_warn!("No register state node found");
@@ -76,8 +76,8 @@ pub fn sweep<T>(ssa: &mut T)
     let blocks = ssa.blocks();
     for block in &blocks {
         // Do not touch start or exit nodes
-        if *block == entry_node_warn!(ssa) ||
-           *block == exit_node_warn!(ssa) {
+        if *block == entry_node_err!(ssa) ||
+           *block == exit_node_err!(ssa) {
             continue;
         }
 

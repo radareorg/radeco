@@ -932,7 +932,7 @@ impl<'a, T> PhiPlacer<'a, T>
     // with exit_node
     pub fn gather_exits(&mut self) {
         let blocks = self.ssa.blocks();
-        let exit_node = exit_node_warn!(self.ssa);
+        let exit_node = exit_node_err!(self.ssa);
         for block in blocks {
             if self.ssa.succs_of(block).len() == 0 {
                 self.ssa.insert_control_edge(block, exit_node, UNCOND_EDGE);

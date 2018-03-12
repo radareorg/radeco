@@ -28,20 +28,20 @@ use middle::ir;
 use super::cfg_traits::{CFG, CFGMod};
 
 #[macro_export]
-macro_rules! entry_node_warn {
+macro_rules! entry_node_err {
     ($ssa:expr) => {
         $ssa.entry_node().unwrap_or_else(|| {
-            radeco_warn!("Incomplete CFG graph");
+            radeco_err!("Incomplete CFG graph");
             $ssa.invalid_action().unwrap()
         })
     }
 }
 
 #[macro_export]
-macro_rules! exit_node_warn {
+macro_rules! exit_node_err {
     ($ssa:expr) => {
         $ssa.exit_node().unwrap_or_else(|| {
-            radeco_warn!("Incomplete CFG graph");
+            radeco_err!("Incomplete CFG graph");
             $ssa.invalid_action().unwrap()
         })
     }
