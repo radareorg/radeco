@@ -59,6 +59,7 @@ fn main() {
    
         // Analyze preserved for all functions.
         {
+            //FIXME issue119
             // println!("[*] Fixing Callee Information");
             // let bp_name = regfile.get_name_by_alias(&"BP".to_string());
             // let sp_name = regfile.get_name_by_alias(&"SP".to_string());
@@ -74,7 +75,6 @@ fn main() {
                     let f = _f.function.1;
                     (f.offset.clone(), &*f.name)
                 }).collect();
-                // rmod.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
 
             let all_func_names: Vec<(&str)> =
                 matched_func_vec.iter().map(|&(_, name)| name).collect();
@@ -127,23 +127,25 @@ fn main() {
                 match verifier::verify(rfn.ssa()) {
                     Err(e) => {
                         println!("  [*] Found Error: {}", e);
-                        process::exit(255);
+                        //TODO issue119
+                        // process::exit(255);
                     }
                     Ok(_) => {  }
                 }
             }
             {
-                // Building memory SSA.
-                let _memory_ssa = {
-                    // Generate MemorySSA
-                    println!("  [*] Generating Memory SSA");
-                    let mut mssa = MemorySSA::new(rfn.ssa());
-                    //TODO issue119
-                    mssa.gather_variables(rfn.datarefs(), rfn.locals(),
-                                          &rfn.call_sites(&rmod.callgraph));
-                    mssa.run();
-                    mssa
-                };
+                //FIXME issue119
+                // // Building memory SSA.
+                // let _memory_ssa = {
+                //     // Generate MemorySSA
+                //     println!("  [*] Generating Memory SSA");
+                //     let mut mssa = MemorySSA::new(rfn.ssa());
+                //     //TODO issue119
+                //     mssa.gather_variables(rfn.datarefs(), rfn.locals(),
+                //                           &rfn.call_sites(&rmod.callgraph));
+                //     mssa.run();
+                //     mssa
+                // };
             }
             //if false {
             //    if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
