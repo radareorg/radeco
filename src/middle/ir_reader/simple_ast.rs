@@ -19,7 +19,7 @@ pub struct Function {
 pub struct BasicBlock {
     pub addr: ir::MAddress,
     pub ops: Vec<Operation>,
-    pub jump: Option<Jump>,
+    pub jump: Option<Terminator>,
 }
 
 #[derive(Debug)]
@@ -64,10 +64,10 @@ pub enum Operand {
 }
 
 #[derive(Debug)]
-pub enum Jump {
-    Uncond(ir::MAddress),
-    Cond(Operand, ir::MAddress, Option<ir::MAddress>),
-    Indirect(Operand),
+pub enum Terminator {
+    JmpUncond(ir::MAddress),
+    JmpCond(Operand, ir::MAddress, Option<ir::MAddress>),
+    JmpIndirect(Operand),
     Unreachable,
 }
 
