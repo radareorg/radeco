@@ -401,7 +401,14 @@ impl<'a> ProjectLoader<'a> {
         // TODO: Load more arch specific information from the source
 
         if self.mloader.is_none() {
-            self.mloader = Some(ModuleLoader::default().source(Rc::clone(source)));
+            self.mloader = Some(ModuleLoader::default().source(Rc::clone(source))
+                .build_ssa()
+                .build_callgraph()
+                .load_datarefs()
+                //TODO issue119 .load_locals()
+                .parallel()
+                .assume_cc()
+                .stub_imports());
         }
 
         let mut mod_map = Vec::new();
