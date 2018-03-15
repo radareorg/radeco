@@ -21,7 +21,7 @@ RegisterList: Vec<PhysReg> =
     "registers: " <Comma<PhysReg>> ";"                      => <>;
 
 BasicBlock: BasicBlock =
-    <addr:BBHeader> <ops:Operation*> <jump:Jump?>           => BasicBlock { <> };
+    <addr:BBHeader> <ops:Operation*> <jump:Terminator?>     => BasicBlock { <> };
 
 BBHeader: ir::MAddress =
     "bb_" <MAddress> "(" ")" ":"                            => <>;
@@ -58,11 +58,11 @@ Expr: Expr = {
     <ResizeType> <WidthSpec> "(" <Operand> ")"              => Expr::Resize(<>),
 };
 
-Jump: Jump = {
-    "JMP" <MAddress>                                        => Jump::Uncond(<>),
-    "JMP" "IF" <Operand> <MAddress> <("ELSE" <MAddress>)?>  => Jump::Cond(<>),
-    "JMP" "TO" <Operand>                                    => Jump::Indirect(<>),
-    "UNREACHABLE"                                           => Jump::Unreachable,
+Terminator: Terminator = {
+    "JMP" <MAddress>                                        => Terminator::JmpUncond(<>),
+    "JMP" "IF" <Operand> <MAddress> <("ELSE" <MAddress>)?>  => Terminator::JmpCond(<>),
+    "JMP" "TO" <Operand>                                    => Terminator::JmpIndirect(<>),
+    "UNREACHABLE"                                           => Terminator::Unreachable,
 };
 
 FinalRegState: Vec<(PhysReg, Operand)> =

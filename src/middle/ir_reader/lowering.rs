@@ -155,11 +155,11 @@ impl<'a> LowerSsa<'a> {
 
         let next_node = opt_next_addr.map_or(Ok(self.exit_node), |a| self.block_at(a))?;
         match sbb.jump {
-            Some(sast::Jump::Uncond(tgt)) => {
+            Some(sast::Terminator::JmpUncond(tgt)) => {
                 let tgt_bb = self.block_at(tgt)?;
                 self.ssa.insert_control_edge(bb, tgt_bb, UNCOND_EDGE);
             }
-            Some(sast::Jump::Cond(sel_sop, if_tgt, opt_else_tgt)) => {
+            Some(sast::Terminator::JmpCond(sel_sop, if_tgt, opt_else_tgt)) => {
                 let sel_op = self.lower_operand(sel_sop)?;
                 let if_bb = self.block_at(if_tgt)?;
                 let else_bb = opt_else_tgt.map_or(Ok(next_node), |a| self.block_at(a))?;
@@ -167,13 +167,13 @@ impl<'a> LowerSsa<'a> {
                 self.ssa.insert_control_edge(bb, if_bb, TRUE_EDGE);
                 self.ssa.insert_control_edge(bb, else_bb, FALSE_EDGE);
             }
-            Some(sast::Jump::Indirect(sel_sop)) => {
+            Some(sast::Terminator::JmpIndirect(sel_sop)) => {
                 let sel_op = self.lower_operand(sel_sop)?;
                 self.ssa.set_selector(sel_op, bb);
                 self.ssa
                     .insert_control_edge(bb, self.exit_node, UNCOND_EDGE);
             }
-            Some(sast::Jump::Unreachable) => {
+            Some(sast::Terminator::Unreachable) => {
                 // nothing to do
             }
             None => {
