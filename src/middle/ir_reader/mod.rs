@@ -31,6 +31,7 @@ define-fun main(unknown) -> unknown {
     registers: $r15,$r14,$r13,$r12,$rbp,$rbx,$r11,$r10,$r9,$r8,$rax,$rcx,$rdx,$rsi,$rdi,$rip,$cs,$cf,$pf,$af,$zf,$sf,$tf,$if,$df,$of,$rsp,$ss,$fs_base,$gs_base,$ds,$es,$fs,$gs;
     bb_0x0005FA.0000():
         [@0x0005FA.0001] %1: $Unknown64(*?) = {rsi} + #x1;
+    exit-node:
     final-register-state:
         $rax = %1;
 }"#;

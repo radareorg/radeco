@@ -6,18 +6,15 @@
 //! The text based
 //! representation is inspired from (and probably similar) LLVM IR.
 
-
 use frontend::radeco_containers::RadecoFunction;
-use middle::ir::{MOpcode};
-use middle::ssa::ssastorage::{NodeData, SSAStorage};
-use middle::ssa::ssa_traits::{SSA, SSAWalk, ValueInfo};
+use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::graph_traits::{EdgeInfo, Graph};
-
-
+use middle::ssa::ssa_traits::{SSAWalk, ValueInfo, SSA};
+use middle::ssa::ssastorage::{NodeData, SSAStorage};
+use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 use std::default;
-use petgraph::graph::NodeIndex;
 
 const BLOCK_SEP: &'static str = "{";
 const CL_BLOCK_SEP: &'static str = "}";
@@ -307,33 +304,66 @@ impl IRWriter {
         }
     }
 
-    fn fmt_jump(&mut self, ssa: &SSAStorage, prev_blk: NodeIndex, next_blk: NodeIndex) -> String {
-        if let Some(selector) = ssa.selector_in(prev_blk) {
-            if let Some(cond_info_blk) = ssa.conditional_blocks(prev_blk) {
-                if cond_info_blk.false_side == next_blk {
-                    let ops = self.fmt_operands(&[selector, cond_info_blk.true_side], ssa);
-                    format!("JMP IF {} {}", ops[0], ops[1])
+    fn try_fmt_jump(
+        &mut self,
+        ssa: &SSAStorage,
+        prev_blk: NodeIndex,
+        opt_next_blk: Option<NodeIndex>,
+    ) -> Result<String, &'static str> {
+        Ok(
+            if let Some(successor_blk) = ssa.unconditional_block(prev_blk) {
+                if let Some(selector) = ssa.selector_in(prev_blk) {
+                    // indirect jump
+                    if ssa.exit_node().map_or(false, |en| en != successor_blk) {
+                        radeco_warn!("successor of block with indirect jump wasn't exit_node");
+                    }
+                    let ops = self.fmt_operands(&[selector], ssa);
+                    format!("JMP TO {}", ops[0])
                 } else {
-                    let ops = self.fmt_operands(&[selector, cond_info_blk.true_side, cond_info_blk.false_side], ssa);
-                    format!("JMP IF {} {} ELSE {}", ops[0], ops[1], ops[2])
+                    // unconditional jump
+                    if opt_next_blk == Some(successor_blk) {
+                        // implicit fall-through to next_blk
+                        String::new()
+                    } else {
+                        let ops = self.fmt_operands(&[successor_blk], ssa);
+                        format!("JMP {}", ops[0])
+                    }
                 }
             } else {
-                radeco_err!("block with selector has no conditional successors");
-                "[[invalid SSA for jump]]".to_owned()
-            }
-        } else {
-            if let Some(blk) = ssa.unconditional_block(prev_blk) {
-                if blk == next_blk {
-                    String::new()
+                if let Some(blk_cond_info) = ssa.conditional_blocks(prev_blk) {
+                    // conditional jump
+                    let selector = ssa.selector_in(prev_blk)
+                        .ok_or("block with conditional successors has no selector")?;
+                    if opt_next_blk == Some(blk_cond_info.false_side) {
+                        // implicit fall-through to next_blk
+                        let ops = self.fmt_operands(&[selector, blk_cond_info.true_side], ssa);
+                        format!("JMP IF {} {}", ops[0], ops[1])
+                    } else {
+                        let ops = self.fmt_operands(
+                            &[selector, blk_cond_info.true_side, blk_cond_info.false_side],
+                            ssa,
+                        );
+                        format!("JMP IF {} {} ELSE {}", ops[0], ops[1], ops[2])
+                    }
                 } else {
-                    let ops = self.fmt_operands(&[blk], ssa);
-                    format!("JMP {}", ops[0])
+                    // non-terminating
+                    "UNREACHABLE".to_owned()
                 }
-            } else {
-                radeco_err!("block without selector has no unconditional successor");
+            },
+        )
+    }
+
+    fn fmt_jump(
+        &mut self,
+        ssa: &SSAStorage,
+        prev_blk: NodeIndex,
+        opt_next_blk: Option<NodeIndex>,
+    ) -> String {
+        self.try_fmt_jump(ssa, prev_blk, opt_next_blk)
+            .unwrap_or_else(|err_str| {
+                radeco_err!("{}", err_str);
                 "[[invalid SSA for jump]]".to_owned()
-            }
-        }
+            })
     }
 
     fn fmt_indent(by: u64) -> String {
@@ -399,7 +429,7 @@ impl IRWriter {
                 }
                 NodeData::BasicBlock(addr, _) => {
                     let bbline = if let Some(prev_block) = last {
-                        let jmp = self.fmt_jump(ssa, prev_block, node);
+                        let jmp = self.fmt_jump(ssa, prev_block, Some(node));
                         if !jmp.is_empty() {
                             concat_strln!(text_il, indent!(self.indent, jmp));
                         }
@@ -424,6 +454,25 @@ impl IRWriter {
                     last = Some(node);
                     bbline
                 }
+                NodeData::DynamicAction => {
+                    if let Some(prev_block) = last {
+                        let jmp = self.fmt_jump(ssa, prev_block, Some(node));
+                        if !jmp.is_empty() {
+                            concat_strln!(text_il, indent!(self.indent, jmp));
+                        }
+                    } else {
+                        radeco_warn!("first node was DynamicAction");
+                    }
+                    last = Some(node);
+
+                    let block_label = if ssa.exit_node() == Some(node) {
+                        "exit-node:"
+                    } else {
+                        radeco_warn!("found DynamicAction node that wasn't exit_node");
+                        "[[dynamic_action]]:"
+                    };
+                    indent!(self.indent - 1, block_label)
+                }
                 ref n@_ => {
                     radeco_err!("Unknown node: {:?}", n);
                     String::new()
@@ -432,6 +481,16 @@ impl IRWriter {
 
             if !line.is_empty() {
                 concat_strln!(text_il, line);
+            }
+        }
+
+        if let Some(prev_block) = last {
+            if ssa.exit_node() != Some(prev_block) {
+                // emit jump for the last block
+                let jmp = self.fmt_jump(ssa, prev_block, None);
+                if !jmp.is_empty() {
+                    concat_strln!(text_il, indent!(self.indent, jmp));
+                }
             }
         }
 
