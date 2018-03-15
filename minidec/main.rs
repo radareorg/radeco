@@ -59,12 +59,11 @@ fn main() {
    
         // Analyze preserved for all functions.
         {
-            //FIXME issue119
-            // println!("[*] Fixing Callee Information");
-            // let bp_name = regfile.get_name_by_alias(&"BP".to_string());
-            // let sp_name = regfile.get_name_by_alias(&"SP".to_string());
-            // let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
-            // callfixer.rounded_analysis();
+            println!("[*] Fixing Callee Information");
+            let bp_name = regfile.get_name_by_alias(&"BP".to_string());
+            let sp_name = regfile.get_name_by_alias(&"SP".to_string());
+            let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
+            callfixer.rounded_analysis();
         }
         // Filter the data if the user provided some args to be matched upon
         let matched_func_addrs = if requested_functions.len() != 0 {
@@ -127,25 +126,22 @@ fn main() {
                 match verifier::verify(rfn.ssa()) {
                     Err(e) => {
                         println!("  [*] Found Error: {}", e);
-                        //TODO issue119
-                        // process::exit(255);
+                        process::exit(255);
                     }
                     Ok(_) => {  }
                 }
             }
             {
-                //FIXME issue119
-                // // Building memory SSA.
-                // let _memory_ssa = {
-                //     // Generate MemorySSA
-                //     println!("  [*] Generating Memory SSA");
-                //     let mut mssa = MemorySSA::new(rfn.ssa());
-                //     //TODO issue119
-                //     mssa.gather_variables(rfn.datarefs(), rfn.locals(),
-                //                           &rfn.call_sites(&rmod.callgraph));
-                //     mssa.run();
-                //     mssa
-                // };
+                // Building memory SSA.
+                let _memory_ssa = {
+                    // Generate MemorySSA
+                    println!("  [*] Generating Memory SSA");
+                    let mut mssa = MemorySSA::new(rfn.ssa());
+                    mssa.gather_variables(rfn.datarefs(), &rfn.locals(),
+                                          &rfn.call_sites(&rmod.callgraph));
+                    mssa.run();
+                    mssa
+                };
             }
             //if false {
             //    if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
