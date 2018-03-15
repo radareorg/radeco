@@ -11,6 +11,7 @@ pub struct Function {
     pub name: String,
     pub register_list: Vec<PhysReg>,
     pub basic_blocks: Vec<BasicBlock>,
+    pub exit_node: Option<ExitNode>,
     pub final_reg_state: Vec<(PhysReg, Operand)>,
 }
 
@@ -19,6 +20,11 @@ pub struct BasicBlock {
     pub addr: ir::MAddress,
     pub ops: Vec<Operation>,
     pub jump: Option<Jump>,
+}
+
+#[derive(Debug)]
+pub struct ExitNode {
+    pub ops: Vec<Operation>,
 }
 
 #[derive(Debug)]
@@ -61,6 +67,8 @@ pub enum Operand {
 pub enum Jump {
     Uncond(ir::MAddress),
     Cond(Operand, ir::MAddress, Option<ir::MAddress>),
+    Indirect(Operand),
+    Unreachable,
 }
 
 #[derive(Debug)]

@@ -1233,7 +1233,8 @@ impl SSAWalk<Walker> for SSAStorage {
                 nodes.push_back(*block);
                 let mut exprs = self.exprs_in(*block)
                                     .iter()
-                                    .chain(self.phis_in(*block).iter().rev())
+                                    .chain(self.phis_in(*block).iter())
+                                    .rev()
                                     .cloned()
                                     .collect::<Vec<NodeIndex>>();
 

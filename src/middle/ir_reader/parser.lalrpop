@@ -10,6 +10,7 @@ pub Function: Function =
     "{"
     <register_list:RegisterList>
     <basic_blocks:BasicBlock*>
+    <exit_node:ExitNode?>
     <final_reg_state:FinalRegState>
     "}"                                                     => Function { <> };
 
@@ -24,6 +25,9 @@ BasicBlock: BasicBlock =
 
 BBHeader: ir::MAddress =
     "bb_" <MAddress> "(" ")" ":"                            => <>;
+
+ExitNode: ExitNode =
+    "exit-node:" <ops:Operation*>                           => ExitNode { <> };
 
 Operation: Operation = <Operation0> ";";
 
@@ -57,6 +61,8 @@ Expr: Expr = {
 Jump: Jump = {
     "JMP" <MAddress>                                        => Jump::Uncond(<>),
     "JMP" "IF" <Operand> <MAddress> <("ELSE" <MAddress>)?>  => Jump::Cond(<>),
+    "JMP" "TO" <Operand>                                    => Jump::Indirect(<>),
+    "UNREACHABLE"                                           => Jump::Unreachable,
 };
 
 FinalRegState: Vec<(PhysReg, Operand)> =

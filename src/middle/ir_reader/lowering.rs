@@ -15,7 +15,7 @@ pub type Result<T> = ::std::result::Result<T, LoweringError>;
 
 /// Lowers [AST](sast) into the provided [`SSAStorage`](SSAStorage)
 pub fn lower_simpleast<'a>(ssa: &'a mut SSAStorage, sfn: sast::Function) -> Result<()> {
-    LowerSsa::new(ssa).lower_function(sfn)
+    LowerSsa::new(ssa)?.lower_function(sfn)
 }
 
 #[derive(Debug)]
@@ -36,19 +36,37 @@ const UNCOND_EDGE: u8 = 2;
 
 struct LowerSsa<'a> {
     ssa: &'a mut SSAStorage,
+    entry_node: SSABlock,
+    exit_node: SSABlock,
     blocks: HashMap<ir::MAddress, SSABlock>,
     values: HashMap<sast::ValueRef, SSAValue>,
     regnames: Vec<sast::PhysReg>,
 }
 
 impl<'a> LowerSsa<'a> {
-    fn new(ssa: &'a mut SSAStorage) -> Self {
-        LowerSsa {
+    fn new(ssa: &'a mut SSAStorage) -> Result<Self> {
+        let entry_node = if let Some(en) = ssa.entry_node() {
+            en
+        } else {
+            let entry_node = ssa.insert_block(ir::MAddress::new(0, 0))?;
+            ssa.set_entry_node(entry_node);
+            entry_node
+        };
+        let exit_node = if let Some(en) = ssa.exit_node() {
+            en
+        } else {
+            let exit_node = ssa.insert_dynamic()?;
+            ssa.set_exit_node(exit_node);
+            exit_node
+        };
+        Ok(LowerSsa {
             ssa,
+            entry_node,
+            exit_node,
             blocks: HashMap::new(),
             values: HashMap::new(),
             regnames: Vec::new(),
-        }
+        })
     }
 
     fn lower_function(mut self, sfn: sast::Function) -> Result<()> {
@@ -59,12 +77,6 @@ impl<'a> LowerSsa<'a> {
                 self.regnames.len()
             )));
         }
-
-        let exit_node = self.ssa.insert_dynamic()?;
-        self.ssa.set_exit_node(exit_node);
-
-        let entry_node = self.ssa.insert_block(ir::MAddress::new(0, 0))?;
-        self.ssa.set_entry_node(entry_node);
 
         // when we're lowering a block, we need to know what block comes afterwards;
         // so when we iterate over the blocks, we lower the *previous* block we saw,
@@ -78,7 +90,8 @@ impl<'a> LowerSsa<'a> {
             } else {
                 // `sbb` is the first block
                 let bb = self.block_at(sbb_addr)?;
-                self.ssa.insert_control_edge(entry_node, bb, UNCOND_EDGE);
+                self.ssa
+                    .insert_control_edge(self.entry_node, bb, UNCOND_EDGE);
             }
         }
         if let Some(last_sbb) = opt_prev_sbb {
@@ -88,7 +101,11 @@ impl<'a> LowerSsa<'a> {
             // there were 0 blocks
             // I think this is a sane thing to do in this case :P
             self.ssa
-                .insert_control_edge(entry_node, exit_node, UNCOND_EDGE);
+                .insert_control_edge(self.entry_node, self.exit_node, UNCOND_EDGE);
+        }
+
+        if let Some(sen) = sfn.exit_node {
+            self.lower_exit_node(sen)?;
         }
 
         let mut sfinal_state: Vec<Option<SSAValue>> = vec![None; self.regnames.len() + 1];
@@ -102,7 +119,7 @@ impl<'a> LowerSsa<'a> {
             let op = self.lower_operand(sop)?;
             sfinal_state[reg_idx] = Some(op);
         }
-        let final_state = self.ssa.registers_in(exit_node)?;
+        let final_state = self.ssa.registers_in(self.exit_node)?;
         for (reg_i, opt_op) in sfinal_state.into_iter().enumerate() {
             let op = if let Some(op) = opt_op {
                 op
@@ -136,12 +153,7 @@ impl<'a> LowerSsa<'a> {
             self.ssa.insert_into_block(res, bb, op_addr);
         }
 
-        // can't use `map_or_else` because either operation may fail
-        let next_node = if let Some(next_addr) = opt_next_addr {
-            self.block_at(next_addr)?
-        } else {
-            self.ssa.exit_node()?
-        };
+        let next_node = opt_next_addr.map_or(Ok(self.exit_node), |a| self.block_at(a))?;
         match sbb.jump {
             Some(sast::Jump::Uncond(tgt)) => {
                 let tgt_bb = self.block_at(tgt)?;
@@ -155,10 +167,30 @@ impl<'a> LowerSsa<'a> {
                 self.ssa.insert_control_edge(bb, if_bb, TRUE_EDGE);
                 self.ssa.insert_control_edge(bb, else_bb, FALSE_EDGE);
             }
+            Some(sast::Jump::Indirect(sel_sop)) => {
+                let sel_op = self.lower_operand(sel_sop)?;
+                self.ssa.set_selector(sel_op, bb);
+                self.ssa
+                    .insert_control_edge(bb, self.exit_node, UNCOND_EDGE);
+            }
+            Some(sast::Jump::Unreachable) => {
+                // nothing to do
+            }
             None => {
                 // fallthrough to `next`
                 self.ssa.insert_control_edge(bb, next_node, UNCOND_EDGE);
             }
+        }
+
+        Ok(())
+    }
+
+    fn lower_exit_node(&mut self, sen: sast::ExitNode) -> Result<()> {
+        let node_addr = self.ssa.starting_address(self.exit_node)?;
+        for sop in sen.ops {
+            let (res, opt_op_addr) = self.lower_operation(sop)?;
+            let op_addr = opt_op_addr.unwrap_or(node_addr);
+            self.ssa.insert_into_block(res, self.exit_node, op_addr);
         }
 
         Ok(())
