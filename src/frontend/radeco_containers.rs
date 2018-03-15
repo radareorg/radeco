@@ -1025,17 +1025,18 @@ impl RadecoFunction {
 
     //TODO issue119
     pub fn call_sites(&self, call_graph: &CallGraph) -> CallContextInfo {
-        unimplemented!()
-        // call_graph.get(self.offset)
+        radeco_err!("RadecoFunction#call_sites is not implemented yet");
+        CallContextInfo::new()
     }
 
     pub fn datarefs(&self) -> &Vec<u64> {
         &self.datarefs
     }
 
-    //XXX issue119
-    pub fn locals(&self) -> &Vec<LVarInfo> {
-        unimplemented!()
+    //FIXME issue119
+    pub fn locals(&self) -> Vec<LVarInfo> {
+        radeco_err!("RadecoFunction#locals is not implemented yet");
+        Vec::new()
     }
 }
 
@@ -1047,6 +1048,17 @@ pub struct CallContextInfo {
     pub csite_node: NodeIndex,
     /// Address of callsite
     pub csite: u64,
+}
+
+impl CallContextInfo {
+    //FIXME it should not be dummy
+    pub fn new() -> CallContextInfo {
+        CallContextInfo {
+            map: Vec::new(),
+            csite_node: NodeIndex::end(),
+            csite: 0,
+        }
+    }
 }
 
 #[cfg(test)]

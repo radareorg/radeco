@@ -158,7 +158,11 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         nodes
     } else {
         let blocks = ssa.succs_of(entry_node_err!(ssa));
-        assert_eq!(blocks.len(), 1);
+        //FIXME issue119
+        if blocks.len() != 1 {
+            radeco_err!("blocks.len() should return 1");
+        }
+        // assert_eq!(blocks.len(), 1);
         ssa.exprs_in(blocks[0])
     };
 

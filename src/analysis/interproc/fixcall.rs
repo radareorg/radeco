@@ -196,6 +196,7 @@ impl<'a> CallFixer<'a> {
         }
         let call_info: Vec<(LValueRef, Vec<String>)> = {
             let rfn = self.rmod.functions.get(rfn_addr).unwrap();
+            //TODO issue119
             self.preserves_for_call_context(rfn.call_sites(&self.rmod.callgraph).clone())
         };
         radeco_trace!("CallFixer|Call site: {:?}", call_info);
@@ -397,15 +398,9 @@ impl<'a> CallFixer<'a> {
     // Get callee's node and its preserved registers
     fn preserves_for_call_context(&self, 
             call_context: CallContextInfo)
-            -> Vec<(LValueRef, Vec<String>)> 
+            -> Vec<(NodeIndex, Vec<String>)>
     {
-        let mut result: Vec<(LValueRef, Vec<String>)> = Vec::new(); 
-
-        // We only analyze the call context which have ssa node.
-        // TODO issue119
-        // if con.ssa_ref.is_none() {
-        //     continue;
-        // }
+        let mut result: Vec<(NodeIndex, Vec<String>)> = Vec::new();
 
         for (caller, callee) in call_context.map {
             let mut preserves: Vec<String> = Vec::new();
@@ -418,22 +413,12 @@ impl<'a> CallFixer<'a> {
                         preserves.push(bind.name().to_string());
                     }
                 }
-                //TODO issue119
-                // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
-                //     radeco_err!("con.ssa_ref == None");
-                //     NodeIndex::end()
-                // });
-                // result.push((ssa_ref, preserves));
+                result.push((callee, preserves));
             } else {
                 // Callee is library function
-                //TODO issue119
-                unimplemented!()
-                // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
-                //     radeco_err!("con.ssa_ref == None");
-                //     NodeIndex::end()
-                // });
-                // let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
-                // result.push((ssa_ref, bp_name));
+                //TODO issue119 This might be wrong.
+                let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
+                result.push((callee, bp_name));
             }
         }
 
