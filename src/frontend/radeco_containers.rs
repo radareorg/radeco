@@ -1023,10 +1023,26 @@ impl RadecoFunction {
         &mut self.bindings
     }
 
-    //TODO issue119
     pub fn call_sites(&self, call_graph: &CallGraph) -> CallContextInfo {
-        radeco_err!("RadecoFunction#call_sites is not implemented yet");
-        CallContextInfo::new()
+        let idx = call_graph.node_indices()
+            .filter(|n| {
+                if let Some(node) = call_graph.node_weight(*n) {
+                    *node == self.offset
+                } else {
+                    false
+                }
+            }).collect::<Vec<_>>();
+        if idx.len() != 1 {
+            radeco_err!("NodeIndex: {:?}", idx);
+        };
+        let map = call_graph.callees(idx[0]).into_iter()
+            .map(|i| (idx[0], i.1))
+            .collect::<Vec<_>>();
+        CallContextInfo {
+            map: map,
+            csite_node: idx[0],
+            csite: self.offset,
+        }
     }
 
     pub fn datarefs(&self) -> &Vec<u64> {
@@ -1048,17 +1064,6 @@ pub struct CallContextInfo {
     pub csite_node: NodeIndex,
     /// Address of callsite
     pub csite: u64,
-}
-
-impl CallContextInfo {
-    //FIXME it should not be dummy
-    pub fn new() -> CallContextInfo {
-        CallContextInfo {
-            map: Vec::new(),
-            csite_node: NodeIndex::end(),
-            csite: 0,
-        }
-    }
 }
 
 #[cfg(test)]

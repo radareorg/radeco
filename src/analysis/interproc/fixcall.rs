@@ -196,8 +196,8 @@ impl<'a> CallFixer<'a> {
         }
         let call_info: Vec<(LValueRef, Vec<String>)> = {
             let rfn = self.rmod.functions.get(rfn_addr).unwrap();
-            //TODO issue119
-            self.preserves_for_call_context(rfn.call_sites(&self.rmod.callgraph).clone())
+            let call_sites = rfn.call_sites(&self.rmod.callgraph).clone();
+            self.preserves_for_call_context(call_sites)
         };
         radeco_trace!("CallFixer|Call site: {:?}", call_info);
 
@@ -402,13 +402,11 @@ impl<'a> CallFixer<'a> {
     {
         let mut result: Vec<(NodeIndex, Vec<String>)> = Vec::new();
 
-        for (caller, callee) in call_context.map {
+        for (_, callee) in call_context.map {
             let mut preserves: Vec<String> = Vec::new();
-            let rfn_opt = self.rmod.functions.get(&call_context.csite);
-            if let Some(rfn) = rfn_opt {
+            if let Some(rfn) = self.rmod.functions.get(&call_context.csite) {
                 // Callee is man made function
-                let mut bindings = rfn.bindings().into_iter();
-                while let Some(bind) = bindings.next() {
+                for bind in rfn.bindings().into_iter() {
                     if bind.is_preserved() {
                         preserves.push(bind.name().to_string());
                     }
