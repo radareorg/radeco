@@ -416,7 +416,6 @@ impl<'a> CallFixer<'a> {
                 result.push((callee, preserves));
             } else {
                 // Callee is library function
-                //TODO issue119 This might be wrong.
                 let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
                 result.push((callee, bp_name));
             }
