@@ -411,7 +411,7 @@ impl IRWriter {
                                 self.fmt_expression(node, opcode, vt, operands, &ssa))
                     }
                 }
-                Some(&NodeData::Phi(_, _)) => {
+                Some(&NodeData::Phi(vt, _)) => {
                     let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
                     let result_idx = self.node_idx(node);
                     let vi_str = self.fmt_valueinfo(vt);
