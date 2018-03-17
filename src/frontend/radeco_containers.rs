@@ -31,7 +31,6 @@
 //! For more examples of loading, check the `examples/` directory of this project.
 
 
-use frontend::bindings::{Binding, RBindings, RadecoBindings};
 use frontend::llanalyzer;
 use frontend::radeco_source::{WrappedR2Api, Source};
 use frontend::ssaconstructor::SSAConstruct;
@@ -63,6 +62,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
+use std::iter::FromIterator;
 
 // use cpuprofiler::PROFILER;
 
@@ -270,6 +270,16 @@ impl VarBinding {
 #[derive(Debug, Clone, Default)]
 pub struct VarBindings(Vec<VarBinding>);
 
+impl VarBindings {
+    fn arguments(&self) -> VarArguments {
+        self.into_iter().filter(|x| match x.btype() {
+            BindingType::RegisterArgument(_) => true,
+            BindingType::StackArgument(_) => true,
+            _ => false,
+        }).collect()
+    }
+}
+
 impl<'a> IntoIterator for &'a VarBindings {
     type Item = &'a VarBinding;
     type IntoIter = VarBindingIter<'a>;
@@ -286,6 +296,18 @@ impl<'a> Iterator for VarBindingIter<'a> {
         self.0.next()
     }
 }
+
+impl<'a> FromIterator<&'a VarBinding> for VarBindings {
+    fn from_iter<I: IntoIterator<Item=&'a VarBinding>>(iter: I) -> Self {
+        let mut contents = Vec::new();
+        for i in iter {
+            contents.push((*i).clone());
+        }
+        VarBindings(contents)
+    }
+}
+
+pub type VarArguments = VarBindings;
 
 #[derive(Debug, Clone, Default)]
 /// Container to store information about identified function.
@@ -991,6 +1013,10 @@ impl RadecoFunction {
     pub fn bindings(&self) -> &VarBindings {
         &self.bindings
     }
+
+    pub fn arguments(&self) -> VarArguments {
+        self.bindings.arguments()
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1014,4 +1040,5 @@ mod test {
         // let mut fl = FunctionLoader::default();
         // fl.strategy(&ld);
     }
+
 }
