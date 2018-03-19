@@ -315,6 +315,8 @@ pub struct RadecoFunction {
     cgid: NodeIndex,
     /// Variable bindings
     bindings: VarBindings,
+    /// Local Variables of this function
+    locals: Vec<LVarInfo>,
 }
 
 #[derive(Default)]
@@ -405,7 +407,7 @@ impl<'a> ProjectLoader<'a> {
                 .build_ssa()
                 .build_callgraph()
                 .load_datarefs()
-                //TODO issue119 .load_locals()
+                .load_locals()
                 .parallel()
                 .assume_cc()
                 .stub_imports());
@@ -807,7 +809,23 @@ impl<'a> ModuleLoader<'a> {
             }
 
             if self.load_locals {
-                unimplemented!()
+                for info in &aux_info {
+                    if let Some(mut rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
+                        let locals_res = self.source.as_ref()
+                            .map(|s| s.locals_of(rfn.offset));
+                        rfn.locals = match locals_res {
+                            Some(Ok(locals)) => locals,
+                            Some(Err(e)) => {
+                                radeco_warn!("{:?}", e);
+                                Vec::new()
+                            },
+                            None => {
+                                radeco_warn!("Source is not found");
+                                Vec::new()
+                            },
+                        };
+                    }
+                }
             }
         }
 
@@ -1049,10 +1067,8 @@ impl RadecoFunction {
         &self.datarefs
     }
 
-    //FIXME issue119
-    pub fn locals(&self) -> Vec<LVarInfo> {
-        radeco_err!("RadecoFunction#locals is not implemented yet");
-        Vec::new()
+    pub fn locals(&self) -> &Vec<LVarInfo> {
+        &self.locals
     }
 }
 

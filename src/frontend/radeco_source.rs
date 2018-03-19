@@ -13,7 +13,7 @@ use std::fmt;
 use r2api::api_trait::R2Api;
 use r2pipe::r2::R2;
 use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
-LImportInfo, LExportInfo, LRelocInfo, LEntryInfo};
+LImportInfo, LExportInfo, LRelocInfo, LEntryInfo, LVarInfo};
 
 #[derive(Debug)]
 pub enum SourceErr {
@@ -52,6 +52,7 @@ pub trait Source {
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> { unimplemented!() }
     fn disassemble_n_bytes(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn disassemble_n_insts(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
+    fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
     fn raw(&self, cmd: String) -> Result<String, SourceErr> { unimplemented!() }
 
     fn send(&self, _: &str) -> Result<(), SourceErr> { Ok(()) }
@@ -183,6 +184,10 @@ impl Source for WrappedR2Api {
 
     fn disassemble_n_insts(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.disassemble_n_insts(n, Some(at))?)
+    }
+
+    fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.locals_of(start_addr)?)
     }
 
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {
