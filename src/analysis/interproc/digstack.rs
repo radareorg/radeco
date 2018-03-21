@@ -302,9 +302,7 @@ mod test {
     use middle::ssa::ssastorage::SSAStorage;
     use middle::dce;
 
-    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
-    const BIN_LS_INSTRUCTIONS: &'static str = "test_files/bin_ls_instructions.json";
-    const CT1_INSTRUCTIONS: &'static str = "test_files/ct1_instructions.json";
+    use utils::test_const::{REGISTER_PROFILE, BIN_LS_INSTRUCTIONS, CT1_INSTRUCTIONS};
 
     #[test]
     fn bin_ls_test() {
