@@ -764,8 +764,7 @@ mod test {
     use std::io::prelude::*;
     use super::*;
 
-
-    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+    use utils::test_const::REGISTER_PROFILE;
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
         // Enable for debugging only.

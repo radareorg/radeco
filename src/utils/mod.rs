@@ -11,6 +11,9 @@
 #[macro_use]
 pub mod logger;
 
+#[cfg(test)]
+pub(crate) mod test_const;
+
 //use std::io::prelude::*;
 //use std::fs;
 //use std::fs::File;
