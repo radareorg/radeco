@@ -27,6 +27,39 @@ use std::fmt::{self, Debug};
 use middle::ir;
 use super::cfg_traits::{CFG, CFGMod};
 
+#[macro_export]
+macro_rules! entry_node_err {
+    ($ssa:expr) => {
+        $ssa.entry_node().unwrap_or_else(|| {
+            radeco_err!("Incomplete CFG graph");
+            $ssa.invalid_action().unwrap()
+        })
+    }
+}
+
+#[macro_export]
+macro_rules! exit_node_err {
+    ($ssa:expr) => {
+        $ssa.exit_node().unwrap_or_else(|| {
+            radeco_err!("Incomplete CFG graph");
+            $ssa.invalid_action().unwrap()
+        })
+    }
+}
+
+#[macro_export]
+macro_rules! registers_in_err {
+    ($ssa:expr, $node:expr) => {
+            registers_in_err!($ssa, $node, $ssa.invalid_action().unwrap())
+    };
+    ($ssa:expr, $node:expr, $default:expr) => {
+        $ssa.registers_in($node).unwrap_or_else(|| {
+            radeco_err!("No register state node found");
+            $default
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Defines the high level `type` of value for a node. It is only used to differentiate between
 /// references and non-reference (scalar) types.

@@ -28,16 +28,7 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
     let mut visited: HashSet<LValueRef> = HashSet::new();
 
     // Initial the last SP register offset to ZERO.
-    let reg_state = {
-        let exit_node = ssa.exit_node().unwrap_or_else(||{
-                radeco_err!("Incomplete CFG graph");
-                ssa.invalid_action().unwrap()
-            });
-        ssa.registers_in(exit_node)
-    }.unwrap_or_else(|| {
-        radeco_err!("No register state node found");
-        ssa.invalid_action().unwrap()
-    });
+    let reg_state = registers_in_err!(ssa, exit_node_err!(ssa));
     let nodes = ssa.operands_of(reg_state);
     for node in &nodes {
         if ssa.registers(*node).contains(&sp_name) {
@@ -146,16 +137,7 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     {
-        let reg_state_opt = ssa.registers_in(ssa.entry_node()
-                                            .unwrap_or_else(|| {
-                                                radeco_err!("Incomplete CFG graph");
-                                                ssa.invalid_value().unwrap()
-                                            })
-                                        );
-        let reg_state = reg_state_opt.unwrap_or_else(|| {
-            radeco_err!("No register state node found");
-            ssa.invalid_value().unwrap()
-        });
+        let reg_state = registers_in_err!(ssa, entry_node_err!(ssa));
 
         let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
@@ -175,12 +157,12 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
         }
         nodes
     } else {
-        let blocks = ssa.succs_of(ssa.entry_node().
-                                  unwrap_or_else(|| {
-                                      radeco_err!("Incomplete CFG graph");
-                                      ssa.invalid_action().unwrap()
-                                  }));
-        assert_eq!(blocks.len(), 1);
+        let blocks = ssa.succs_of(entry_node_err!(ssa));
+        //FIXME issue119
+        if blocks.len() != 1 {
+            radeco_err!("blocks.len() should return 1");
+        }
+        // assert_eq!(blocks.len(), 1);
         ssa.exprs_in(blocks[0])
     };
 

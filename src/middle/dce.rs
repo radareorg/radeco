@@ -8,8 +8,7 @@
 //! Dead code elimination
 
 use middle::ssa::graph_traits::Graph;
-use middle::ssa::ssa_traits::{SSAExtra, SSAMod};
-use middle::ssa::ssa_traits::NodeType;
+use middle::ssa::ssa_traits::{SSAExtra, SSAMod, NodeType};
 use petgraph::graph::NodeIndex;
 use std::collections::VecDeque;
 
@@ -31,8 +30,8 @@ pub fn mark<T>(ssa: &mut T)
         SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
 {
     let nodes = ssa.values();
-    let exit_node = ssa.exit_node().expect("Incomplete CFG graph");
-    let roots = ssa.registers_in(exit_node).expect("No register state node found");
+    let roots = registers_in_err!(ssa, exit_node_err!(ssa),
+        ssa.invalid_value().unwrap());
     let mut queue = VecDeque::<T::ValueRef>::new();
     for node in &nodes {
         if let Ok(ref result) = ssa.node_data(*node) {
@@ -72,8 +71,8 @@ pub fn sweep<T>(ssa: &mut T)
     let blocks = ssa.blocks();
     for block in &blocks {
         // Do not touch start or exit nodes
-        if *block == ssa.entry_node().expect("Incomplete CFG graph") ||
-           *block == ssa.exit_node().expect("Incomplete CFG graph") {
+        if *block == entry_node_err!(ssa) ||
+           *block == exit_node_err!(ssa) {
             continue;
         }
 

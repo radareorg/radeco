@@ -13,7 +13,7 @@ use std::fmt;
 use r2api::api_trait::R2Api;
 use r2pipe::r2::R2;
 use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
-LImportInfo, LExportInfo, LRelocInfo, LEntryInfo};
+LImportInfo, LExportInfo, LRelocInfo, LEntryInfo, LVarInfo};
 
 #[derive(Debug)]
 pub enum SourceErr {
@@ -52,6 +52,7 @@ pub trait Source {
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> { unimplemented!() }
     fn disassemble_n_bytes(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn disassemble_n_insts(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
+    fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
     fn raw(&self, cmd: String) -> Result<String, SourceErr> { unimplemented!() }
 
     fn send(&self, _: &str) -> Result<(), SourceErr> { Ok(()) }
@@ -122,10 +123,13 @@ pub trait Source {
 // sense to have some sort of cached information so that concurrent reads can occur. This should
 // be invalidated whenever some information is exported back to radare or some analysis is run on 
 // r2.
-pub type WrappedR2Api<R> = Rc<RefCell<R>>;
+//TODO Use generic type instead of Rc<RefCell<R2>>
+// pub type WrappedR2Api<R> = Rc<RefCell<R>>;
+pub type WrappedR2Api = Rc<RefCell<R2>>;
 
 // Implementation of `Source` trait for R2.
-impl<R: R2Api> Source for WrappedR2Api<R> {
+//TODO impl<R: R2Api> Source for WrappedR2Api<R> {
+impl Source for WrappedR2Api {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.fn_list()?)
     }
@@ -182,13 +186,21 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
         Ok(self.try_borrow_mut()?.disassemble_n_insts(n, Some(at))?)
     }
 
+    fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.locals_of(start_addr)?)
+    }
+
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {
+        //FIXME issue119
         // Ok(self.try_borrow_mut()?.raw(cmd))
         Ok("".to_string())
     }
 
     fn send(&self, s: &str) -> Result<(), SourceErr> {
-        unimplemented!()
+        //XXX Sould return Result<String, SourceErr>?
+        let mut self_mut = self.try_borrow_mut()?;
+        R2::send(&mut self_mut, s);
+        Ok(())
     }
 }
 
@@ -274,8 +286,10 @@ impl Source for FileSource {
     }
 }
 
-impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
-    fn from(mut r2: WrappedR2Api<R>) -> FileSource {
+// impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
+//     fn from(mut r2: WrappedR2Api<R>) -> FileSource {
+impl From<WrappedR2Api> for FileSource {
+    fn from(mut r2: WrappedR2Api) -> FileSource {
         let bin_info = r2.borrow_mut().bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
         let fname = Path::new(&fname).file_stem().unwrap();

@@ -196,7 +196,8 @@ impl<'a> CallFixer<'a> {
         }
         let call_info: Vec<(LValueRef, Vec<String>)> = {
             let rfn = self.rmod.functions.get(rfn_addr).unwrap();
-            self.preserves_for_call_context(rfn.call_sites(&self.rmod.callgraph).clone())
+            let call_sites = rfn.call_sites(&self.rmod.callgraph).clone();
+            self.preserves_for_call_context(call_sites)
         };
         radeco_trace!("CallFixer|Call site: {:?}", call_info);
 
@@ -301,15 +302,7 @@ impl<'a> CallFixer<'a> {
         let mut worklist: VecDeque<LValueRef> = VecDeque::new();
         let mut visited: HashSet<LValueRef> = HashSet::new();
 
-        let reg_state = ssa.registers_in(ssa.exit_node()
-                                         .unwrap_or_else(|| {
-                                            radeco_err!("Incomplete CFG graph");
-                                            ssa.invalid_action().unwrap()
-                                         }))
-                            .unwrap_or_else(|| {
-                                radeco_err!("No register state node found");
-                                ssa.invalid_value().unwrap()
-                            });
+        let reg_state = registers_in_err!(ssa, exit_node_err!(ssa));
         worklist.push_back(reg_state);
         
         while let Some(node) = worklist.pop_front() {
@@ -371,16 +364,7 @@ impl<'a> CallFixer<'a> {
             -> HashMap<String, i64> {
         let mut entry_store: HashMap<String, i64> = HashMap::new();
 
-        let reg_state = {
-            let entry_node = ssa.entry_node().unwrap_or_else(|| {
-                radeco_err!("Incomplete CFG graph");
-                ssa.invalid_action().unwrap()
-            });
-            ssa.registers_in(entry_node).unwrap_or_else(|| {
-                radeco_err!("No register state node found");
-                ssa.invalid_action().unwrap()
-            })
-        };
+        let reg_state = registers_in_err!(ssa, entry_node_err!(ssa));
         let nodes = ssa.operands_of(reg_state);
         for node in &nodes {
             if ssa.comment(*node).is_none(){
@@ -414,43 +398,24 @@ impl<'a> CallFixer<'a> {
     // Get callee's node and its preserved registers
     fn preserves_for_call_context(&self, 
             call_context: CallContextInfo)
-            -> Vec<(LValueRef, Vec<String>)> 
+            -> Vec<(NodeIndex, Vec<String>)>
     {
-        let mut result: Vec<(LValueRef, Vec<String>)> = Vec::new(); 
+        let mut result: Vec<(NodeIndex, Vec<String>)> = Vec::new();
 
-        // We only analyze the call context which have ssa node.
-        // TODO issue119
-        // if con.ssa_ref.is_none() {
-        //     continue;
-        // }
-
-        for (caller, callee) in call_context.map {
+        for (_, callee) in call_context.map {
             let mut preserves: Vec<String> = Vec::new();
-            let rfn_opt = self.rmod.functions.get(&call_context.csite);
-            if let Some(rfn) = rfn_opt {
+            if let Some(rfn) = self.rmod.functions.get(&call_context.csite) {
                 // Callee is man made function
-                let mut bindings = rfn.bindings().into_iter();
-                while let Some(bind) = bindings.next() {
+                for bind in rfn.bindings().into_iter() {
                     if bind.is_preserved() {
                         preserves.push(bind.name().to_string());
                     }
                 }
-                //TODO issue119
-                // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
-                //     radeco_err!("con.ssa_ref == None");
-                //     NodeIndex::end()
-                // });
-                // result.push((ssa_ref, preserves));
+                result.push((callee, preserves));
             } else {
                 // Callee is library function
-                //TODO issue119
-                unimplemented!()
-                // let ssa_ref = con.ssa_ref.unwrap_or_else(|| {
-                //     radeco_err!("con.ssa_ref == None");
-                //     NodeIndex::end()
-                // });
-                // let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
-                // result.push((ssa_ref, bp_name));
+                let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
+                result.push((callee, bp_name));
             }
         }
 

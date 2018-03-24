@@ -315,6 +315,8 @@ pub struct RadecoFunction {
     cgid: NodeIndex,
     /// Variable bindings
     bindings: VarBindings,
+    /// Local Variables of this function
+    locals: Vec<LVarInfo>,
 }
 
 #[derive(Default)]
@@ -390,7 +392,9 @@ impl<'a> ProjectLoader<'a> {
         if self.source.is_none() {
             // Load r2 source.
             let mut r2 = R2::new(Some(&self.path)).expect("Unable to open r2");
-            let mut r2w: WrappedR2Api<R2> = Rc::new(RefCell::new(r2));
+            //New r2 process is launched thus it needs to analyze
+            r2.analyze_all();
+            let mut r2w: WrappedR2Api = Rc::new(RefCell::new(r2));
             self.source = Some(Rc::new(r2w));
         };
 
@@ -399,7 +403,14 @@ impl<'a> ProjectLoader<'a> {
         // TODO: Load more arch specific information from the source
 
         if self.mloader.is_none() {
-            self.mloader = Some(ModuleLoader::default().source(Rc::clone(source)));
+            self.mloader = Some(ModuleLoader::default().source(Rc::clone(source))
+                .build_ssa()
+                .build_callgraph()
+                .load_datarefs()
+                .load_locals()
+                .parallel()
+                .assume_cc()
+                .stub_imports());
         }
 
         let mut mod_map = Vec::new();
@@ -798,7 +809,23 @@ impl<'a> ModuleLoader<'a> {
             }
 
             if self.load_locals {
-                unimplemented!()
+                for info in &aux_info {
+                    if let Some(mut rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
+                        let locals_res = self.source.as_ref()
+                            .map(|s| s.locals_of(rfn.offset));
+                        rfn.locals = match locals_res {
+                            Some(Ok(locals)) => locals,
+                            Some(Err(e)) => {
+                                radeco_warn!("{:?}", e);
+                                Vec::new()
+                            },
+                            None => {
+                                radeco_warn!("Source is not found");
+                                Vec::new()
+                            },
+                        };
+                    }
+                }
             }
         }
 
@@ -1014,19 +1041,34 @@ impl RadecoFunction {
         &mut self.bindings
     }
 
-    //TODO issue119
     pub fn call_sites(&self, call_graph: &CallGraph) -> CallContextInfo {
-        unimplemented!()
-        // call_graph.get(self.offset)
+        let idx = call_graph.node_indices()
+            .filter(|n| {
+                if let Some(node) = call_graph.node_weight(*n) {
+                    *node == self.offset
+                } else {
+                    false
+                }
+            }).collect::<Vec<_>>();
+        if idx.len() != 1 {
+            radeco_err!("NodeIndex: {:?}", idx);
+        };
+        let map = call_graph.callees(idx[0]).into_iter()
+            .map(|i| (idx[0], i.1))
+            .collect::<Vec<_>>();
+        CallContextInfo {
+            map: map,
+            csite_node: idx[0],
+            csite: self.offset,
+        }
     }
 
     pub fn datarefs(&self) -> &Vec<u64> {
         &self.datarefs
     }
 
-    //XXX issue119
     pub fn locals(&self) -> &Vec<LVarInfo> {
-        unimplemented!()
+        &self.locals
     }
 }
 

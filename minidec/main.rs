@@ -42,7 +42,7 @@ fn main() {
 
     let requested_functions = cli::init_for_args(USAGE);
 
-    let proj_name = env::args().nth(env::args().len() -1).unwrap();
+    let proj_name = env::args().nth(env::args().len() - 1).unwrap();
     let mut rproj = {
         ProjectLoader::new().path(&proj_name).load()
     };
@@ -74,7 +74,6 @@ fn main() {
                     let f = _f.function.1;
                     (f.offset.clone(), &*f.name)
                 }).collect();
-                // rmod.iter().map(|(fn_addr, rfn)| (fn_addr.clone(), &rfn.name)).collect();
 
             let all_func_names: Vec<(&str)> =
                 matched_func_vec.iter().map(|&(_, name)| name).collect();
@@ -138,8 +137,7 @@ fn main() {
                     // Generate MemorySSA
                     println!("  [*] Generating Memory SSA");
                     let mut mssa = MemorySSA::new(rfn.ssa());
-                    //TODO issue119
-                    mssa.gather_variables(rfn.datarefs(), rfn.locals(),
+                    mssa.gather_variables(rfn.datarefs(), &rfn.locals(),
                                           &rfn.call_sites(&rmod.callgraph));
                     mssa.run();
                     mssa

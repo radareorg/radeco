@@ -367,10 +367,7 @@ impl<T> Analyzer<T>
     pub fn analyze(&mut self) {
 
         {
-            let entry_node = self.g.entry_node().unwrap_or_else(|| {
-                                radeco_err!("Incomplete CFG graph");
-                                self.g.invalid_action().unwrap()
-            });
+            let entry_node = entry_node_err!(self.g);
             let edges = self.g.outgoing_edges(entry_node);
             for &(ref next, _) in &edges {
                 self.cfgwl_push(next);
@@ -550,10 +547,7 @@ impl<T> Analyzer<T>
 
     fn is_block_executable(&self, i: &T::ActionRef) -> bool {
         // entry_node is always reachable.
-        if *i == self.g.entry_node().unwrap_or_else(|| {
-                    radeco_err!("Incomplete CFG graph");
-                    self.g.invalid_action().unwrap()
-                }){
+        if *i == entry_node_err!(&self.g) {
             return true;
         }
         let incoming = self.g.incoming_edges(*i);

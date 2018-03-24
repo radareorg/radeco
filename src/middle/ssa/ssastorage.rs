@@ -606,8 +606,7 @@ impl CFGMod for SSAStorage {
     fn remove_block(&mut self, exi: Self::ActionRef) {
         assert!(self.is_block(exi));
 
-        let regstate = self.registers_in(exi)
-                                .expect("No register state node found");
+        let regstate = registers_in_err!(self, exi);
         self.remove_value(regstate);
 
         let node = exi;
@@ -763,7 +762,10 @@ impl SSA for SSAStorage {
     }
 
     fn registers_in(&self, exi: Self::ActionRef) -> Option<Self::ValueRef> {
-        assert!(self.is_action(exi));
+        if !self.is_action(exi) {
+            radeco_err!("Error: {:?} should be action", exi);
+            return None;
+        }
         let i = exi;
         let mut walk = self.g.neighbors_directed(i, EdgeDirection::Outgoing).detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
@@ -932,8 +934,7 @@ impl SSAMod for SSAStorage {
     }
 
     fn set_register(&mut self, i: Self::ValueRef, regname: String) {
-        let reg_state = self.registers_in(self.entry_node)
-                                .expect("No register state node found");
+        let reg_state = registers_in_err!(self, self.entry_node);
         let operands = self.operands_of(reg_state);
         for op in operands {
             if Some(regname.clone()) == self.comment(op) {
@@ -1177,10 +1178,7 @@ impl SSAWalk<Walker> for SSAStorage {
         {
             let mut visited = HashSet::new();
             let mut explorer = VecDeque::new();
-            explorer.push_back(self.entry_node().unwrap_or_else(|| {
-                radeco_err!("Incomplete CFG graph");
-                self.invalid_value().unwrap()
-            }));
+            explorer.push_back(entry_node_err!(self));
             let nodes = &mut walker.nodes;
             while let Some(ref block) = explorer.pop_front() {
                 if visited.contains(block) {
@@ -1219,10 +1217,7 @@ impl SSAWalk<Walker> for SSAStorage {
             let mut visited = HashSet::new();
             let mut explorer = BinaryHeap::<InorderKey>::new();
             explorer.push(InorderKey::new(MAddress::new(0, 0),
-                self.entry_node().unwrap_or_else(|| {
-                    radeco_err!("Incomplete CFG graph");
-                    self.invalid_value().unwrap()
-                })));
+                entry_node_err!(self)));
             let nodes = &mut walker.nodes;
             while let Some(ref key) = explorer.pop() {
                 let block = &key.value;

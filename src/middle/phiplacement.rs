@@ -559,10 +559,8 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn sync_register_state(&mut self, block: T::ActionRef) {
-        let rs = self.ssa.registers_in(block).unwrap_or_else(|| {
-            radeco_err!("No register state node found");
-            self.ssa.invalid_value().unwrap()
-        });
+        let rs = registers_in_err!(self.ssa, block,
+            self.ssa.invalid_value().unwrap());
         for var in 0..self.variable_types.len() {
             let mut addr = self.addr_of(&block);
             let val = self.read_variable(&mut addr, var as u64);
@@ -932,7 +930,7 @@ impl<'a, T> PhiPlacer<'a, T>
     // with exit_node
     pub fn gather_exits(&mut self) {
         let blocks = self.ssa.blocks();
-        let exit_node = self.ssa.exit_node().expect("Incomplete CFG graph");
+        let exit_node = exit_node_err!(self.ssa);
         for block in blocks {
             if self.ssa.succs_of(block).len() == 0 {
                 self.ssa.insert_control_edge(block, exit_node, UNCOND_EDGE);

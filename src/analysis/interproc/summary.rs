@@ -39,15 +39,9 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
             {
                 let locals = rfn.locals().iter().map(|x| x.0).collect::<HashSet<_>>();
                 let ssa = rfn.ssa_ref();
-                let start_block = ssa.entry_node().unwrap_or_else(|| {
-                    radeco_err!("Incomplete CFG graph");
-                    ssa.invalid_action().unwrap()
-                });
                 // Get register state at the start block.
-                let rs = ssa.registers_in(start_block).unwrap_or_else(|| {
-                                    radeco_err!("No register state node found");
-                                    ssa.invalid_value().unwrap()
-                                });
+                let rs = registers_in_err!(ssa, entry_node_err!(ssa),
+                    ssa.invalid_value().unwrap());
                 // For every register in the starting block.
                 for (i, reg) in ssa.operands_of(rs).iter().enumerate() {
                     // Get the uses of the register
@@ -74,14 +68,8 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                         }
                     }
                 }
-                let exit_block = ssa.exit_node().unwrap_or_else(|| {
-                    radeco_err!("Incomplete CFG graph");
-                    ssa.invalid_action().unwrap()
-                });
-                let rs = ssa.registers_in(exit_block).unwrap_or_else(|| {
-                    radeco_err!("No register state node found");
-                    ssa.invalid_value().unwrap()
-                });
+                let rs = registers_in_err!(ssa, exit_node_err!(ssa),
+                    ssa.invalid_value().unwrap());
                 for (i, r) in ssa.operands_of(rs).iter().enumerate() {
                     let (insert_r, insert_m) = if let Ok(ref data) = ssa.node_data(*r) {
                         match data.nt {

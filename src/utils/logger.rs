@@ -128,7 +128,7 @@ macro_rules! radeco_err {
     ($fmt:expr, $($arg:tt)*) => ({
         if cfg!(feature = "trace_log") {
             #[cfg(feature="trace_log")]
-            warn!("{}", format_args!($fmt, $($arg)*));
+            error!("{}", format_args!($fmt, $($arg)*));
         }
     });
 }
