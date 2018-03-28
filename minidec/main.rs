@@ -10,18 +10,15 @@ mod cli;
 use std::env;
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process;
-use petgraph::graph::NodeIndex;
 
-use r2pipe::r2::R2;
-use r2api::api_trait::R2Api;
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::sccp;
 //use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
 //use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
-use radeco_lib::frontend::radeco_containers::{ProjectLoader, RadecoProject, RadecoModule};
+use radeco_lib::frontend::radeco_containers::ProjectLoader;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ir_reader::parse_il;
@@ -187,7 +184,10 @@ fn main() {
                 writeln!(ff, "{}", res).expect("Error writing to file");
                 writeln!(ffm, "{}", res).expect("Error writing to file");
                 // Set as a comment in radare2
-                rmod.source.as_mut().unwrap().send(&format!("CC, {} @ {}", fname.to_str().unwrap(), addr));
+                match rmod.source.as_mut().unwrap().send(format!("CC, {} @ {}", fname.to_str().unwrap(), addr)) {
+                    Ok(_) => {},
+                    Err(e) => println!("{:?}", e),
+                };
                 res
             };
         
@@ -218,7 +218,10 @@ fn main() {
             }
         }
 
-        rmod.source.as_mut().unwrap().send("e scr.color=true");
+        match rmod.source.as_mut().unwrap().send("e scr.color=true".to_string()) {
+            Ok(()) => {},
+            Err(e) => println!("{:?}", e),
+        }
     }
 }
 

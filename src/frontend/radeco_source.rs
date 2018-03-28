@@ -11,7 +11,6 @@ use std::error::Error;
 use std::fmt;
 
 use r2api::api_trait::R2Api;
-use r2pipe::r2::R2;
 use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
 LImportInfo, LExportInfo, LRelocInfo, LEntryInfo, LVarInfo};
 
