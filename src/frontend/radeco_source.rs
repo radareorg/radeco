@@ -55,7 +55,7 @@ pub trait Source {
     fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
     fn raw(&self, cmd: String) -> Result<String, SourceErr> { unimplemented!() }
 
-    fn send(&self, _: &str) -> Result<(), SourceErr> { Ok(()) }
+    fn send(&self, _: String) -> Result<(), SourceErr> { Ok(()) }
 
     // Non essential / functions with default implementation.
     fn function_at(&self, address: u64) -> Result<FunctionInfo, SourceErr> {
@@ -123,13 +123,10 @@ pub trait Source {
 // sense to have some sort of cached information so that concurrent reads can occur. This should
 // be invalidated whenever some information is exported back to radare or some analysis is run on 
 // r2.
-//TODO Use generic type instead of Rc<RefCell<R2>>
-// pub type WrappedR2Api<R> = Rc<RefCell<R>>;
-pub type WrappedR2Api = Rc<RefCell<R2>>;
+pub type WrappedR2Api<R> = Rc<RefCell<R>>;
 
 // Implementation of `Source` trait for R2.
-//TODO impl<R: R2Api> Source for WrappedR2Api<R> {
-impl Source for WrappedR2Api {
+impl<R: R2Api> Source for WrappedR2Api<R> {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.fn_list()?)
     }
@@ -191,15 +188,11 @@ impl Source for WrappedR2Api {
     }
 
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {
-        //FIXME issue119
-        // Ok(self.try_borrow_mut()?.raw(cmd))
-        Ok("".to_string())
+        Ok(self.try_borrow_mut()?.raw(cmd))
     }
 
-    fn send(&self, s: &str) -> Result<(), SourceErr> {
-        //XXX Sould return Result<String, SourceErr>?
-        let mut self_mut = self.try_borrow_mut()?;
-        R2::send(&mut self_mut, s);
+    fn send(&self, s: String) -> Result<(), SourceErr> {
+        let _ = self.try_borrow_mut()?.raw(s);
         Ok(())
     }
 }
@@ -286,10 +279,8 @@ impl Source for FileSource {
     }
 }
 
-// impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
-//     fn from(mut r2: WrappedR2Api<R>) -> FileSource {
-impl From<WrappedR2Api> for FileSource {
-    fn from(mut r2: WrappedR2Api) -> FileSource {
+impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
+    fn from(mut r2: WrappedR2Api<R>) -> FileSource {
         let bin_info = r2.borrow_mut().bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
         let fname = Path::new(&fname).file_stem().unwrap();
