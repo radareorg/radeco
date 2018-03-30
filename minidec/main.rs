@@ -114,6 +114,7 @@ fn main() {
                 println!("  [*] Eliminating More DeadCode");
                 dce::collect(&mut ssa);
             }
+            *rfn.ssa_mut() = ssa;
             {
                 // Common SubExpression Elimination (cse)
                 println!("  [*] Eliminating Common SubExpressions");
