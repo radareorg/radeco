@@ -1041,8 +1041,26 @@ impl RadecoFunction {
         &mut self.bindings
     }
 
-    pub fn call_sites(&self, call_graph: &CallGraph) -> CallContextInfo {
-        let idx = call_graph.node_indices()
+    fn is_addr_in(&self, addr: u64) -> bool {
+        self.offset <= addr && addr <= self.offset + self.size
+    }
+
+    pub fn call_sites(&self, call_graph: &CallGraph) -> Vec<CallContextInfo> {
+        let indices = self.call_refs(call_graph);
+        indices.into_iter().filter_map(|idx| {
+            // TODO
+            let map = Vec::new();
+            let csite_opt = call_graph.node_weight(idx);
+            csite_opt.map(|csite| {
+                CallContextInfo {
+                    map: map,
+                    csite_node: idx,
+                    csite: *csite,
+                }
+            })
+        }).collect::<Vec<_>>()
+    }
+
             .filter(|n| {
                 if let Some(node) = call_graph.node_weight(*n) {
                     *node == self.offset
