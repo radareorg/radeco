@@ -148,7 +148,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     pub fn gather_variables(&mut self,
                         datafers: &Vec<u64>,
                         locals: &Vec<LVarInfo>,
-                        callrefs: &CallContextInfo) {
+                        callrefs: &Vec<NodeIndex>) {
         radeco_trace!("MemorrySSA|Get datafers: {:?}", datafers);
         // datafers is coming from RadecoFunctoin::datafers
         let mut gvars: Vec<VariableType> 
@@ -170,8 +170,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         radeco_trace!("MemorrySSA|Get callrefs: {:?}", callrefs);
         // callrefs is coming from RadecoFunctoin::call_ctx::ssa_ref
         let mut evars: Vec<VariableType>
-            = callrefs.map.clone().into_iter()
-                        .map(|(x, _)| VariableType::Extra(x))
+            = callrefs.clone().into_iter()
+                        .map(|x| VariableType::Extra(x))
                         .collect();
         self.variables.append(&mut evars);
 

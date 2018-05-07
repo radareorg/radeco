@@ -135,7 +135,7 @@ fn main() {
                     println!("  [*] Generating Memory SSA");
                     let mut mssa = MemorySSA::new(rfn.ssa());
                     mssa.gather_variables(rfn.datarefs(), &rfn.locals(),
-                                          &rfn.call_sites(&rmod.callgraph));
+                                          &rfn.call_refs(&rmod.callgraph));
                     mssa.run();
                     mssa
                 };

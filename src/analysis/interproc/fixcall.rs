@@ -196,8 +196,12 @@ impl<'a> CallFixer<'a> {
         }
         let call_info: Vec<(LValueRef, Vec<String>)> = {
             let rfn = self.rmod.functions.get(rfn_addr).unwrap();
-            let call_sites = rfn.call_sites(&self.rmod.callgraph).clone();
-            self.preserves_for_call_context(call_sites)
+            let callees = rfn.call_refs(&self.rmod.callgraph).clone();
+            let addr_callees = callees.into_iter()
+                .filter_map(|node| {
+                    self.rmod.callgraph.node_weight(node).map(|a| (*a, node))
+                }).collect::<Vec<_>>();
+            self.preserves_for_call_context(addr_callees)
         };
         radeco_trace!("CallFixer|Call site: {:?}", call_info);
 
@@ -397,25 +401,25 @@ impl<'a> CallFixer<'a> {
 
     // Get callee's node and its preserved registers
     fn preserves_for_call_context(&self, 
-            call_context: CallContextInfo)
+            callees: Vec<(u64, NodeIndex)>)
             -> Vec<(NodeIndex, Vec<String>)>
     {
         let mut result: Vec<(NodeIndex, Vec<String>)> = Vec::new();
 
-        for (_, callee) in call_context.map {
+        for (callee, node) in callees.into_iter() {
             let mut preserves: Vec<String> = Vec::new();
-            if let Some(rfn) = self.rmod.functions.get(&call_context.csite) {
+            if let Some(rfn) = self.rmod.functions.get(&callee) {
                 // Callee is man made function
                 for bind in rfn.bindings().into_iter() {
                     if bind.is_preserved() {
                         preserves.push(bind.name().to_string());
                     }
                 }
-                result.push((callee, preserves));
+                result.push((node, preserves));
             } else {
                 // Callee is library function
                 let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
-                result.push((callee, bp_name));
+                result.push((node, bp_name));
             }
         }
 
