@@ -1047,17 +1047,22 @@ impl RadecoFunction {
 
     pub fn call_sites(&self, call_graph: &CallGraph) -> Vec<CallContextInfo> {
         let indices = self.call_refs(call_graph);
-        indices.into_iter().filter_map(|idx| {
-            // TODO
-            let map = Vec::new();
-            let csite_opt = call_graph.node_weight(idx);
-            csite_opt.map(|csite| {
-                CallContextInfo {
-                    map: map,
-                    csite_node: idx,
-                    csite: *csite,
-                }
-            })
+        indices.into_iter().map(|idx| {
+            let context_opt = call_graph.edges_directed(idx, Direction::Outgoing)
+                .into_iter()
+                .map(|e| e.weight().clone())
+                .next();
+            match context_opt {
+                Some(context) => context,
+                None => {
+                    radeco_warn!("No CallContextInfo found @ {:}", idx);
+                    CallContextInfo {
+                        map: Vec::new(),
+                        csite_node: idx,
+                        csite: *call_graph.node_weight(idx).unwrap_or(&0),
+                    }
+                },
+            }
         }).collect::<Vec<_>>()
     }
 
