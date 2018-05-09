@@ -10,9 +10,16 @@ use petgraph::prelude::*;
 
 use std::collections::HashMap;
 
+/// For every [`OpCall`] SSA node in every function, try to find that call
+/// site's corresponding edge in [the callgraph] and replace the "target"
+/// operand of the SSA node with a constant value for the address of the actual
+/// call target.
+///
+/// [`OpCall`]: ir::MOpcode::OpCall
+/// [the callgraph]: RadecoModule::callgraph
 pub fn go(rmod: &mut RadecoModule) -> () {
     for rfun in rmod.functions.values_mut() {
-        go_fn(rfun, &rmod.callgraph)
+        go_fn(rfun, &rmod.callgraph);
     }
 }
 
@@ -58,4 +65,3 @@ fn fix_call_site(
     }
     Some(())
 }
-
