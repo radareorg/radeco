@@ -1005,10 +1005,6 @@ impl RadecoModule {
     pub fn sections(&self) -> &Arc<Vec<LSectionInfo>> {
         &self.sections
     }
-
-    pub fn callgraph(&self) -> &CallGraph {
-        &self.callgraph
-    }
 }
 
 impl RadecoFunction {
