@@ -175,7 +175,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             // TODO: Currently, there is nothing to set this information inside radeco-lib (as we do
             // not analyze dependencies yet). This phase is only useful if another analysis pass
             // already preloads this information.
-            let callgraph = rmod.callgraph();
+            let callgraph = &rmod.callgraph;
             for (plt, imp) in rmod.imports.iter() {
                 let current_fn = imp.rfn.borrow_mut();
                 let current_fn_node = current_fn.cgid();
@@ -200,7 +200,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                     infos.entry(*current_offset).or_insert(Vec::new()).push(this_info);
                 }
                 // Get callsite information for every callee of current function
-                let callgraph = rmod.callgraph();
+                let callgraph = &rmod.callgraph;
                 let current_fn_node = current_fn.cgid();
 
                 Self::propagate_down_callgraph(&current_fn_node,
