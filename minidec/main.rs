@@ -65,6 +65,12 @@ fn main() {
             let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
             callfixer.rounded_analysis();
         }
+
+        // Fix call sites
+        {
+            radeco_lib::analysis::functions::fix_ssa_opcalls::go(rmod);
+        }
+
         // Filter the data if the user provided some args to be matched upon
         let matched_func_addrs = if requested_functions.len() != 0 {
  

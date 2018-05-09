@@ -409,7 +409,7 @@ impl<'a> ProjectLoader<'a> {
                 .load_datarefs()
                 .load_locals()
                 .parallel()
-                .assume_cc()
+                // .assume_cc()
                 .stub_imports());
         }
 
