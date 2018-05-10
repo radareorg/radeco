@@ -65,38 +65,37 @@ impl<'a, T> InterProcAnalyzer<'a, T>
 #[cfg(test)]
 mod test {
     use super::*;
-    use frontend::source::FileSource;
-    // use frontend::source::Source;
-    // TODO
-    use frontend::containers::*;
+    use frontend::radeco_source::FileSource;
+    use frontend::radeco_containers::{ProjectLoader, RadecoModule};
     use middle::ir_writer::IRWriter;
     use middle::dce;
     use analysis::interproc::summary;
-    // use r2pipe::r2::R2;
+    use std::rc::Rc;
 
     #[test]
     #[ignore]
     fn ipa_t1() {
-        //let mut r2 = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
-        //r2.init();
-        //let mut fsource = FileSource::from(r2);
+        // let mut rproj = ProjectLoader::new().path("./ct1_sccp_ex.o").load();
         let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
-        let mut rmod = RadecoModule::from(&mut fsource);
-        {
-            analyze_module::<_, summary::CallSummary>(&mut rmod);
-        }
-
-        for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
+        let mut rproj = ProjectLoader::new().source(Rc::new(fsource)).load();
+        for mut xy in rproj.iter_mut() {
+            let mut rmod = &mut xy.module;
             {
-                dce::collect(&mut rfn.ssa);
+                analyze_module::<summary::CallSummary>(&mut rmod);
             }
-            //println!("Binds: {:?}", rfn.bindings.bindings());
-            println!("Info for: {:#x}", addr);
-            println!("Local Variable info: {:#?}", rfn.locals());
-            println!("Arg info: {:#?}", rfn.args());
-            //println!("Returns info: {:?}", rfn.returns());
-            let mut writer: IRWriter = Default::default();
-            println!("{}", writer.emit_il(Some(rfn.name.clone()), &rfn.ssa));
+
+            for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
+                {
+                    dce::collect(rfn.ssa_mut());
+                }
+                //println!("Binds: {:?}", rfn.bindings.bindings());
+                println!("Info for: {:#x}", addr);
+                println!("Local Variable info: {:#?}", rfn.locals());
+                println!("Arg info: {:#?}", rfn.args());
+                //println!("Returns info: {:?}", rfn.returns());
+                let mut writer: IRWriter = Default::default();
+                println!("{}", writer.emit_il(Some(rfn.name.clone().to_string()), rfn.ssa()));
+            }
         }
     }
 }

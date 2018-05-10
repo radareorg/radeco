@@ -8,8 +8,7 @@ use std::collections::HashMap;
 use frontend::radeco_containers::{RadecoModule, RadecoFunction};
 use backend::lang_c::c_simple::{CAST, Ty, BTy};
 
-#[derive(Clone, Debug, Default)]
-pub struct CWriter {
+#[derive(Clone, Debug, Default)] pub struct CWriter {
     c_ast: HashMap<u64, CAST>,
 }
 
@@ -75,35 +74,38 @@ impl CWriter {
 #[cfg(test)]
 mod test {
     use super::*;
-    // use frontend::containers::RadecoFunction;
-    // use frontend::source::FileSource;
-    use frontend::containers::RadecoModule;
     use middle::dce;
+    use frontend::radeco_source::FileSource;
+    use frontend::radeco_containers::{ProjectLoader, RadecoModule};
     use analysis::interproc::interproc::analyze_module;
     use analysis::interproc::summary;
     use r2pipe::r2::R2;
     use r2api::api_trait::R2Api;
+    use std::rc::Rc;
 
     #[test]
     #[ignore]
     // Incomplete testcase
     fn test_emit_c() {
-        //let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
-        let mut fsource = R2::new(Some("./ct1_sccp_ex.o")).expect("Failed to open r2");
-        fsource.init();
-        let mut rmod = RadecoModule::from(&mut fsource);
-        for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
-            dce::collect(&mut rfn.ssa);
-        }
+        // let mut fsource = FileSource::open(Some("./test_files/ct1_sccp_ex/ct1_sccp_ex"));
+        // let mut rproj = ProjectLoader::new().source(Rc::new(fsource)).load();
+        let mut rproj = ProjectLoader::new().path("./ct1_sccp_ex.o").load();
+        for mut xy in rproj.iter_mut() {
+            let mut rmod = &mut xy.module;
+            // let mut rmod = RadecoModule::from(&mut fsource);
+            for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
+                dce::collect(rfn.ssa_mut());
+            }
 
-        {
-            analyze_module::<_, summary::CallSummary>(&mut rmod);
-        }
+            {
+                analyze_module::<summary::CallSummary>(&mut rmod);
+            }
 
-        let mut writer = CWriter::new();
-        writer.rmod_to_c_ast(&rmod);
-        let mut res = String::new();
-        writer.emit(&mut res);
-        println!("{}", res);
+            let mut writer = CWriter::new();
+            writer.rmod_to_c_ast(&rmod);
+            let mut res = String::new();
+            writer.emit(&mut res);
+            println!("{}", res);
+        }
     }
 }
