@@ -1090,6 +1090,10 @@ impl RadecoFunction {
         &self.datarefs
     }
 
+    pub fn locals(&self) -> &VarBindings {
+        unimplemented!()
+    }
+
     pub fn args(&self) -> &VarBindings {
         unimplemented!()
     }

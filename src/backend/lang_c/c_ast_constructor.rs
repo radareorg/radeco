@@ -5,7 +5,7 @@
 use std::fmt::Write;
 use std::collections::HashMap;
 
-use frontend::containers::{RModule, RFunction};
+use frontend::radeco_containers::{RadecoModule, RadecoFunction};
 use backend::lang_c::c_simple::{CAST, Ty, BTy};
 
 #[derive(Clone, Debug, Default)]
@@ -21,9 +21,9 @@ impl CWriter {
     }
 
     // Converts argument information inside RFunction into arguments for the C Function.
-    fn add_function_arguments<F: RFunction>(&self, rfn: &F, cast: &mut CAST) {
+    fn add_function_arguments(&self, rfn: &RadecoFunction, cast: &mut CAST) {
         let mut args = Vec::new();
-        for (i, &(_, _)) in rfn.args().iter().enumerate() {
+        for (i, &_) in rfn.args().iter().enumerate() {
             // TODO: Add real type
             args.push((Ty::new(BTy::Int, true, 0), format!("arg_{}", i)));
         }
@@ -31,9 +31,9 @@ impl CWriter {
     }
 
     // Converts local variables information inside RFunction to C variable declarations.
-    fn add_locals<F: RFunction>(&self, rfn: &F, cast: &mut CAST) {
+    fn add_locals(&self, rfn: &RadecoFunction, cast: &mut CAST) {
         let mut locals = Vec::new();
-        for (i, &(_, _)) in rfn.locals().iter().enumerate() {
+        for (i, &_) in rfn.locals().iter().enumerate() {
             locals.push(format!("locals_{}", i));
         }
         // TODO: Add real type
@@ -44,8 +44,8 @@ impl CWriter {
 
     /// Converts a RFunction to CAST and stores it internally.
     /// This can later be retrieved by using the address the key.
-    pub fn rfn_to_c_ast<F: RFunction>(&mut self, rfn: &F, key: u64) {
-        let mut ast = CAST::new(&rfn.fn_name());
+    pub fn rfn_to_c_ast(&mut self, rfn: &RadecoFunction, key: u64) {
+        let mut ast = CAST::new(&rfn.name);
         self.add_function_arguments(rfn, &mut ast);
         self.add_locals(rfn, &mut ast);
         self.c_ast.insert(key, ast);
@@ -53,12 +53,9 @@ impl CWriter {
 
     /// Converts all the functions inside the current RModule to CAST and
     /// stores it internally. This can later be emitted.
-    pub fn rmod_to_c_ast<'a, M: RModule<'a>>(&mut self, rmod: &M) {
-        for ref rfn_idx in rmod.functions() {
-            if let Some(rfn) = rmod.function_by_ref(rfn_idx) {
-                let fn_ref: u64 = (*rfn_idx).into();
-                self.rfn_to_c_ast(rfn, fn_ref);
-            }
+    pub fn rmod_to_c_ast(&mut self, rmod: &RadecoModule) {
+        for (_, ref rfn) in rmod.functions.iter() {
+            self.rfn_to_c_ast(rfn, rfn.offset);
         }
     }
 
