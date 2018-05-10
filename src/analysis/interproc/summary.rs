@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use petgraph::graph::NodeIndex;
 
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::containers::{RModule, RFunction};
+use frontend::radeco_containers::{RadecoModule, RadecoFunction, CGInfo};
 use middle::ssa::ssa_traits::{SSA, NodeType};
 use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
@@ -13,20 +13,20 @@ use middle::ir::MOpcode;
 #[derive(Clone, Debug, Default)]
 pub struct CallSummary { }
 
-impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
+impl InterProcAnalysis for CallSummary {
     fn new() -> CallSummary {
         Default::default()
     }
 
     // Compute fn arguments, modifides and returns lists.
     // TODO: Add support for memory args and modifides.
-    fn transfer(&mut self, rmod: &mut T, fn_ref: &T::FnRef) {
+    fn transfer(&mut self, rmod: &mut RadecoModule, fn_ref: u64) {
         {
             // fn arguments.
             let mut args = HashSet::new();
             let mut modifides = HashSet::new();
             let mut returns = HashSet::new();
-            let rfn = rmod.function_by_ref_mut(fn_ref);
+            let rfn = rmod.functions.get_mut(&fn_ref);
             if rfn.is_none() {
                 // Nothing to analyze. This is not a function defined inside the loaded binary. So
                 // it must be an import. Use the calling convention information for analysis and
@@ -105,15 +105,16 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
     // Iterate through all the call-sites in a function(`fn_ref`) and pull in changes from the
     // callees. i.e. Replace args_list by args_list in the callee and replace modifides by the
     // values the callee actually modifies.
-    fn propagate(&mut self, rmod: &mut T, fn_ref: &T::FnRef) {
-        if let Some(rfn) = rmod.function_by_ref(fn_ref) {
-            for csite in rfn.call_sites() {
-                let callee = csite.callee.unwrap_or_else(|| {
+    fn propagate(&mut self, rmod: &mut RadecoModule, fn_ref: u64) {
+        if let Some(rfn) = rmod.functions.get(&fn_ref) {
+            for context in rfn.call_sites(rmod.callgraph()) {
+                let callee = rmod.callgraph().callees(context.csite_node).next()
+                    .map(|x| x.0).unwrap_or_else(|| {
                     radeco_err!("Call site cannot have callee as `None`");
                     0
                 });
-                let args = if let Some(callee) = rmod.function_by_ref(&callee.into()) {
-                    callee.args()
+                let args = if let Some(callee) = rmod.functions.get(&callee) {
+                    callee.args().clone()
                 } else {
                     // XXX
                     // No information is inferable. Load data from r2. For now, we use fake data.
