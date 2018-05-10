@@ -513,7 +513,6 @@ impl IRWriter {
 
         for (i, reg) in ssa.operands_of(final_state).iter().enumerate() {
             let reg_assign = match ssa.g[*reg] {
-                NodeData::Comment(_, _) => String::new(),
                 _ => {
                     format!("${} = {};",
                             ssa.regnames.get(i).unwrap_or_else(|| {
