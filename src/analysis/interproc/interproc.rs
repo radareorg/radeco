@@ -2,32 +2,30 @@
 
 use std::collections::HashSet;
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::containers::RModule;
+use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 
 #[derive(Debug)]
-pub struct InterProcAnalyzer<'a, 'b, M, T>
-    where M: 'a + RModule<'b>,
-          T: InterProcAnalysis<'b, M>
+pub struct InterProcAnalyzer<'a, T>
+    where T: InterProcAnalysis
 {
-    analyzed: HashSet<M::FnRef>,
-    rmod: &'a mut M,
+    analyzed: HashSet<u64>,
+    rmod: &'a mut RadecoModule,
     analyzer: T,
 }
 
-pub fn analyze_module<'a, 'b, M, A>(ssa: &'a mut M) 
-    where M: RModule<'b>,
-          A: InterProcAnalysis<'b, M> {
-    let mut ipa = InterProcAnalyzer::<M, A>::new(ssa);
-    for f in &ipa.rmod.functions() {
-        ipa.analyze_function(f);
+pub fn analyze_module<'a, A>(ssa: &'a mut RadecoModule)
+    where A: InterProcAnalysis {
+    let mut ipa = InterProcAnalyzer::<'a, A>::new(ssa);
+    let fs = ipa.rmod.functions.clone();
+    for (_, f) in fs {
+        ipa.analyze_function(f.offset);
     }
 }
 
-impl<'a,'b, M, T> InterProcAnalyzer<'a, 'b, M, T>
-    where M: RModule<'b>,
-          T: InterProcAnalysis<'b, M>,
+impl<'a, T> InterProcAnalyzer<'a, T>
+    where T: InterProcAnalysis
 {
-    pub fn new(rmod: &'a mut M) -> InterProcAnalyzer<'a, 'b, M, T> {
+    pub fn new(rmod: &'a mut RadecoModule) -> InterProcAnalyzer<'a, T> {
         InterProcAnalyzer {
             analyzed: HashSet::new(),
             rmod: rmod,
@@ -35,15 +33,17 @@ impl<'a,'b, M, T> InterProcAnalyzer<'a, 'b, M, T>
         }
     }
 
-    fn analyze_function(&mut self, rfn: &M::FnRef) {
+    fn analyze_function(&mut self, func_addr: u64) {
         // If the current function has already been analyzed, return.
-        if self.analyzed.contains(rfn) {
+        if self.analyzed.contains(&func_addr) {
             return;
         }
-
         // Analyze all children of the present node in call graph.
-        let callees = self.rmod.callees_of(rfn);
-        for call in &callees {
+        let callees = self.rmod.function(func_addr).map(|rfn| {
+            self.rmod.callees_of(rfn)
+        }).unwrap_or(Vec::new());
+
+        for (call, _) in callees {
             self.analyze_function(call);
         }
 
@@ -52,13 +52,13 @@ impl<'a,'b, M, T> InterProcAnalyzer<'a, 'b, M, T>
         // TODO.
         {
             // Pull changes from callee.
-            self.analyzer.propagate(self.rmod, rfn);
+            self.analyzer.propagate(self.rmod, func_addr);
             // Analyze transfer function for the current function.
-            self.analyzer.transfer(self.rmod, rfn);
+            self.analyzer.transfer(self.rmod, func_addr);
         }
 
         // Insert the current function into analyzed set.
-        self.analyzed.insert(*rfn);
+        self.analyzed.insert(func_addr);
     }
 }
 

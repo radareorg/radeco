@@ -1008,6 +1008,16 @@ impl RadecoModule {
     pub fn sections(&self) -> &Arc<Vec<LSectionInfo>> {
         &self.sections
     }
+
+    pub fn callees_of(&self, rfn: &RadecoFunction) -> Vec<(u64, NodeIndex)> {
+        // TODO More efficient implementation
+        let csite_nodes = rfn.call_sites(&self.callgraph)
+            .into_iter()
+            .map(|c| c.csite_node);
+        csite_nodes.flat_map(|cn| {
+            self.callgraph.callees(cn).collect::<Vec<_>>()
+        }).collect::<Vec<_>>()
+    }
 }
 
 impl RadecoFunction {
@@ -1080,8 +1090,28 @@ impl RadecoFunction {
         &self.datarefs
     }
 
-    pub fn locals(&self) -> &Vec<LVarInfo> {
-        &self.locals
+    pub fn args(&self) -> &VarBindings {
+        unimplemented!()
+    }
+
+    pub fn set_args(&mut self, args: &Vec<usize>) {
+        unimplemented!()
+    }
+
+    pub fn set_modifides(&mut self, locals: &Vec<usize>) {
+        unimplemented!()
+    }
+
+    pub fn set_locals(&mut self, locals: &Vec<usize>) {
+        unimplemented!()
+    }
+
+    pub fn set_returns(&mut self, returns: &Vec<usize>) {
+        for i in returns {
+            if let Some(ref mut var) = self.bindings.iter_mut().nth(*i) {
+                var.btype = BindingType::Return;
+            }
+        }
     }
 }
 
