@@ -136,16 +136,17 @@ fn main() {
                 }
             }
             {
-                // Building memory SSA.
-                let _memory_ssa = {
-                    // Generate MemorySSA
-                    println!("  [*] Generating Memory SSA");
-                    let mut mssa = MemorySSA::new(rfn.ssa());
-                    mssa.gather_variables(rfn.datarefs(), &rfn.locals(),
-                                          &rfn.call_refs(&rmod.callgraph));
-                    mssa.run();
-                    mssa
-                };
+                // TODO
+                // // Building memory SSA.
+                // let _memory_ssa = {
+                //     // Generate MemorySSA
+                //     println!("  [*] Generating Memory SSA");
+                //     let mut mssa = MemorySSA::new(rfn.ssa());
+                //     mssa.gather_variables(rfn.datarefs(), &rfn.locals(),
+                //                           &rfn.call_refs(&rmod.callgraph));
+                //     mssa.run();
+                //     mssa
+                // };
             }
             //if false {
             //    if (!rfn.name.eq("sym.main")) & (!rfn.name.eq("main")) {
