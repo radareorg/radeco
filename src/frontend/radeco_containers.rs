@@ -315,8 +315,6 @@ pub struct RadecoFunction {
     cgid: NodeIndex,
     /// Variable bindings
     bindings: VarBindings,
-    /// Local Variables of this function
-    locals: Vec<LVarInfo>,
 }
 
 #[derive(Default)]
@@ -813,8 +811,12 @@ impl<'a> ModuleLoader<'a> {
                     if let Some(mut rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
                         let locals_res = self.source.as_ref()
                             .map(|s| s.locals_of(rfn.offset));
-                        rfn.locals = match locals_res {
-                            Some(Ok(locals)) => locals,
+                        let mut locals = match locals_res {
+                            Some(Ok(locals)) => {
+                                // TODO
+                                radeco_err!("Not implemented yet");
+                                Vec::new()
+                            },
                             Some(Err(e)) => {
                                 radeco_warn!("{:?}", e);
                                 Vec::new()
@@ -824,6 +826,7 @@ impl<'a> ModuleLoader<'a> {
                                 Vec::new()
                             },
                         };
+                        rfn.bindings_mut().append(&mut locals);
                     }
                 }
             }
