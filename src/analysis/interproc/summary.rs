@@ -37,8 +37,12 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
             }
             let rfn = rfn.unwrap();
             {
-                let locals = rfn.locals().iter().map(|x| x.0).collect::<HashSet<_>>();
-                let ssa = rfn.ssa_ref();
+                let locals = rfn.bindings().iter()
+                    .enumerate()
+                    .filter(|&(_, l)| l.btype.is_local())
+                    .map(|(i, _)| i)
+                    .collect::<HashSet<_>>();
+                let ssa = rfn.ssa();
                 // Get register state at the start block.
                 let rs = registers_in_err!(ssa, entry_node_err!(ssa),
                     ssa.invalid_value().unwrap());
