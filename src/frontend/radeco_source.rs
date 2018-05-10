@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt;
 
 use r2api::api_trait::R2Api;
-use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
+use r2api::structs::{FunctionInfo, LCCInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
 LImportInfo, LExportInfo, LRelocInfo, LEntryInfo, LVarInfo};
 
 #[derive(Debug)]
@@ -52,6 +52,7 @@ pub trait Source {
     fn disassemble_n_bytes(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn disassemble_n_insts(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
+    fn cc_info_of(&self, start_addr: u64) -> Result<LCCInfo, SourceErr> { unimplemented!() }
     fn raw(&self, cmd: String) -> Result<String, SourceErr> { unimplemented!() }
 
     fn send(&self, _: String) -> Result<(), SourceErr> { Ok(()) }
@@ -184,6 +185,10 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
 
     fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.locals_of(start_addr)?)
+    }
+
+    fn cc_info_of(&self, start_addr: u64) -> Result<LCCInfo, SourceErr> {
+        Ok(self.try_borrow_mut()?.cc_info_of(start_addr)?)
     }
 
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {

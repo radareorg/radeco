@@ -49,7 +49,7 @@ use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
 use r2api::structs::{LOpInfo, LRegInfo, LSymbolInfo, LRelocInfo, LImportInfo, LExportInfo,
-                     LSectionInfo, LEntryInfo, LSymbolType, LVarInfo};
+                     LSectionInfo, LEntryInfo, LSymbolType, LVarInfo, LCCInfo};
 
 use r2pipe::r2::R2;
 use rayon::prelude::*;
@@ -114,6 +114,7 @@ pub mod loader_defaults {
                     rfn.offset = function.offset.unwrap();
                     rfn.size = function.size.unwrap();
                     rfn.name = Cow::from(function.name.as_ref().unwrap().to_owned());
+                    rfn.callconv_name = function.calltype.as_ref().unwrap().to_owned();
                     new_fl.functions.insert(rfn.offset, rfn);
                     new_fl.new = new_fl.new + 1;
                 }
@@ -317,6 +318,11 @@ pub struct RadecoFunction {
     bindings: VarBindings,
     /// Local Variables of this function
     locals: Vec<LVarInfo>,
+    /// Calling convention of this function
+    pub callconv: Option<LCCInfo>,
+    /// Name of the calling convention of this function (e.g. amd64, ms, arm64, etc.)
+    // see https://github.com/radare/radare2/tree/9e08da0fa6b6c36edf04db72d22e065ccc90d381/libr/anal/d
+    pub callconv_name: String,
 }
 
 #[derive(Default)]
@@ -707,7 +713,11 @@ impl<'a> ModuleLoader<'a> {
             Ok(import_info) => {
                 rmod.imports = import_info.iter().filter_map(|ii| {
                     if let Some(plt) = ii.plt {
-                        Some((plt, ImportInfo::new_stub(plt, Cow::from(ii.name.as_ref().unwrap().clone()))))
+                        if let Some(LSymbolType::Func) = ii.itype {
+                            Some((plt, ImportInfo::new_stub(plt, Cow::from(ii.name.as_ref().unwrap().clone()))))
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
@@ -752,6 +762,16 @@ impl<'a> ModuleLoader<'a> {
                 .unwrap_or(Vec::new());
         }
 
+        // Load calling conventions for all functions and imports
+        for (&rfn_addr, rfn) in &mut rmod.functions {
+            rfn.callconv = source.cc_info_of(rfn_addr).ok();
+        }
+        for (&imp_addr, imp_info) in &mut rmod.imports {
+            let imp_rfn = &mut *imp_info.rfn.borrow_mut();
+            imp_rfn.callconv = source.cc_info_of(imp_addr).ok();
+            imp_rfn.callconv_name = rmod.functions[&imp_addr].callconv_name.clone();
+        }
+
         // Optionally construct the SSA.
         let reg_p = source.register_profile().expect("Unable to load register profile");
         let sub_reg_f = SubRegisterFile::new(&reg_p);
@@ -792,7 +812,8 @@ impl<'a> ModuleLoader<'a> {
                         if let Some(rfn) = rmod.functions.get_mut(cg_addr) {
                             // Functions defined in this binary
                             rfn.cgid = nidx;
-                        } else if let Some(ifn) = rmod.imports.get_mut(cg_addr) {
+                        }
+                        if let Some(ifn) = rmod.imports.get_mut(cg_addr) {
                             // Handle imports
                             ifn.rfn.borrow_mut().cgid = nidx;
                         }
