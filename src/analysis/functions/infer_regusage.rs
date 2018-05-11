@@ -1,4 +1,4 @@
-//! Infers the calling convention of each function.
+//! Infers how each function uses every register
 
 use frontend::imports::ImportInfo;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
