@@ -13,7 +13,7 @@ use petgraph::prelude::*;
 use petgraph::visit::{DfsPostOrder, VisitMap, Walker};
 
 use std::collections::{hash_map, HashMap, HashSet};
-use std::iter::{Extend, FromIterator};
+use std::iter::{self, Extend, FromIterator};
 
 /// For every function, record which registers it reads and which registers it
 /// preserves.
@@ -71,7 +71,11 @@ impl Analyzer {
                 let imp_rfn = &*imp_info.rfn.borrow();
                 // ignore imports without callconvs
                 let imp_args = imp_rfn.callconv.as_ref()?.args.as_ref()?;
-                let reads: HashSet<_> = imp_args.iter().cloned().collect();
+                let reads: HashSet<_> = imp_args
+                    .iter()
+                    .cloned()
+                    .chain(iter::once("mem".to_owned())) // assume imports read memory
+                    .collect();
                 // r2 doesn't tell us what registers are preserved
                 let preserves = callconv_name_to_preserved_set(&imp_rfn.callconv_name);
                 Some((imp_addr, CallingConvention { reads, preserves }))
@@ -155,7 +159,7 @@ impl Analyzer {
             let reg_idx = ssa.regnames
                 .iter()
                 .position(|x| x == reg_name)
-                .expect("invalid reg name");
+                .unwrap_or(ssa.regnames.len());
             if cc.preserves.contains(reg_name) {
                 ssa.replace_value(use_node, call_reg_map[reg_idx]);
             }
@@ -179,8 +183,10 @@ impl Analyzer {
         let mut preserves = HashSet::new();
 
         // ignore registers not in entry regstate
-        let mut regstate_iter = (0..).zip(exit_regstate).zip(entry_regstate)
-            .filter_map(|((i,x),on)| on.map(|n| (i, n, x)));
+        let mut regstate_iter = (0..)
+            .zip(exit_regstate)
+            .zip(entry_regstate)
+            .filter_map(|((i, x), on)| on.map(|n| (i, n, x)));
 
         for (i, reg_val_entry, reg_val_exit) in regstate_iter {
             if reg_val_exit == reg_val_entry {
@@ -216,14 +222,14 @@ fn register_state_info(
 }
 
 /// Extracts the call target address and the value of all registers
-/// The length of the returned `Vec` is exactly `ssa.regnames.len()`.
+/// The length of the returned `Vec` is exactly `ssa.regnames.len() + 1`.
 /// Returns `None` if the call is indirect or if not all registers have a value.
 fn direct_call_info(
     ssa: &SSAStorage,
     call_node: <SSAStorage as SSA>::ValueRef,
 ) -> Option<(u64, Vec<<SSAStorage as SSA>::ValueRef>)> {
     let mut tgt_opt: Option<u64> = None;
-    let mut reg_opt_map: Vec<Option<_>> = vec![None; ssa.regnames.len()];
+    let mut reg_opt_map: Vec<Option<_>> = vec![None; ssa.regnames.len() + 1];
 
     for (op_idx, op_node) in ssa.sparse_operands_of(call_node) {
         if op_idx == 0 {
