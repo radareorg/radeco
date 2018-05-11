@@ -1,85 +1,82 @@
 //! Infers the calling convention of each function.
 
 use frontend::imports::ImportInfo;
-use frontend::radeco_containers::RadecoModule;
+use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::dce;
 use middle::ir;
-use middle::regfile::SubRegisterFile;
+use middle::regfile::{RegisterId, RegisterUsage, SubRegisterFile};
 use middle::ssa::cfg_traits::*;
 use middle::ssa::ssa_traits::*;
 use middle::ssa::ssastorage::SSAStorage;
 
+use r2api::structs::LCCInfo;
+
 use petgraph::prelude::*;
 use petgraph::visit::{DfsPostOrder, VisitMap, Walker};
 
-use std::collections::{hash_map, HashMap, HashSet};
+use std::collections::{hash_map, BTreeMap, HashMap, HashSet};
 use std::iter::{self, Extend, FromIterator};
 
-/// For every function, record which registers it reads and which registers it
+/// For every function, patch all of its call sites to ignore registers that the
+/// callee doesn't read and to preserve register values that the callee
+/// preserves. Then, record which registers it reads and which registers it
 /// preserves.
+///
+/// After this, all functions should have mutable [`regusage`][RadecoFunction::regusage]s.
 ///
 /// This analysis is super conservative; for example, if a function preserves a
 /// register by pushing it onto the stack and popping it back right before
 /// returning, it is considered to be read and not preserved because we can't
 /// guarantee that that stack location is never subsequently read or modified.
-pub fn go(rmod: &mut RadecoModule) -> () {
-    let mut a = Analyzer::new();
-    a.go(rmod);
-    for (addr, cc) in &a.call_convs {
-        let rfn = &rmod.functions[addr];
+pub fn run(rmod: &mut RadecoModule, reginfo: &SubRegisterFile) -> () {
+    let mut a = Inferer::new();
+    a.run(rmod, reginfo);
+    for (_, rfn) in &rmod.functions {
         eprintln!("{:?} (@ {:#X}):", rfn.name, rfn.offset);
-        eprintln!("  reads: {:?}", cc.reads);
-        eprintln!("  preserves: {:?}", cc.preserves);
+        for (i, regname) in reginfo.whole_names.iter().enumerate() {
+            let rid = RegisterId::from_usize(i);
+            let is_ignored = rfn.regusage.is_ignored(rid);
+            let is_preserved = rfn.regusage.is_preserved(rid);
+            eprintln!(
+                "  {:>8}: {} {}",
+                regname,
+                if is_ignored { 'I' } else { 'R' },
+                if is_preserved { 'P' } else { 'C' }
+            );
+        }
     }
 }
 
-// TODO: index in SubRegisterFile?
-type Reg = String;
-
-#[derive(Debug, Clone)]
-struct CallingConvention {
-    /// (potential) parameters
-    reads: HashSet<Reg>,
-    /// Callee-saved registers
-    preserves: HashSet<Reg>,
+struct Inferer {
+    /// Addresses of the functions we've already analyzed
+    analyzed: HashSet<u64>,
 }
 
-impl CallingConvention {
-    fn is_compatible_with(&self, other: &CallingConvention) -> bool {
-        self.reads.is_subset(&other.reads) && self.preserves.is_superset(&other.preserves)
-    }
-}
-
-struct Analyzer {
-    /// Map from function addresses to their calling convention
-    call_convs: HashMap<u64, CallingConvention>,
-}
-
-impl Analyzer {
-    fn new() -> Analyzer {
-        Analyzer {
-            call_convs: HashMap::new(),
+impl Inferer {
+    fn new() -> Inferer {
+        Inferer {
+            analyzed: HashSet::new(),
         }
     }
 
     /// Calls `patch_fn`, `dce::collect`, and `analyze_fn` on every function,
     /// callees first
-    fn go(&mut self, rmod: &mut RadecoModule) -> () {
+    fn run(&mut self, rmod: &mut RadecoModule, reginfo: &SubRegisterFile) -> () {
         // for imports, *ASSUME* that the callconv that r2 says is correct
-        self.call_convs
-            .extend(rmod.imports.iter().filter_map(|(&imp_addr, imp_info)| {
-                let imp_rfn = &*imp_info.rfn.borrow();
-                // ignore imports without callconvs
-                let imp_args = imp_rfn.callconv.as_ref()?.args.as_ref()?;
-                let reads: HashSet<_> = imp_args
-                    .iter()
-                    .cloned()
-                    .chain(iter::once("mem".to_owned())) // assume imports read memory
-                    .collect();
-                // r2 doesn't tell us what registers are preserved
-                let preserves = callconv_name_to_preserved_set(&imp_rfn.callconv_name);
-                Some((imp_addr, CallingConvention { reads, preserves }))
-            }));
+        {
+            let imp_ru_iter = rmod.imports.iter().filter_map(|(&imp_addr, imp_info)| {
+                let imp_rfn = imp_info.rfn.borrow();
+                let regusage = reginfo.r2callconv_to_register_usage(
+                    imp_rfn.callconv.as_ref()?, // ignore imports without callconvs
+                    &*imp_rfn.callconv_name,
+                )?;
+                Some((imp_addr, regusage))
+            });
+            for (imp_addr, imp_ru) in imp_ru_iter {
+                rmod.functions.get_mut(&imp_addr).unwrap().regusage = imp_ru;
+                self.analyzed.insert(imp_addr);
+            }
+        }
 
         let mut dfs_wi = DfsPostOrder::empty(&rmod.callgraph).iter(&rmod.callgraph);
         // pick a function ...
@@ -90,26 +87,21 @@ impl Analyzer {
                 let fn_addr = rmod.callgraph[fn_to_anal];
 
                 // ignore functions already in `call_convs` (probably because its an import)
-                if !self.call_convs.contains_key(&fn_addr) {
+                if !self.analyzed.contains(&fn_addr) {
+                    self.patch_fn(fn_addr, &mut rmod.functions);
+
                     let rfn = &mut rmod.functions.get_mut(&fn_addr).unwrap();
-
-                    radeco_trace!("patching calls in fn: {}", rfn.name);
-                    self.patch_fn(rfn.ssa_mut());
-
                     dce::collect(rfn.ssa_mut());
                     // TODO: inst_combine
 
-                    radeco_trace!("analyzing fn: {}", rfn.name);
-                    let cc = self.analyze_fn(rfn.ssa()).unwrap_or_else(|| {
+                    let ru = self.analyze_fn(rfn, reginfo).unwrap_or_else(|| {
                         radeco_err!("Failed to analyze fn: {:?} (@ {:#X})", rfn.name, fn_addr);
                         // if analysis failed, default to "reads and clobbers everything"
-                        CallingConvention {
-                            reads: HashSet::from_iter(rfn.ssa().regnames.iter().cloned()),
-                            preserves: HashSet::new(),
-                        }
+                        reginfo.new_register_usage()
                     });
 
-                    self.call_convs.insert(fn_addr, cc);
+                    rfn.regusage = ru;
+                    self.analyzed.insert(fn_addr);
                 }
             }
         }
@@ -118,57 +110,74 @@ impl Analyzer {
     /// Using the callconv info we've gathered so far, patch-up call sites to
     /// to remove arguments that the callee doesn't read and make values in
     /// callee-saved registers be preserved across the call.
-    fn patch_fn(&self, ssa: &mut SSAStorage) -> () {
-        for node in ssa.inorder_walk() {
-            if let Ok(NodeType::Op(ir::MOpcode::OpCall)) = ssa.node_data(node).map(|nd| nd.nt) {
-                self.patch_call_node(ssa, node).unwrap_or_else(|| {
-                    radeco_trace!(
-                        "failed to remove unused args for call at {:#X}",
-                        ssa.address(node).unwrap()
-                    );
-                });
+    fn patch_fn(&self, fn_addr: u64, fn_map: &mut BTreeMap<u64, RadecoFunction>) -> () {
+        radeco_trace!("patching calls in fn: {}", rfn.name);
+        for node in fn_map[&fn_addr].ssa().inorder_walk() {
+            if let Ok(NodeType::Op(ir::MOpcode::OpCall)) =
+                fn_map[&fn_addr].ssa().node_data(node).map(|nd| nd.nt)
+            {
+                self.patch_call_node(node, fn_addr, fn_map)
+                    .unwrap_or_else(|| {
+                        radeco_warn!(
+                            "failed to remove unused args for call at {:#X}",
+                            ssa.address(node).unwrap()
+                        );
+                    });
             }
         }
     }
 
     fn patch_call_node(
         &self,
-        ssa: &mut SSAStorage,
         call_node: <SSAStorage as SSA>::ValueRef,
+        fn_addr: u64,
+        fn_map: &mut BTreeMap<u64, RadecoFunction>,
     ) -> Option<()> {
-        let (call_tgt_addr, call_reg_map) = direct_call_info(ssa, call_node)?; // bail on indirect or weird call
-        let cc = self.call_convs.get(&call_tgt_addr)?; // bail if we have no info about the callee
+        // bail on indirect or weird call
+        let (call_tgt_addr, call_reg_map) = direct_call_info(fn_map[&fn_addr].ssa(), call_node)?;
 
         // remove unread args
         for (reg_idx, &op_node) in (0..).zip(&call_reg_map) {
-            if !cc.reads.contains(reg_idx_to_name(ssa, reg_idx)) {
-                ssa.op_unuse(call_node, op_node);
+            if fn_map[&call_tgt_addr]
+                .regusage
+                .is_ignored(RegisterId::from_usize(reg_idx))
+            {
+                fn_map
+                    .get_mut(&fn_addr)
+                    .unwrap()
+                    .ssa_mut()
+                    .op_unuse(call_node, op_node);
             }
         }
 
         // bridge preserved registers
-        for use_node in ssa.uses_of(call_node) {
-            // TODO: `ssa.registers(use_node)` might be the right thing to use,
-            //       but it sometimes returns two registers which makes no sense
-            //       :shrug:
-            let reg_comment = ssa.comment(use_node).expect("use of call wasn't comment");
-            let reg_name = reg_comment
-                .split('@')
-                .next()
-                .expect("invalid reg comment format");
-            let reg_idx = ssa.regnames
-                .iter()
-                .position(|x| x == reg_name)
-                .unwrap_or(ssa.regnames.len());
-            if cc.preserves.contains(reg_name) {
-                ssa.replace_value(use_node, call_reg_map[reg_idx]);
+        for use_node in fn_map[&fn_addr].ssa().uses_of(call_node) {
+            let reg_idx = match fn_map[&fn_addr]
+                .ssa()
+                .sparse_operands_of(use_node)
+                .as_slice()
+            {
+                &[(reg_idx, _)] => reg_idx,
+                _ => panic!("invalid use of call as operand"),
+            };
+            if fn_map[&call_tgt_addr]
+                .regusage
+                .is_preserved(RegisterId::from_u8(reg_idx))
+            {
+                fn_map
+                    .get_mut(&fn_addr)
+                    .unwrap()
+                    .ssa_mut()
+                    .replace_value(use_node, call_reg_map[reg_idx as usize]);
             }
         }
 
         Some(())
     }
 
-    fn analyze_fn(&self, ssa: &SSAStorage) -> Option<CallingConvention> {
+    fn analyze_fn(&self, rfn: &RadecoFunction, reginfo: &SubRegisterFile) -> Option<RegisterUsage> {
+        eprintln!("analyzing fn: {}", rfn.name);
+        let ssa = rfn.ssa();
         let entry_regstate_node = ssa.registers_in(ssa.entry_node()?)?;
         let exit_regstate_node = ssa.registers_in(ssa.exit_node()?)?;
         // some registers may not be present in the entry node;
@@ -179,8 +188,8 @@ impl Analyzer {
             .into_iter()
             .collect::<Option<_>>()?;
 
-        let mut reads = HashSet::new();
-        let mut preserves = HashSet::new();
+        let mut ret = reginfo.new_register_usage();
+        ret.set_all_ignored();
 
         // ignore registers not in entry regstate
         let mut regstate_iter = (0..)
@@ -190,7 +199,11 @@ impl Analyzer {
 
         for (i, reg_val_entry, reg_val_exit) in regstate_iter {
             if reg_val_exit == reg_val_entry {
-                preserves.insert(reg_idx_to_name(ssa, i as u8).to_owned());
+                eprintln!(
+                    "  set_preserved({})",
+                    ssa.regnames.get(i as usize).map(|x| &**x).unwrap_or("mem")
+                );
+                ret.set_preserved(RegisterId::from_u8(i));
             }
 
             // find all uses, ignoring entry/exit register state
@@ -198,11 +211,11 @@ impl Analyzer {
                 .into_iter()
                 .filter(|&n| n != entry_regstate_node && n != exit_regstate_node);
             if uses_iter.next().is_some() {
-                reads.insert(reg_idx_to_name(ssa, i as u8).to_owned());
+                ret.set_read(RegisterId::from_u8(i));
             }
         }
 
-        Some(CallingConvention { reads, preserves })
+        Some(ret)
     }
 }
 
@@ -243,44 +256,4 @@ fn direct_call_info(
 
     let reg_map_opt: Option<Vec<_>> = reg_opt_map.into_iter().collect();
     Some((tgt_opt?, reg_map_opt?))
-}
-
-fn reg_idx_to_name(ssa: &SSAStorage, reg_idx: u8) -> &str {
-    ssa.regnames
-        .get(reg_idx as usize)
-        .map_or("mem", String::as_str)
-}
-
-// TODO: if r2 ever starts keeping track of preserved registers, use that instead of this
-/// For a given named calling convention, return the set of registers it
-/// preserves across calls (are callee-saved).
-///
-/// This should only be used for imported functions that we can't analyze to
-/// find a more specific calling convention.
-#[cfg_attr(rustfmt, rustfmt_skip)]
-fn callconv_name_to_preserved_set(cc_name: &str) -> HashSet<String> {
-    // see https://github.com/radare/radare2/tree/master/libr/anal/d
-    // for what `cc_name` can be
-    let reg_slice: &[_] = match cc_name {
-        // --- x86[_64] ---
-        // standard for SysV-compatible systems (most modern Unixes)
-        // https://github.com/hjl-tools/x86-psABI/wiki/X86-psABI
-        "amd64" => &["rbx", "rsp", "rbp", "r12", "r13", "r14", "r15"],
-        "cdecl" => &["ebx", "esp", "ebp", "esi", "edi"],
-
-        // standard for Windows
-        // https://en.wikipedia.org/wiki/X86_calling_conventions and https://llvm.org/viewvc/llvm-project/llvm/trunk/lib/Target/X86/X86CallingConv.td?view=markup#l1047
-        "ms" => &["rbx", "rsp", "rbp", "rsi", "rdi", "r12", "r13", "r14", "r15"],
-        "stdcall" => &["ebx", "ebp", "esi", "edi"],
-
-        // --- ARM ---
-        // https://developer.arm.com/docs/ihi0042/latest
-        "arm32" => &["r4", "r5", "r6", "r7", "r8", "r10", "r11", "sp"],
-        // https://developer.arm.com/docs/ihi0055/latest
-        "arm64" => &["x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "fp", "sp"],
-
-        // if we don't recognize `cc_name`, assume all registers are clobbered
-        _ => &[],
-    };
-    reg_slice.into_iter().map(|&x| x.to_owned()).collect()
 }
