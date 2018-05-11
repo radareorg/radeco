@@ -56,6 +56,7 @@ extern crate petgraph;
 extern crate serde_json;
 extern crate num;
 #[macro_use] extern crate lazy_static;
+extern crate fixedbitset;
 
 #[cfg(feature="trace_log")]
 #[macro_use] extern crate log;

@@ -38,7 +38,7 @@ use frontend::ssaconstructor::SSAConstruct;
 use frontend::imports::ImportInfo;
 
 use middle::ir;
-use middle::regfile::SubRegisterFile;
+use middle::regfile::{SubRegisterFile, RegisterUsage};
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, NodeData, NodeType};
 
@@ -318,6 +318,8 @@ pub struct RadecoFunction {
     bindings: VarBindings,
     /// Calling convention of this function
     pub callconv: Option<LCCInfo>,
+    /// Register usage of this function
+    pub regusage: RegisterUsage,
     /// Name of the calling convention of this function (e.g. amd64, ms, arm64, etc.)
     // see https://github.com/radare/radare2/tree/9e08da0fa6b6c36edf04db72d22e065ccc90d381/libr/anal/d
     pub callconv_name: String,
