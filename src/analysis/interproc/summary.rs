@@ -107,8 +107,8 @@ impl InterProcAnalysis for CallSummary {
     // values the callee actually modifies.
     fn propagate(&mut self, rmod: &mut RadecoModule, fn_ref: u64) {
         if let Some(rfn) = rmod.functions.get(&fn_ref) {
-            for context in rfn.call_sites(rmod.callgraph()) {
-                let callee = rmod.callgraph().callees(context.csite_node).next()
+            for context in rfn.call_sites(&rmod.callgraph) {
+                let callee = rmod.callgraph.callees(context.csite_node).next()
                     .map(|x| x.0).unwrap_or_else(|| {
                     radeco_err!("Call site cannot have callee as `None`");
                     0
