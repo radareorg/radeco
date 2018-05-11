@@ -67,7 +67,7 @@ fn main() {
         radeco_lib::analysis::functions::fix_ssa_opcalls::go(rmod);
 
         // Infer calling conventions
-        radeco_lib::analysis::functions::infer_callconv::go(rmod);
+        radeco_lib::analysis::functions::infer_callconv::run(rmod, &*regfile);
 
         // Filter the data if the user provided some args to be matched upon
         let matched_func_addrs = if requested_functions.len() != 0 {

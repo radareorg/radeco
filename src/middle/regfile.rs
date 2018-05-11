@@ -5,14 +5,15 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Contains the struct `SubRegisterFile` which extends `PhiPlacer`s
+//! Contains the struct [`SubRegisterFile`] which extends `PhiPlacer`s
 //! functionality by reads and writes to partial registers.
+//! Also contains the struct [`RegisterUsage`].
 
 use middle::ir;
 
 use middle::ssa::ssa_traits::ValueInfo;
 
-use r2api::structs::LRegInfo;
+use r2api::structs::{LCCInfo, LRegInfo};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -202,5 +203,169 @@ impl SubRegisterFile {
             } else {
                 None
             })))
+    }
+
+    /// Creates a new mutable `RegisterUsage`.
+    /// The returned value says "reads and clobbers everything".
+    pub fn new_register_usage(&self) -> RegisterUsage {
+        let reg_count = self.whole_registers.len() + 1;
+        RegisterUsage {
+            ignores: FixedBitSet::with_capacity(reg_count),
+            preserves: FixedBitSet::with_capacity(reg_count),
+        }
+    }
+
+    /// Converts the given `LCCInfo` imported from r2 to a `RegisterUsage`.
+    /// Returns `None` if the `LCCInfo` contains a register name we don't
+    /// recognize.
+    pub fn r2callconv_to_register_usage(
+        &self,
+        callconv: &LCCInfo,
+        callconv_name: &str,
+    ) -> Option<RegisterUsage> {
+        let reg_count = self.whole_registers.len() + 1;
+
+        let mut ignores = FixedBitSet::with_capacity(reg_count);
+        ignores.set_range(.., true);
+        for regname in callconv.args.as_ref()? {
+            // bail if we don't recognize the register name
+            let reg_id = self.register_id_by_name(regname)?;
+            ignores.set(reg_id as usize, false);
+        }
+        // memory is always read
+        ignores.set(reg_count - 1, false);
+
+        let mut preserves = FixedBitSet::with_capacity(reg_count);
+
+        for regname in callconv_name_to_preserved_list(callconv_name) {
+            let reg_id = self.register_id_by_name(regname)
+                .expect("unknown register in internal preserved list");
+            preserves.set(reg_id as usize, true)
+        }
+
+        Some(RegisterUsage { ignores, preserves })
+    }
+}
+
+/// Opaque identifier for a register in [`SubRegisterFile`]
+#[derive(Copy, Clone, Debug)]
+pub struct RegisterId(u8);
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+impl RegisterId {
+    // TODO: make these private everything uses the new RegisterId API
+    pub fn to_u8(&self) -> u8 { self.0 }
+    pub fn from_u8(i: u8) -> Self { RegisterId(i) }
+    pub fn to_usize(&self) -> usize { self.0 as usize }
+    pub fn from_usize(i: usize) -> Self {
+        assert!(i <= u8::max_value() as usize);
+        RegisterId(i as u8)
+    }
+}
+
+use fixedbitset::FixedBitSet;
+
+/// The set of registers (possibly including the memory "register") that a
+/// function reads and/or preserves.
+///
+/// **Note:** Instances created with [`Default::default`] *cannot be modified*
+/// To create a mutable instance, use [`SubRegisterFile::new_register_usage`].
+///
+/// **Implementation note:** This stores which registers a function *ignores*
+/// instead of what it reads. This is so the `Default` implementation of
+/// "reads and clobbers everything" is safe to assign to unanalyzed functions.
+#[derive(Debug, Clone, Default)]
+pub struct RegisterUsage {
+    /// Registers that are *not* parameters
+    ignores: FixedBitSet,
+    /// Callee-saved registers
+    preserves: FixedBitSet,
+}
+
+impl RegisterUsage {
+    /// Returns `true` if a callee that adheres to `self` can be called by a
+    /// caller that assumes that callee adheres to `other`.
+    pub fn is_compatible_with(&self, other: &RegisterUsage) -> bool {
+        // self.reads.is_subset(&other.reads) && self.preserves.is_superset(&other.preserves)
+        other.ignores.ones().all(|i| self.ignores[i])
+            && other.preserves.ones().all(|i| self.preserves[i])
+    }
+
+    /// Returns if this `RegisterUsage` can be modified.
+    /// If this returns `false`, *calling the `set_*` functions will panic*.
+    pub fn is_mutable(&self) -> bool {
+        self.ignores.len() > 0 && self.preserves.len() > 0
+    }
+
+    pub fn is_ignored(&self, reg_id: RegisterId) -> bool {
+        self.ignores[reg_id.to_usize()]
+    }
+    pub fn is_read(&self, reg_id: RegisterId) -> bool {
+        !self.ignores[reg_id.to_usize()]
+    }
+    pub fn is_preserved(&self, reg_id: RegisterId) -> bool {
+        self.preserves[reg_id.to_usize()]
+    }
+    pub fn is_clobbered(&self, reg_id: RegisterId) -> bool {
+        !self.preserves[reg_id.to_usize()]
+    }
+
+    pub fn set_ignored(&mut self, reg_id: RegisterId) -> () {
+        self.ignores.set(reg_id.to_usize(), true)
+    }
+    pub fn set_read(&mut self, reg_id: RegisterId) -> () {
+        self.ignores.set(reg_id.to_usize(), false)
+    }
+    pub fn set_preserved(&mut self, reg_id: RegisterId) -> () {
+        self.preserves.set(reg_id.to_usize(), true)
+    }
+    pub fn set_clobbered(&mut self, reg_id: RegisterId) -> () {
+        self.preserves.set(reg_id.to_usize(), false)
+    }
+
+    pub fn set_all_ignored(&mut self) -> () {
+        self.ignores.set_range(.., true)
+    }
+    pub fn set_all_read(&mut self) -> () {
+        self.ignores.set_range(.., false)
+    }
+    pub fn set_all_preserved(&mut self) -> () {
+        self.preserves.set_range(.., true)
+    }
+    pub fn set_all_clobbered(&mut self) -> () {
+        self.preserves.set_range(.., false)
+    }
+}
+
+// TODO: if r2 ever starts keeping track of preserved registers, use that instead of this
+/// For a given named calling convention, return the set of registers it
+/// preserves across calls (are callee-saved).
+///
+/// This should only be used for imported functions that we can't analyze to
+/// find a more specific calling convention.
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn callconv_name_to_preserved_list(cc_name: &str) -> &'static [&'static str] {
+    // see https://github.com/radare/radare2/tree/master/libr/anal/d
+    // for what `cc_name` can be
+    match cc_name {
+        // --- x86[_64] ---
+        // standard for SysV-compatible systems (most modern Unixes)
+        // https://github.com/hjl-tools/x86-psABI/wiki/X86-psABI
+        "amd64" => &["rbx", "rsp", "rbp", "r12", "r13", "r14", "r15"],
+        "cdecl" => &["ebx", "esp", "ebp", "esi", "edi"],
+
+        // standard for Windows
+        // https://en.wikipedia.org/wiki/X86_calling_conventions and https://llvm.org/viewvc/llvm-project/llvm/trunk/lib/Target/X86/X86CallingConv.td?view=markup#l1047
+        "ms" => &["rbx", "rsp", "rbp", "rsi", "rdi", "r12", "r13", "r14", "r15"],
+        "stdcall" => &["ebx", "ebp", "esi", "edi"],
+
+        // --- ARM ---
+        // https://developer.arm.com/docs/ihi0042/latest
+        "arm32" => &["r4", "r5", "r6", "r7", "r8", "r10", "r11", "sp"],
+        // https://developer.arm.com/docs/ihi0055/latest
+        "arm64" => &["x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "fp", "sp"],
+
+        // if we don't recognize `cc_name`, assume all registers are clobbered
+        _ => &[],
     }
 }
