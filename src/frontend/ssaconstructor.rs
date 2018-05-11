@@ -224,6 +224,7 @@ impl<'a, T> SSAConstruct<'a, T>
                             // Indirect CF transfer
                             if let Some(ref jump_idx) = rhs {
                                 self.phiplacer.add_indirect_cf(jump_idx, address, UNCOND_EDGE);
+                                self.phiplacer.write_register(address, name, *jump_idx);
                                 // Next instruction should begin in a new block
                                 self.needs_new_block = true;
                             } else {
