@@ -1,4 +1,4 @@
-//! Analyzes which registers are read by each function
+//! Infers the calling convention of each function.
 
 use frontend::imports::ImportInfo;
 use frontend::radeco_containers::RadecoModule;
