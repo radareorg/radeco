@@ -33,7 +33,41 @@ define-fun main(unknown) -> unknown {
         [@0x0005FA.0001] %1: $Unknown64(*?) = {rsi} + #x1;
     exit-node:
     final-register-state:
+        $r15 = {r15};
+        $r14 = {r14};
+        $r13 = {r13};
+        $r12 = {r12};
+        $rbp = {rbp};
+        $rbx = {rbx};
+        $r11 = {r11};
+        $r10 = {r10};
+        $r9 = {r9};
+        $r8 = {r8};
         $rax = %1;
+        $rcx = {rcx};
+        $rdx = {rdx};
+        $rsi = {rsi};
+        $rdi = {rdi};
+        $rip = {rip};
+        $cs = {cs};
+        $cf = {cf};
+        $pf = {pf};
+        $af = {af};
+        $zf = {zf};
+        $sf = {sf};
+        $tf = {tf};
+        $if = {if};
+        $df = {df};
+        $of = {of};
+        $rsp = {rsp};
+        $ss = {ss};
+        $fs_base = {fs_base};
+        $gs_base = {gs_base};
+        $ds = {ds};
+        $es = {es};
+        $fs = {fs};
+        $gs = {gs};
+        $mem = {mem};
 }"#;
 
     #[test]
