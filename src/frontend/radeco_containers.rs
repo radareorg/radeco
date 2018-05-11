@@ -1041,10 +1041,6 @@ impl RadecoFunction {
         &mut self.bindings
     }
 
-    fn is_addr_in(&self, addr: u64) -> bool {
-        self.offset <= addr && addr <= self.offset + self.size
-    }
-
     pub fn call_sites(&self, call_graph: &CallGraph) -> Vec<CallContextInfo> {
         call_graph.edges_directed(self.cgid, Direction::Outgoing)
             .into_iter()
@@ -1052,15 +1048,8 @@ impl RadecoFunction {
             .collect()
     }
 
-    pub fn call_refs(&self, call_graph: &CallGraph) -> Vec<NodeIndex> {
-        call_graph.node_indices()
-            .filter(|n| {
-                if let Some(node) = call_graph.node_weight(*n) {
-                    self.is_addr_in(*node)
-                } else {
-                    false
-                }
-            }).collect::<Vec<_>>()
+    pub fn callees(&self, call_graph: &CallGraph) -> Vec<NodeIndex> {
+        call_graph.callees(self.cgid).map(|(_, n)| n).collect()
     }
 
     pub fn datarefs(&self) -> &Vec<u64> {
