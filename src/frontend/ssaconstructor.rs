@@ -244,7 +244,7 @@ impl<'a, T> SSAConstruct<'a, T>
                     let op_node = self.phiplacer
                         .add_op(&MOpcode::OpStore,
                                 address,
-                                ValueInfo::new_scalar(ir::WidthSpec::Known(0)));
+                                *MEM_VALUEINFO);
                     self.phiplacer.op_use(&op_node,
                                           0,
                                           lhs.as_ref()
@@ -412,7 +412,7 @@ impl<'a, T> SSAConstruct<'a, T>
             let reglen = self.regfile.whole_names.len();
             self.set_mem_id(reglen as u64);
             let mem_comment = self.phiplacer
-                .add_comment(start_address, scalar!(0), "mem".to_owned());
+                .add_comment(start_address, *MEM_VALUEINFO, "mem".to_owned());
             let mem_id = self.mem_id();
             self.phiplacer.write_variable(start_address, mem_id, mem_comment);
         }
@@ -531,6 +531,16 @@ impl<'a, T> SSAConstruct<'a, T>
                             self.phiplacer.op_use(&comment_node, i as u8, &op_call);
                         }
                     }
+
+                    // Assume every function call reads from and writes to memory.
+                    let mem_id = self.mem_id();
+                    let mem_node = self.phiplacer.read_variable(&mut current_address, mem_id);
+                    self.phiplacer.op_use(&op_call, (mem_id + 1) as u8, &mem_node);
+                    let new_mem_comment = format!("{}@{}", "mem", current_address);
+                    let comment_node = self.phiplacer
+                        .add_comment(current_address, *MEM_VALUEINFO, new_mem_comment);
+                    self.phiplacer.write_variable(current_address, mem_id, comment_node);
+                    self.phiplacer.op_use(&comment_node, mem_id as u8, &op_call);
 
                     // If we're using CC, we assume that we know the register that corresponds to
                     // the return value, so we write this register with the output from `OpCall`
@@ -861,4 +871,9 @@ mod test {
         let mut writer: IRWriter = Default::default();
         println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
     }
+}
+
+lazy_static! {
+    /// A `ValueInfo` for `{mem}` comments
+    static ref MEM_VALUEINFO: ValueInfo = scalar!(0);
 }
