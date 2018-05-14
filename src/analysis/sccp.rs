@@ -339,7 +339,7 @@ impl<T> Analyzer<T>
             opcode
         } else {
             radeco_err!("Found something other than an expression!");
-            MOpcode::Invalid
+            MOpcode::OpInvalid
         };
 
         if let MOpcode::OpConst(v) = opcode {

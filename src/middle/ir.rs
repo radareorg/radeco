@@ -138,7 +138,6 @@ pub enum MOpcode {
     OpXor,
     // Zero Extend to width
     OpZeroExt(u16),
-    Invalid,
 }
 
 impl MOpcode {
@@ -165,9 +164,7 @@ impl MOpcode {
             MOpcode::OpAnd |
             MOpcode::OpOr |
             MOpcode::OpXor |
-            MOpcode::OpCmp |
-            MOpcode::OpGt |
-            MOpcode::OpLt => true,
+            MOpcode::OpCmp => true,
             _ => false,
         }
     }
@@ -223,11 +220,10 @@ impl MOpcode {
             MOpcode::OpRol => (Cow::from("OpRol"), MArity::Binary),
             MOpcode::OpRor => (Cow::from("OpRor"), MArity::Binary),
             MOpcode::OpSignExt(_) => (Cow::from("OpSignExt"), MArity::Unary),
-            MOpcode::OpStore => (Cow::from("OpStore"), MArity::Binary),
+            MOpcode::OpStore => (Cow::from("OpStore"), MArity::Ternary),
             MOpcode::OpSub => (Cow::from("OpSub"), MArity::Binary),
             MOpcode::OpXor => (Cow::from("OpXor"), MArity::Binary),
             MOpcode::OpZeroExt(_) => (Cow::from("OpZeroExt"), MArity::Unary),
-            MOpcode::Invalid => (Cow::from("Invalid"), MArity::Zero),
         }
     }
 
@@ -264,7 +260,6 @@ impl MOpcode {
             MOpcode::OpSub => 28,
             MOpcode::OpXor => 29,
             MOpcode::OpZeroExt(_) => 30,
-            MOpcode::Invalid => 31,
         }
     }
 }
