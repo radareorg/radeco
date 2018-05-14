@@ -111,7 +111,7 @@ impl Inferer {
     /// to remove arguments that the callee doesn't read and make values in
     /// callee-saved registers be preserved across the call.
     fn patch_fn(&self, fn_addr: u64, fn_map: &mut BTreeMap<u64, RadecoFunction>) -> () {
-        radeco_trace!("patching calls in fn: {}", rfn.name);
+        radeco_trace!("patching calls in fn: {}", fn_map[&fn_addr].name);
         for node in fn_map[&fn_addr].ssa().inorder_walk() {
             if let Ok(NodeType::Op(ir::MOpcode::OpCall)) =
                 fn_map[&fn_addr].ssa().node_data(node).map(|nd| nd.nt)
@@ -120,7 +120,7 @@ impl Inferer {
                     .unwrap_or_else(|| {
                         radeco_warn!(
                             "failed to remove unused args for call at {:#X}",
-                            ssa.address(node).unwrap()
+                            fn_map[&fn_addr].ssa().address(node).unwrap()
                         );
                     });
             }
