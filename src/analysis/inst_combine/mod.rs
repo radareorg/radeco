@@ -6,6 +6,7 @@ use middle::ssa::ssastorage::SSAStorage;
 
 use either::*;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::num::Wrapping;
@@ -58,7 +59,7 @@ impl Combiner {
                 let blk = ssa.block_for(node).unwrap();
                 let addr = ssa.address(node).unwrap();
                 ssa.replace_value(node, repl_node);
-                if !ssa.is_constant(repl_node) {
+                if !ssa.is_constant(repl_node) && ssa.address(repl_node).is_none() {
                     ssa.insert_into_block(repl_node, blk, addr);
                 }
             }
@@ -66,73 +67,151 @@ impl Combiner {
     }
 
     /// Returns `Some(new_node)` if one of `cur_node`'s operands can be combined
-    /// into `cur_node`, resulting in `new_node`.
+    /// into `cur_node`, resulting in `new_node`; or, if `cur_node` could be
+    /// simplified, resulting in `new_node`.
     /// Returns `None` if no simplification can occur.
     fn visit_node(&mut self, cur_node: SSAValue, ssa: &mut SSAStorage) -> Option<SSAValue> {
         // bail if non-combinable
         let extracted = extract_opinfo(cur_node, ssa)?;
         match extracted {
             Left((sub_node, cur_opinfo, cur_vt)) => {
+                radeco_trace!(
+                    "trying to combine ({:?} = {:?} {:?})",
+                    cur_node,
+                    sub_node,
+                    cur_opinfo
+                );
                 let opt_new_node = self.make_combined_node(&cur_opinfo, cur_vt, sub_node, ssa);
-                if let Some((new_node, new_sub_node, new_opinfo)) = opt_new_node {
-                    radeco_trace!(
-                        "combined ({:?} = {:?} {:?} {:?}) into ({:?} = {:?} {:?})",
-                        cur_node,
-                        new_sub_node,
-                        self.combine_candidates[&sub_node].1,
-                        cur_opinfo,
-                        new_node,
-                        new_sub_node,
-                        new_opinfo
-                    );
-                    self.combine_candidates
-                        .insert(new_node, (new_sub_node, new_opinfo));
-                    Some(new_node)
-                } else {
-                    self.combine_candidates
-                        .insert(cur_node, (sub_node, cur_opinfo));
-                    None
+                match opt_new_node {
+                    Some(Left((new_node, new_sub_node, new_opinfo))) => {
+                        radeco_trace!(
+                            "  {:?} ==> ({:?} = {:?} {:?})",
+                            cur_node,
+                            new_node,
+                            new_sub_node,
+                            new_opinfo
+                        );
+                        self.combine_candidates
+                            .insert(new_node, (new_sub_node, new_opinfo));
+                        Some(new_node)
+                    }
+                    Some(Right(new_node)) => {
+                        radeco_trace!("  {:?} ==> no-op", cur_node);
+                        Some(new_node)
+                    }
+                    None => {
+                        // no change; still add to `combine_candidates`
+                        self.combine_candidates
+                            .insert(cur_node, (sub_node, cur_opinfo));
+                        None
+                    }
                 }
             }
             Right(c_val) => {
+                // combined to constant
+                radeco_trace!("{:?} = {:#x}", cur_node, c_val);
                 let c_node = ssa.insert_const(c_val)?;
                 Some(c_node)
             }
         }
     }
 
-    /// Returns (the node that was just created, its operand, its opinfo)
+    /// Returns `Left(new_node, new_sub_node, new_opinfo)` if `cur_opinfo`
+    /// combined with an operand or if `cur_opinfo` was simplified.
+    /// Returns `Right(new_node)` if `cur_opinfo` canceled with an
+    /// operand to make a no-op or was originally a no-op.
+    /// Returns `None` if no combination or simplification exists.
     fn make_combined_node(
         &self,
         cur_opinfo: &CombinableOpInfo,
         cur_vt: ValueInfo,
         sub_node: SSAValue,
         ssa: &mut SSAStorage,
-    ) -> Option<(SSAValue, SSAValue, CombinableOpInfo)> {
-        // bail if the operand isn't combinable
-        let (sub_sub_node, sub_opinfo) = self.combine_candidates.get(&sub_node)?;
-        // bail if no combination exists
-        let new_opinfo = combine_rules::combine_opinfo(cur_opinfo, sub_opinfo)?;
+    ) -> Option<Either<(SSAValue, SSAValue, CombinableOpInfo), SSAValue>> {
+        let (new_sub_node, new_opinfo) = self.combine_candidates
+            .get(&sub_node)
+            .and_then(|(sub_sub_node, sub_opinfo)| {
+                combine_rules::combine_opinfo(cur_opinfo, sub_opinfo).map(|new_opinfo| {
+                    radeco_trace!(
+                        "    combined ({:?} {:?}) into ({:?})",
+                        sub_opinfo,
+                        cur_opinfo,
+                        new_opinfo
+                    );
+                    (*sub_sub_node, Cow::Owned(new_opinfo))
+                })
+            })
+            .unwrap_or((sub_node, Cow::Borrowed(cur_opinfo)));
 
-        // make the new node
-        let CombinableOpInfo(new_opcode, new_coci) = new_opinfo.clone();
-        let new_node = ssa.insert_op(new_opcode, cur_vt, None)?;
-        match new_coci {
-            COCI::Unary => {
-                ssa.op_use(new_node, 0, sub_node);
+        // simplify
+        match simplify_opinfo(&new_opinfo) {
+            Some(Some(simpl_new_opinfo)) => {
+                radeco_trace!(
+                    "    simplified ({:?}) into ({:?})",
+                    new_opinfo,
+                    simpl_new_opinfo
+                );
+                // make the new node
+                let CombinableOpInfo(new_opcode, new_coci) = simpl_new_opinfo.clone();
+                let new_node = ssa.insert_op(new_opcode, cur_vt, None)?;
+                match new_coci {
+                    COCI::Unary => {
+                        ssa.op_use(new_node, 0, sub_node);
+                    }
+                    COCI::Left(new_c) => {
+                        let new_cnode = ssa.insert_const(new_c)?;
+                        ssa.op_use(new_node, 0, new_cnode);
+                        ssa.op_use(new_node, 1, new_sub_node);
+                    }
+                    COCI::Right(new_c) => {
+                        let new_cnode = ssa.insert_const(new_c)?;
+                        ssa.op_use(new_node, 0, new_sub_node);
+                        ssa.op_use(new_node, 1, new_cnode);
+                    }
+                };
+                Some(Left((new_node, new_sub_node, simpl_new_opinfo)))
             }
-            COCI::Left(new_c) => {
-                let new_cnode = ssa.insert_const(new_c)?;
-                ssa.op_use(new_node, 0, new_cnode);
-                ssa.op_use(new_node, 1, *sub_sub_node);
+            Some(None) => {
+                radeco_trace!("    simplified ({:?}) into no-op", new_opinfo);
+                Some(Right(new_sub_node))
             }
-            COCI::Right(new_c) => {
-                let new_cnode = ssa.insert_const(new_c)?;
-                ssa.op_use(new_node, 0, *sub_sub_node);
-                ssa.op_use(new_node, 1, new_cnode);
+            None => {
+                // no simplification
+                None
             }
-        };
-        Some((new_node, *sub_sub_node, new_opinfo))
+        }
+    }
+}
+
+/// Returns an equivalent `CombinableOpInfo`, but "simpler" in some sence.
+/// Currently, this converts `OpAdd`s or `OpSub`s with "negative" constants into
+/// equivalent operations with positive constants.
+/// Returns `Some(None)` if `info` is a no-op.
+/// Returns `None` if no simplification exists.
+fn simplify_opinfo(info: &CombinableOpInfo) -> Option<Option<CombinableOpInfo>> {
+    use self::CombinableOpConstInfo as COCI;
+    use self::CombinableOpInfo as COI;
+    use middle::ir::MOpcode::*;
+
+    match info {
+        COI(OpAdd, COCI::Left(0))
+        | COI(OpAdd, COCI::Right(0))
+        | COI(OpSub, COCI::Right(0))
+        | COI(OpAnd, COCI::Left(0xFFFFFFFFFFFFFFFF))
+        | COI(OpAnd, COCI::Right(0xFFFFFFFFFFFFFFFF))
+        | COI(OpOr, COCI::Left(0))
+        | COI(OpOr, COCI::Right(0))
+        | COI(OpXor, COCI::Left(0))
+        | COI(OpXor, COCI::Right(0)) => Some(None),
+        COI(OpAdd, COCI::Left(c)) | COI(OpAdd, COCI::Right(c)) if *c > u64::max_value() / 2 => {
+            let c = OpSub.eval_binop(0, *c).unwrap();
+            Some(Some(COI(OpSub, COCI::Right(c))))
+        }
+        COI(OpSub, COCI::Right(c)) if *c > u64::max_value() / 2 => {
+            let c = OpSub.eval_binop(0, *c).unwrap();
+            Some(Some(COI(OpAdd, COCI::Left(c))))
+        }
+        _ => None,
     }
 }
 
