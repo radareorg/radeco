@@ -30,22 +30,7 @@ use std::iter::{self, Extend, FromIterator};
 /// returning, it is considered to be read and not preserved because we can't
 /// guarantee that that stack location is never subsequently read or modified.
 pub fn run(rmod: &mut RadecoModule, reginfo: &SubRegisterFile) -> () {
-    let mut a = Inferer::new();
-    a.run(rmod, reginfo);
-    for (_, rfn) in &rmod.functions {
-        eprintln!("{:?} (@ {:#X}):", rfn.name, rfn.offset);
-        for (i, regname) in reginfo.whole_names.iter().enumerate() {
-            let rid = RegisterId::from_usize(i);
-            let is_ignored = rfn.regusage.is_ignored(rid);
-            let is_preserved = rfn.regusage.is_preserved(rid);
-            eprintln!(
-                "  {:>8}: {} {}",
-                regname,
-                if is_ignored { 'I' } else { 'R' },
-                if is_preserved { 'P' } else { 'C' }
-            );
-        }
-    }
+    Inferer::new().run(rmod, reginfo);
 }
 
 struct Inferer {
@@ -177,7 +162,7 @@ impl Inferer {
     }
 
     fn analyze_fn(&self, rfn: &RadecoFunction, reginfo: &SubRegisterFile) -> Option<RegisterUsage> {
-        eprintln!("analyzing fn: {}", rfn.name);
+        radeco_trace!("analyzing fn: {}", rfn.name);
         let ssa = rfn.ssa();
         let entry_regstate_node = ssa.registers_in(ssa.entry_node()?)?;
         let exit_regstate_node = ssa.registers_in(ssa.exit_node()?)?;
@@ -200,10 +185,6 @@ impl Inferer {
 
         for (i, reg_val_entry, reg_val_exit) in regstate_iter {
             if reg_val_exit == reg_val_entry {
-                eprintln!(
-                    "  set_preserved({})",
-                    ssa.regnames.get(i as usize).map(|x| &**x).unwrap_or("mem")
-                );
                 ret.set_preserved(RegisterId::from_u8(i));
             }
 
