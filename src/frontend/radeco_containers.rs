@@ -1037,26 +1037,15 @@ impl RadecoFunction {
         &mut self.bindings
     }
 
-    pub fn call_sites(&self, call_graph: &CallGraph) -> CallContextInfo {
-        let idx = call_graph.node_indices()
-            .filter(|n| {
-                if let Some(node) = call_graph.node_weight(*n) {
-                    *node == self.offset
-                } else {
-                    false
-                }
-            }).collect::<Vec<_>>();
-        if idx.len() != 1 {
-            radeco_err!("NodeIndex: {:?}", idx);
-        };
-        let map = call_graph.callees(idx[0]).into_iter()
-            .map(|i| (idx[0], i.1))
-            .collect::<Vec<_>>();
-        CallContextInfo {
-            map: map,
-            csite_node: idx[0],
-            csite: self.offset,
-        }
+    pub fn call_sites(&self, call_graph: &CallGraph) -> Vec<CallContextInfo> {
+        call_graph.edges_directed(self.cgid, Direction::Outgoing)
+            .into_iter()
+            .map(|e| e.weight().clone())
+            .collect()
+    }
+
+    pub fn callees(&self, call_graph: &CallGraph) -> Vec<NodeIndex> {
+        call_graph.callees(self.cgid).map(|(_, n)| n).collect()
     }
 
     pub fn datarefs(&self) -> &Vec<u64> {
