@@ -281,15 +281,20 @@ impl<'a> LowerSsa<'a> {
     }
 
     fn index_of_reg(&self, sreg: &sast::PhysReg) -> Result<u8> {
-        // TODO: more efficient as a HashMap<Reg, u8>?
-        if let Some(x) = self.regnames.iter().position(|r| r == sreg) {
+        if sreg.0 == "mem" {
             // we already checked that `regnames.len() < u8::max_value()`
-            Ok(x as u8)
+            Ok(self.regnames.len() as u8)
         } else {
-            Err(LoweringError::InvalidAst(format!(
-                "no physical register: {}",
-                sreg.0
-            )))
+            // TODO: more efficient as a HashMap<Reg, u8>?
+            if let Some(x) = self.regnames.iter().position(|r| r == sreg) {
+                // we already checked that `regnames.len() < u8::max_value()`
+                Ok(x as u8)
+            } else {
+                Err(LoweringError::InvalidAst(format!(
+                    "no physical register: {}",
+                    sreg.0
+                )))
+            }
         }
     }
 }
