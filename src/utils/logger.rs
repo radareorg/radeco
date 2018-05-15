@@ -19,13 +19,6 @@
 
 use std::fmt::Debug;
 
-#[cfg(feature="trace_log")]
-use log::{self, SetLoggerError};
-
-use std::fs::OpenOptions;
-use std::path::Path;
-use std::io::Write;
-
 pub enum Event<'a, T: 'a + Debug> {
     /// external -> internal
     SSAInsertNode(&'a T),

@@ -23,13 +23,11 @@ use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
 use middle::ssa::graph_traits::Graph;
 use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
-use petgraph::graph::NodeIndex;
 
 use r2api::structs::{LOpInfo, LRegInfo};
 
 use regex::Regex;
 use std::{fmt, cmp, u64};
-use std::collections::HashMap;
 
 pub type VarId = usize;
 
@@ -179,7 +177,6 @@ impl<'a, T> SSAConstruct<'a, T>
         // handles assignments
         // and jumps as these are cases that need to be handled a bit differently from
         // the rest of the opcodes.
-        let replace_pc = true;
         let mut lhs = self.process_in(&operands[0], address, Some(op_length));
         let mut rhs = self.process_in(&operands[1], address, Some(op_length));
 
@@ -330,7 +327,6 @@ impl<'a, T> SSAConstruct<'a, T>
                 return None;
             }
             Token::EPeek(n) => {
-                let mem_id = self.mem_id();
                 let mem = self.phiplacer.read_variable(address, self.mem_id);
                 let op_node = self.phiplacer
                     .add_op(&MOpcode::OpLoad,
@@ -656,7 +652,7 @@ impl<'a, T> SSAConstruct<'a, T>
                     self.phiplacer.op_use(&add_node, 1, o2);
                     Some(add_node)
                 }
-                (None, Some(ref o2)) => *nd,
+                (None, Some(_)) => *nd,
                 (_, _) => res,
             }
         }
@@ -671,7 +667,6 @@ impl<'a, T> SSAConstruct<'a, T>
         let vt = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
 
         let custom_opnode = self.phiplacer.add_op(&opcode, addr, vt);
-        let mut opidx: u8 = 0;
 
         let reg_r = ia.registers_read()
             .iter()
@@ -691,7 +686,7 @@ impl<'a, T> SSAConstruct<'a, T>
             }
         }
 
-        opidx = reg_r.len() as u8;
+        let opidx = reg_r.len() as u8;
 
         let reg_w = ia.registers_written()
             .iter()
@@ -741,7 +736,6 @@ impl<'a, T> SSAConstruct<'a, T>
             };
 
             let mem_op = self.phiplacer.add_op(&opcode, addr, vt);
-            let mem_id = self.mem_id();
             let mem = self.phiplacer.read_variable(addr, self.mem_id);
 
             // Op[Load/Store](mem, addr)

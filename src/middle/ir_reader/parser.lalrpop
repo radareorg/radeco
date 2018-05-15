@@ -1,7 +1,6 @@
 use middle::ir_reader::parser_util::*;
 use middle::ir_reader::simple_ast::*;
 use middle::ir;
-use std::str::FromStr;
 
 grammar;
 

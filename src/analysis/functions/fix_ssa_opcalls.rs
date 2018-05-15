@@ -2,11 +2,8 @@
 
 use frontend::radeco_containers::*;
 use middle::ir;
-use middle::ssa::cfg_traits::*;
 use middle::ssa::ssa_traits::*;
 use middle::ssa::ssastorage::SSAStorage;
-
-use petgraph::prelude::*;
 
 use std::collections::HashMap;
 

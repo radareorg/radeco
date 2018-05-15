@@ -22,7 +22,6 @@ use std::marker::PhantomData;
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
-use frontend::radeco_containers::CallContextInfo;
 
 use r2api::structs::LVarInfo;
 

@@ -2,10 +2,8 @@
 
 use std::collections::HashSet;
 
-use petgraph::graph::NodeIndex;
-
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::radeco_containers::{RadecoModule, RadecoFunction, CGInfo};
+use frontend::radeco_containers::{RadecoModule, CGInfo};
 use middle::ssa::ssa_traits::{SSA, NodeType};
 use middle::ssa::cfg_traits::CFG;
 use middle::ir::MOpcode;
@@ -110,10 +108,10 @@ impl InterProcAnalysis for CallSummary {
             for context in rfn.call_sites(&rmod.callgraph) {
                 let callee = rmod.callgraph.callees(context.csite_node).next()
                     .map(|x| x.0).unwrap_or_else(|| {
-                    radeco_err!("Call site cannot have callee as `None`");
-                    0
-                });
-                let args = if let Some(callee) = rmod.functions.get(&callee) {
+                        radeco_err!("Call site cannot have callee as `None`");
+                        0
+                    });
+                let _args = if let Some(callee) = rmod.functions.get(&callee) {
                     callee.args().clone()
                 } else {
                     // XXX
@@ -123,19 +121,5 @@ impl InterProcAnalysis for CallSummary {
                 };
             }
         }
-    }
-}
-
-impl CallSummary {
-    fn detect_arguments() -> HashSet<NodeIndex> {
-        unimplemented!()
-    }
-
-    fn detect_modifides() -> HashSet<NodeIndex> {
-        unimplemented!()
-    }
-
-    fn detect_locals() -> HashSet<NodeIndex> {
-        unimplemented!()
     }
 }

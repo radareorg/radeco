@@ -11,7 +11,7 @@ use std::fmt::{self, Debug};
 use std::collections::{HashMap, VecDeque, HashSet, BinaryHeap};
 use std::{default, u64};
 use std::cmp::{PartialOrd, PartialEq, Ordering};
-use petgraph::visit::{IntoEdgeReferences, IntoNodeReferences, EdgeRef};
+use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};

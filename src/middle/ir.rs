@@ -275,7 +275,6 @@ impl MOpcode {
             OpAnd => (lhs & rhs).0,
             OpOr => (lhs | rhs).0,
             OpXor => (lhs ^ rhs).0,
-            OpCmp => (lhs == rhs) as u64,
             OpEq => (lhs == rhs) as u64,
             OpGt => (lhs > rhs) as u64,
             OpLt => (lhs < rhs) as u64,

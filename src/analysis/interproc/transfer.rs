@@ -1,6 +1,6 @@
 //! Defines transfer and propagate traits used for interprocess analysis.
 
-use frontend::radeco_containers::{RadecoFunction, RadecoModule};
+use frontend::radeco_containers::RadecoModule;
 
 pub trait InterProcAnalysis {
     fn new() -> Self;

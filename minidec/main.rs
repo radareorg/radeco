@@ -22,7 +22,6 @@ use radeco_lib::frontend::radeco_containers::ProjectLoader;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer::IRWriter;
 use radeco_lib::middle::ir_reader::parse_il;
-use radeco_lib::middle::ssa::memoryssa::MemorySSA;
 use radeco_lib::middle::ssa::verifier;
 
 //use radeco_lib::analysis::mark_refs;

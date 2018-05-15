@@ -44,9 +44,6 @@
 #![feature(slice_patterns)]
 #![feature(try_trait)]
 
-// #![allow(dead_code)]
-// #![allow(unused_variables)]
-#![allow(warnings)]
 extern crate regex;
 extern crate petgraph;
 extern crate serde_json;

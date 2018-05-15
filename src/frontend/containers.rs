@@ -1,5 +1,6 @@
 //! Defines `Module` and `Function` that act as containers.
 
+#![allow(deprecated)]
 #![deprecated(since="0.2.0", note="Replace with `radeco_containers`")]
 
 use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
@@ -188,7 +189,6 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
                            }), x))
                            .collect::<HashMap<_, _>>();
     {
-        let caller = rfn.offset;
         let ssa = rfn.ssa_mut();
         for node in ssa.inorder_walk() {
             if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.node_data(node).map(|x| x.nt) {
@@ -218,6 +218,7 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
 }
 
 // TODO: Make this a method of SSA Soon to pretty print expression trees.
+#[allow(dead_code)]
 fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
     let nt = ssa.node_data(*n).map(|x| x.nt);
     if nt.is_err() {
@@ -252,6 +253,7 @@ fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
 // This function analyzes memory, i.e. all the memory store and load operations.
 //
 // It identifies these loads and stores and makes appropriate bindings for them.
+#[allow(dead_code)]
 fn analyze_memory(rfn: &mut DefaultFnTy) {
     let mut hashes = HashMap::<String, NodeIndex>::new();
     let mut seen_l = HashMap::<NodeIndex, Binding<NodeIndex>>::new();
@@ -328,10 +330,10 @@ fn load_datarefs(rfn: &mut DefaultFnTy, datarefs: Option<Vec<u64>>) {
         return;
     }
     rfn.datarefs = datarefs.clone();
-    let datarefs = datarefs.expect("This cannot be 'None'");
-    for dataref in datarefs {
-        //radeco_trace!("{:?}", dataref);
-    }
+    // let datarefs = datarefs.expect("This cannot be 'None'");
+    // for dataref in datarefs {
+    //     radeco_trace!("{:?}", dataref);
+    // }
 }
 
 fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
@@ -445,7 +447,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
         }
 
         for _ in 0..success {
-            let (offset, name, rfn) = rx.recv().unwrap_or_else(|x| {
+            let (offset, name, rfn) = rx.recv().unwrap_or_else(|_| {
                 radeco_err!("recv failed");
                 (0, "Unknown".to_string(), RadecoFunction::new())
             });
@@ -460,6 +462,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
 
 // Implementations that are specific to `RadecoModule`.
 impl<'a> RadecoModule<'a, DefaultFnTy> {
+    #[allow(dead_code)]
     fn construct<S: 'a + Source>(source: &'a mut S) -> RadecoModule<'a, DefaultFnTy> {
         RadecoModule::from(source)
     }
