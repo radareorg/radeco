@@ -32,6 +32,7 @@ docopt = "*"
 rayon = "0.8.2"
 lalrpop-util = "0.14.0"
 fixedbitset = "0.1.9"
+either = "^1"
 
 log = { version = "*", optional = true }
 env_logger = { version = "*", optional = true }

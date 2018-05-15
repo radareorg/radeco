@@ -262,6 +262,42 @@ impl MOpcode {
             MOpcode::OpZeroExt(_) => 30,
         }
     }
+
+    pub fn eval_binop(&self, lhs: u64, rhs: u64) -> Option<u64> {
+        use self::MOpcode::*;
+        use std::num::Wrapping;
+
+        let lhs = Wrapping(lhs);
+        let rhs = Wrapping(rhs);
+        Some(match self {
+            OpAdd => (lhs + rhs).0,
+            OpSub => (lhs - rhs).0,
+            OpMul => (lhs * rhs).0,
+            OpDiv => (lhs / rhs).0,
+            OpMod => (lhs % rhs).0,
+            OpAnd => (lhs & rhs).0,
+            OpOr => (lhs | rhs).0,
+            OpXor => (lhs ^ rhs).0,
+            OpCmp => (lhs == rhs) as u64,
+            OpEq => (lhs == rhs) as u64,
+            OpGt => (lhs > rhs) as u64,
+            OpLt => (lhs < rhs) as u64,
+            OpLsl => (lhs << (rhs.0 as usize)).0,
+            OpLsr => (lhs >> (rhs.0 as usize)).0,
+            OpRol => lhs.0.rotate_left(rhs.0 as u32),
+            OpRor => lhs.0.rotate_right(rhs.0 as u32),
+            _ => return None,
+        })
+    }
+
+    pub fn eval_unop(&self, val: u64) -> Option<u64> {
+        use self::MOpcode::*;
+
+        Some(match self {
+            OpNot => !val,
+            _ => return None,
+        })
+    }
 }
 
 impl fmt::Display for MOpcode {
