@@ -9,15 +9,14 @@
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::collections::Bound::{Included, Excluded};
+use std::collections::Bound::Included;
 use std::cmp::Ordering;
 use std::u64;
 
 use r2api::structs::{LOpInfo};
-use petgraph::graph::NodeIndex;
-use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueInfo, ValueType};
+use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueInfo};
 use middle::ssa::graph_traits::{Graph, EdgeInfo, ConditionInfo};
-use middle::ir::{self, MAddress, MOpcode, WidthSpec};
+use middle::ir::{self, MAddress, MOpcode};
 
 use middle::ssa::ssa_traits::{NodeType, NodeData};
 use middle::regfile::SubRegisterFile;
@@ -436,7 +435,7 @@ impl<'a, T> PhiPlacer<'a, T>
                 }
             }
 
-            for (key, value) in self.current_def[variable as usize].iter_mut() {
+            for value in self.current_def[variable as usize].values_mut() {
                 if value == &node {
                     *value = nx;
                 }
@@ -526,7 +525,7 @@ impl<'a, T> PhiPlacer<'a, T>
         }
 
         for variable in 0..self.variable_types.len() {
-            for (addr, def) in self.current_def[variable].iter_mut() {
+            for def in self.current_def[variable].values_mut() {
                 if def == &phi {
                     *def = same;
                 }
@@ -943,7 +942,6 @@ impl<'a, T> PhiPlacer<'a, T>
     pub fn finish(&mut self, ops: &[LOpInfo]) {
         // Iterate through blocks and seal them. Also associate nodes with their
         // respective blocks.
-        let blocks = self.blocks.clone();
 
         let mut wl = VecDeque::new();
         let mut seen = HashSet::new();
@@ -1015,7 +1013,7 @@ impl<'a, T> PhiPlacer<'a, T>
 
             match (self.block_of(off1), self.block_of(off2)) {
                 (Some(b1), Some(b2)) if b1 == b2 => { /* Nothing to do */ },
-                (Some(b1), Some(b2)) => {
+                (Some(b1), Some(_)) => {
                     if let Some(start) = self.ssa.starting_address(b1) {
                         let size = off1.address - start.address;
                         self.ssa.set_block_size(b1, size);

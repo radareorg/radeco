@@ -5,6 +5,8 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![allow(warnings)]
+
 pub mod c_simple;
 pub mod c_ast_constructor;
 

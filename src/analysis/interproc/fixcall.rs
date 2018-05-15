@@ -14,14 +14,11 @@
 //!
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fmt::Debug;
 use petgraph::prelude::NodeIndex;
 
 use analysis::cse::ssasort::Sorter;
-use frontend::bindings::{RadecoBindings, RBind, RBindings};
-use frontend::radeco_containers::{RadecoFunction, VarBindings, RadecoModule, CallContextInfo};
+use frontend::radeco_containers::{RadecoModule, CallContextInfo};
 use middle::ir::MOpcode;
-use middle::regfile::SubRegisterFile;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssastorage::SSAStorage;
@@ -29,7 +26,6 @@ use middle::ssa::ssastorage::SSAStorage;
 use super::digstack;
 
 type LValueRef = <SSAStorage as SSA>::ValueRef;
-type LIdx<B> = <RadecoBindings<B> as RBindings>::Idx;
 
 
 #[derive(Debug)]

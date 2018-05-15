@@ -14,7 +14,6 @@ use middle::ir;
 use middle::ssa::ssa_traits::ValueInfo;
 
 use r2api::structs::{LCCInfo, LRegInfo};
-use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::From;

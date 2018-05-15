@@ -9,7 +9,6 @@
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::graph_traits::{EdgeInfo, Graph};
 use middle::ssa::ssa_traits::{SSAWalk, ValueInfo, SSA};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use petgraph::graph::NodeIndex;
@@ -97,7 +96,7 @@ macro_rules! indent {
 macro_rules! fmt_call {
     ($fmt:expr, $operands:ident, $ssa:ident, $ni:ident) => {{
         let mem = "mem".to_owned();
-        let mut operands_idx: Vec<u8> = ($ssa.sparse_operands_of($ni).iter().map(|x| x.0).collect());
+        let mut operands_idx: Vec<u8> = $ssa.sparse_operands_of($ni).iter().map(|x| x.0).collect();
         operands_idx.sort();
         format!($fmt,
             $operands[0],
@@ -151,9 +150,9 @@ impl IRWriter {
                 NodeData::Op(MOpcode::OpConst(ref value), _) => result.push(fmt_const!(value)),
                 NodeData::Op(MOpcode::OpCall, _) => {
                     println!("unchi");
-                    let op_i = self.node_idx(*operand);
+                    let _op_i = self.node_idx(*operand);
                     panic!("ncahrc.,uh.,r");
-                    result.push(format!("%{}", op_i));
+                    // result.push(format!("%{}", op_i));
                 },
                 NodeData::Comment(_, ref named) => result.push(format!("{{{}}}", named.clone())),
                 _ => {
@@ -376,7 +375,7 @@ impl IRWriter {
 
     // TODO: expose width
     pub fn pretty_print_function_proto(rfn: &RadecoFunction) -> String {
-        let mut args = rfn.bindings()
+        let args = rfn.bindings()
             .into_iter()
             .filter(|&x| x.btype().is_argument())
             .filter_map(|x| rfn.ssa().node_data(x.idx).map(|v| (x.idx, v.vt)).ok())
@@ -481,9 +480,6 @@ impl IRWriter {
                     radeco_err!("Invalid node");
                     String::new()
                 },
-                _ => {
-                    String::new()
-                }
             };
 
             if !line.is_empty() {
@@ -501,10 +497,6 @@ impl IRWriter {
             }
         }
 
-        let exit_node = ssa.exit_node().unwrap_or_else(|| {
-            radeco_err!("Incomplete CFG graph");
-            ssa.invalid_action().unwrap()
-        });
         let final_state = registers_in_err!(ssa, exit_node_err!(ssa),
             ssa.invalid_value().unwrap());
         let mem_comment = "mem".to_owned();

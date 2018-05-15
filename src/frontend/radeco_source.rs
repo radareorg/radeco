@@ -49,11 +49,11 @@ pub trait Source {
     fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> { unimplemented!() }
     fn libraries(&self) -> Result<Vec<String>, SourceErr> { unimplemented!() }
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> { unimplemented!() }
-    fn disassemble_n_bytes(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
-    fn disassemble_n_insts(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
-    fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
-    fn cc_info_of(&self, start_addr: u64) -> Result<LCCInfo, SourceErr> { unimplemented!() }
-    fn raw(&self, cmd: String) -> Result<String, SourceErr> { unimplemented!() }
+    fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
+    fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
+    fn locals_of(&self, _start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
+    fn cc_info_of(&self, _start_addr: u64) -> Result<LCCInfo, SourceErr> { unimplemented!() }
+    fn raw(&self, _cmd: String) -> Result<String, SourceErr> { unimplemented!() }
 
     fn send(&self, _: String) -> Result<(), SourceErr> { Ok(()) }
 
@@ -284,7 +284,7 @@ impl Source for FileSource {
 }
 
 impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
-    fn from(mut r2: WrappedR2Api<R>) -> FileSource {
+    fn from(r2: WrappedR2Api<R>) -> FileSource {
         let bin_info = r2.borrow_mut().bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
         let fname = Path::new(&fname).file_stem().unwrap();

@@ -14,7 +14,6 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::u64;
-use petgraph::graph::NodeIndex;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
 use middle::ssa::graph_traits::{Graph, ConditionInfo};

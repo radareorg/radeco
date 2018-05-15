@@ -1,15 +1,12 @@
 //! Implements some low-level analysis as a part of frontend
 
-use frontend::radeco_containers::{RadecoModule, CallGraph, CGInfo, CallContextInfo, RadecoFunction};
+use frontend::radeco_containers::{RadecoModule, CallGraph, CallContextInfo, RadecoFunction};
 use middle::ir::MOpcode;
-use middle::regfile::SubRegisterFile;
 use middle::ssa::ssa_traits::{SSAWalk, SSA, NodeType};
 use petgraph::Direction;
 use petgraph::graph::NodeIndex;
-use petgraph::visit::EdgeRef;
 use r2api::structs::FunctionInfo;
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 /// Converts call graph information from `Source`, represented in FunctionInfo,
 /// into an actual graph with links.
@@ -94,7 +91,6 @@ fn analyze_callsite_initial(rfn: &RadecoFunction) -> HashMap<u64, CallContextInf
 }
 
 pub fn init_call_ctx(rmod: &mut RadecoModule) {
-    let cctxs: Vec<(u64, CallContextInfo)> = Vec::new();
     for wrapper in rmod.functions.iter() {
         let rfn = wrapper.1;
         let mut csites: HashMap<u64, CallContextInfo> = analyze_callsite_initial(rfn);
@@ -141,7 +137,7 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
                 if let Some(mut cctx) = csites.remove(&csite) {
                     cctx.map = cctx.map
                         .iter()
-                        .map(|&(k, v)| k)
+                        .map(|&(k, _)| k)
                         .zip(args.into_iter().map(|v| v.idx))
                         .collect();
                     // Update callsite information in the callgraph.

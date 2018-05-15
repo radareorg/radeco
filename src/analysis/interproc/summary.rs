@@ -2,8 +2,6 @@
 
 use std::collections::HashSet;
 
-use petgraph::graph::NodeIndex;
-
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::containers::{RModule, RFunction};
 use middle::ssa::ssa_traits::{SSA, NodeType};
@@ -108,29 +106,7 @@ impl<'a, T: RModule<'a>> InterProcAnalysis<'a, T> for CallSummary {
                     radeco_err!("Call site cannot have callee as `None`");
                     0
                 });
-                let args = if let Some(callee) = rmod.function_by_ref(&callee.into()) {
-                    callee.args()
-                } else {
-                    // XXX
-                    // No information is inferable. Load data from r2. For now, we use fake data.
-                    //unimplemented!()
-                    Vec::new()
-                };
             }
         }
-    }
-}
-
-impl CallSummary {
-    fn detect_arguments() -> HashSet<NodeIndex> {
-        unimplemented!()
-    }
-
-    fn detect_modifides() -> HashSet<NodeIndex> {
-        unimplemented!()
-    }
-
-    fn detect_locals() -> HashSet<NodeIndex> {
-        unimplemented!()
     }
 }

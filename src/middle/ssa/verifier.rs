@@ -16,8 +16,7 @@ use petgraph::graph::NodeIndex;
 
 use super::graph_traits::Graph;
 use super::cfg_traits::CFG;
-use super::ssa_traits::{SSA, ValueType};
-use super::ssa_traits::NodeData as TNodeData;
+use super::ssa_traits::SSA;
 use super::ssa_traits::NodeType as TNodeType;
 use super::error::SSAErr;
 use super::ssastorage::SSAStorage;

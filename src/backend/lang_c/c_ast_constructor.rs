@@ -2,6 +2,8 @@
 //!
 //!
 
+#![allow(deprecated)]
+
 use std::fmt::Write;
 use std::collections::HashMap;
 

@@ -1,7 +1,6 @@
 //! Infers how each function uses every register
 
 use analysis::inst_combine;
-use frontend::imports::ImportInfo;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::dce;
 use middle::ir;
@@ -10,13 +9,9 @@ use middle::ssa::cfg_traits::*;
 use middle::ssa::ssa_traits::*;
 use middle::ssa::ssastorage::SSAStorage;
 
-use r2api::structs::LCCInfo;
+use petgraph::visit::{DfsPostOrder, Walker};
 
-use petgraph::prelude::*;
-use petgraph::visit::{DfsPostOrder, VisitMap, Walker};
-
-use std::collections::{hash_map, BTreeMap, HashMap, HashSet};
-use std::iter::{self, Extend, FromIterator};
+use std::collections::{BTreeMap, HashSet};
 
 /// For every function, patch all of its call sites to ignore registers that the
 /// callee doesn't read and to preserve register values that the callee
@@ -178,7 +173,7 @@ impl Inferer {
         ret.set_all_ignored();
 
         // ignore registers not in entry regstate
-        let mut regstate_iter = (0..)
+        let regstate_iter = (0..)
             .zip(exit_regstate)
             .zip(entry_regstate)
             .filter_map(|((i, x), on)| on.map(|n| (i, n, x)));

@@ -11,11 +11,12 @@
 //!
 //! This process repeats until a cap of `n` iterations is hit, or we reach a fixpoint.
 
+#![allow(deprecated)]
+
 pub mod reference_marking_intra;
 pub mod reference_marking_inter;
 
-use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo};
-use middle::ir;
+use frontend::radeco_containers::{RadecoFunction, CallContextInfo};
 use middle::regfile::SubRegisterFile;
 use middle::ssa::ssa_traits::{SSA, ValueType};
 use petgraph::graph::NodeIndex;
@@ -127,7 +128,7 @@ impl Propagate for ReferenceMarker {
             .collect()))
     }
 
-    fn union(analyzer: &mut ReferenceMarker, infov: &[ReferenceMarkerInfo]) -> Option<Self::Info> {
+    fn union(_analyzer: &mut ReferenceMarker, _infov: &[ReferenceMarkerInfo]) -> Option<Self::Info> {
         unimplemented!()
     }
 

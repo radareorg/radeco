@@ -9,7 +9,6 @@
 
 use middle::ssa::graph_traits::Graph;
 use middle::ssa::ssa_traits::{SSAExtra, SSAMod, NodeType};
-use petgraph::graph::NodeIndex;
 use std::collections::VecDeque;
 
 /// Removes SSA nodes that are not used by any other node.
