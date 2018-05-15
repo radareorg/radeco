@@ -39,10 +39,6 @@
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
 
-// Support for extra lints throgh clippy
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
-
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(slice_patterns)]
@@ -54,7 +50,6 @@
 extern crate regex;
 extern crate petgraph;
 extern crate serde_json;
-extern crate num;
 #[macro_use] extern crate lazy_static;
 extern crate fixedbitset;
 extern crate either;
