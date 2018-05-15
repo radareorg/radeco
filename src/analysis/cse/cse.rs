@@ -85,13 +85,12 @@ where I: Iterator<Item = S::ValueRef>,
         // Sort the operands for commutative opcode first;
 
         for expr in self.ssa.inorder_walk() {
-            let hs_ = self.hash_string(&expr);
+            let hs = match self.hash_string(&expr) {
+                Some(hs) => hs,
+                None => continue,
+            };
             let mut replaced = false;
-            if hs_.is_none() {
-                break;
-            }
-            let hs = hs_.as_ref().unwrap();
-            if let Some(ex_idxs) = self.exprs.get(hs).cloned() {
+            if let Some(ex_idxs) = self.exprs.get(&hs).cloned() {
                 // NOTE: Though we can eliminate expression even if the two aren't in the same
                 // block, we do not do so cause it requires that block b1 (block of the
                 // replacer) must dominate block b2 (the replacee). Since we are currently not
@@ -108,10 +107,8 @@ where I: Iterator<Item = S::ValueRef>,
             }
 
             if !replaced {
-                if let Some(ref hs) = hs_ {
-                    self.exprs.entry(hs.clone()).or_insert_with(Vec::new).push(expr);
-                    self.hashed.insert(expr, hs.clone());
-                }
+                self.exprs.entry(hs.clone()).or_insert_with(Vec::new).push(expr);
+                self.hashed.insert(expr, hs.clone());
             }
         }
     }
