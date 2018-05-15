@@ -1,5 +1,6 @@
 //! Infers how each function uses every register
 
+use analysis::inst_combine;
 use frontend::imports::ImportInfo;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::dce;
@@ -92,7 +93,7 @@ impl Inferer {
 
                     let rfn = &mut rmod.functions.get_mut(&fn_addr).unwrap();
                     dce::collect(rfn.ssa_mut());
-                    // TODO: inst_combine
+                    inst_combine::run(rfn.ssa_mut());
 
                     let ru = self.analyze_fn(rfn, reginfo).unwrap_or_else(|| {
                         radeco_err!("Failed to analyze fn: {:?} (@ {:#X})", rfn.name, fn_addr);
