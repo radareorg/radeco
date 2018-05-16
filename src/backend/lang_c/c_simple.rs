@@ -106,6 +106,8 @@ enum CASTNode {
     Var(String),
     // Constant
     Constant(Ty, String),
+    Return(String),
+    Call(String, Vec<String>),
 }
 
 #[derive(Clone, Debug)]
@@ -286,6 +288,29 @@ impl CAST {
         conditional
     }
 
+    pub fn call_func(&mut self, func_name: &str, args: Vec<NodeIndex>) -> NodeIndex {
+        let args_str = args
+            .into_iter()
+            .map(|arg| {
+                match self.ast.node_weight(arg) {
+                    Some(&CASTNode::Var(ref v)) => v.clone(),
+                    Some(&CASTNode::Constant(_, ref c)) => c.clone(),
+                    _ => "unknown".to_string(),
+                }
+            }).collect::<Vec<_>>();
+        let call_node = self.ast.add_node(CASTNode::Call(func_name.to_string(), args_str));
+        let idx = self.next_edge_idx();
+        self.ast.add_edge(self.fn_head, call_node, CASTEdge::StatementOrd(idx));
+        call_node
+    }
+
+    pub fn ret(&mut self, value: &str) -> NodeIndex {
+        let ret_node = self.ast.add_node(CASTNode::Return(value.to_string()));
+        let idx = self.next_edge_idx();
+        self.ast.add_edge(self.fn_head, ret_node, CASTEdge::StatementOrd(idx));
+        ret_node
+    }
+
     pub fn goto(&mut self, label: String) {
         let goto_n = self.ast.add_node(CASTNode::Goto(label));
         let idx = self.next_edge_idx();
@@ -457,6 +482,12 @@ impl CAST {
             CASTNode::Constant(_, ref value) => {
                 value.clone()
             }
+            CASTNode::Return(ref value) => {
+                format!("{}return {}", format_with_indent("", indent), &value)
+            }
+            CASTNode::Call(ref func, ref args) => {
+                format!("{}({})", format_with_indent(&func, indent), args.join(", "))
+            }
         }
     }
 
@@ -531,6 +562,18 @@ mod test {
         let increment = c_ast.expr(Expr::Add, &vars);
         let assignment = c_ast.expr(Expr::Eq, &[vars[0], increment]);
         c_ast.new_conditional(cmp, assignment, None);
+        let _ = c_ast.ret("");
+        println!("{}", c_ast.print());
+    }
+
+    #[test]
+    fn c_ast_call_test() {
+        let mut c_ast = CAST::new("main");
+        let args = c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
+        let test_args = args.iter().chain(vars.iter()).map(|n| n.clone()).collect::<Vec<_>>();
+        let _ = c_ast.call_func("test_func", test_args);
+        let _ = c_ast.ret("");
         println!("{}", c_ast.print());
     }
 }
