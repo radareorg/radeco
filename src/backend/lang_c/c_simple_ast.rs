@@ -1,5 +1,3 @@
-//! Block by block CAST
-
 use std::{default, iter, fmt};
 use std::collections::LinkedList;
 
