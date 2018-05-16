@@ -223,7 +223,7 @@ impl Verify for SSAStorage {
                             check!(opw < w0, SSAErr::IncompatibleWidth(*exi, opw, w0));
                             check!(w == w0, SSAErr::IncompatibleWidth(*exi, w, w0));
                         }
-                        MOpcode::OpCmp |
+                        MOpcode::OpEq |
                         MOpcode::OpGt |
                         MOpcode::OpLt => {
                             check!(w == 1, SSAErr::IncompatibleWidth(*exi, 1, w));
