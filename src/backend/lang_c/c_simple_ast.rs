@@ -26,11 +26,11 @@ enum ActionNode {
     Goto,
 }
 
+// TODO
 #[derive(Debug, Clone, PartialEq)]
 enum ValueNode {
-    // The string is the name of variable
+    /// The string is the name of variable
     Variable(String),
-    // TODO
     Constant,
 }
 
@@ -58,7 +58,7 @@ enum ValueEdge {
 }
 
 struct SimpleCAST {
-    // Name of function of this AST
+    /// Name of function of this AST
     fname: String,
     entry: NodeIndex,
     ast: Graph<SimpleCASTNode, SimpleCASTEdge>,
