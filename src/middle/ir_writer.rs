@@ -235,7 +235,7 @@ impl IRWriter {
                                       operands[0],
                                       operands[1]),
             MOpcode::OpNot => format!("%{}: {} = !{}", result_idx, vi_str, operands[0]),
-            MOpcode::OpCmp => format!("%{}: {} = {} == {}",
+            MOpcode::OpEq => format!("%{}: {} = {} == {}",
                                       result_idx,
                                       vi_str,
                                       operands[0],

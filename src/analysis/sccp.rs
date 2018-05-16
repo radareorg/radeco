@@ -299,7 +299,7 @@ impl<T> Analyzer<T>
             MOpcode::OpXor => {
                 lhs_val ^ rhs_val
             }
-            MOpcode::OpCmp => {
+            MOpcode::OpEq => {
                 (lhs_val == rhs_val) as u64
             }
             MOpcode::OpGt => {

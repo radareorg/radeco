@@ -8,7 +8,7 @@ use middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
 
 #[allow(dead_code)]
 mod patterns {
-    pub const OF: &'static str = "(OpNarrow1 (OpCmp (OpAnd (OpLsr (OpAnd (OpXor (OpNot %2), %3), (OpXor %1, %2)), #x3f), #x1), #x1))";
+    pub const OF: &'static str = "(OpNarrow1 (OpEq (OpAnd (OpLsr (OpAnd (OpXor (OpNot %2), %3), (OpXor %1, %2)), #x3f), #x1), #x1))";
     pub const PF: &'static str = "(OpNarrow1 (OpAnd (OpMod (OpAnd (OpMul (OpAnd %1, #xff), #x101010101010101), #x8040201008040201), #x1ff), #x1))";
     pub const SF: &'static str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x40, #x1)))";
     pub const SF_32: &'static str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x20, #x1)))";
@@ -33,7 +33,7 @@ mod patterns {
             // LE -  of,sf,^,zf,|
             v.push((format!("(OpOr {}, (OpXor {}, (OpNarrow1 #x0)))", ZF, SF), "(OpLt %2, %3)"));
             v.push((format!("(OpOr {}, (OpXor {}, #x0))", ZF_32, SF_32), "(OpLt %2, %3)"));
-            v.push((format!("{}", ZF), "(OpCmp %2, %3)"));
+            v.push((format!("{}", ZF), "(OpEq %2, %3)"));
             v
         };
     }
