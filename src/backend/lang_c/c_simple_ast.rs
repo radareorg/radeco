@@ -6,10 +6,9 @@ use std::collections::LinkedList;
 use super::c_simple;
 use super::c_simple::{CAST, CASTNode};
 use frontend::radeco_containers::RadecoFunction;
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::visit::EdgeRef;
-use petgraph::EdgeDirection;
-use petgraph::Direction;
+use petgraph::{EdgeDirection, Direction, Directed};
 
 #[derive(Debug, Clone, PartialEq)]
 enum SimpleCASTNode {
@@ -74,6 +73,13 @@ impl SimpleCASTNode {
     }
 }
 
+/// Returns nodes which is connected with given type of edge
+fn neighbors_by_edge(edges: &Vec<EdgeReference<SimpleCASTEdge>>, ty: &SimpleCASTEdge) -> Vec<NodeIndex> {
+    edges.iter().filter(|e| (*e).weight() == ty)
+        .map(|e| e.target())
+        .collect()
+}
+
 impl SimpleCAST {
 
     fn next_actions(&self, idx: NodeIndex) -> Vec<NodeIndex> {
@@ -92,15 +98,14 @@ impl SimpleCAST {
         if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::If)) {
             return None;
         }
-        let ns = self.next_actions(idx);
-        // TODO This implementation is not correct
-        // specify node by matching IfThen, IfElse
-        if ns.len() == 2 {
-            Some((ns[0], Some(ns[1])))
-        } else if ns.len() <= 1 {
-            Some((ns[0], None))
+        let ns = self.ast.edges_directed(idx, Direction::Outgoing).into_iter().collect();
+        let if_then = neighbors_by_edge(&ns, &SimpleCASTEdge::Action(ActionEdge::IfThen))
+            .first().map(|e| e.clone());
+        let if_else = neighbors_by_edge(&ns, &SimpleCASTEdge::Action(ActionEdge::IfElse))
+            .first().map(|e| e.clone());
+        if if_then.is_some() {
+            Some((if_then.unwrap(), if_else))
         } else {
-            radeco_warn!("ns.len() should return less than or equal 2");
             None
         }
     }
@@ -130,16 +135,11 @@ impl SimpleCAST {
         if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::Assignment)) {
             return None;
         }
-        let src = self.ast.edges_directed(idx, Direction::Outgoing)
-            .into_iter()
-            .filter(|e| e.weight() == &SimpleCASTEdge::Value(ValueEdge::AssignSrc))
-            .map(|e| e.target())
-            .next();
-        let dst = self.ast.edges_directed(idx, Direction::Outgoing)
-            .into_iter()
-            .filter(|e| e.weight() == &SimpleCASTEdge::Value(ValueEdge::AssignDst))
-            .map(|e| e.target())
-            .next();
+        let ns = self.ast.edges_directed(idx, Direction::Outgoing).into_iter().collect();
+        let src = neighbors_by_edge(&ns, &SimpleCASTEdge::Value(ValueEdge::AssignSrc))
+            .first().map(|e| e.clone());
+        let dst = neighbors_by_edge(&ns, &SimpleCASTEdge::Value(ValueEdge::AssignDst))
+            .first().map(|e| e.clone());
         if src.is_some() && dst.is_some() {
             return None;
         }
