@@ -6,5 +6,6 @@
 // except according to those terms.
 
 pub mod c_simple;
+pub mod c_simple_ast;
 pub mod c_ast_constructor;
 

@@ -94,7 +94,7 @@ impl fmt::Display for BTy {
 //////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
-enum CASTNode {
+pub enum CASTNode {
     FunctionHeader(String),
     Conditional,
     Declaration(Ty),
