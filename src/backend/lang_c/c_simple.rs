@@ -112,7 +112,7 @@ enum CASTNode {
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    Eq,
+    Assign,
     Add,
     Sub,
     Mul,
@@ -129,7 +129,7 @@ pub enum Expr {
     GtEq,
     Lt,
     LtEq,
-    Cmp,
+    Eq,
 }
 
 #[derive(Clone, Debug)]
@@ -430,7 +430,7 @@ impl CAST {
                 let operands = self.get_args_ordered(node);
                 let op_str = operands.iter().map(|x| self.emit_c(x, 0)).collect::<Vec<_>>();
                 match *expr {
-                    Expr::Eq => format!("{} = {}",
+                    Expr::Assign => format!("{} = {}",
                                         format_with_indent(&op_str[0], indent),
                                         &op_str[1]),
                     Expr::Add => format!("({} + {})",
@@ -477,7 +477,7 @@ impl CAST {
                     Expr::LtEq => format!("({} <= {})",
                                           format_with_indent(&op_str[0], indent),
                                           &op_str[1]),
-                    Expr::Cmp => format!("({} == {})",
+                    Expr::Eq => format!("({} == {})",
                                          format_with_indent(&op_str[0], indent),
                                          &op_str[1]),
                 }
@@ -564,10 +564,10 @@ mod test {
         let mut c_ast = CAST::new("main");
         c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
         let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
-        let cmp = c_ast.expr(Expr::Cmp, &vars);
+        let eq = c_ast.expr(Expr::Eq, &vars);
         let increment = c_ast.expr(Expr::Add, &vars);
-        let assignment = c_ast.expr(Expr::Eq, &[vars[0], increment]);
-        c_ast.new_conditional(cmp, assignment, None);
+        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment]);
+        c_ast.new_conditional(eq, assignment, None);
         let _ = c_ast.ret("");
         println!("{}", c_ast.print());
     }
