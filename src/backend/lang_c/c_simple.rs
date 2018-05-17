@@ -311,16 +311,22 @@ impl CAST {
         ret_node
     }
 
-    pub fn goto(&mut self, label: String) {
-        let goto_n = self.ast.add_node(CASTNode::Goto(label));
-        let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+    pub fn goto(&mut self, label_node: NodeIndex) {
+        let label_opt = self.ast.node_weight(label_node).map(|e| e.clone());
+        if let Some(CASTNode::Label(ref label)) = label_opt {
+            let goto_n = self.ast.add_node(CASTNode::Goto(label.clone()));
+            let idx = self.next_edge_idx();
+            self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+        } else {
+            radeco_warn!("Label node is not found");
+        }
     }
 
-    pub fn label(&mut self, label: String) {
-        let label = self.ast.add_node(CASTNode::Label(label));
+    pub fn label(&mut self, label: &str) -> NodeIndex{
+        let label = self.ast.add_node(CASTNode::Label(label.to_string()));
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, label, CASTEdge::StatementOrd(idx));
+        label
     }
 
     pub fn insert_break(&mut self, _ : NodeIndex) {
@@ -415,7 +421,7 @@ impl CAST {
                 format_with_indent(&format!("goto {}", label), indent)
             }
             CASTNode::Label(ref label) => {
-                format_with_indent(&format!("label {}:", label), indent)
+                format!("{}:", label)
             }
             CASTNode::Break => {
                 format_with_indent("break;", indent)
@@ -574,6 +580,15 @@ mod test {
         let test_args = args.iter().chain(vars.iter()).map(|n| n.clone()).collect::<Vec<_>>();
         let _ = c_ast.call_func("test_func", test_args);
         let _ = c_ast.ret("");
+        println!("{}", c_ast.print());
+    }
+
+    #[test]
+    fn c_ast_goto_test() {
+        let mut c_ast = CAST::new("main");
+        let _ = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
+        let lbl = c_ast.label("L1");
+        let _ = c_ast.goto(lbl);
         println!("{}", c_ast.print());
     }
 }
