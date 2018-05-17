@@ -17,7 +17,7 @@ enum SimpleCASTNode {
 #[derive(Debug, Clone, PartialEq)]
 enum ActionNode {
     Assignment,
-    Call,
+    Call(String),
     Return,
     If,
     Goto,
@@ -146,9 +146,10 @@ impl SimpleCAST {
 
     /// Returns arguments of function call
     fn args_call(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
-        if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::Call)) {
-            return None;
-        }
+        match self.ast.node_weight(idx) {
+            Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
+            _ => {return None;},
+        };
         let mut args = self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
@@ -182,7 +183,7 @@ impl SimpleCAST {
                         radeco_err!("Something wrong");
                     }
                 },
-                Some(&SimpleCASTNode::Action(ActionNode::Call)) => {
+                Some(&SimpleCASTNode::Action(ActionNode::Call(ref name))) => {
                     let args = self.args_call(current_node);
                     // TODO insert node, args
                 },
