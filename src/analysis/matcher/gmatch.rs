@@ -445,7 +445,7 @@ where I: Iterator<Item=S::ValueRef>,
             };
             self.ssa.op_use(parent, edge_idx, inner_node);
             for i in 0..pt.len() {
-                let p = r.op(i + 1).unwrap_or_else(|| {
+                let _p = r.op(i + 1).unwrap_or_else(|| {
                     radeco_err!("parse error");
                     String::new()
                 });

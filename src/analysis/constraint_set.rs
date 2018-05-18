@@ -19,7 +19,6 @@ use std::collections::{HashMap, VecDeque};
 use std::collections::hash_map;
 use std::fmt::{Debug, Display, Formatter, Error};
 use std::hash::Hash;
-use std::slice;
 
 #[derive(Debug, Clone)]
 pub enum Constraint<I: Debug + Clone + Copy> {
@@ -51,14 +50,14 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     pub fn add_union(&mut self, lhs: T, ops: &[T]) {
         let n = ops.len();
 
-        if (n == 0) {
+        if n == 0 {
             // Nothing to do
-        } else if (n == 1) {
+        } else if n == 1 {
             // Add a single equality constraint
             self.add_equivalence_assertion(&[lhs, ops[0]]);
         } else {
             let iter_limit = n - 1;
-            for i in (0..iter_limit) {
+            for i in 0..iter_limit {
                 self.add_constraint(Constraint::Equality(lhs,
                                         Box::new(Constraint::Union(ops[i],
                                                     ops[i + 1]))));
@@ -93,7 +92,6 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
             // Match to see if this is an Eq constraint or an assert
             let res = match constraint {
                 Constraint::Equality(_, box _) => self.solve_eq(&constraint),
-                Constraint::Equality(_, _) => self.solve_eq(&constraint),
                 Constraint::Assertion(_) => self.solve_assert(&constraint),
                 Constraint::AssertEquivalence(_) => self.solve_equivalence(&constraint),
                 _ => false,

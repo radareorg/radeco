@@ -31,16 +31,14 @@
 //! For more examples of loading, check the `examples/` directory of this project.
 
 
-use frontend::bindings::{Binding, RBindings, RadecoBindings};
 use frontend::llanalyzer;
-use frontend::radeco_source::{WrappedR2Api, Source};
+use frontend::radeco_source::Source;
 use frontend::ssaconstructor::SSAConstruct;
 use frontend::imports::ImportInfo;
 
-use middle::ir;
 use middle::regfile::{SubRegisterFile, RegisterUsage};
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, NodeData, NodeType};
+use middle::ssa::ssa_traits::{SSA, NodeType};
 
 use middle::ssa::ssastorage::SSAStorage;
 use petgraph::Direction;
@@ -48,8 +46,8 @@ use petgraph::Direction;
 use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
-use r2api::structs::{LOpInfo, LRegInfo, LSymbolInfo, LRelocInfo, LImportInfo, LExportInfo,
-                     LSectionInfo, LEntryInfo, LSymbolType, LVarInfo, LCCInfo};
+use r2api::structs::{LOpInfo, LSymbolInfo, LRelocInfo, LExportInfo,
+                     LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
 
 use r2pipe::r2::R2;
 use rayon::prelude::*;
@@ -57,10 +55,8 @@ use std::fmt;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::collections::{btree_map, hash_map};
-use std::marker::PhantomData;
-use std::path::Path;
+use std::collections::{BTreeMap, HashMap};
+use std::collections::btree_map;
 use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
@@ -73,12 +69,12 @@ pub mod loader_defaults {
     use r2api::structs::LSymbolType;
     use std::borrow::Cow;
     use std::rc::Rc;
-    use super::{FLResult, PredicatedLoader};
+    use super::FLResult;
     use super::{RadecoModule, RadecoFunction};
 
     /// Use symbol information to identify functions
-    pub fn strat_use_symbols(source: Option<&Rc<Source>>,
-                             fl: &FLResult,
+    pub fn strat_use_symbols(_source: Option<&Rc<Source>>,
+                             _fl: &FLResult,
                              rmod: &RadecoModule)
                              -> FLResult {
         rmod.symbols
@@ -103,7 +99,7 @@ pub mod loader_defaults {
     /// Use analysis that `Source` provides to identify functions
     pub fn strat_use_source(source: Option<&Rc<Source>>,
                             fl: &FLResult,
-                            rmod: &RadecoModule)
+                            _rmod: &RadecoModule)
                             -> FLResult {
         // Load function information fom `Source`
         if let Some(ref src) = source {
@@ -161,8 +157,6 @@ impl CGInfo for CallGraph {
 pub struct RadecoModule {
     /// Human-readable name for the  module
     name: Cow<'static, str>,
-    /// Path on disk to the loaded library
-    path: Cow<'static, str>,
     // Information from the loader
     symbols: Vec<LSymbolInfo>,
     sections: Arc<Vec<LSectionInfo>>,
@@ -182,7 +176,7 @@ pub struct RadecoModule {
 }
 
 impl fmt::Debug for RadecoModule {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
         unimplemented!()
     }
 }
@@ -253,7 +247,7 @@ pub struct VarBinding {
 }
 
 impl VarBinding {
-    pub fn new(btype: BindingType, mut name: Option<String>, idx: NodeIndex, ridx: Option<u64>) -> VarBinding {
+    pub fn new(btype: BindingType, name: Option<String>, idx: NodeIndex, ridx: Option<u64>) -> VarBinding {
         let name = Cow::from(name.unwrap_or_default());
         VarBinding {
             name: name,
@@ -400,7 +394,7 @@ impl<'a> ProjectLoader<'a> {
             let mut r2 = R2::new(Some(&self.path)).expect("Unable to open r2");
             //New r2 process is launched thus it needs to analyze
             r2.analyze_all();
-            let mut r2w = Rc::new(RefCell::new(r2));
+            let r2w = Rc::new(RefCell::new(r2));
             self.source = Some(Rc::new(r2w));
         };
 
@@ -626,8 +620,7 @@ impl<'a> ModuleLoader<'a> {
 
         let mut tbindings: Vec<VarBinding> = sub_reg_f.alias_info
             .iter()
-            .enumerate()
-            .filter_map(|(i, reg)| {
+            .filter_map(|reg| {
                 let alias = reg.0;
                 if let &Some(idx) = &["A0", "A1", "A2", "A3", "A4", "A5", "SN"]
                     .iter()
@@ -749,7 +742,7 @@ impl<'a> ModuleLoader<'a> {
         let mut flresult = floader.load(&rmod);
         flresult.functions = if self.filter.is_some() {
             let filter_fn = self.filter.as_ref().unwrap();
-            flresult.functions.into_iter().filter(|&(ref x, ref v)| filter_fn(v)).collect()
+            flresult.functions.into_iter().filter(|&(_, ref v)| filter_fn(v)).collect()
         } else {
             flresult.functions
         };
@@ -757,7 +750,7 @@ impl<'a> ModuleLoader<'a> {
         rmod.functions = flresult.functions;
 
         // Load instructions into functions
-        for (_, rfn) in rmod.functions.iter_mut() {
+        for rfn in rmod.functions.values_mut() {
             rfn.instructions = source.disassemble_n_bytes(rfn.size, rfn.offset)
                 .unwrap_or(Vec::new());
         }
@@ -782,14 +775,14 @@ impl<'a> ModuleLoader<'a> {
                     SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, ascc, true);
                 });
             } else {
-                for (off, rfn) in rmod.functions.iter_mut() {
+                for rfn in rmod.functions.values_mut() {
                     SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, self.assume_cc, true);
                 }
             }
         }
 
         if self.stub_imports {
-            for (off, ifn) in rmod.imports.iter_mut() {
+            for ifn in rmod.imports.values_mut() {
                 SSAConstruct::<SSAStorage>::construct(&mut ifn.rfn.borrow_mut(), &reg_p, self.assume_cc, true);
             }
         }
@@ -835,7 +828,7 @@ impl<'a> ModuleLoader<'a> {
                         let locals_res = self.source.as_ref()
                             .map(|s| s.locals_of(rfn.offset));
                         let mut locals = match locals_res {
-                            Some(Ok(locals)) => {
+                            Some(Ok(_locals)) => {
                                 // TODO
                                 radeco_err!("Not implemented yet");
                                 Vec::new()
@@ -856,11 +849,11 @@ impl<'a> ModuleLoader<'a> {
         }
 
         if self.build_callgraph && self.assume_cc {
-            for (off, rfn) in rmod.functions.iter_mut() {
+            for rfn in rmod.functions.values_mut() {
                 ModuleLoader::init_fn_bindings(rfn, &sub_reg_f);
             }
             // Do the same for imports.
-            for (plt, ifn) in rmod.imports.iter_mut() {
+            for ifn in rmod.imports.values_mut() {
                 ModuleLoader::init_fn_bindings(&mut ifn.rfn.borrow_mut(), &sub_reg_f);
             }
 
@@ -898,7 +891,7 @@ pub trait PredicatedLoader {
     /// Decide if the current loading strategy should be executed, based on previous results.
     ///
     /// Defaults to true, need not implement if the Loader is not conditional
-    fn predicate(&self, x: &FLResult) -> bool {
+    fn predicate(&self, _: &FLResult) -> bool {
         true
     }
     /// Function to execute to breakdown the `RadecoModule`
@@ -1096,15 +1089,15 @@ impl RadecoFunction {
         unimplemented!()
     }
 
-    pub fn set_args(&mut self, args: &Vec<usize>) {
+    pub fn set_args(&mut self, _args: &Vec<usize>) {
         unimplemented!()
     }
 
-    pub fn set_modifides(&mut self, locals: &Vec<usize>) {
+    pub fn set_modifides(&mut self, _locals: &Vec<usize>) {
         unimplemented!()
     }
 
-    pub fn set_locals(&mut self, locals: &Vec<usize>) {
+    pub fn set_locals(&mut self, _locals: &Vec<usize>) {
         unimplemented!()
     }
 

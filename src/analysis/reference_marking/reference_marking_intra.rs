@@ -20,17 +20,15 @@
 //!   - Return from functions                           -- Added from inter-function propagation
 //!     + Returns from 'well-known' functions that return references, such as malloc.
 
-use analysis::constraint_set::{ConstraintSet, Constraint};
+use analysis::constraint_set::ConstraintSet;
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{ValueInfo, ValueType, SSA, SSAWalk, NodeType};
-use middle::ssa::ssastorage::{NodeData, SSAStorage};
+use middle::ssa::ssa_traits::{ValueType, SSA, SSAWalk, NodeType};
+use middle::ssa::ssastorage::SSAStorage;
 use petgraph::graph::NodeIndex;
 use r2api::structs::LSectionInfo;
-use std::collections::{HashSet, VecDeque};
-use std::fmt::Debug;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -41,18 +39,6 @@ pub struct ReferenceMarker {
 }
 
 impl ReferenceMarker {
-    fn compute_result(&self, op: &[ValueType]) -> ValueType {
-        match (op[0], op[1]) {
-            (ValueType::Invalid, _) |
-            (_, ValueType::Invalid) |
-            (ValueType::Reference, ValueType::Reference) => ValueType::Invalid,
-            (ValueType::Reference, _) |
-            (_, ValueType::Reference) => ValueType::Reference,
-            (ValueType::Scalar, ValueType::Scalar) => ValueType::Scalar,
-            (_, _) => ValueType::Unresolved,
-        }
-    }
-
     fn is_constant_scalar(&self, val: u64) -> bool {
         !self.sections.iter().any(|section| {
             let base = section.vaddr.unwrap();
@@ -229,7 +215,7 @@ impl ReferenceMarker {
             sections: sections,
             cs: ConstraintSet::default(),
         };
-        let bn = refmarker.add_constraints(rfn.ssa());
+        let _bn = refmarker.add_constraints(rfn.ssa());
         refmarker.resolve_references_iterative(rfn);
         refmarker
     }

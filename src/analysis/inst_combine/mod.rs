@@ -9,7 +9,6 @@ use either::*;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
-use std::num::Wrapping;
 
 mod combine_rules;
 

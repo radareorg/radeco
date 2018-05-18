@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::radeco_containers::{RadecoFunction, RadecoModule};
+use frontend::radeco_containers::RadecoModule;
 
 #[derive(Debug)]
 pub struct InterProcAnalyzer<'a, T>

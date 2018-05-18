@@ -270,11 +270,11 @@ impl ConstraintSet {
         unimplemented!()
     }
 
-    fn solve_equality_constraint(&mut self, constraint_edge: &EdgeIndex) -> TIEResult<()> {
+    fn solve_equality_constraint(&mut self, _constraint_edge: &EdgeIndex) -> TIEResult<()> {
         unimplemented!()
     }
 
-    fn solve_subtype_constraint(&mut self, constraint_edge: &EdgeIndex) -> TIEResult<()> {
+    fn solve_subtype_constraint(&mut self, _constraint_edge: &EdgeIndex) -> TIEResult<()> {
         unimplemented!()
     }
 
@@ -342,11 +342,11 @@ impl ConstraintSet {
         self.decompose_constraint_node(lhs, rhs);
     }
 
-    fn meet(&mut self, operands: &[RType]) -> RType {
+    fn meet(&mut self, _operands: &[RType]) -> RType {
         unimplemented!()
     }
 
-    fn join(&mut self, operands: &[RType]) -> RType {
+    fn join(&mut self, _operands: &[RType]) -> RType {
         unimplemented!()
     }
 }

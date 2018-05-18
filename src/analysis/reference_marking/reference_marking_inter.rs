@@ -7,15 +7,12 @@
 //!
 
 use frontend::radeco_containers::{RadecoFunction, RadecoModule, CallContextInfo, CallGraph};
-use middle::ir::MAddress;
 use middle::regfile::SubRegisterFile;
-use middle::ir_writer::IRWriter;
 
 use petgraph::Direction;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use r2api::structs::LSectionInfo;
-use rayon::prelude::*;
 use std::collections::HashMap;
 // TODO: Remove this
 use std::fmt;
@@ -83,10 +80,6 @@ impl<T: InterProcAnalysis> AnalyzerWrapper<T> {
         &mut self.analyzer
     }
 
-    pub fn analyzer(&self) -> &T {
-        &self.analyzer
-    }
-
     pub fn should_run(&self) -> bool {
         self.should_run
     }
@@ -97,10 +90,6 @@ impl<T: InterProcAnalysis> AnalyzerWrapper<T> {
 
     pub fn offset(&self) -> u64 {
         self.offset
-    }
-
-    pub fn set_run(&mut self, should_run: bool) {
-        self.should_run = should_run;
     }
 }
 
@@ -176,7 +165,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             // not analyze dependencies yet). This phase is only useful if another analysis pass
             // already preloads this information.
             let callgraph = &rmod.callgraph;
-            for (plt, imp) in rmod.imports.iter() {
+            for imp in rmod.imports.values() {
                 let current_fn = imp.rfn.borrow_mut();
                 let current_fn_node = current_fn.cgid();
                 Self::propagate_up_callgraph(&current_fn_node,
@@ -218,7 +207,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
 
             // Union all infos collected for a function. TODO: Parallelize as there is no
             // dependency.
-            for (current_offset, infov) in infos.iter_mut() {
+            for infov in infos.values_mut() {
                 // XXX: Avoid allocation
                 *infov = vec![infov.iter()
                                   .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];

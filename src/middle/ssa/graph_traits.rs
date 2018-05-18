@@ -32,7 +32,6 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use middle::ir::MAddress;
 use petgraph::EdgeDirection;
 
 

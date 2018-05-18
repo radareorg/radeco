@@ -9,7 +9,6 @@
 //! which will help other modules analyze.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use petgraph::graph::NodeIndex;
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAWalk};

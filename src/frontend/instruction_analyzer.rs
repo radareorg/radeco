@@ -101,6 +101,7 @@ pub trait InstructionAnalyzer: Sized {
 }
 
 /// Capstone-based x86 instruction analyzer
+#[allow(non_camel_case_types)]
 pub struct X86_CS_IA {
     bytes: Vec<u8>,
     cs: cs::Capstone,
