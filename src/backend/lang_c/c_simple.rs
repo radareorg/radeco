@@ -106,11 +106,13 @@ enum CASTNode {
     Var(String),
     // Constant
     Constant(Ty, String),
+    Return(String),
+    Call(String, Vec<String>),
 }
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    Eq,
+    Assign,
     Add,
     Sub,
     Mul,
@@ -127,7 +129,7 @@ pub enum Expr {
     GtEq,
     Lt,
     LtEq,
-    Cmp,
+    Eq,
 }
 
 #[derive(Clone, Debug)]
@@ -286,16 +288,45 @@ impl CAST {
         conditional
     }
 
-    pub fn goto(&mut self, label: String) {
-        let goto_n = self.ast.add_node(CASTNode::Goto(label));
+    pub fn call_func(&mut self, func_name: &str, args: Vec<NodeIndex>) -> NodeIndex {
+        let args_str = args
+            .into_iter()
+            .map(|arg| {
+                match self.ast.node_weight(arg) {
+                    Some(&CASTNode::Var(ref v)) => v.clone(),
+                    Some(&CASTNode::Constant(_, ref c)) => c.clone(),
+                    _ => "unknown".to_string(),
+                }
+            }).collect::<Vec<_>>();
+        let call_node = self.ast.add_node(CASTNode::Call(func_name.to_string(), args_str));
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+        self.ast.add_edge(self.fn_head, call_node, CASTEdge::StatementOrd(idx));
+        call_node
     }
 
-    pub fn label(&mut self, label: String) {
-        let label = self.ast.add_node(CASTNode::Label(label));
+    pub fn ret(&mut self, value: &str) -> NodeIndex {
+        let ret_node = self.ast.add_node(CASTNode::Return(value.to_string()));
+        let idx = self.next_edge_idx();
+        self.ast.add_edge(self.fn_head, ret_node, CASTEdge::StatementOrd(idx));
+        ret_node
+    }
+
+    pub fn goto(&mut self, label_node: NodeIndex) {
+        let label_opt = self.ast.node_weight(label_node).map(|e| e.clone());
+        if let Some(CASTNode::Label(ref label)) = label_opt {
+            let goto_n = self.ast.add_node(CASTNode::Goto(label.clone()));
+            let idx = self.next_edge_idx();
+            self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+        } else {
+            radeco_warn!("Label node is not found");
+        }
+    }
+
+    pub fn label(&mut self, label: &str) -> NodeIndex{
+        let label = self.ast.add_node(CASTNode::Label(label.to_string()));
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, label, CASTEdge::StatementOrd(idx));
+        label
     }
 
     pub fn insert_break(&mut self, _ : NodeIndex) {
@@ -390,7 +421,7 @@ impl CAST {
                 format_with_indent(&format!("goto {}", label), indent)
             }
             CASTNode::Label(ref label) => {
-                format_with_indent(&format!("label {}:", label), indent)
+                format!("{}:", label)
             }
             CASTNode::Break => {
                 format_with_indent("break;", indent)
@@ -399,7 +430,7 @@ impl CAST {
                 let operands = self.get_args_ordered(node);
                 let op_str = operands.iter().map(|x| self.emit_c(x, 0)).collect::<Vec<_>>();
                 match *expr {
-                    Expr::Eq => format!("{} = {}",
+                    Expr::Assign => format!("{} = {}",
                                         format_with_indent(&op_str[0], indent),
                                         &op_str[1]),
                     Expr::Add => format!("({} + {})",
@@ -446,7 +477,7 @@ impl CAST {
                     Expr::LtEq => format!("({} <= {})",
                                           format_with_indent(&op_str[0], indent),
                                           &op_str[1]),
-                    Expr::Cmp => format!("({} == {})",
+                    Expr::Eq => format!("({} == {})",
                                          format_with_indent(&op_str[0], indent),
                                          &op_str[1]),
                 }
@@ -456,6 +487,12 @@ impl CAST {
             }
             CASTNode::Constant(_, ref value) => {
                 value.clone()
+            }
+            CASTNode::Return(ref value) => {
+                format!("{}return {}", format_with_indent("", indent), &value)
+            }
+            CASTNode::Call(ref func, ref args) => {
+                format!("{}({})", format_with_indent(&func, indent), args.join(", "))
             }
         }
     }
@@ -527,10 +564,31 @@ mod test {
         let mut c_ast = CAST::new("main");
         c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
         let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
-        let cmp = c_ast.expr(Expr::Cmp, &vars);
+        let eq = c_ast.expr(Expr::Eq, &vars);
         let increment = c_ast.expr(Expr::Add, &vars);
-        let assignment = c_ast.expr(Expr::Eq, &[vars[0], increment]);
-        c_ast.new_conditional(cmp, assignment, None);
+        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment]);
+        c_ast.new_conditional(eq, assignment, None);
+        let _ = c_ast.ret("");
+        println!("{}", c_ast.print());
+    }
+
+    #[test]
+    fn c_ast_call_test() {
+        let mut c_ast = CAST::new("main");
+        let args = c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
+        let test_args = args.iter().chain(vars.iter()).map(|n| n.clone()).collect::<Vec<_>>();
+        let _ = c_ast.call_func("test_func", test_args);
+        let _ = c_ast.ret("");
+        println!("{}", c_ast.print());
+    }
+
+    #[test]
+    fn c_ast_goto_test() {
+        let mut c_ast = CAST::new("main");
+        let _ = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
+        let lbl = c_ast.label("L1");
+        let _ = c_ast.goto(lbl);
         println!("{}", c_ast.print());
     }
 }
