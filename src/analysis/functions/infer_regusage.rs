@@ -29,7 +29,7 @@ use std::iter::{self, Extend, FromIterator};
 /// register by pushing it onto the stack and popping it back right before
 /// returning, it is considered to be read and not preserved because we can't
 /// guarantee that that stack location is never subsequently read or modified.
-/// See #147 for furhter discussion
+/// See #147 for further discussion
 pub fn run(rmod: &mut RadecoModule, reginfo: &SubRegisterFile) -> () {
     Inferer::new().run(rmod, reginfo);
 }
