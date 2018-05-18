@@ -192,7 +192,7 @@ impl<'a> CallFixer<'a> {
         }
         let call_info: Vec<(LValueRef, Vec<String>)> = {
             let rfn = self.rmod.functions.get(rfn_addr).unwrap();
-            let callees = rfn.call_refs(&self.rmod.callgraph).clone();
+            let callees = rfn.callees(&self.rmod.callgraph).clone();
             let addr_callees = callees.into_iter()
                 .filter_map(|node| {
                     self.rmod.callgraph.node_weight(node).map(|a| (*a, node))

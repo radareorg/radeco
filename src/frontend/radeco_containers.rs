@@ -1066,40 +1066,15 @@ impl RadecoFunction {
         &mut self.bindings
     }
 
-    fn is_addr_in(&self, addr: u64) -> bool {
-        self.offset <= addr && addr <= self.offset + self.size
-    }
-
     pub fn call_sites(&self, call_graph: &CallGraph) -> Vec<CallContextInfo> {
-        let indices = self.call_refs(call_graph);
-        indices.into_iter().map(|idx| {
-            let context_opt = call_graph.edges_directed(idx, Direction::Outgoing)
-                .into_iter()
-                .map(|e| e.weight().clone())
-                .next();
-            match context_opt {
-                Some(context) => context,
-                None => {
-                    radeco_warn!("No CallContextInfo found @ {:?}", idx);
-                    CallContextInfo {
-                        map: Vec::new(),
-                        csite_node: idx,
-                        csite: *call_graph.node_weight(idx).unwrap_or(&0),
-                    }
-                },
-            }
-        }).collect::<Vec<_>>()
+        call_graph.edges_directed(self.cgid, Direction::Outgoing)
+            .into_iter()
+            .map(|e| e.weight().clone())
+            .collect()
     }
 
-    pub fn call_refs(&self, call_graph: &CallGraph) -> Vec<NodeIndex> {
-        call_graph.node_indices()
-            .filter(|n| {
-                if let Some(node) = call_graph.node_weight(*n) {
-                    self.is_addr_in(*node)
-                } else {
-                    false
-                }
-            }).collect::<Vec<_>>()
+    pub fn callees(&self, call_graph: &CallGraph) -> Vec<NodeIndex> {
+        call_graph.callees(self.cgid).map(|(_, n)| n).collect()
     }
 
     pub fn datarefs(&self) -> &Vec<u64> {
