@@ -377,10 +377,10 @@ impl CAST {
                     let fbody = self.emit_c(&arg3, indent + 1);
                     if let CASTNode::Conditional = self.ast[arg3] {
                         // Else-If case
-                        format_with_indent("\n}} else ", indent) + &fbody
+                        format_with_indent("} else ", indent) + &fbody
                     } else {
                         // Else case.
-                        format_with_indent("\n}} else {{", indent) + &fbody
+                        format_with_indent("} else {\n", indent) + &fbody
                     }
                 } else {
                     "".to_owned()
@@ -389,7 +389,7 @@ impl CAST {
                 format!("{}{}{}\n{}",
                         condition,
                         true_body,
-                        false_body,
+                        format!("\n{}", false_body),
                         format_with_indent("}", indent))
             }
             CASTNode::Declaration(ref ty) => {
