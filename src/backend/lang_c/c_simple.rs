@@ -110,7 +110,7 @@ pub enum CASTNode {
     Call(String, Vec<String>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Assign,
     Add,
@@ -272,9 +272,13 @@ impl CAST {
         }
 
         let conditional = self.ast.add_node(CASTNode::Conditional);
-        let e1 = self.ast.find_edge(self.fn_head, condition).expect("This cannot be `None`");
-        let idx = self.get_statement_ord(e1);
-        self.ast.remove_edge(e1);
+        let idx = if let Some(e1) = self.ast.find_edge(self.fn_head, condition) {
+            let idx = self.get_statement_ord(e1);
+            self.ast.remove_edge(e1);
+            idx
+        } else {
+            self.next_edge_idx()
+        };
 
         let e2 = self.ast.find_edge(self.fn_head, body).expect("This cannot be `None`");
         self.ast.remove_edge(e2);
@@ -288,14 +292,18 @@ impl CAST {
         conditional
     }
 
-    pub fn call_func(&mut self, func_name: &str, args: Vec<NodeIndex>) -> NodeIndex {
+    pub fn call_func(&mut self, func_name: &str, args: Vec<Option<NodeIndex>>) -> NodeIndex {
         let args_str = args
             .into_iter()
-            .map(|arg| {
-                match self.ast.node_weight(arg) {
-                    Some(&CASTNode::Var(ref v)) => v.clone(),
-                    Some(&CASTNode::Constant(_, ref c)) => c.clone(),
-                    _ => "unknown".to_string(),
+            .map(|arg_opt| {
+                if let Some(arg) = arg_opt {
+                    match self.ast.node_weight(arg) {
+                        Some(&CASTNode::Var(ref v)) => v.clone(),
+                        Some(&CASTNode::Constant(_, ref c)) => c.clone(),
+                        _ => "unknown".to_string(),
+                    }
+                } else {
+                    "unknown".to_string()
                 }
             }).collect::<Vec<_>>();
         let call_node = self.ast.add_node(CASTNode::Call(func_name.to_string(), args_str));
@@ -304,25 +312,51 @@ impl CAST {
         call_node
     }
 
-    pub fn ret(&mut self, value: &str) -> NodeIndex {
-        let ret_node = self.ast.add_node(CASTNode::Return(value.to_string()));
+    pub fn ret(&mut self, value: Option<NodeIndex>) -> NodeIndex {
+        let value_str = if let Some(_value) = value {
+            match self.ast.node_weight(_value) {
+                Some(&CASTNode::Var(ref v)) => v.clone(),
+                Some(&CASTNode::Constant(_, ref c)) => c.clone(),
+            _ => "unknown".to_string(),
+            }
+        } else {
+            "".to_string()
+        };
+        let ret_node = self.ast.add_node(CASTNode::Return(value_str));
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, ret_node, CASTEdge::StatementOrd(idx));
         ret_node
     }
 
-    pub fn goto(&mut self, label_node: NodeIndex) {
+    pub fn goto(&mut self, label_node: NodeIndex, is_append: bool) -> Option<NodeIndex> {
         let label_opt = self.ast.node_weight(label_node).map(|e| e.clone());
         if let Some(CASTNode::Label(ref label)) = label_opt {
             let goto_n = self.ast.add_node(CASTNode::Goto(label.clone()));
-            let idx = self.next_edge_idx();
-            self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+            // XXX
+            if is_append {
+                let idx = self.next_edge_idx();
+                self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+            }
+            Some(goto_n)
         } else {
             radeco_warn!("Label node is not found");
+            None
         }
     }
 
-    pub fn label(&mut self, label: &str) -> NodeIndex{
+    pub fn reserve_edge(&mut self) -> u64 {
+        self.next_edge_idx()
+    }
+
+    pub fn replace_node(&mut self, idx: u64, node: NodeIndex) {
+        self.ast.add_edge(self.fn_head, node, CASTEdge::StatementOrd(idx));
+    }
+
+    pub fn insert_label_at(&mut self, label: &str, node: NodeIndex) -> NodeIndex {
+        unimplemented!()
+    }
+
+    pub fn label(&mut self, label: &str) -> NodeIndex {
         let label = self.ast.add_node(CASTNode::Label(label.to_string()));
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, label, CASTEdge::StatementOrd(idx));
@@ -380,13 +414,13 @@ impl CAST {
                         format_with_indent("} else ", indent) + &fbody
                     } else {
                         // Else case.
-                        format_with_indent("} else {\n", indent) + &fbody
+                        format_with_indent("} else {\n", indent) + &fbody + "\n"
                     }
                 } else {
                     "".to_owned()
                 };
 
-                format!("{}{}{}\n{}",
+                format!("{}{}{}{}",
                         condition,
                         true_body,
                         format!("\n{}", false_body),
@@ -568,7 +602,7 @@ mod test {
         let increment = c_ast.expr(Expr::Add, &vars);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment]);
         c_ast.new_conditional(eq, assignment, None);
-        let _ = c_ast.ret("");
+        let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }
 
@@ -577,9 +611,9 @@ mod test {
         let mut c_ast = CAST::new("main");
         let args = c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
         let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
-        let test_args = args.iter().chain(vars.iter()).map(|n| n.clone()).collect::<Vec<_>>();
+        let test_args = args.iter().chain(vars.iter()).map(|n| Some(n.clone())).collect::<Vec<_>>();
         let _ = c_ast.call_func("test_func", test_args);
-        let _ = c_ast.ret("");
+        let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }
 
@@ -588,7 +622,7 @@ mod test {
         let mut c_ast = CAST::new("main");
         let _ = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
         let lbl = c_ast.label("L1");
-        let _ = c_ast.goto(lbl);
+        let _ = c_ast.goto(lbl, true);
         println!("{}", c_ast.print());
     }
 }
