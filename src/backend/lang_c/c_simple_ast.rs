@@ -535,7 +535,120 @@ impl SimpleCAST {
         for n in self.next_actions(current_node) {
             self.to_c_ast_body(c_ast, n);
         }
-        c_ast
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn simple_c_ast_basic_test() {
+        let mut ast = SimpleCAST::new("main");
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let z = ast.var("z");
+        let w = ast.var("w");
+        let entry = ast.entry;
+        let assn = ast.assign(x, y, entry);
+        let _ = ast.call_func("func", &[z, w], assn, None);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
     }
 
+    #[test]
+    fn simple_c_ast_expr_test() {
+        let mut ast = SimpleCAST::new("main");
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let z = ast.var("z");
+        let entry = ast.entry;
+        let expr = ast.expr(&[x, y], c_simple::Expr::Add);
+        let assn = ast.assign(x, expr, entry);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_func_test() {
+        let mut ast = SimpleCAST::new("main");
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let entry = ast.entry;
+        let call_f = ast.call_func("func", &[x], entry, Some(y));
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_conditional_test() {
+        let mut ast = SimpleCAST::new("main");
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let z = ast.var("z");
+        let w = ast.var("w");
+        let entry = ast.entry;
+        // XXX
+        let assn = ast.assign(x, y, entry);
+        let call_f = ast.call_func("func", &[z, w], assn, None);
+        let _ = ast.conditional(x, assn, Some(call_f), entry);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_goto_test() {
+        let mut ast = SimpleCAST::new("main");
+        let entry = ast.entry;
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let assn = ast.assign(x, y, entry);
+        let _ = ast.add_goto(entry, "L1", assn);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_return_test() {
+        let mut ast = SimpleCAST::new("main");
+        let entry = ast.entry;
+        let x = ast.var("x");
+        let _ = ast.add_return(Some(x), entry);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_insert_goto_test() {
+        let mut ast = SimpleCAST::new("main");
+        let entry = ast.entry;
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let assn = ast.assign(x, y, entry);
+        let ret = ast.add_return(Some(x), assn);
+        let _ = ast.insert_goto(entry, assn, ret, "L1");
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_complex_test() {
+        let mut ast = SimpleCAST::new("main");
+        let entry = ast.entry;
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let w = ast.var("w");
+        let z = ast.var("z");
+        let v = ast.var("v");
+        let cond = ast.var("cond");
+        let assn1 = ast.assign(x, y, entry);
+        let add = ast.expr(&[x, w], c_simple::Expr::Add);
+        let assn2 = ast.assign(x, add, assn1);
+        let f_call = ast.call_func("func", &[x], assn2, Some(cond));
+        let break_goto = ast.add_goto(assn2, "L1", f_call);
+        let if_node = ast.conditional(cond, break_goto, None, f_call);
+        let _ = ast.add_return(None, if_node);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
 }
