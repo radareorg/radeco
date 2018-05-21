@@ -127,20 +127,10 @@ impl Combiner {
         sub_node: SSAValue,
         ssa: &mut SSAStorage,
     ) -> Option<Either<(SSAValue, SSAValue, CombinableOpInfo), SSAValue>> {
-        let (new_sub_node, new_opinfo) = self.combine_candidates
-            .get(&sub_node)
-            .and_then(|(sub_sub_node, sub_opinfo)| {
-                combine_rules::combine_opinfo(cur_opinfo, sub_opinfo).map(|new_opinfo| {
-                    radeco_trace!(
-                        "    combined ({:?} {:?}) into ({:?})",
-                        sub_opinfo,
-                        cur_opinfo,
-                        new_opinfo
-                    );
-                    (*sub_sub_node, Cow::Owned(new_opinfo))
-                })
-            })
-            .unwrap_or((sub_node, Cow::Borrowed(cur_opinfo)));
+        let (new_opinfo, new_sub_node) = self
+            .combine_opinfo(cur_opinfo, sub_node)
+            .map(|(oi, sn)| (Cow::Owned(oi), sn))
+            .unwrap_or((Cow::Borrowed(cur_opinfo), sub_node));
 
         // simplify
         match simplify_opinfo(&new_opinfo) {
@@ -151,23 +141,8 @@ impl Combiner {
                     simpl_new_opinfo
                 );
                 // make the new node
-                let CombinableOpInfo(new_opcode, new_coci) = simpl_new_opinfo.clone();
-                let new_node = ssa.insert_op(new_opcode, cur_vt, None)?;
-                match new_coci {
-                    COCI::Unary => {
-                        ssa.op_use(new_node, 0, sub_node);
-                    }
-                    COCI::Left(new_c) => {
-                        let new_cnode = ssa.insert_const(new_c)?;
-                        ssa.op_use(new_node, 0, new_cnode);
-                        ssa.op_use(new_node, 1, new_sub_node);
-                    }
-                    COCI::Right(new_c) => {
-                        let new_cnode = ssa.insert_const(new_c)?;
-                        ssa.op_use(new_node, 0, new_sub_node);
-                        ssa.op_use(new_node, 1, new_cnode);
-                    }
-                };
+                let new_node =
+                    make_opinfo_node(cur_vt, simpl_new_opinfo.clone(), new_sub_node, ssa)?;
                 Some(Left((new_node, new_sub_node, simpl_new_opinfo)))
             }
             Some(None) => {
@@ -176,10 +151,63 @@ impl Combiner {
             }
             None => {
                 // no simplification
-                None
+                match new_opinfo {
+                    Cow::Borrowed(_) => None,
+                    Cow::Owned(new_opinfo) => {
+                        // combined, but no further simplification
+                        let new_node =
+                            make_opinfo_node(cur_vt, new_opinfo.clone(), new_sub_node, ssa)?;
+                        Some(Left((new_node, new_sub_node, new_opinfo)))
+                    }
+                }
             }
         }
     }
+
+    /// Tries to combine `sub_node` into `cur_opinfo`.
+    /// Returns `None` if no combination exists.
+    fn combine_opinfo(
+        &self,
+        cur_opinfo: &CombinableOpInfo,
+        sub_node: SSAValue,
+    ) -> Option<(CombinableOpInfo, SSAValue)> {
+        let &(sub_sub_node, ref sub_opinfo) = self.combine_candidates.get(&sub_node)?;
+        let new_opinfo = combine_rules::combine_opinfo(cur_opinfo, sub_opinfo)?;
+        radeco_trace!(
+            "    combined ({:?} {:?}) into ({:?})",
+            sub_opinfo,
+            cur_opinfo,
+            new_opinfo
+        );
+        Some((new_opinfo, sub_sub_node))
+    }
+}
+
+/// Creates an SSA node from the given `CombinableOpInfo`.
+/// Returns `None` on SSA error.
+fn make_opinfo_node(
+    vt: ValueInfo,
+    opinfo: CombinableOpInfo,
+    sub_node: SSAValue,
+    ssa: &mut SSAStorage,
+) -> Option<SSAValue> {
+    let ret = ssa.insert_op(opinfo.0, vt, None)?;
+    match opinfo.1 {
+        COCI::Unary => {
+            ssa.op_use(ret, 0, sub_node);
+        }
+        COCI::Left(new_c) => {
+            let new_cnode = ssa.insert_const(new_c)?;
+            ssa.op_use(ret, 0, new_cnode);
+            ssa.op_use(ret, 1, sub_node);
+        }
+        COCI::Right(new_c) => {
+            let new_cnode = ssa.insert_const(new_c)?;
+            ssa.op_use(ret, 0, sub_node);
+            ssa.op_use(ret, 1, new_cnode);
+        }
+    };
+    Some(ret)
 }
 
 /// Returns an equivalent `CombinableOpInfo`, but "simpler" in some sence.
