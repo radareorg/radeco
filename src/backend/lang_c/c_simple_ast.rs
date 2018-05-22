@@ -105,7 +105,7 @@ fn neighbors_by_edge(edges: &Vec<EdgeReference<SimpleCASTEdge>>, ty: &SimpleCAST
 }
 
 impl SimpleCAST {
-    fn new(fn_name: &str) -> SimpleCAST {
+    pub fn new(fn_name: &str) -> SimpleCAST {
         let mut ast = Graph::new();
         let entry = ast.add_node(SimpleCASTNode::Entry);
         SimpleCAST {
@@ -120,21 +120,21 @@ impl SimpleCAST {
     }
 
     /// Add ValueNode of variable
-    fn var(&mut self, name: &str) -> NodeIndex {
+    pub fn var(&mut self, name: &str) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Variable(name.to_string())));
         self.vars.insert(node);
         node
     }
 
     /// Add ValueNode of constant value
-    fn constant(&mut self, name: &str) -> NodeIndex {
+    pub fn constant(&mut self, name: &str) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Constant(name.to_string())));
         self.consts.insert(node);
         node
     }
 
     /// Add ValueNode of expression
-    fn expr(&mut self, operands: &[NodeIndex], op: c_simple::Expr) -> NodeIndex {
+    pub fn expr(&mut self, operands: &[NodeIndex], op: c_simple::Expr) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(op)));
         for (i, operand) in operands.iter().enumerate() {
             let _ = self.ast.add_edge(node, *operand, SimpleCASTEdge::Value(ValueEdge::Operand(i as u8)));
@@ -144,7 +144,7 @@ impl SimpleCAST {
     }
 
     /// Add ActionNode of assignment
-    fn assign(&mut self, dst: NodeIndex, src: NodeIndex, prev_action: NodeIndex) -> NodeIndex {
+    pub fn assign(&mut self, dst: NodeIndex, src: NodeIndex, prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Assignment));
         let _ = self.ast.add_edge(node, dst, SimpleCASTEdge::Value(ValueEdge::AssignDst));
         let _ = self.ast.add_edge(node, src, SimpleCASTEdge::Value(ValueEdge::AssignSrc));
@@ -153,7 +153,7 @@ impl SimpleCAST {
     }
 
     /// Add ActionNode of function call
-    fn call_func(&mut self, fname: &str, args: &[NodeIndex], prev_action: NodeIndex,
+    pub fn call_func(&mut self, fname: &str, args: &[NodeIndex], prev_action: NodeIndex,
                  ret_val: Option<NodeIndex>) -> NodeIndex {
         let call_node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Call(fname.to_string())));
         for (i, arg) in args.iter().enumerate() {
@@ -198,7 +198,7 @@ impl SimpleCAST {
     }
 
     /// Add ActionNode of if statement
-    fn conditional(&mut self, condition: NodeIndex, if_then: NodeIndex,
+    pub fn conditional(&mut self, condition: NodeIndex, if_then: NodeIndex,
                    if_else: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::If));
         self.remove_incoming_actions(if_then);
@@ -213,7 +213,7 @@ impl SimpleCAST {
     }
 
     /// Add ActionNode of return statement
-    fn add_return(&mut self, ret_val: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
+    pub fn add_return(&mut self, ret_val: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Return));
         if ret_val.is_some() {
             self.ast.add_edge(node, ret_val.unwrap(), SimpleCASTEdge::Value(ValueEdge::RetVal));
@@ -222,7 +222,7 @@ impl SimpleCAST {
         node
     }
 
-    fn add_goto(&mut self, dst: NodeIndex, label_str: &str, prev_action: NodeIndex) -> NodeIndex {
+    pub fn add_goto(&mut self, dst: NodeIndex, label_str: &str, prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Goto));
         self.ast.add_edge(node, dst, SimpleCASTEdge::Value(ValueEdge::GotoDst));
         self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
@@ -230,7 +230,7 @@ impl SimpleCAST {
         node
     }
 
-    fn insert_goto(&mut self, prev_action: NodeIndex, next_action: NodeIndex,
+    pub fn insert_goto(&mut self, prev_action: NodeIndex, next_action: NodeIndex,
                    dst: NodeIndex, label_str: &str) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Goto));
         let _ = self.ast.add_edge(node, dst, SimpleCASTEdge::Value(ValueEdge::GotoDst));
@@ -250,7 +250,7 @@ impl SimpleCAST {
             }).collect()
     }
 
-    /// Returns a pair (IfThen, IfElse)
+    // Returns a pair (IfThen, IfElse)
     fn branch(&self, idx: NodeIndex) -> Option<(NodeIndex, Option<NodeIndex>)> {
         if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::If)) {
             return None;
@@ -267,7 +267,7 @@ impl SimpleCAST {
         }
     }
 
-    /// Returns value node which represents condition used by If statement
+    // Returns value node which represents condition used by If statement
     fn branch_condition(&self, idx: NodeIndex) -> Option<NodeIndex> {
         if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::If)) {
             return None;
@@ -283,7 +283,7 @@ impl SimpleCAST {
         expr
     }
 
-    /// Returns destination of goto statement
+    // Returns destination of goto statement
     fn goto(&self, idx: NodeIndex) -> Option<NodeIndex> {
         if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::Goto))  {
             return None;
@@ -303,7 +303,7 @@ impl SimpleCAST {
         goto_dsts.first().map(|n| n.clone())
     }
 
-    /// Returns a pair (Dst, Src) which represents Dst = Src
+    // Returns a pair (Dst, Src) which represents Dst = Src
     fn assignment(&self, idx: NodeIndex) -> Option<(NodeIndex, NodeIndex)> {
         if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::Assignment)) {
             return None;
@@ -319,7 +319,7 @@ impl SimpleCAST {
         None
     }
 
-    /// Returns arguments of function call
+    // Returns arguments of function call
     fn args_call(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
         match self.ast.node_weight(idx) {
             Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
@@ -340,7 +340,7 @@ impl SimpleCAST {
         Some(ret)
     }
 
-    /// Returns value node which is assigned by a given function call
+    // Returns value node which is assigned by a given function call
     fn func_val(&self, idx: NodeIndex) -> Option<NodeIndex> {
         match self.ast.node_weight(idx) {
             Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
@@ -360,7 +360,7 @@ impl SimpleCAST {
         ret.first().map(|x| *x)
     }
 
-    /// Returns value node of the return value of a return statement
+    // Returns value node of the return value of a return statement
     fn ret_val(&self, idx: NodeIndex) -> Option<NodeIndex> {
         match self.ast.node_weight(idx) {
             Some(&SimpleCASTNode::Action(ActionNode::Return)) => {},
@@ -380,7 +380,7 @@ impl SimpleCAST {
         ret_val.into_iter().next()
     }
 
-    /// Returns operands used by a given expression
+    // Returns operands used by a given expression
     fn operands_from_expr(&self, expr: NodeIndex) -> Vec<NodeIndex> {
         let mut operands = self.ast.edges_directed(expr, Direction::Outgoing)
             .into_iter()
@@ -394,7 +394,7 @@ impl SimpleCAST {
         operands.into_iter().map(|(_, n)| n).collect::<Vec<_>>()
     }
 
-    fn to_c_ast(&self) -> CAST {
+    pub fn to_c_ast(&self) -> CAST {
         let mut converter = CASTConverter::new(&self);
         converter.to_c_ast()
     }
