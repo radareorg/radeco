@@ -425,8 +425,6 @@ struct CASTConverter<'a> {
     ast: &'a SimpleCAST,
     /// HashMap from SimpleCAST's node to CAST's node
     node_map: HashMap<NodeIndex, NodeIndex>,
-    /// HashMap from ActionNode to label node
-    label_node_map: HashMap<NodeIndex, NodeIndex>,
     visited: HashSet<NodeIndex>,
 }
 
@@ -435,7 +433,6 @@ impl<'a> CASTConverter<'a> {
         CASTConverter {
             ast: ast,
             node_map: HashMap::new(),
-            label_node_map: HashMap::new(),
             visited: HashSet::new(),
         }
     }
