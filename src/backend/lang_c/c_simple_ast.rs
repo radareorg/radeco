@@ -251,15 +251,39 @@ impl SimpleCAST {
     }
 
     // Returns a pair (IfThen, IfElse)
-    fn branch(&self, idx: NodeIndex) -> Option<(NodeIndex, Option<NodeIndex>)> {
+    fn branch(&self, idx: NodeIndex) -> Option<(Vec<NodeIndex>, Option<Vec<NodeIndex>>)> {
         if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::If)) {
             return None;
         }
-        let ns = self.ast.edges_directed(idx, Direction::Outgoing).into_iter().collect();
-        let if_then = neighbors_by_edge(&ns, &SimpleCASTEdge::Action(ActionEdge::IfThen))
-            .first().map(|e| e.clone());
-        let if_else = neighbors_by_edge(&ns, &SimpleCASTEdge::Action(ActionEdge::IfElse))
-            .first().map(|e| e.clone());
+        let gather_actions = |index, action_type| {
+            let next_node = |node, edge| {
+                let ns = self.ast
+                    .edges_directed(node, Direction::Outgoing)
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                neighbors_by_edge(&ns, edge)
+                    .first().map(|e| e.clone())
+            };
+            let next_normal = move |node| {
+                next_node(node, &SimpleCASTEdge::Action(ActionEdge::Normal))
+            };
+            move || {
+                let mut first = next_node(index, action_type);
+                let mut ret = Vec::new();
+                while let Some(n) = first {
+                    ret.push(n);
+                    first = next_normal(n);
+                }
+                eprintln!("ret.len(): {:?}", ret.len());
+                if ret.len() > 0 {
+                    Some(ret)
+                } else {
+                    None
+                }
+            }
+        };
+        let if_then = gather_actions(idx, &SimpleCASTEdge::Action(ActionEdge::IfThen))();
+        let if_else = gather_actions(idx, &SimpleCASTEdge::Action(ActionEdge::IfElse))();
         if if_then.is_some() {
             Some((if_then.unwrap(), if_else))
         } else {
@@ -509,14 +533,18 @@ impl<'a> CASTConverter<'a> {
                 let cond = self.ast.branch_condition(current_node);
                 let branches = self.ast.branch(current_node).map(|x| x.clone());
                 if let (Some((if_then, if_else)), Some(cond)) = (branches, cond) {
-                    self.to_c_ast_body(c_ast, if_then);
+                    for n in if_then.iter() {
+                        self.to_c_ast_body(c_ast, *n);
+                    }
                     if if_else.is_some() {
-                        self.to_c_ast_body(c_ast, if_else.unwrap());
+                        for n in if_else.as_ref().unwrap().iter() {
+                            self.to_c_ast_body(c_ast, *n);
+                        }
                     }
                     // TODO avoid unwrap
                     let c = *self.node_map.get(&cond).unwrap();
-                    let t = *self.node_map.get(&if_then).unwrap();
-                    let e = if_else.and_then(|x| self.node_map.get(&x)).map(|x| *x);
+                    let t = if_then.into_iter().map(|x| *self.node_map.get(&x).unwrap()).collect::<Vec<_>>();
+                    let e = if_else.map(|x| x.iter().map(|y| *self.node_map.get(y).unwrap()).collect::<Vec<_>>());
                     let node = c_ast.new_conditional(c, t, e);
                     self.node_map.insert(current_node, node);
                 }

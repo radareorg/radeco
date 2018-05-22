@@ -8,7 +8,7 @@ use std::{default, iter, fmt};
 
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use petgraph::visit::EdgeRef;
-use petgraph::EdgeDirection;
+use petgraph::{Direction, EdgeDirection};
 
 //////////////////////////////////////////////////////////////////////////////
 //// Declaration and implementation for basic C data types.
@@ -108,6 +108,8 @@ pub enum CASTNode {
     Constant(Ty, String),
     Return(String),
     Call(String, Vec<String>),
+    // Used in if-then, if-else body
+    Block,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -140,6 +142,7 @@ enum CASTEdge {
     /// Used to ensure ordering of operands in an expression. Operands are ordered from lower to
     /// higher index.
     OpOrd(u8),
+    BlockOrd(u64),
 }
 
 const LHS: CASTEdge = CASTEdge::OpOrd(0);
@@ -258,20 +261,9 @@ impl CAST {
 
     pub fn new_conditional(&mut self,
                            condition: NodeIndex,
-                           body: NodeIndex,
-                           else_condition: Option<NodeIndex>)
+                           body: Vec<NodeIndex>,
+                           else_condition: Option<Vec<NodeIndex>>)
                            -> NodeIndex {
-        let e3 = if let Some(else_c) = else_condition {
-            self.ast.find_edge(self.fn_head, else_c)
-        } else {
-            None
-        };
-
-        if let Some(e3) = e3 {
-            self.ast.remove_edge(e3);
-        }
-
-        let conditional = self.ast.add_node(CASTNode::Conditional);
         let idx = if let Some(e1) = self.ast.find_edge(self.fn_head, condition) {
             let idx = self.get_statement_ord(e1);
             self.ast.remove_edge(e1);
@@ -279,15 +271,26 @@ impl CAST {
         } else {
             self.next_edge_idx()
         };
-
-        let e2 = self.ast.find_edge(self.fn_head, body).expect("This cannot be `None`");
-        self.ast.remove_edge(e2);
-
+        let conditional = self.ast.add_node(CASTNode::Conditional);
         self.ast.add_edge(self.fn_head, conditional, CASTEdge::StatementOrd(idx));
         self.ast.add_edge(conditional, condition, CASTEdge::OpOrd(0));
-        self.ast.add_edge(conditional, body, CASTEdge::OpOrd(1));
-        if let Some(else_condition) = else_condition {
-            self.ast.add_edge(conditional, else_condition, CASTEdge::OpOrd(2));
+
+        let node = self.ast.add_node(CASTNode::Block);
+        self.ast.add_edge(conditional, node, CASTEdge::OpOrd(1));
+        for (i, n) in body.iter().enumerate() {
+            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            self.ast.remove_edge(e);
+            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+        }
+
+        if let Some(elses) = else_condition {
+            let else_node = self.ast.add_node(CASTNode::Block);
+            self.ast.add_edge(conditional, else_node, CASTEdge::OpOrd(2));
+            for (i, n) in elses.into_iter().enumerate() {
+                let e = self.ast.find_edge(self.fn_head, n).expect("This cannot be `None`");
+                self.ast.remove_edge(e);
+                self.ast.add_edge(else_node, n, CASTEdge::BlockOrd(i as u64));
+            }
         }
         conditional
     }
@@ -528,6 +531,21 @@ impl CAST {
             CASTNode::Call(ref func, ref args) => {
                 format!("{}({})", format_with_indent(&func, indent), args.join(", "))
             }
+            CASTNode::Block => {
+                let mut ns = self.ast.edges_directed(*node, Direction::Outgoing)
+                    .into_iter()
+                    .filter_map(|x| {
+                        match x.weight() {
+                            CASTEdge::BlockOrd(i) => Some((i, x.target())),
+                            _ => None
+                        }
+                    }).collect::<Vec<_>>();
+                ns.sort_by_key(|k| k.0);
+                ns.into_iter()
+                    .map(|(_, n)| self.emit_c(&n, indent))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
         }
     }
 
@@ -601,7 +619,7 @@ mod test {
         let eq = c_ast.expr(Expr::Eq, &vars);
         let increment = c_ast.expr(Expr::Add, &vars);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment]);
-        c_ast.new_conditional(eq, assignment, None);
+        c_ast.new_conditional(eq, vec![assignment], None);
         let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }
