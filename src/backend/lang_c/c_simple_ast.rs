@@ -482,8 +482,7 @@ impl<'a> CASTConverter<'a> {
         eprintln!("current: {:?}", current_node);
         if let Some(ref l) = self.ast.label_map.get(&current_node) {
             eprintln!("Label at {:?}", current_node);
-            let node = c_ast.label(l);
-            self.label_node_map.insert(current_node, node);
+            c_ast.label(l);
         };
         let idx = self.ast.ast.node_weight(current_node).map(|x| x.clone());
         match idx {
@@ -549,25 +548,12 @@ impl<'a> CASTConverter<'a> {
                 }
             },
             Some(SimpleCASTNode::Action(ActionNode::Goto)) => {
-                let reserved_edge = if self.ast.goto(current_node)
-                    .and_then(|d| self.label_node_map.get(&d)).is_some() {
-                        None
-                    } else {
-                        let ret = c_ast.reserve_edge();
-                        for n in self.ast.next_actions(current_node) {
-                            self.to_c_ast_body(c_ast, n);
-                        }
-                        Some(ret)
-                    };
                 let dst_opt = self.ast.goto(current_node)
-                    .and_then(|d| self.label_node_map.get(&d))
+                    .and_then(|d| self.ast.label_map.get(&d))
                     .map(|d| d.clone());
                 if let Some(dst) = dst_opt {
                     // TODO avoid unwrap
-                    let node = c_ast.goto(dst, reserved_edge.is_none()).unwrap();
-                    if reserved_edge.is_some() {
-                        c_ast.replace_node(reserved_edge.unwrap(), node);
-                    }
+                    let node = c_ast.goto(&dst);
                     self.node_map.insert(current_node, node);
                 } else {
                     radeco_warn!("Error Goto");
