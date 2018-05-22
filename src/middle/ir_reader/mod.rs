@@ -6,14 +6,18 @@ mod lowering;
 mod simple_ast;
 
 use middle::ssa::ssastorage::SSAStorage;
+use middle::regfile::SubRegisterFile;
+
+use std::sync::Arc;
 
 /// Parses textual IL as emited by [`ir_writer`](::middle::ir_writer).
-/// The returned SSA is empty if an error occured.
-pub fn parse_il<T: AsRef<str>>(il: T) -> SSAStorage {
+/// The returned SSA is empty if an error occurred.
+pub fn parse_il(il: &str, regfile: Arc<SubRegisterFile>) -> SSAStorage {
     let mut ret = SSAStorage::new();
-    match parser::FunctionParser::new().parse(il.as_ref()) {
+    ret.regfile = regfile;
+    match parser::FunctionParser::new().parse(il) {
         Ok(sast) => lowering::lower_simpleast(&mut ret, sast)
-            .unwrap_or_else(|e| radeco_err!("Error lowering AST to SSA: {:?}", e)),
+            .unwrap_or_else(|e| radeco_err!("Error lowering IL to SSA: {:?}", e)),
         Err(s) => radeco_err!("Error parsing IL: {}", s),
     }
     ret

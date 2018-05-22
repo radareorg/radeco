@@ -7,7 +7,11 @@
 
 //! Contains the struct [`SubRegisterFile`] which extends `PhiPlacer`s
 //! functionality by reads and writes to partial registers.
-//! Also contains the struct [`RegisterUsage`].
+//! Also contains [`RegisterUsage`], and [`RegisterMap`].
+
+mod regmap;
+
+pub use self::regmap::RegisterMap;
 
 use middle::ir;
 
@@ -17,7 +21,6 @@ use r2api::structs::{LCCInfo, LRegInfo};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::From;
-
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SubRegister {
@@ -94,7 +97,11 @@ impl SubRegisterFile {
             if reg.name.ends_with("flags") {
                 continue;
             } // HARDCODED x86
-            events.push(SubRegister::new(i as u64, reg.offset as u64, reg.size as u64));
+            events.push(SubRegister::new(
+                i as u64,
+                reg.offset as u64,
+                reg.size as u64,
+            ));
         }
 
         events.sort_by(|a, b| {
@@ -117,7 +124,9 @@ impl SubRegisterFile {
 
                 radeco_trace!("regfile_mappings|{} -> {}", whole.len(), &name);
 
-                whole.push(ValueInfo::new_unresolved(ir::WidthSpec::from(current.width as u16)));
+                whole.push(ValueInfo::new_unresolved(ir::WidthSpec::from(
+                    current.width as u16,
+                )));
                 names.push(name.clone());
             } else {
                 let ev_until = ev.width + ev.shift;
@@ -158,17 +167,16 @@ impl SubRegisterFile {
         }
     }
 
-
     // API for whole register.
 
     // Get information by id.
-    pub fn get_name(&self, id: usize) -> Option<String> {
-        Some(self.whole_names[id].clone())
+    pub fn get_name(&self, id: RegisterId) -> Option<&str> {
+        self.whole_names.get(id.to_usize()).map(|s| &**s)
     }
 
-    pub fn get_width(&self, id: usize) -> Option<u64> {
+    pub fn get_width(&self, id: RegisterId) -> Option<u64> {
         if let Some(name) = self.get_name(id) {
-            if let Some(subreg) = self.named_registers.get(&name) {
+            if let Some(subreg) = self.named_registers.get(name) {
                 Some(subreg.width)
             } else {
                 None
@@ -179,10 +187,10 @@ impl SubRegisterFile {
     }
 
     // Get information by other way.
-    pub fn get_name_by_alias(&self, alias: &String) -> Option<String> {
+    pub fn get_name_by_alias(&self, alias: &String) -> Option<&str> {
         for id in 0..self.whole_names.len() {
-            if let Some(name) = self.get_name(id) {
-                if self.alias_info.get(&name) == Some(alias) {
+            if let Some(name) = self.get_name(RegisterId::from_usize(id)) {
+                if self.alias_info.get(name) == Some(alias) {
                     return Some(name);
                 }
             }
@@ -192,16 +200,22 @@ impl SubRegisterFile {
 
     pub fn iter_args(&self) -> RegisterIter {
         let args = &["A0", "A1", "A2", "A3", "A4", "A5"];
-        let whiter: HashMap<String, usize> = self.whole_names.iter().enumerate().map(|(i, x)| (x.clone(), i)).collect();
+        let whiter: HashMap<String, usize> = self
+            .whole_names
+            .iter()
+            .enumerate()
+            .map(|(i, x)| (x.clone(), i))
+            .collect();
         // XXX: Avoid clones!
-        RegisterIter(Box::new(self.alias_info
-            .clone()
-            .into_iter()
-            .filter_map(move |r| if args.contains(&r.0.as_str()) {
-                Some((whiter[&r.1], r.1))
-            } else {
-                None
-            })))
+        RegisterIter(Box::new(self.alias_info.clone().into_iter().filter_map(
+            move |r| {
+                if args.contains(&r.0.as_str()) {
+                    Some((whiter[&r.1], r.1))
+                } else {
+                    None
+                }
+            },
+        )))
     }
 
     /// Creates a new mutable `RegisterUsage`.
@@ -237,17 +251,23 @@ impl SubRegisterFile {
         let mut preserves = FixedBitSet::with_capacity(reg_count);
 
         for regname in callconv_name_to_preserved_list(callconv_name) {
-            let reg_id = self.register_id_by_name(regname)
+            let reg_id = self
+                .register_id_by_name(regname)
                 .expect("unknown register in internal preserved list");
             preserves.set(reg_id as usize, true)
         }
 
         Some(RegisterUsage { ignores, preserves })
     }
+
+    /// Creates an empty `RegisterMap`.
+    pub fn new_register_map<V>(&self) -> RegisterMap<V> {
+        RegisterMap::with_register_count(self.whole_registers.len() + 1)
+    }
 }
 
-/// Opaque identifier for a register in [`SubRegisterFile`]
-#[derive(Copy, Clone, Debug)]
+/// Opaque identifier for a whole register in [`SubRegisterFile`]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RegisterId(u8);
 
 #[cfg_attr(rustfmt, rustfmt_skip)]

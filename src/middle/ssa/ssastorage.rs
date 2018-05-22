@@ -11,11 +11,13 @@ use std::fmt::{self, Debug};
 use std::collections::{HashMap, VecDeque, HashSet, BinaryHeap};
 use std::{default, u64};
 use std::cmp::{PartialOrd, PartialEq, Ordering};
+use std::sync::Arc;
 use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::EdgeDirection;
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::graph::{EdgeIndex,  NodeIndex};
 use middle::ir::{self, MAddress, MOpcode};
+use middle::regfile::SubRegisterFile;
 
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
@@ -167,7 +169,9 @@ pub struct SSAStorage {
     entry_node: NodeIndex,
     exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
+    #[deprecated(note = "use regfile instead")]
     pub regnames: Vec<String>,
+    pub regfile: Arc<SubRegisterFile>,
     pub constants: HashMap<u64, NodeIndex>,
 }
 
@@ -179,6 +183,7 @@ impl default::Default for SSAStorage {
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
             regnames: Vec::new(),
+            regfile: Arc::default(),
             constants: HashMap::new(),
         }
     }
@@ -192,6 +197,7 @@ impl SSAStorage {
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
             regnames: Vec::new(),
+            regfile: Arc::default(),
             constants: HashMap::new(),
         }
     }

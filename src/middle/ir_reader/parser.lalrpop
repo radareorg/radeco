@@ -7,7 +7,7 @@ grammar;
 pub Function: Function =
     <name:FuncHeader>
     "{"
-    <register_list:RegisterList>
+    <entry_reg_state:EntryRegState>
     <basic_blocks:BasicBlock*>
     <exit_node:ExitNode?>
     <final_reg_state:FinalRegState>
@@ -16,29 +16,59 @@ pub Function: Function =
 FuncHeader: String =
     <s:r"define-fun [[:alnum:]_.]+\(unknown\) -> unknown">  => s[11..s.len()-20].to_owned();
 
-RegisterList: Vec<PhysReg> =
-    "registers: " <Comma<PhysReg>> ";"                      => <>;
+EntryRegState: Vec<(NewValue, PhysReg)> =
+    "entry-register-state:" <EntryRegState0*>               => <>;
+
+EntryRegState0: (NewValue, PhysReg) =
+    <NewValue> <PhysReg> ";"                                => (<>);
+
+FinalRegState: Vec<(PhysReg, Operand)> =
+    "final-register-state:" <FinalRegState0*>               => <>;
+
+FinalRegState0: (PhysReg, Operand) =
+    <PhysReg> "=" <Operand> ";"                             => (<>);
 
 BasicBlock: BasicBlock =
-    <addr:BBHeader> <ops:Operation*> <jump:Terminator?>     => BasicBlock { <> };
+    <addr:BBAddress>
+    <size:BBSize>
+    ":"
+    <ops:Operation*>
+    <term:Terminator>                                       => BasicBlock { <> };
 
-BBHeader: ir::MAddress =
-    "bb_" <MAddress> "(" ")" ":"                            => <>;
+BBAddress: ir::MAddress =
+    "bb_" <MAddress>                                        => <>;
+
+BBSize: u64 =
+    "(" <r"sz 0x[[:xdigit:]]+"> ")"                         => str_to_u64(&<>[5..], 16);
 
 ExitNode: ExitNode =
     "exit-node:" <ops:Operation*>                           => ExitNode { <> };
 
-Operation: Operation = <Operation0> ";";
+Terminator: Terminator = {
+    "JMP" <MAddress>                                        => Terminator::JmpUncond(<>),
+    "JMP" "IF" <Operand> <MAddress> "ELSE" <MAddress>       => Terminator::JmpCond(<>),
+    "JMP" "TO" <Operand>                                    => Terminator::JmpIndirect(<>),
+    "UNREACHABLE"                                           => Terminator::Unreachable,
+};
+
+Operation: Operation =
+    <Operation0> ";"                                        => <>;
 
 Operation0: Operation = {
-    <ValueRef> ":" <Type> "=" <Phi>                         => Operation::Phi(<>),
-    <OpAddr?> <ValueRef> ":" <Type> "=" <Expr>              => Operation::Assign(<>),
-    <OpAddr?> "CALL" "*" "(" <Operand> ")" <CallArgs>       => Operation::Call(<>),
-    <OpAddr?> "CALL" <Operand> <CallArgs>                   => Operation::Call(<>),
+    <NewValue> <Phi>                                        => Operation::Phi(<>),
+    <OpAddr?> <NewValue> <Expr>                             => Operation::Assign(<>),
+    <OpAddr?> <CallRets> "CALL" <Operand> <CallArgs>        => Operation::Call(<>),
+    <OpAddr?> <CallRets> "CALL *(" <Operand> ")" <CallArgs> => Operation::Call(<>),
 };
 
 OpAddr: ir::MAddress =
     "[@" <MAddress> "]"                                     => <>;
+
+CallRets: Vec<CallRet> =
+    "(" <Comma<CallRet>> ")" "="                            => <>;
+
+CallRet: CallRet =
+    <value:NewValue> <reg:PhysReg>                          => CallRet { <> };
 
 CallArgs: Vec<CallArg> =
     "(" <Comma<CallArg>> ")"                                => <>;
@@ -57,29 +87,15 @@ Expr: Expr = {
     <ResizeType> <WidthSpec> "(" <Operand> ")"              => Expr::Resize(<>),
 };
 
-Terminator: Terminator = {
-    "JMP" <MAddress>                                        => Terminator::JmpUncond(<>),
-    "JMP" "IF" <Operand> <MAddress> <("ELSE" <MAddress>)?>  => Terminator::JmpCond(<>),
-    "JMP" "TO" <Operand>                                    => Terminator::JmpIndirect(<>),
-    "UNREACHABLE"                                           => Terminator::Unreachable,
-};
-
-FinalRegState: Vec<(PhysReg, Operand)> =
-    "final-register-state:" <FinalRegState0*>               => <>;
-
-FinalRegState0: (PhysReg, Operand) =
-    <PhysReg> "=" <Operand> ";"                             => (<>);
-
-Operand: Operand = {
-    Comment                                                 => Operand::Comment(<>),
-    ValueRef                                                => Operand::ValueRef(<>),
-    Const                                                   => Operand::Const(<>),
-};
-
 ResizeType: ResizeType = {
     "Narrow"                                                => ResizeType::Narrow,
     "SignExt"                                               => ResizeType::SignExt,
     "ZeroExt"                                               => ResizeType::ZeroExt,
+};
+
+Operand: Operand = {
+    ValueRef                                                => Operand::ValueRef(<>),
+    Const                                                   => Operand::Const(<>),
 };
 
 PrefixOp: PrefixOp = {
@@ -101,6 +117,9 @@ InfixOp: InfixOp = {
     "<<"                                                    => InfixOp::Lsl,
     ">>"                                                    => InfixOp::Lsr,
 };
+
+NewValue: NewValue =
+    <ValueRef> ":" <Type> "="                               => NewValue(<>);
 
 Type: Type =
     "$Unknown" <WidthSpec> <RefSpec>                        => Type(<>);
@@ -136,6 +155,5 @@ MAddress: ir::MAddress =
                               str_to_u64(&s[dot_idx+1..], 16))
         };
 
-Comma<E>: Vec<E> = {
-    <v0:(<E> ",")*> <e:E>                                   => { let mut v = v0; v.push(e); v },
-};
+Comma<E>: Vec<E> =
+    <v0:(<E> ",")*> <e:E>                                   => { let mut v = v0; v.push(e); v };

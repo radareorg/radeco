@@ -19,7 +19,7 @@ use middle::ssa::graph_traits::{Graph, EdgeInfo, ConditionInfo};
 use middle::ir::{self, MAddress, MOpcode};
 
 use middle::ssa::ssa_traits::{NodeType, NodeData};
-use middle::regfile::SubRegisterFile;
+use middle::regfile::{RegisterId, SubRegisterFile};
 
 pub type VarId = u64;
 
@@ -645,13 +645,12 @@ impl<'a, T> PhiPlacer<'a, T>
         
         // Add register information into comment;
         for id in 0..self.regfile.whole_names.len() {
-            let reg_name = self.regfile.get_name(id).unwrap_or_else(|| {
+            let name = self.regfile.get_name(RegisterId::from_usize(id)).unwrap_or_else(|| {
                 radeco_err!("Register Name not found");
-                "Unknown".to_string()
+                "Unknown"
             });
-            let name = reg_name.as_str();
             if msg.starts_with(name) {
-                self.ssa.set_register(i, reg_name.clone());
+                self.ssa.set_register(i, name.to_owned());
             }
         }
 
@@ -754,9 +753,13 @@ impl<'a, T> PhiPlacer<'a, T>
                 }
             };
             self.write_variable(*address, id, value);
-            self.ssa.set_register(value, self.regfile
-                                              .get_name(id as usize)
-                                              .unwrap_or(String::new()));
+            self.ssa.set_register(
+                value,
+                self.regfile
+                    .get_name(RegisterId::from_usize(id as usize))
+                    .unwrap_or("")
+                    .to_owned()
+            );
             return;
         }
 
@@ -1002,6 +1005,7 @@ impl<'a, T> PhiPlacer<'a, T>
             }
         }
 
+        // TODO: remove
         self.ssa.map_registers(self.regfile.whole_names.clone());
 
         // Associate basic block with correct block sizes.

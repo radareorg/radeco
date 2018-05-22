@@ -50,6 +50,7 @@ extern crate serde_json;
 #[macro_use] extern crate lazy_static;
 extern crate fixedbitset;
 extern crate either;
+extern crate vec_map;
 
 #[cfg(feature="trace_log")]
 #[macro_use] extern crate log;

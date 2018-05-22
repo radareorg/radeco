@@ -20,7 +20,7 @@ use radeco_lib::analysis::sccp;
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::frontend::radeco_containers::ProjectLoader;
 use radeco_lib::middle::{dce, dot};
-use radeco_lib::middle::ir_writer::IRWriter;
+use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::ir_reader::parse_il;
 use radeco_lib::middle::ssa::verifier;
 
@@ -57,7 +57,9 @@ fn main() {
         {
             println!("[*] Fixing Callee Information");
             let bp_name = regfile.get_name_by_alias(&"BP".to_string());
+            let bp_name = bp_name.map(|s| s.to_owned());
             let sp_name = regfile.get_name_by_alias(&"SP".to_string());
+            let sp_name = sp_name.map(|s| s.to_owned());
             let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
             callfixer.rounded_analysis();
         }
@@ -179,10 +181,10 @@ fn main() {
                 // Write out the IR file
                 //////////////////////////
                 println!("  [*] Writing out IR");
+                let mut res = String::new();
+                ir_writer::emit_il(&mut res, Some(rfn.name.to_string()), rfn.ssa()).unwrap();
                 let mut ff = File::create(&fname).expect("Unable to create file");
-                let mut writer: IRWriter = Default::default();
-                let res = writer.emit_il(Some(rfn.name.to_string()), rfn.ssa());
-                writeln!(ff, "{}", res).expect("Error writing to file");
+                write!(ff, "{}", res).expect("Error writing to file");
                 writeln!(ffm, "{}", res).expect("Error writing to file");
                 // Set as a comment in radare2
                 match rmod.source.as_mut().unwrap().send(format!("CC, {} @ {}", fname.to_str().unwrap(), addr)) {
@@ -197,9 +199,9 @@ fn main() {
                 // Try parsing the IR file
                 /////////////////////////////
                 println!("  [*] Testing IR parser");
-                let parsed = parse_il(&fn_ir_str);
-                let mut writer: IRWriter = Default::default();
-                let res = writer.emit_il(Some((*rfn.name).to_owned()), &parsed);
+                let parsed = parse_il(&fn_ir_str, regfile.clone());
+                let mut res = String::new();
+                ir_writer::emit_il(&mut res, Some((*rfn.name).to_owned()), &parsed).unwrap();
                 for (orig, roundtrip) in fn_ir_str.lines().zip(res.lines()) {
                     if orig != roundtrip {
                         println!("  FAILED TO ROUND-TRIP: \"{}\" => \"{}\"", orig, roundtrip);
