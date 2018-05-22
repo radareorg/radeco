@@ -83,13 +83,8 @@ struct SimpleCAST {
     consts: HashSet<NodeIndex>,
     /// Expressions declared in this function
     exprs: HashSet<NodeIndex>,
-    /// HashMap from SimpleCAST's node to CAST's node
-    node_map: HashMap<NodeIndex, NodeIndex>,
-    /// HashMap from ActionNode to label node
-    label_node_map: HashMap<NodeIndex, NodeIndex>,
     /// Hashmap from label node to string it represents
     label_map: HashMap<NodeIndex, String>,
-    visited: HashSet<NodeIndex>,
 }
 
 
@@ -120,10 +115,7 @@ impl SimpleCAST {
             vars: HashSet::new(),
             consts: HashSet::new(),
             exprs: HashSet::new(),
-            node_map: HashMap::new(),
-            label_node_map: HashMap::new(),
             label_map: HashMap::new(),
-            visited: HashSet::new(),
         }
     }
 
@@ -402,20 +394,45 @@ impl SimpleCAST {
         operands.into_iter().map(|(_, n)| n).collect::<Vec<_>>()
     }
 
+    fn to_c_ast(&self) -> CAST {
+        let mut converter = CASTConverter::new(&self);
+        converter.to_c_ast()
+    }
+}
+
+struct CASTConverter<'a> {
+    ast: &'a SimpleCAST,
+    /// HashMap from SimpleCAST's node to CAST's node
+    node_map: HashMap<NodeIndex, NodeIndex>,
+    /// HashMap from ActionNode to label node
+    label_node_map: HashMap<NodeIndex, NodeIndex>,
+    visited: HashSet<NodeIndex>,
+}
+
+impl<'a> CASTConverter<'a> {
+    fn new(ast: &SimpleCAST) -> CASTConverter {
+        CASTConverter {
+            ast: ast,
+            node_map: HashMap::new(),
+            label_node_map: HashMap::new(),
+            visited: HashSet::new(),
+        }
+    }
+
     /// Entry point of Simple-C-AST to C-AST conversion.
     pub fn to_c_ast(&mut self) -> CAST {
-        let mut c_ast = CAST::new(&self.fname);
-        for var in self.vars.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref var_name))) = self.ast.node_weight(*var) {
+        let mut c_ast = CAST::new(&self.ast.fname);
+        for var in self.ast.vars.iter() {
+            if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref var_name))) = self.ast.ast.node_weight(*var) {
                 // TODO use given type from ValueNode
                 let n = c_ast.declare_vars(c_simple::Ty::new(c_simple::BTy::Int, false, 0), &[var_name.to_string()]);
                 // XXX
                 self.node_map.insert(*var, n[0]);
             }
         }
-        for expr in self.exprs.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Expression(ref op))) = self.ast.node_weight(*expr) {
-                let operands = self.operands_from_expr(*expr)
+        for expr in self.ast.exprs.iter() {
+            if let Some(&SimpleCASTNode::Value(ValueNode::Expression(ref op))) = self.ast.ast.node_weight(*expr) {
+                let operands = self.ast.operands_from_expr(*expr)
                     .into_iter()
                     .map(|_n| {
                         if let Some(&n) = self.node_map.get(&_n) {
@@ -429,7 +446,7 @@ impl SimpleCAST {
                 self.node_map.insert(*expr, n);
             }
         }
-        let entry = self.entry;
+        let entry = self.ast.entry;
         self.to_c_ast_body(&mut c_ast, entry);
         c_ast
     }
@@ -440,15 +457,15 @@ impl SimpleCAST {
         };
         self.visited.insert(current_node);
         eprintln!("current: {:?}", current_node);
-        if let Some(ref l) = self.label_map.get(&current_node) {
+        if let Some(ref l) = self.ast.label_map.get(&current_node) {
             eprintln!("Label at {:?}", current_node);
             let node = c_ast.label(l);
             self.label_node_map.insert(current_node, node);
         };
-        let idx = self.ast.node_weight(current_node).map(|x| x.clone());
+        let idx = self.ast.ast.node_weight(current_node).map(|x| x.clone());
         match idx {
             Some(SimpleCASTNode::Action(ActionNode::Assignment)) => {
-                let tmp = self.assignment(current_node)
+                let tmp = self.ast.assignment(current_node)
                     .and_then(|(d, s)| {
                         match (self.node_map.get(&d), self.node_map.get(&s)) {
                             (Some(&x), Some(&y)) => Some((x.clone(), y.clone())),
@@ -463,7 +480,7 @@ impl SimpleCAST {
                 }
             },
             Some(SimpleCASTNode::Action(ActionNode::Call(ref name))) => {
-                let args = self.args_call(current_node)
+                let args = self.ast.args_call(current_node)
                     .unwrap_or(Vec::new())
                     .into_iter()
                     .map(|arg| {
@@ -473,7 +490,7 @@ impl SimpleCAST {
                         }
                         ret
                     }).collect();
-                let ret_node_opt = self.func_val(current_node)
+                let ret_node_opt = self.ast.func_val(current_node)
                     .and_then(|x| self.node_map.get(&x).map(|a| *a));
                 let node = c_ast.call_func(name, args);
                 if let Some(ret_node) = ret_node_opt {
@@ -482,15 +499,15 @@ impl SimpleCAST {
                 self.node_map.insert(current_node, node);
             },
             Some(SimpleCASTNode::Action(ActionNode::Return)) => {
-                let opt = self.ret_val(current_node)
+                let opt = self.ast.ret_val(current_node)
                     .and_then(|n| self.node_map.get(&n))
                     .map(|n| *n);
                 let node = c_ast.ret(opt);
                 self.node_map.insert(current_node, node);
             },
             Some(SimpleCASTNode::Action(ActionNode::If)) => {
-                let cond = self.branch_condition(current_node);
-                let branches = self.branch(current_node).map(|x| x.clone());
+                let cond = self.ast.branch_condition(current_node);
+                let branches = self.ast.branch(current_node).map(|x| x.clone());
                 if let (Some((if_then, if_else)), Some(cond)) = (branches, cond) {
                     self.to_c_ast_body(c_ast, if_then);
                     if if_else.is_some() {
@@ -505,17 +522,17 @@ impl SimpleCAST {
                 }
             },
             Some(SimpleCASTNode::Action(ActionNode::Goto)) => {
-                let reserved_edge = if self.goto(current_node)
+                let reserved_edge = if self.ast.goto(current_node)
                     .and_then(|d| self.label_node_map.get(&d)).is_some() {
                         None
                     } else {
                         let ret = c_ast.reserve_edge();
-                        for n in self.next_actions(current_node) {
+                        for n in self.ast.next_actions(current_node) {
                             self.to_c_ast_body(c_ast, n);
                         }
                         Some(ret)
                     };
-                let dst_opt = self.goto(current_node)
+                let dst_opt = self.ast.goto(current_node)
                     .and_then(|d| self.label_node_map.get(&d))
                     .map(|d| d.clone());
                 if let Some(dst) = dst_opt {
@@ -532,7 +549,7 @@ impl SimpleCAST {
             Some(SimpleCASTNode::Entry) => {},
             _ => unreachable!(),
         };
-        for n in self.next_actions(current_node) {
+        for n in self.ast.next_actions(current_node) {
             self.to_c_ast_body(c_ast, n);
         }
     }
