@@ -14,7 +14,7 @@ use petgraph::{Direction, EdgeDirection};
 //// Declaration and implementation for basic C data types.
 //////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// Struct to describe a C-Type
 pub struct Ty {
     base_type: BTy,
@@ -42,7 +42,7 @@ impl Ty {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// Defines the basic valid C data types.
 pub enum BTy {
     Int,
