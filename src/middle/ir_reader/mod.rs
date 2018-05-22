@@ -1,16 +1,16 @@
-//! Parses textual IL as emited by [`ir_writer`](::middle::ir_writer).
+//! Parses textual IL as emitted by [`ir_writer`](::middle::ir_writer).
 
-mod parser_util;
-mod parser;
 mod lowering;
+mod parser;
+mod parser_util;
 mod simple_ast;
 
-use middle::ssa::ssastorage::SSAStorage;
 use middle::regfile::SubRegisterFile;
+use middle::ssa::ssastorage::SSAStorage;
 
 use std::sync::Arc;
 
-/// Parses textual IL as emited by [`ir_writer`](::middle::ir_writer).
+/// Parses textual IL as emitted by [`ir_writer`](::middle::ir_writer).
 /// The returned SSA is empty if an error occurred.
 pub fn parse_il(il: &str, regfile: Arc<SubRegisterFile>) -> SSAStorage {
     let mut ret = SSAStorage::new();
@@ -25,78 +25,132 @@ pub fn parse_il(il: &str, regfile: Arc<SubRegisterFile>) -> SSAStorage {
 
 #[cfg(test)]
 mod test {
-    use middle::ir_writer::IRWriter;
+    use middle::ir_writer;
+    use middle::regfile::SubRegisterFile;
+    use serde_json;
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
+    use std::sync::Arc;
 
-    const SSA_TXT: &str = r#"
+    #[cfg_attr(rustfmt, rustfmt_skip)]
+    const SSA_TXT: &str = "\
 define-fun main(unknown) -> unknown {
-    registers: $r15,$r14,$r13,$r12,$rbp,$rbx,$r11,$r10,$r9,$r8,$rax,$rcx,$rdx,$rsi,$rdi,$rip,$cs,$cf,$pf,$af,$zf,$sf,$tf,$if,$df,$of,$rsp,$ss,$fs_base,$gs_base,$ds,$es,$fs,$gs;
-    bb_0x0005FA.0000():
-        [@0x0005FA.0001] %1: $Unknown64(*?) = {rsi} + #x1;
+    entry-register-state:
+        %1: $Unknown64(*?) = $r15;
+        %2: $Unknown64(*?) = $r14;
+        %3: $Unknown64(*?) = $r13;
+        %4: $Unknown64(*?) = $r12;
+        %5: $Unknown64(*?) = $rbp;
+        %6: $Unknown64(*?) = $rbx;
+        %7: $Unknown64(*?) = $r11;
+        %8: $Unknown64(*?) = $r10;
+        %9: $Unknown64(*?) = $r9;
+        %10: $Unknown64(*?) = $r8;
+        %11: $Unknown64(*?) = $rcx;
+        %12: $Unknown64(*?) = $rdx;
+        %13: $Unknown64(*?) = $rsi;
+        %14: $Unknown64(*?) = $rdi;
+        %15: $Unknown64(*?) = $rip;
+        %16: $Unknown64(*?) = $cs;
+        %17: $Unknown1(*?) = $cf;
+        %18: $Unknown1(*?) = $pf;
+        %19: $Unknown1(*?) = $af;
+        %20: $Unknown1(*?) = $zf;
+        %21: $Unknown1(*?) = $sf;
+        %22: $Unknown1(*?) = $tf;
+        %23: $Unknown1(*?) = $if;
+        %24: $Unknown1(*?) = $df;
+        %25: $Unknown1(*?) = $of;
+        %26: $Unknown64(*?) = $rsp;
+        %27: $Unknown64(*?) = $ss;
+        %28: $Unknown64(*?) = $fs_base;
+        %29: $Unknown64(*?) = $gs_base;
+        %30: $Unknown64(*?) = $ds;
+        %31: $Unknown64(*?) = $es;
+        %32: $Unknown64(*?) = $fs;
+        %33: $Unknown64(*?) = $gs;
+        %34: $Unknown0 = $mem;
+    bb_0x0005B5.0000(sz 0x0):
+        [@0x0005B5.0001] %35: $Unknown64(*?) = #x1 + %14;
+        [@0x0005B9.0002] %36: $Unknown64(*?) = Load(%34, %26);
+        [@0x0005B9.0006] %37: $Unknown64(*?) = #x8 + %26;
+        JMP TO %36
     exit-node:
     final-register-state:
-        $r15 = {r15};
-        $r14 = {r14};
-        $r13 = {r13};
-        $r12 = {r12};
-        $rbp = {rbp};
-        $rbx = {rbx};
-        $r11 = {r11};
-        $r10 = {r10};
-        $r9 = {r9};
-        $r8 = {r8};
-        $rax = %1;
-        $rcx = {rcx};
-        $rdx = {rdx};
-        $rsi = {rsi};
-        $rdi = {rdi};
-        $rip = {rip};
-        $cs = {cs};
-        $cf = {cf};
-        $pf = {pf};
-        $af = {af};
-        $zf = {zf};
-        $sf = {sf};
-        $tf = {tf};
-        $if = {if};
-        $df = {df};
-        $of = {of};
-        $rsp = {rsp};
-        $ss = {ss};
-        $fs_base = {fs_base};
-        $gs_base = {gs_base};
-        $ds = {ds};
-        $es = {es};
-        $fs = {fs};
-        $gs = {gs};
-        $mem = {mem};
-}"#;
+        $r15 = %1;
+        $r14 = %2;
+        $r13 = %3;
+        $r12 = %4;
+        $rbp = %5;
+        $rbx = %6;
+        $r11 = %7;
+        $r10 = %8;
+        $r9 = %9;
+        $r8 = %10;
+        $rax = %35;
+        $rcx = %11;
+        $rdx = %12;
+        $rsi = %13;
+        $rdi = %14;
+        $rip = %15;
+        $cs = %16;
+        $cf = %17;
+        $pf = %18;
+        $af = %19;
+        $zf = %20;
+        $sf = %21;
+        $tf = %22;
+        $if = %23;
+        $df = %24;
+        $of = %25;
+        $rsp = %37;
+        $ss = %27;
+        $fs_base = %28;
+        $gs_base = %29;
+        $ds = %30;
+        $es = %31;
+        $fs = %32;
+        $gs = %33;
+        $mem = %34;
+}
+";
+    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+
+    lazy_static! {
+        static ref REGISTER_FILE: Arc<SubRegisterFile> = {
+            let s = ::std::fs::read_to_string(REGISTER_PROFILE).unwrap();
+            let reg_profile = serde_json::from_str(&*s).unwrap();
+            Arc::new(SubRegisterFile::new(&reg_profile))
+        };
+    }
 
     #[test]
     fn check_ssa_parse() {
         use middle::ir::MOpcode::*;
         use middle::ir::WidthSpec;
+        use middle::regfile::RegisterId;
         use middle::ssa::cfg_traits::*;
         use middle::ssa::ssa_traits::*;
         use middle::ssa::ssastorage::NodeData;
-        use middle::ssa::ssastorage::SSAStorage;
+        use middle::ssa::utils;
         use std::collections::HashSet;
 
-        let ssa = super::parse_il(SSA_TXT);
+        let ssa = super::parse_il(SSA_TXT, REGISTER_FILE.clone());
 
         let entry = ssa.entry_node().unwrap();
+        let ers_node = ssa.registers_in(entry).unwrap();
+        let ers = utils::register_state_info(ers_node, &ssa);
         let succs = ssa.succs_of(entry);
         assert_eq!(succs.len(), 1);
         let real_entry = succs[0];
         let exprs = ssa.exprs_in(real_entry).into_iter().collect::<HashSet<_>>();
         let exit = ssa.exit_node().unwrap();
         let frs_node = ssa.registers_in(exit).unwrap();
-        let frs = ssa.operands_of(frs_node);
+        let frs = utils::register_state_info(frs_node, &ssa);
 
-        let rbp_i = ssa.regnames.iter().position(|r| r == "rax").unwrap();
-        let v1 = frs[rbp_i];
+        let rax_i = ssa.regfile.register_id_by_name("rax").unwrap() as usize;
+        let v1 = frs[RegisterId::from_usize(rax_i)].0;
         assert!(exprs.contains(&v1));
         assert_eq!(
             ssa.g[v1],
@@ -104,19 +158,21 @@ define-fun main(unknown) -> unknown {
         );
         let v1_ops = ssa.operands_of(v1);
         assert_eq!(v1_ops.len(), 2);
-        let cmt_rsi = v1_ops[0];
-        assert_eq!(
-            ssa.g[cmt_rsi],
-            NodeData::Comment(
-                ValueInfo::new_unresolved(WidthSpec::Unknown),
-                "rsi".to_owned()
-            )
-        );
-        let x1 = v1_ops[1];
+        let x1 = v1_ops[0];
         assert_eq!(
             ssa.g[x1],
             NodeData::Op(OpConst(1), ValueInfo::new_scalar(WidthSpec::new_known(64)))
         );
+        let cmt_rdi = v1_ops[1];
+        assert_eq!(
+            ssa.g[cmt_rdi],
+            NodeData::Comment(
+                ValueInfo::new_unresolved(WidthSpec::new_known(64)),
+                "rdi".to_owned()
+            )
+        );
+        let rdi_i = ssa.regfile.register_id_by_name("rdi").unwrap() as usize;
+        assert_eq!(cmt_rdi, ers[RegisterId::from_usize(rdi_i)].0);
     }
 
     #[test]
@@ -142,8 +198,9 @@ define-fun main(unknown) -> unknown {
     }
 
     fn roundtrip(fn_name: String, ssa_txt: &str) {
-        let parsed = super::parse_il(ssa_txt);
-        let emited = IRWriter::default().emit_il(Some(fn_name), &parsed);
-        assert_eq!(ssa_txt, emited);
+        let parsed = super::parse_il(ssa_txt, REGISTER_FILE.clone());
+        let mut emitted = String::new();
+        ir_writer::emit_il(&mut emitted, Some(fn_name), &parsed).unwrap();
+        assert_eq!(ssa_txt, emitted);
     }
 }

@@ -762,12 +762,13 @@ impl<'a, T> SSAConstruct<'a, T>
 mod test {
     use analysis::sccp;
     use middle::{dot, dce};
-    use middle::ir_writer::IRWriter;
+    use middle::ir_writer;
     use middle::ssa::ssastorage::SSAStorage;
     use r2api::structs::{LFunctionInfo, LRegInfo};
     use serde_json;
     use std::fs::File;
     use std::io::prelude::*;
+    use std::sync::Arc;
     use super::*;
 
 
@@ -845,16 +846,18 @@ mod test {
                     "test_files/tiny_sccp_test_instructions.json");
         let mut ssa = SSAStorage::new();
         {
-            let regfile = SubRegisterFile::new(&reg_profile);
-            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
+            let regfile = Arc::new(SubRegisterFile::new(&reg_profile));
+            ssa.regfile = regfile.clone();
+            let mut constructor = SSAConstruct::new(&mut ssa, &*regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
             dce::collect(&mut ssa);
         }
         println!("\nBefore Constant Propagation:");
-        let mut writer: IRWriter = Default::default();
-        println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
+        let mut il = String::new();
+        ir_writer::emit_il(&mut il, Some("main".to_owned()), &ssa).unwrap();
+        println!("{}", il);
         let mut ssa = {
             let mut analyzer = sccp::Analyzer::new(&mut ssa);
             analyzer.analyze();
@@ -864,8 +867,9 @@ mod test {
             dce::collect(&mut ssa);
         }
         println!("\nAfter Constant Propagation:");
-        let mut writer: IRWriter = Default::default();
-        println!("{}", writer.emit_il(Some("main".to_owned()), &ssa));
+        let mut il = String::new();
+        ir_writer::emit_il(&mut il, Some("main".to_owned()), &ssa).unwrap();
+        println!("{}", il);
     }
 }
 

@@ -67,7 +67,7 @@ mod test {
     use super::*;
     use frontend::radeco_source::FileSource;
     use frontend::radeco_containers::{ProjectLoader, RadecoModule};
-    use middle::ir_writer::IRWriter;
+    use middle::ir_writer;
     use middle::dce;
     use analysis::interproc::summary;
     use std::rc::Rc;
@@ -93,8 +93,9 @@ mod test {
                 println!("Local Variable info: {:#?}", rfn.locals());
                 println!("Arg info: {:#?}", rfn.args());
                 //println!("Returns info: {:?}", rfn.returns());
-                let mut writer: IRWriter = Default::default();
-                println!("{}", writer.emit_il(Some(rfn.name.clone().to_string()), rfn.ssa()));
+                let mut il = String::new();
+                ir_writer::emit_il(&mut il, Some(rfn.name.clone().to_string()), rfn.ssa()).unwrap();
+                println!("{}", il);
             }
         }
     }
