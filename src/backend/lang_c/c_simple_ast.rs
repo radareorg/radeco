@@ -563,6 +563,7 @@ impl<'a> CASTConverter<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use self::c_simple::{BTy, Ty};
 
     // fn main () {
     //     unsigned int x;
@@ -778,6 +779,29 @@ mod test {
         let break_goto = ast.add_goto(assn2, "L1", f_call1);
         let if_node = ast.conditional(cond, f_call1, None, f_call);
         let _ = ast.add_return(None, if_node);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+
+    // fn main () {
+    //     int i;
+    //     unsigned long int u;
+    //     double d;
+    //     *float f;
+    //     char c;
+    //     void v;
+    // }
+    #[test]
+    fn simple_c_ast_type_test() {
+        let mut ast = SimpleCAST::new("main");
+        let entry = ast.entry;
+        let i = ast.var("i", Some(Ty::new(BTy::Int, true, 0)));
+        let u = ast.var("u", Some(Ty::new(BTy::Int, false, 1)));
+        let d = ast.var("d", Some(Ty::new(BTy::Double, true, 0)));
+        let c = ast.var("c", Some(Ty::new(BTy::Char, true, 0)));
+        let v = ast.var("v", Some(Ty::new(BTy::Void, true, 0)));
+        let f = ast.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
