@@ -174,8 +174,6 @@ impl SimpleCAST {
                 self.ast.remove_edge(idx);
                 self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
                 self.ast.add_edge(node, next_action, SimpleCASTEdge::Action(ActionEdge::Normal));
-                eprintln!("add edge {:?} to {:?}", prev_action, node);
-                eprintln!("add edge {:?} to {:?}", node, next_action);
             },
             _ => {
                 radeco_warn!("Invalid nodes {}, {}", prev_action, next_action);
@@ -274,7 +272,6 @@ impl SimpleCAST {
                     ret.push(n);
                     first = next_normal(n);
                 }
-                eprintln!("ret.len(): {:?}", ret.len());
                 if ret.len() > 0 {
                     Some(ret)
                 } else {
@@ -479,9 +476,7 @@ impl<'a> CASTConverter<'a> {
             return;
         };
         self.visited.insert(current_node);
-        eprintln!("current: {:?}", current_node);
         if let Some(ref l) = self.ast.label_map.get(&current_node) {
-            eprintln!("Label at {:?}", current_node);
             c_ast.label(l);
         };
         let idx = self.ast.ast.node_weight(current_node).map(|x| x.clone());
