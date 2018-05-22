@@ -25,8 +25,6 @@ enum ActionNode {
     Goto,
 }
 
-// TODO Use another type instead of String
-// TODO Add type information
 #[derive(Debug, Clone, PartialEq)]
 enum ValueNode {
     /// The string is the name of variable
@@ -544,7 +542,6 @@ impl<'a> CASTConverter<'a> {
                     .and_then(|d| self.ast.label_map.get(&d))
                     .map(|d| d.clone());
                 if let Some(dst) = dst_opt {
-                    // TODO avoid unwrap
                     let node = c_ast.goto(&dst);
                     self.node_map.insert(current_node, node);
                 } else {
