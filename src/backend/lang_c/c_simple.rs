@@ -338,18 +338,6 @@ impl CAST {
         goto_n
     }
 
-    pub fn reserve_edge(&mut self) -> u64 {
-        self.next_edge_idx()
-    }
-
-    pub fn replace_node(&mut self, idx: u64, node: NodeIndex) {
-        self.ast.add_edge(self.fn_head, node, CASTEdge::StatementOrd(idx));
-    }
-
-    pub fn insert_label_at(&mut self, label: &str, node: NodeIndex) -> NodeIndex {
-        unimplemented!()
-    }
-
     pub fn label(&mut self, label: &str) -> NodeIndex {
         let label = self.ast.add_node(CASTNode::Label(label.to_string()));
         let idx = self.next_edge_idx();
