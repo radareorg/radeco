@@ -331,20 +331,11 @@ impl CAST {
         ret_node
     }
 
-    pub fn goto(&mut self, label_node: NodeIndex, is_append: bool) -> Option<NodeIndex> {
-        let label_opt = self.ast.node_weight(label_node).map(|e| e.clone());
-        if let Some(CASTNode::Label(ref label)) = label_opt {
-            let goto_n = self.ast.add_node(CASTNode::Goto(label.clone()));
-            // XXX
-            if is_append {
-                let idx = self.next_edge_idx();
-                self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
-            }
-            Some(goto_n)
-        } else {
-            radeco_warn!("Label node is not found");
-            None
-        }
+    pub fn goto(&mut self, label: &str) -> NodeIndex {
+        let goto_n = self.ast.add_node(CASTNode::Goto(label.to_string()));
+        let idx = self.next_edge_idx();
+        self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+        goto_n
     }
 
     pub fn reserve_edge(&mut self) -> u64 {
@@ -639,8 +630,9 @@ mod test {
     fn c_ast_goto_test() {
         let mut c_ast = CAST::new("main");
         let _ = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
-        let lbl = c_ast.label("L1");
-        let _ = c_ast.goto(lbl, true);
+        let lbl_str = "L1";
+        let _ = c_ast.label(lbl_str);
+        let _ = c_ast.goto(lbl_str);
         println!("{}", c_ast.print());
     }
 }
