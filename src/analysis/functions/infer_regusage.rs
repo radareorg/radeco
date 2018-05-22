@@ -133,6 +133,7 @@ impl Inferer {
         }
 
         // bridge preserved registers
+        // TODO: use utils::call_rets
         for use_node in fn_map[&fn_addr].ssa().uses_of(call_node) {
             let reg_idx = match fn_map[&fn_addr]
                 .ssa()
@@ -215,6 +216,7 @@ fn register_state_info(
 /// Extracts the call target address and the value of all registers
 /// The length of the returned `Vec` is exactly `ssa.regnames.len() + 1`.
 /// Returns `None` if the call is indirect or if not all registers have a value.
+// TODO: use new utils::call_info
 fn direct_call_info(
     ssa: &SSAStorage,
     call_node: <SSAStorage as SSA>::ValueRef,

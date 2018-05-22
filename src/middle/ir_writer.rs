@@ -11,160 +11,403 @@ use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSAWalk, ValueInfo, SSA};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
+use middle::ssa::utils;
 use petgraph::graph::NodeIndex;
+
 use std::collections::HashMap;
-use std::default;
+use std::fmt;
+use std::fmt::Write;
 
-const BLOCK_SEP: &'static str = "{";
-const CL_BLOCK_SEP: &'static str = "}";
-
-#[macro_export]
-macro_rules! ir_write {
-    ($n: expr, $ssa: expr) => ({
-        {
-            use $crate::middle::ir_writer::IRWriter;
-
-            let mut writer = IRWriter::default();
-            writer.emit_il($n, $ssa)
+macro_rules! emit_list {
+    ($output:expr, $list:expr, | $elem:pat | $formatter:expr) => {{
+        let mut first = true;
+        for $elem in $list {
+            if !first {
+                $output.write_str(", ")?;
+            }
+            $formatter;
+            first = false;
         }
-    });
-    ($n: expr, $ssa: expr, $f: expr) => ({
-        {
-            use $crate::middle::ir_writer::IRWriter;
-            use std::fs::File;
-            use std::io::prelude::*;
-
-            let mut writer = IRWriter::default();
-            let mut f = File::create($f).unwrap_or_else(|e| {
-                radeco_err!("Unable to create file");
-                radeco_err!("{:?}", e);
-            });
-            writer.emit_il($n, $ssa, &mut f);
-        }
-    });
-}
-
-#[allow(unused_macros)]
-macro_rules! concat_str {
-    ($s:expr, $t:expr) => { $s = format!("{}{}", $s, $t); }
-}
-
-#[allow(unused_macros)]
-macro_rules! concat_strln {
-    ($s:expr, $t:expr) => { $s = format!("{}\n{}", $s, $t); }
-}
-
-// Format constants.
-#[allow(unused_macros)]
-macro_rules! fmt_const {
-    ($c:expr) => { format!("#x{:x}", $c); }
-}
-
-// Format bb.
-#[allow(unused_macros)]
-macro_rules! bb {
-    ($bb:expr) => { format!("bb_{}():", $bb); }
-}
-
-// Format an expression
-#[allow(unused_macros)]
-macro_rules! expr {
-    ($r:expr, $tp:tt = $rhs:expr) => { format!("%{}{} = {}", $r, fmttyp!($tp), $rhs); }
-}
-
-// Format a type
-#[allow(unused_macros)]
-macro_rules! fmttyp {
-    ($t: expr) => { format!(":${}", $t); }
-}
-
-#[allow(unused_macros)]
-macro_rules! fmt_fn {
-    ($f:expr) => { format!("define-fun {}(unknown) -> unknown {}", $f, BLOCK_SEP); }
-}
-
-#[allow(unused_macros)]
-macro_rules! fmtarg {
-    ($v:expr, $typ:expr) => { format!("%{}{}", $v, fmttyp!($typ)); }
-}
-
-#[allow(unused_macros)]
-macro_rules! indent {
-    ($n:expr, $s:expr) => { format!("{}{}", IRWriter::fmt_indent($n), $s); }
-}
-
-macro_rules! fmt_call {
-    ($fmt:expr, $operands:ident, $ssa:ident, $ni:ident) => {{
-        let mem = "mem".to_owned();
-        let mut operands_idx: Vec<u8> = $ssa.sparse_operands_of($ni).iter().map(|x| x.0).collect();
-        operands_idx.sort();
-        format!($fmt,
-            $operands[0],
-            &$operands[1..]
-            .iter()
-            .zip(&operands_idx[1..])
-            .map(|i| format!("${}={}", $ssa.regnames.get((*i.1 - 1) as usize).unwrap_or(&mem), i.0))
-            .fold(String::new(), |acc, x| {
-                if !acc.is_empty() {
-                    format!("{}, {}", acc, x)
-                } else {
-                    x
-                }
-            }))
     }};
+    ($output:expr, $list:expr, | $elem:pat | $formatter:expr,) => {
+        emit_list!($output, $list, |$elem| $formatter)
+    };
+}
+
+macro_rules! log_emit_err {
+    ($self:ident, $($arg:tt)*) => {
+        match format_args!($($arg)*) {
+            msg => {
+                radeco_err!("{}", msg);
+                write!($self.output, "ERR{{{}}}", msg)
+            }
+        }
+    }
+}
+
+pub fn emit_il<O: Write>(output: O, fn_name: Option<String>, ssa: &SSAStorage) -> fmt::Result {
+    IRWriter::new(output, ssa).emit_il(fn_name)
+}
+
+// TODO: expose width
+pub fn pretty_print_function_proto(rfn: &RadecoFunction) -> String {
+    let args = rfn
+        .bindings()
+        .into_iter()
+        .filter(|&x| x.btype().is_argument())
+        .filter_map(|x| rfn.ssa().node_data(x.idx).map(|v| (x.idx, v.vt)).ok())
+        .fold(String::new(), |acc, x| {
+            if acc.is_empty() {
+                format!("{}{:?}", acc, x.1.vty)
+            } else {
+                format!("{}, {:?}", acc, x.1.vty)
+            }
+        });
+    format!("{} ({})", rfn.name, args)
 }
 
 #[derive(Clone, Debug)]
-pub struct IRWriter {
+struct IRWriter<'a, O: Write> {
+    ssa: &'a SSAStorage,
     seen: HashMap<NodeIndex, u64>,
-    indent: u64,
     ctr: u64,
+    output: O,
 }
 
-impl default::Default for IRWriter {
-    fn default() -> IRWriter {
+impl<'a, O: Write> IRWriter<'a, O> {
+    fn new(output: O, ssa: &'a SSAStorage) -> Self {
         IRWriter {
+            ssa,
             seen: HashMap::new(),
-            indent: 1,
             ctr: 0,
+            output,
         }
     }
-}
 
-impl IRWriter {
-    fn node_idx(&mut self, node: NodeIndex) -> u64 {
-        let next = self.ctr + 1;
-        let node_idx = *self.seen.entry(node).or_insert(next);
-        if node_idx == next {
-            self.ctr += 1;
-        }
-        node_idx
-    }
+    fn emit_il(mut self, fn_name: Option<String>) -> fmt::Result {
+        let mut last = None;
+        let entry_node = entry_node_err!(self.ssa);
+        let exit_node = exit_node_err!(self.ssa);
+        let fn_name = fn_name.as_ref().map(|s| &**s).unwrap_or("fn_apple");
 
-    fn fmt_operands(&mut self, operands: &[NodeIndex], ssa: &SSAStorage) -> Vec<String> {
-        let mut result = Vec::new();
-        for operand in operands {
-            match ssa.g[*operand] {
-                NodeData::BasicBlock(addr, _) => result.push(format!("{}", addr)),
-                NodeData::DynamicAction => result.push("dynamic_action".to_owned()),
-                NodeData::Op(MOpcode::OpConst(ref value), _) => result.push(fmt_const!(value)),
-                NodeData::Op(MOpcode::OpCall, _) => {
-                    println!("unchi");
-                    let _op_i = self.node_idx(*operand);
-                    panic!("ncahrc.,uh.,r");
-                    // result.push(format!("%{}", op_i));
-                },
-                NodeData::Comment(_, ref named) => result.push(format!("{{{}}}", named.clone())),
-                _ => {
-                    let op_i = self.node_idx(*operand);
-                    result.push(format!("%{}", op_i));
+        writeln!(self.output, "define-fun {}(unknown) -> unknown {{", fn_name)?;
+
+        let entry_regs = registers_in_err!(self.ssa, entry_node);
+        self.emit_entry_regstate(entry_regs)?;
+
+        for node in self.ssa.inorder_walk() {
+            if node == entry_node {
+                continue;
+            }
+            match self.ssa.g[node] {
+                NodeData::Op(ref opcode, vt) => {
+                    self.indent(2)?;
+                    if let Some(address) = self.ssa.address(node) {
+                        write!(self.output, "[@{}] ", address)?;
+                    }
+                    match opcode {
+                        MOpcode::OpConst(_) => {
+                            radeco_err!("found const");
+                        }
+                        MOpcode::OpCall => self.emit_call(node)?,
+                        _ => {
+                            self.emit_new_value(node, vt)?;
+                            self.emit_operation(opcode, &self.ssa.operands_of(node))?;
+                        }
+                    };
+                    writeln!(self.output, ";")?;
                 }
+                NodeData::Phi(vt, _) => {
+                    self.indent(2)?;
+                    self.emit_new_value(node, vt)?;
+                    write!(self.output, "Phi(")?;
+                    let operands = self.ssa.operands_of(node);
+                    self.emit_operand_list(&operands)?;
+                    writeln!(self.output, ");")?;
+                }
+                NodeData::BasicBlock(addr, sz) => {
+                    if let Some(prev_block) = last {
+                        // end previous block
+                        self.indent(2)?;
+                        self.emit_jump(prev_block)?;
+                    }
+                    last = Some(node);
+                    self.indent(1)?;
+                    writeln!(self.output, "bb_{}(sz {:#x}):", addr, sz)?;
+                }
+                NodeData::DynamicAction => {
+                    if let Some(prev_block) = last {
+                        // end previous block
+                        self.indent(2)?;
+                        self.emit_jump(prev_block)?;
+                    } else {
+                        radeco_warn!("first node was DynamicAction");
+                    }
+                    last = Some(node);
+
+                    self.indent(1)?;
+                    if self.ssa.exit_node() == Some(node) {
+                        writeln!(self.output, "exit-node:")?;
+                    } else {
+                        radeco_warn!("found DynamicAction node that wasn't exit_node");
+                        writeln!(self.output, "[[dynamic_action]]:")?;
+                    };
+                }
+                ref n => {
+                    log_emit_err!(self, "Unknown node: {:?}", n)?;
+                }
+            };
+        }
+
+        if let Some(prev_block) = last {
+            if prev_block != exit_node {
+                // end previous block
+                self.indent(2)?;
+                self.emit_jump(prev_block)?;
             }
         }
-        result
+
+        let final_state = registers_in_err!(self.ssa, exit_node);
+        self.emit_exit_regstate(final_state)?;
+
+        writeln!(self.output, "}}")?;
+        Ok(())
     }
 
-    fn fmt_valueinfo(&self, vt: ValueInfo) -> String {
+    fn emit_entry_regstate(&mut self, entry_regstate: NodeIndex) -> fmt::Result {
+        self.indent(1)?;
+        writeln!(self.output, "entry-register-state:")?;
+        for (reg_id, (reg_val, vt)) in utils::register_state_info(entry_regstate, self.ssa) {
+            self.indent(2)?;
+            self.emit_new_value(reg_val, vt)?;
+            let regname = self
+                .ssa
+                .regfile
+                .get_name(reg_id)
+                .unwrap_or("mem");
+            writeln!(self.output, "${};", regname)?;
+        }
+        Ok(())
+    }
+
+    fn emit_exit_regstate(&mut self, exit_regstate: NodeIndex) -> fmt::Result {
+        self.indent(1)?;
+        writeln!(self.output, "final-register-state:")?;
+        for (reg_id, (reg_val, _)) in utils::register_state_info(exit_regstate, self.ssa) {
+            self.indent(2)?;
+            let regname = self.ssa.regfile.get_name(reg_id).unwrap_or("mem");
+            write!(self.output, "${} = ", regname)?;
+            self.emit_operand(reg_val)?;
+            writeln!(self.output, ";")?;
+        }
+        Ok(())
+    }
+
+    fn emit_operation(&mut self, opcode: &MOpcode, operands: &[NodeIndex]) -> fmt::Result {
+        use self::MOpcode::*;
+        match *opcode {
+            OpAdd => self.emit_binop("+", operands),
+            OpSub => self.emit_binop("-", operands),
+            OpMul => self.emit_binop("*", operands),
+            OpDiv => self.emit_binop("/", operands),
+            OpMod => self.emit_binop("%", operands),
+            OpAnd => self.emit_binop("&", operands),
+            OpOr => self.emit_binop("|", operands),
+            OpXor => self.emit_binop("^", operands),
+            OpEq => self.emit_binop("==", operands),
+            OpGt => self.emit_binop(">", operands),
+            OpLt => self.emit_binop("<", operands),
+            OpLsl => self.emit_binop("<<", operands),
+            OpLsr => self.emit_binop(">>", operands),
+            OpNot => {
+                write!(self.output, "!")?;
+                self.emit_opt_operand(operands.get(0).cloned())?;
+                Ok(())
+            }
+            OpLoad => {
+                write!(self.output, "Load(")?;
+                self.emit_opt_operand(operands.get(0).cloned())?;
+                write!(self.output, ", ")?;
+                self.emit_opt_operand(operands.get(1).cloned())?;
+                write!(self.output, ")")?;
+                Ok(())
+            }
+            OpStore => {
+                write!(self.output, "Store(")?;
+                self.emit_opt_operand(operands.get(0).cloned())?;
+                write!(self.output, ", ")?;
+                self.emit_opt_operand(operands.get(1).cloned())?;
+                write!(self.output, ", ")?;
+                self.emit_opt_operand(operands.get(2).cloned())?;
+                write!(self.output, ")")?;
+                Ok(())
+            }
+            OpNarrow(wd) => {
+                write!(self.output, "Narrow{}(", wd)?;
+                self.emit_opt_operand(operands.get(0).cloned())?;
+                write!(self.output, ")")?;
+                Ok(())
+            }
+            OpSignExt(wd) => {
+                write!(self.output, "SignExt{}(", wd)?;
+                self.emit_opt_operand(operands.get(0).cloned())?;
+                write!(self.output, ")")?;
+                Ok(())
+            }
+            OpZeroExt(wd) => {
+                write!(self.output, "ZeroExt{}(", wd)?;
+                self.emit_opt_operand(operands.get(0).cloned())?;
+                write!(self.output, ")")?;
+                Ok(())
+            }
+            _ => {
+                radeco_warn!("unknown opcode: {:?}", opcode);
+                write!(self.output, "{}(", opcode)?;
+                self.emit_operand_list(operands)?;
+                write!(self.output, ")")?;
+                Ok(())
+            }
+        }
+    }
+
+    fn emit_binop(&mut self, op: &str, operands: &[NodeIndex]) -> fmt::Result {
+        self.emit_opt_operand(operands.get(0).cloned())?;
+        write!(self.output, " {} ", op)?;
+        self.emit_opt_operand(operands.get(1).cloned())?;
+        Ok(())
+    }
+
+    fn emit_opt_operand(&mut self, opt_operand: Option<NodeIndex>) -> fmt::Result {
+        match opt_operand {
+            Some(operand) => self.emit_operand(operand),
+            None => log_emit_err!(self, "not enough operands"),
+        }
+    }
+
+    fn emit_operand_list(&mut self, operands: &[NodeIndex]) -> fmt::Result {
+        emit_list!(self.output, operands, |&n| self.emit_operand(n)?);
+        Ok(())
+    }
+
+    fn emit_call(&mut self, call_node: NodeIndex) -> fmt::Result {
+        if let Some(call_info) = utils::call_info(call_node, self.ssa) {
+            let ret_regs = utils::call_rets(call_node, self.ssa);
+
+            write!(self.output, "(")?;
+            emit_list!(self.output, ret_regs, |(idx, (ret_node, ret_vt))| {
+                self.emit_new_value(ret_node, ret_vt)?;
+                write!(
+                    self.output,
+                    "${}",
+                    self.ssa.regfile.get_name(idx).unwrap_or("mem"),
+                )?;
+            });
+
+            write!(self.output, ") = CALL ")?;
+            if self.ssa.is_constant(call_info.target) {
+                self.emit_operand(call_info.target)?;
+            } else {
+                write!(self.output, "(")?;
+                self.emit_operand(call_info.target)?;
+                write!(self.output, ")")?;
+            }
+            write!(self.output, "(")?;
+
+            emit_list!(self.output, call_info.register_args, |(idx, arg)| {
+                write!(
+                    self.output,
+                    "${}=",
+                    self.ssa.regfile.get_name(idx).unwrap_or("mem"),
+                )?;
+                self.emit_operand(arg)?;
+            });
+
+            write!(self.output, ")")?;
+        } else {
+            log_emit_err!(self, "call node has no target: {:?}", call_node)?;
+        }
+        Ok(())
+    }
+
+    fn emit_jump(&mut self, blk: NodeIndex) -> fmt::Result {
+        if let Some(successor_blk) = self.ssa.unconditional_block(blk) {
+            if let Some(selector) = self.ssa.selector_in(blk) {
+                // indirect jump
+                if self.ssa.exit_node().map_or(false, |en| en != successor_blk) {
+                    radeco_warn!("successor of block with indirect jump wasn't exit_node");
+                }
+                write!(self.output, "JMP TO ")?;
+                self.emit_operand(selector)?;
+            } else {
+                // unconditional jump
+                write!(self.output, "JMP ")?;
+                self.emit_jump_tgt(successor_blk)?;
+            }
+        } else {
+            if let Some(blk_cond_info) = self.ssa.conditional_blocks(blk) {
+                // conditional jump
+                if let Some(selector) = self.ssa.selector_in(blk) {
+                    write!(self.output, "JMP IF ")?;
+                    self.emit_operand(selector)?;
+                    write!(self.output, " ")?;
+                    self.emit_jump_tgt(blk_cond_info.true_side)?;
+                    write!(self.output, " ELSE ")?;
+                    self.emit_jump_tgt(blk_cond_info.false_side)?;
+                } else {
+                    log_emit_err!(
+                        self,
+                        "block with conditional successors has no selector: {:?} ({:?})",
+                        blk,
+                        self.ssa.g[blk]
+                    )?;
+                }
+            } else {
+                // non-terminating
+                write!(self.output, "UNREACHABLE")?;
+            }
+        }
+        writeln!(self.output, "")?;
+        Ok(())
+    }
+
+    fn emit_jump_tgt(&mut self, tgt: NodeIndex) -> fmt::Result {
+        match self.ssa.g[tgt] {
+            NodeData::BasicBlock(addr, _) => write!(self.output, "{}", addr),
+            NodeData::DynamicAction => write!(self.output, "{}", "dynamic_action"),
+            _ => log_emit_err!(
+                self,
+                "invalid jump target: {:?} ({:?})",
+                tgt,
+                self.ssa.g[tgt]
+            ),
+        }
+    }
+
+    fn emit_operand(&mut self, operand: NodeIndex) -> fmt::Result {
+        match self.ssa.g[operand] {
+            NodeData::Op(MOpcode::OpConst(c), _) => write!(self.output, "#x{:x}", c),
+            _ => match self.seen.get(&operand) {
+                Some(&idx) => write!(self.output, "%{}", idx),
+                None => log_emit_err!(self, "node {:?} used before defined", operand),
+            },
+        }
+    }
+
+    fn emit_new_value(&mut self, node: NodeIndex, vt: ValueInfo) -> fmt::Result {
+        let idx = self.new_value(node);
+        write!(self.output, "%{}: ", idx)?;
+        self.emit_valueinfo(vt)?;
+        write!(self.output, " = ")?;
+        Ok(())
+    }
+
+    fn new_value(&mut self, node: NodeIndex) -> u64 {
+        self.ctr += 1;
+        self.seen.insert(node, self.ctr);
+        self.ctr
+    }
+
+    fn emit_valueinfo(&mut self, vt: ValueInfo) -> fmt::Result {
         let w = vt.width().get_width().unwrap_or(64);
         let is_reference = if vt.is_reference() {
             "(*)"
@@ -174,352 +417,13 @@ impl IRWriter {
             "(*?)"
         };
 
-        format!("$Unknown{}{}", w, is_reference)
+        write!(self.output, "$Unknown{}{}", w, is_reference)
     }
 
-    fn fmt_expression(&mut self,
-                      ni: NodeIndex,
-                      opcode: &MOpcode,
-                      vt: ValueInfo,
-                      mut operands: Vec<String>,
-                      ssa: &SSAStorage)
-                      -> String {
-        let result_idx = self.node_idx(ni);
-        let vi_str = self.fmt_valueinfo(vt);
-
-        // Quick hack fix
-        operands.push("ERR".to_owned());
-        operands.push("ERR".to_owned());
-        operands.push("ERR".to_owned());
-
-        let op_line = match *opcode {
-            MOpcode::OpAdd => format!("%{}: {} = {} + {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpSub => format!("%{}: {} = {} - {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpMul => format!("%{}: {} = {} * {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpDiv => format!("%{}: {} = {} / {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpMod => format!("%{}: {} = {} % {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpAnd => format!("%{}: {} = {} & {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpOr => format!("%{}: {} = {} | {}",
-                                     result_idx,
-                                     vi_str,
-                                     operands[0],
-                                     operands[1]),
-            MOpcode::OpXor => format!("%{}: {} = {} ^ {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpNot => format!("%{}: {} = !{}", result_idx, vi_str, operands[0]),
-            MOpcode::OpEq => format!("%{}: {} = {} == {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpGt => format!("%{}: {} = {} > {}",
-                                     result_idx,
-                                     vi_str,
-                                     operands[0],
-                                     operands[1]),
-            MOpcode::OpLt => format!("%{}: {} = {} < {}",
-                                     result_idx,
-                                     vi_str,
-                                     operands[0],
-                                     operands[1]),
-            MOpcode::OpLsl => format!("%{}: {} = {} << {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpLsr => format!("%{}: {} = {} >> {}",
-                                      result_idx,
-                                      vi_str,
-                                      operands[0],
-                                      operands[1]),
-            MOpcode::OpLoad => format!("%{}: {} = Load({}, {})",
-                                       result_idx,
-                                       vi_str,
-                                       operands[0],
-                                       operands[1]),
-            MOpcode::OpStore => format!("%{}: {} = Store({}, {}, {})",
-                                        result_idx,
-                                        vi_str,
-                                        operands[0],
-                                        operands[1],
-                                        operands[2]),
-            MOpcode::OpNarrow(wd) => format!("%{}: {} = Narrow{}({})",
-                                             result_idx,
-                                             vi_str,
-                                             wd,
-                                             operands[0]),
-            MOpcode::OpSignExt(wd) => format!("%{}: {} = SignExt{}({})",
-                                              result_idx,
-                                              vi_str,
-                                              wd,
-                                              operands[0]),
-            MOpcode::OpZeroExt(wd) => format!("%{}: {} = ZeroExt{}({})",
-                                              result_idx,
-                                              vi_str,
-                                              wd,
-                                              operands[0]),
-            MOpcode::OpCall => {
-                if vt.is_reference() {
-                    fmt_call!("CALL *({})({})", operands, ssa, ni)
-                } else {
-                    fmt_call!("CALL {}({})", operands, ssa, ni)
-                }
-            }
-            _ => {
-                format!("{} {:?}", opcode, operands)
-            },
-        };
-        if let Some(addr) = ssa.address(ni) {
-            format!("[@{}] {};", addr, op_line)
-        } else {
-            format!("{};", op_line)
-        }
-    }
-
-    fn try_fmt_jump(
-        &mut self,
-        ssa: &SSAStorage,
-        prev_blk: NodeIndex,
-        opt_next_blk: Option<NodeIndex>,
-    ) -> Result<String, &'static str> {
-        Ok(
-            if let Some(successor_blk) = ssa.unconditional_block(prev_blk) {
-                if let Some(selector) = ssa.selector_in(prev_blk) {
-                    // indirect jump
-                    if ssa.exit_node().map_or(false, |en| en != successor_blk) {
-                        radeco_warn!("successor of block with indirect jump wasn't exit_node");
-                    }
-                    let ops = self.fmt_operands(&[selector], ssa);
-                    format!("JMP TO {}", ops[0])
-                } else {
-                    // unconditional jump
-                    if opt_next_blk == Some(successor_blk) {
-                        // implicit fall-through to next_blk
-                        String::new()
-                    } else {
-                        let ops = self.fmt_operands(&[successor_blk], ssa);
-                        format!("JMP {}", ops[0])
-                    }
-                }
-            } else {
-                if let Some(blk_cond_info) = ssa.conditional_blocks(prev_blk) {
-                    // conditional jump
-                    let selector = ssa.selector_in(prev_blk)
-                        .ok_or("block with conditional successors has no selector")?;
-                    if opt_next_blk == Some(blk_cond_info.false_side) {
-                        // implicit fall-through to next_blk
-                        let ops = self.fmt_operands(&[selector, blk_cond_info.true_side], ssa);
-                        format!("JMP IF {} {}", ops[0], ops[1])
-                    } else {
-                        let ops = self.fmt_operands(
-                            &[selector, blk_cond_info.true_side, blk_cond_info.false_side],
-                            ssa,
-                        );
-                        format!("JMP IF {} {} ELSE {}", ops[0], ops[1], ops[2])
-                    }
-                } else {
-                    // non-terminating
-                    "UNREACHABLE".to_owned()
-                }
-            },
-        )
-    }
-
-    fn fmt_jump(
-        &mut self,
-        ssa: &SSAStorage,
-        prev_blk: NodeIndex,
-        opt_next_blk: Option<NodeIndex>,
-    ) -> String {
-        self.try_fmt_jump(ssa, prev_blk, opt_next_blk)
-            .unwrap_or_else(|err_str| {
-                radeco_err!("{}", err_str);
-                "[[invalid SSA for jump]]".to_owned()
-            })
-    }
-
-    fn fmt_indent(by: u64) -> String {
-        let mut indent = String::new();
+    fn indent(&mut self, by: usize) -> fmt::Result {
         for _ in 0..by {
-            indent.push_str("    ");
+            self.output.write_str("    ")?;
         }
-        indent
-    }
-
-    // TODO: expose width
-    pub fn pretty_print_function_proto(rfn: &RadecoFunction) -> String {
-        let args = rfn.bindings()
-            .into_iter()
-            .filter(|&x| x.btype().is_argument())
-            .filter_map(|x| rfn.ssa().node_data(x.idx).map(|v| (x.idx, v.vt)).ok())
-            .fold(String::new(), |acc, x| {
-                if acc.is_empty() {
-                    format!("{}{:?}", acc, x.1.vty)
-                } else {
-                    format!("{}, {:?}", acc, x.1.vty)
-                }
-            });
-        format!("{} ({})", rfn.name, args)
-    }
-
-    pub fn emit_il(&mut self, fn_name: Option<String>, ssa: &SSAStorage) -> String {
-        let mut last = None;
-        let mut text_il = String::new();
-        let fn_name = if fn_name.is_some() {
-            fn_name.unwrap()
-        } else {
-            "fn_apple".to_owned()
-        };
-
-        for node in ssa.inorder_walk() {
-            let line = match ssa.g.node_weight(node) {
-                Some(&NodeData::Op(ref opcode, vt)) => {
-                    if let MOpcode::OpConst(_) = *opcode {
-                        radeco_err!("found const");
-                        String::new()
-                    } else {
-                        let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
-                        indent!(self.indent,
-                                self.fmt_expression(node, opcode, vt, operands, &ssa))
-                    }
-                }
-                Some(&NodeData::Phi(vt, _)) => {
-                    let operands = self.fmt_operands(ssa.operands_of(node).as_slice(), ssa);
-                    let result_idx = self.node_idx(node);
-                    let vi_str = self.fmt_valueinfo(vt);
-                    let mut phi_line = format!("%{}: {} = Phi(", result_idx, vi_str);
-                    for operand in operands {
-                        phi_line = format!("{}{}, ", phi_line, operand);
-                    }
-                    let len = phi_line.len();
-                    phi_line.truncate(len - 2);
-                    phi_line.push_str(");");
-                    indent!(self.indent, phi_line)
-                }
-                Some(&NodeData::Undefined(_)) => {
-                    "Undefined".to_owned()
-                }
-                Some(&NodeData::BasicBlock(addr, _)) => {
-                    let bbline = if let Some(prev_block) = last {
-                        let jmp = self.fmt_jump(ssa, prev_block, Some(node));
-                        if !jmp.is_empty() {
-                            concat_strln!(text_il, indent!(self.indent, jmp));
-                        }
-                        indent!(self.indent - 1, bb!(addr))
-                    } else {
-                        // first block of function, actually a "fake" block
-                        // we use it as the marker for the beginning of the function
-                        self.indent += 1;
-                        let mut fn_line = fmt_fn!(fn_name);
-                        let mut reg_list_line = indent!(self.indent - 1, "registers: ");
-                        for regname in &ssa.regnames {
-                            reg_list_line.push('$');
-                            reg_list_line.push_str(regname);
-                            reg_list_line.push(',');
-                        }
-                        reg_list_line.pop();
-                        reg_list_line.push(';');
-
-                        concat_strln!(fn_line, reg_list_line);
-                        fn_line
-                    };
-                    last = Some(node);
-                    bbline
-                },
-                Some(&NodeData::DynamicAction) => {
-                    if let Some(prev_block) = last {
-                        let jmp = self.fmt_jump(ssa, prev_block, Some(node));
-                        if !jmp.is_empty() {
-                            concat_strln!(text_il, indent!(self.indent, jmp));
-                        }
-                    } else {
-                        radeco_warn!("first node was DynamicAction");
-                    }
-                    last = Some(node);
-
-                    let block_label = if ssa.exit_node() == Some(node) {
-                        "exit-node:"
-                    } else {
-                        radeco_warn!("found DynamicAction node that wasn't exit_node");
-                        "[[dynamic_action]]:"
-                    };
-                    indent!(self.indent - 1, block_label)
-                },
-                Some(ref n@_) => {
-                    radeco_err!("Unknown node: {:?}", n);
-                    String::new()
-                },
-                None => {
-                    radeco_err!("Invalid node");
-                    String::new()
-                },
-            };
-
-            if !line.is_empty() {
-                concat_strln!(text_il, line);
-            }
-        }
-
-        if let Some(prev_block) = last {
-            if ssa.exit_node() != Some(prev_block) {
-                // emit jump for the last block
-                let jmp = self.fmt_jump(ssa, prev_block, None);
-                if !jmp.is_empty() {
-                    concat_strln!(text_il, indent!(self.indent, jmp));
-                }
-            }
-        }
-
-        let final_state = registers_in_err!(ssa, exit_node_err!(ssa),
-            ssa.invalid_value().unwrap());
-        let mem_comment = "mem".to_owned();
-
-        concat_strln!(text_il, &indent!(self.indent - 1, "final-register-state:"));
-
-        for (i, reg) in ssa.operands_of(final_state).iter().enumerate() {
-            let reg_assign = match ssa.g[*reg] {
-                _ => {
-                    format!("${} = {};",
-                            ssa.regnames.get(i).unwrap_or_else(|| {
-                                assert_eq!(i, ssa.regnames.len());
-                                &mem_comment
-                            }),
-                            self.fmt_operands(&[*reg], &ssa)[0])
-                }
-            };
-            if !reg_assign.is_empty() {
-                concat_strln!(text_il, indent!(self.indent, reg_assign));
-            }
-        }
-
-        concat_strln!(text_il, CL_BLOCK_SEP);
-        text_il
+        Ok(())
     }
 }

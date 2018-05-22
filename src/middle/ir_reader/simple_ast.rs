@@ -9,7 +9,7 @@ use middle::ir;
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub register_list: Vec<PhysReg>,
+    pub entry_reg_state: Vec<(NewValue, PhysReg)>,
     pub basic_blocks: Vec<BasicBlock>,
     pub exit_node: Option<ExitNode>,
     pub final_reg_state: Vec<(PhysReg, Operand)>,
@@ -18,8 +18,9 @@ pub struct Function {
 #[derive(Debug)]
 pub struct BasicBlock {
     pub addr: ir::MAddress,
+    pub size: u64,
     pub ops: Vec<Operation>,
-    pub jump: Option<Terminator>,
+    pub term: Terminator,
 }
 
 #[derive(Debug)]
@@ -28,10 +29,30 @@ pub struct ExitNode {
 }
 
 #[derive(Debug)]
+pub enum Terminator {
+    JmpUncond(ir::MAddress),
+    JmpCond(Operand, ir::MAddress, ir::MAddress),
+    JmpIndirect(Operand),
+    Unreachable,
+}
+
+#[derive(Debug)]
 pub enum Operation {
-    Phi(ValueRef, Type, Vec<Operand>),
-    Assign(Option<ir::MAddress>, ValueRef, Type, Expr),
-    Call(Option<ir::MAddress>, Operand, Vec<CallArg>),
+    Phi(NewValue, Vec<Operand>),
+    Assign(Option<ir::MAddress>, NewValue, Expr),
+    Call(Option<ir::MAddress>, Vec<CallRet>, Operand, Vec<CallArg>),
+}
+
+#[derive(Debug)]
+pub struct CallRet {
+    pub value: NewValue,
+    pub reg: PhysReg,
+}
+
+#[derive(Debug)]
+pub struct CallArg {
+    pub formal: PhysReg,
+    pub actual: Operand,
 }
 
 #[derive(Debug)]
@@ -51,24 +72,9 @@ pub enum ResizeType {
 }
 
 #[derive(Debug)]
-pub struct CallArg {
-    pub formal: PhysReg,
-    pub actual: Operand,
-}
-
-#[derive(Debug)]
 pub enum Operand {
-    Comment(String),
     ValueRef(ValueRef),
     Const(u64),
-}
-
-#[derive(Debug)]
-pub enum Terminator {
-    JmpUncond(ir::MAddress),
-    JmpCond(Operand, ir::MAddress, Option<ir::MAddress>),
-    JmpIndirect(Operand),
-    Unreachable,
 }
 
 #[derive(Debug)]
@@ -92,6 +98,9 @@ pub enum InfixOp {
     Lsl,
     Lsr,
 }
+
+#[derive(Debug)]
+pub struct NewValue(pub ValueRef, pub Type);
 
 #[derive(Debug)]
 pub struct Type(pub WidthSpec, pub RefSpec);

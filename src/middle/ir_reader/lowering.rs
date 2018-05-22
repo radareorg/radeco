@@ -3,24 +3,26 @@
 use super::simple_ast as sast;
 use middle::ir;
 use middle::ir::MOpcode as IrOpcode;
+use middle::regfile::RegisterId;
 use middle::ssa::cfg_traits::{CFGMod, CFG};
 use middle::ssa::ssa_traits::{SSAMod, ValueInfo, SSA};
 use middle::ssa::ssastorage::SSAStorage;
+
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::error;
 use std::fmt;
-use std::mem;
 
 pub type Result<T> = ::std::result::Result<T, LoweringError>;
 
-/// Lowers [AST](sast) into the provided [`SSAStorage`](SSAStorage)
+/// Lowers [AST](sast) into the provided [`SSAStorage`]
 pub fn lower_simpleast<'a>(ssa: &'a mut SSAStorage, sfn: sast::Function) -> Result<()> {
     LowerSsa::new(ssa)?.lower_function(sfn)
 }
 
 #[derive(Debug)]
 pub enum LoweringError {
-    /// If an operation on the [`SSAStorage`](SSAStorage) fails
+    /// If an operation on the [`SSAStorage`] fails
     SsaError,
     /// If the AST was invalid somehow
     InvalidAst(String),
@@ -40,7 +42,6 @@ struct LowerSsa<'a> {
     exit_node: SSABlock,
     blocks: HashMap<ir::MAddress, SSABlock>,
     values: HashMap<sast::ValueRef, SSAValue>,
-    regnames: Vec<sast::PhysReg>,
 }
 
 impl<'a> LowerSsa<'a> {
@@ -65,87 +66,65 @@ impl<'a> LowerSsa<'a> {
             exit_node,
             blocks: HashMap::new(),
             values: HashMap::new(),
-            regnames: Vec::new(),
         })
     }
 
     fn lower_function(mut self, sfn: sast::Function) -> Result<()> {
-        self.regnames = sfn.register_list;
-        if self.regnames.len() >= u8::max_value() as usize {
-            return Err(LoweringError::InvalidAst(format!(
-                "too many registers: {}",
-                self.regnames.len()
-            )));
-        }
 
-        // when we're lowering a block, we need to know what block comes afterwards;
-        // so when we iterate over the blocks, we lower the *previous* block we saw,
-        // so then that block's next block is just the current block
-        let mut opt_prev_sbb: Option<sast::BasicBlock> = None;
+        self.lower_entry_reg_state(sfn.entry_reg_state)?;
+
+        let mut first = true;
         for sbb in sfn.basic_blocks {
-            let sbb_addr = sbb.addr;
-            if let Some(prev_sbb) = mem::replace(&mut opt_prev_sbb, Some(sbb)) {
-                // lower `prev`; `sbb` is `prev`'s next
-                self.lower_basicblock(prev_sbb, Some(sbb_addr))?;
-            } else {
-                // `sbb` is the first block
-                let bb = self.block_at(sbb_addr)?;
+            let bb = self.lower_basicblock(sbb)?;
+            if first {
                 self.ssa
                     .insert_control_edge(self.entry_node, bb, UNCOND_EDGE);
+                first = false;
             }
-        }
-        if let Some(last_sbb) = opt_prev_sbb {
-            // lower the last block
-            self.lower_basicblock(last_sbb, None)?;
-        } else {
-            // there were 0 blocks
-            // I think this is a sane thing to do in this case :P
-            self.ssa
-                .insert_control_edge(self.entry_node, self.exit_node, UNCOND_EDGE);
         }
 
         if let Some(sen) = sfn.exit_node {
             self.lower_exit_node(sen)?;
         }
 
-        let mut sfinal_state: Vec<Option<SSAValue>> = vec![None; self.regnames.len() + 1];
-        for (sreg, sop) in sfn.final_reg_state {
-            // a bit of a hack...
-            let reg_idx = if sreg.0 != "mem" {
-                self.index_of_reg(&sreg)? as usize
-            } else {
-                self.regnames.len()
-            };
-            let op = self.lower_operand(sop)?;
-            sfinal_state[reg_idx] = Some(op);
-        }
-        let final_state = self.ssa.registers_in(self.exit_node)?;
-        for (reg_i, opt_op) in sfinal_state.into_iter().enumerate() {
-            let op = if let Some(op) = opt_op {
-                op
-            } else {
-                let cmnt = if reg_i != self.regnames.len() {
-                    self.regnames[reg_i].0.clone()
-                } else {
-                    "mem".to_owned()
-                };
-                self.lower_operand(sast::Operand::Comment(cmnt))?
-            };
-            self.ssa.op_use(final_state, reg_i as u8, op);
-        }
+        self.lower_final_reg_state(sfn.final_reg_state)?;
 
-        self.ssa
-            .map_registers(self.regnames.into_iter().map(|x| x.0).collect());
+        let regs = self.ssa.regfile.whole_names.clone();
+        self.ssa.map_registers(regs);
 
         Ok(())
     }
 
-    fn lower_basicblock(
+    fn lower_entry_reg_state(
         &mut self,
-        sbb: sast::BasicBlock,
-        opt_next_addr: Option<ir::MAddress>,
+        sregstate: Vec<(sast::NewValue, sast::PhysReg)>,
     ) -> Result<()> {
+        let regstate = self.ssa.registers_in(self.entry_node)?;
+        for (sast::NewValue(vr, ty), sreg) in sregstate {
+            let regid = self.index_of_reg(&sreg)?;
+            let val = self.ssa.insert_comment(lower_valueinfo(ty), sreg.0)?;
+            self.ssa.op_use(regstate, regid.to_u8(), val);
+            self.values.insert(vr, val);
+        }
+        Ok(())
+    }
+
+    fn lower_final_reg_state(
+        &mut self,
+        sregstate: Vec<(sast::PhysReg, sast::Operand)>,
+    ) -> Result<()> {
+        let regstate = self.ssa.registers_in(self.exit_node)?;
+        for (sreg, sop) in sregstate {
+            let regid = self.index_of_reg(&sreg)?;
+            let op = self.lower_operand(sop)?;
+            self.ssa.op_use(regstate, regid.to_u8(), op);
+        }
+        Ok(())
+    }
+
+    fn lower_basicblock(&mut self, sbb: sast::BasicBlock) -> Result<SSABlock> {
         let bb = self.block_at(sbb.addr)?;
+        self.ssa.set_block_size(bb, sbb.size);
 
         for sop in sbb.ops {
             let (res, opt_op_addr) = self.lower_operation(sop)?;
@@ -153,36 +132,31 @@ impl<'a> LowerSsa<'a> {
             self.ssa.insert_into_block(res, bb, op_addr);
         }
 
-        let next_node = opt_next_addr.map_or(Ok(self.exit_node), |a| self.block_at(a))?;
-        match sbb.jump {
-            Some(sast::Terminator::JmpUncond(tgt)) => {
+        match sbb.term {
+            sast::Terminator::JmpUncond(tgt) => {
                 let tgt_bb = self.block_at(tgt)?;
                 self.ssa.insert_control_edge(bb, tgt_bb, UNCOND_EDGE);
             }
-            Some(sast::Terminator::JmpCond(sel_sop, if_tgt, opt_else_tgt)) => {
+            sast::Terminator::JmpCond(sel_sop, if_tgt, else_tgt) => {
                 let sel_op = self.lower_operand(sel_sop)?;
                 let if_bb = self.block_at(if_tgt)?;
-                let else_bb = opt_else_tgt.map_or(Ok(next_node), |a| self.block_at(a))?;
+                let else_bb = self.block_at(else_tgt)?;
                 self.ssa.set_selector(sel_op, bb);
                 self.ssa.insert_control_edge(bb, if_bb, TRUE_EDGE);
                 self.ssa.insert_control_edge(bb, else_bb, FALSE_EDGE);
             }
-            Some(sast::Terminator::JmpIndirect(sel_sop)) => {
+            sast::Terminator::JmpIndirect(sel_sop) => {
                 let sel_op = self.lower_operand(sel_sop)?;
                 self.ssa.set_selector(sel_op, bb);
                 self.ssa
                     .insert_control_edge(bb, self.exit_node, UNCOND_EDGE);
             }
-            Some(sast::Terminator::Unreachable) => {
+            sast::Terminator::Unreachable => {
                 // nothing to do
-            }
-            None => {
-                // fallthrough to `next`
-                self.ssa.insert_control_edge(bb, next_node, UNCOND_EDGE);
             }
         }
 
-        Ok(())
+        Ok(bb)
     }
 
     fn lower_exit_node(&mut self, sen: sast::ExitNode) -> Result<()> {
@@ -201,7 +175,7 @@ impl<'a> LowerSsa<'a> {
         sopn: sast::Operation,
     ) -> Result<(SSAValue, Option<ir::MAddress>)> {
         Ok(match sopn {
-            sast::Operation::Phi(vr, ty, sops) => {
+            sast::Operation::Phi(sast::NewValue(vr, ty), sops) => {
                 let vi = lower_valueinfo(ty);
                 let res = self.ssa.insert_phi(vi)?;
                 for sop in sops.into_iter().rev() {
@@ -212,7 +186,7 @@ impl<'a> LowerSsa<'a> {
                 (res, None)
             }
 
-            sast::Operation::Assign(opt_addr, vr, ty, sexpr) => {
+            sast::Operation::Assign(opt_addr, sast::NewValue(vr, ty), sexpr) => {
                 let vi = lower_valueinfo(ty);
                 let (opcode, sops) = match sexpr {
                     sast::Expr::Infix(sop0, sopcode, sop1) => {
@@ -234,16 +208,24 @@ impl<'a> LowerSsa<'a> {
                 (res, opt_addr)
             }
 
-            sast::Operation::Call(opt_addr, tgt, sargs) => {
-                // TODO: round-trip call `ValueInfo`
-                let vi = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
-                let res = self.ssa.insert_op(IrOpcode::OpCall, vi, None)?;
+            sast::Operation::Call(opt_addr, srets, tgt, sargs) => {
+                let res = self.ssa.insert_op(IrOpcode::OpCall, scalar!(0), None)?;
                 let tgt_op = self.lower_operand(tgt)?;
                 self.ssa.op_use(res, 0, tgt_op);
                 for sarg in sargs {
-                    let reg_idx = self.index_of_reg(&sarg.formal)?;
+                    let regid = self.index_of_reg(&sarg.formal)?;
                     let op = self.lower_operand(sarg.actual)?;
-                    self.ssa.op_use(res, reg_idx + 1, op);
+                    self.ssa.op_use(res, regid.to_u8() + 1, op);
+                }
+                for sret in srets {
+                    let regid = self.index_of_reg(&sret.reg)?;
+                    let mut comment = sret.reg.0;
+                    if let Some(addr) = opt_addr {
+                        write!(comment, "@{}", addr).unwrap();
+                    }
+                    let val = self.ssa.insert_comment(lower_valueinfo(sret.value.1), comment)?;
+                    self.ssa.op_use(val, regid.to_u8(), res);
+                    self.values.insert(sret.value.0, val);
                 }
                 (res, opt_addr)
             }
@@ -252,11 +234,6 @@ impl<'a> LowerSsa<'a> {
 
     fn lower_operand(&mut self, sop: sast::Operand) -> Result<SSAValue> {
         match sop {
-            sast::Operand::Comment(s) => {
-                // TODO: round-trip comment `ValueInfo`
-                let vi = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
-                Ok(self.ssa.insert_comment(vi, s)?)
-            }
             sast::Operand::ValueRef(r) => {
                 if let Some(x) = self.values.get(&r).cloned() {
                     Ok(x)
@@ -280,15 +257,14 @@ impl<'a> LowerSsa<'a> {
         })
     }
 
-    fn index_of_reg(&self, sreg: &sast::PhysReg) -> Result<u8> {
+    fn index_of_reg(&self, sreg: &sast::PhysReg) -> Result<RegisterId> {
         if sreg.0 == "mem" {
-            // we already checked that `regnames.len() < u8::max_value()`
-            Ok(self.regnames.len() as u8)
+            Ok(RegisterId::from_usize(
+                self.ssa.regfile.whole_names.len(),
+            ))
         } else {
-            // TODO: more efficient as a HashMap<Reg, u8>?
-            if let Some(x) = self.regnames.iter().position(|r| r == sreg) {
-                // we already checked that `regnames.len() < u8::max_value()`
-                Ok(x as u8)
+            if let Some(x) = self.ssa.regfile.register_id_by_name(&sreg.0) {
+                Ok(RegisterId::from_usize(x as usize))
             } else {
                 Err(LoweringError::InvalidAst(format!(
                     "no physical register: {}",

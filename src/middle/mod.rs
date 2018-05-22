@@ -17,6 +17,7 @@ pub mod ssa {
     pub mod ssadot;
     pub mod memoryssa;
     #[allow(non_snake_case)] pub mod verifier;
+    pub mod utils;
 }
 
 #[macro_use] pub mod dot;

@@ -188,12 +188,10 @@ impl Verify for SSAStorage {
                         MArity::Zero => 0,
                         MArity::Unary => 1,
                         MArity::Binary => 2,
-                        _ => unreachable!(),
+                        MArity::Ternary => 3,
                     };
 
-                    // TODO: OpStore is unclear that it could be binary or ternary.
-                    if opcode != MOpcode::OpStore &&
-                        opcode != MOpcode::OpCall {
+                    if opcode != MOpcode::OpCall {
                         check!(op_len == n, SSAErr::WrongNumOperands(*exi, n, op_len));
                     }
 

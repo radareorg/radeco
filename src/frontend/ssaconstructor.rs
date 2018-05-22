@@ -28,6 +28,7 @@ use r2api::structs::{LOpInfo, LRegInfo};
 
 use regex::Regex;
 use std::{fmt, cmp, u64};
+use std::sync::Arc;
 
 pub type VarId = usize;
 
@@ -82,7 +83,8 @@ impl<'a, T> SSAConstruct<'a, T>
     // Helper wrapper.
     pub fn construct(rfn: &mut RadecoFunction, ri: &LRegInfo, assume_cc: bool, replace_pc: bool) {
         let instructions = rfn.instructions().to_vec();
-        let regfile = SubRegisterFile::new(ri);
+        let regfile = Arc::new(SubRegisterFile::new(ri));
+        rfn.ssa_mut().regfile = regfile.clone();
         let mut constr = SSAConstruct::new(rfn.ssa_mut(), &regfile);
         constr.assume_cc = assume_cc;
         constr.replace_pc = replace_pc;
