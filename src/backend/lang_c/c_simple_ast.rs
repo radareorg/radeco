@@ -559,6 +559,14 @@ impl<'a> CASTConverter<'a> {
 mod test {
     use super::*;
 
+    // fn main () {
+    //     unsigned int x;
+    //     unsigned int y;
+    //     unsigned int z;
+    //     unsigned int w;
+    //     x = y
+    //     func(z, w)
+    // }
     #[test]
     fn simple_c_ast_basic_test() {
         let mut ast = SimpleCAST::new("main");
@@ -573,6 +581,12 @@ mod test {
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int x;
+    //     unsigned int y;
+    //     unsigned int z;
+    //     x = (x + y)
+    // }
     #[test]
     fn simple_c_ast_expr_test() {
         let mut ast = SimpleCAST::new("main");
@@ -586,6 +600,11 @@ mod test {
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int y;
+    //     unsigned int x;
+    //     y = func(x)
+    // }
     #[test]
     fn simple_c_ast_func_test() {
         let mut ast = SimpleCAST::new("main");
@@ -597,6 +616,19 @@ mod test {
         println!("{}", output);
     }
 
+    // fn main() {
+    //     unsigned int z;
+    //     unsigned int x;
+    //     unsigned int y;
+    //     unsigned int w;
+    //     if x {
+    //         x = y
+    //         test1()
+    //     } else {
+    //         func(z, w)
+    //         test2()
+    //     }
+    // }
     #[test]
     fn simple_c_ast_conditional_test() {
         let mut ast = SimpleCAST::new("main");
@@ -607,12 +639,22 @@ mod test {
         let entry = ast.entry;
         // XXX
         let assn = ast.assign(x, y, entry);
+        let call_test1 = ast.call_func("test1", &[], assn, None);
         let call_f = ast.call_func("func", &[z, w], assn, None);
+        let call_test2 = ast.call_func("test2", &[], call_f, None);
         let _ = ast.conditional(x, assn, Some(call_f), entry);
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int y;
+    //     unsigned int x;
+    //     goto L1
+    //     x = y
+    // L1:
+    //     return x
+    // }
     #[test]
     fn simple_c_ast_goto_test() {
         let mut ast = SimpleCAST::new("main");
@@ -625,6 +667,10 @@ mod test {
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int x;
+    //     return x
+    // }
     #[test]
     fn simple_c_ast_return_test() {
         let mut ast = SimpleCAST::new("main");
@@ -635,6 +681,14 @@ mod test {
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int y;
+    //     unsigned int x;
+    //     goto L1
+    //     x = y
+    // L1:
+    //     return x
+    // }
     #[test]
     fn simple_c_ast_insert_goto_test() {
         let mut ast = SimpleCAST::new("main");
@@ -648,6 +702,22 @@ mod test {
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int x;
+    //     unsigned int y;
+    //     unsigned int z;
+    //     unsigned int w;
+    //     unsigned int v;
+    //     unsigned int cond;
+    //     x = y
+    // L1:
+    //     x = (x + w)
+    //     cond = func(x)
+    //     if cond {
+    //         goto L1
+    //     }
+    //     return
+    // }
     #[test]
     fn simple_c_ast_complex_test() {
         let mut ast = SimpleCAST::new("main");
@@ -664,6 +734,44 @@ mod test {
         let f_call = ast.call_func("func", &[x], assn2, Some(cond));
         let break_goto = ast.add_goto(assn2, "L1", f_call);
         let if_node = ast.conditional(cond, break_goto, None, f_call);
+        let _ = ast.add_return(None, if_node);
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    // fn main() {
+    //     unsigned int x;
+    //     unsigned int v;
+    //     unsigned int w;
+    //     unsigned int cond;
+    //     unsigned int y;
+    //     unsigned int z;
+    //     x = y
+    // L1:
+    //     x = (x + w)
+    //     cond = func(x)
+    //     if(cond) {
+    //         go(x)
+    //         goto L1
+    //     }
+    // }
+    #[test]
+    fn simple_c_ast_complex1_test() {
+        let mut ast = SimpleCAST::new("main");
+        let entry = ast.entry;
+        let x = ast.var("x");
+        let y = ast.var("y");
+        let w = ast.var("w");
+        let z = ast.var("z");
+        let v = ast.var("v");
+        let cond = ast.var("cond");
+        let assn1 = ast.assign(x, y, entry);
+        let add = ast.expr(&[x, w], c_simple::Expr::Add);
+        let assn2 = ast.assign(x, add, assn1);
+        let f_call = ast.call_func("func", &[x], assn2, Some(cond));
+        let f_call1 = ast.call_func("go", &[x], f_call, None);
+        let break_goto = ast.add_goto(assn2, "L1", f_call1);
+        let if_node = ast.conditional(cond, f_call1, None, f_call);
         let _ = ast.add_return(None, if_node);
         let output = ast.to_c_ast().print();
         println!("{}", output);
