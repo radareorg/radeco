@@ -2,7 +2,7 @@ use std::{default, iter, fmt};
 use std::collections::{HashMap, HashSet};
 
 use super::c_simple;
-use super::c_simple::{CAST, CASTNode};
+use super::c_simple::{Ty, CAST, CASTNode};
 use frontend::radeco_containers::RadecoFunction;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::visit::EdgeRef;
@@ -30,9 +30,9 @@ enum ActionNode {
 #[derive(Debug, Clone, PartialEq)]
 enum ValueNode {
     /// The string is the name of variable
-    Variable(String),
+    Variable(Option<Ty>, String),
     /// Constant or immidiate value
-    Constant(String),
+    Constant(Option<Ty>, String),
     Expression(c_simple::Expr),
 }
 
@@ -120,15 +120,15 @@ impl SimpleCAST {
     }
 
     /// Add ValueNode of variable
-    pub fn var(&mut self, name: &str) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Variable(name.to_string())));
+    pub fn var(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
+        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Variable(ty, name.to_string())));
         self.vars.insert(node);
         node
     }
 
     /// Add ValueNode of constant value
-    pub fn constant(&mut self, name: &str) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Constant(name.to_string())));
+    pub fn constant(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
+        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Constant(ty, name.to_string())));
         self.consts.insert(node);
         node
     }
@@ -447,10 +447,9 @@ impl<'a> CASTConverter<'a> {
     pub fn to_c_ast(&mut self) -> CAST {
         let mut c_ast = CAST::new(&self.ast.fname);
         for var in self.ast.vars.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref var_name))) = self.ast.ast.node_weight(*var) {
-                // TODO use given type from ValueNode
-                let n = c_ast.declare_vars(c_simple::Ty::new(c_simple::BTy::Int, false, 0), &[var_name.to_string()]);
-                // XXX
+            if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(*var) {
+                let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
+                let n = c_ast.declare_vars(ty, &[var_name.to_string()]);
                 self.node_map.insert(*var, n[0]);
             }
         }
@@ -598,10 +597,10 @@ mod test {
     #[test]
     fn simple_c_ast_basic_test() {
         let mut ast = SimpleCAST::new("main");
-        let x = ast.var("x");
-        let y = ast.var("y");
-        let z = ast.var("z");
-        let w = ast.var("w");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
+        let z = ast.var("z", None);
+        let w = ast.var("w", None);
         let entry = ast.entry;
         let assn = ast.assign(x, y, entry);
         let _ = ast.call_func("func", &[z, w], assn, None);
@@ -618,9 +617,9 @@ mod test {
     #[test]
     fn simple_c_ast_expr_test() {
         let mut ast = SimpleCAST::new("main");
-        let x = ast.var("x");
-        let y = ast.var("y");
-        let z = ast.var("z");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
+        let z = ast.var("z", None);
         let entry = ast.entry;
         let expr = ast.expr(&[x, y], c_simple::Expr::Add);
         let assn = ast.assign(x, expr, entry);
@@ -636,8 +635,8 @@ mod test {
     #[test]
     fn simple_c_ast_func_test() {
         let mut ast = SimpleCAST::new("main");
-        let x = ast.var("x");
-        let y = ast.var("y");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
         let entry = ast.entry;
         let call_f = ast.call_func("func", &[x], entry, Some(y));
         let output = ast.to_c_ast().print();
@@ -660,10 +659,10 @@ mod test {
     #[test]
     fn simple_c_ast_conditional_test() {
         let mut ast = SimpleCAST::new("main");
-        let x = ast.var("x");
-        let y = ast.var("y");
-        let z = ast.var("z");
-        let w = ast.var("w");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
+        let z = ast.var("z", None);
+        let w = ast.var("w", None);
         let entry = ast.entry;
         // XXX
         let assn = ast.assign(x, y, entry);
@@ -687,8 +686,8 @@ mod test {
     fn simple_c_ast_goto_test() {
         let mut ast = SimpleCAST::new("main");
         let entry = ast.entry;
-        let x = ast.var("x");
-        let y = ast.var("y");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
         let assn = ast.assign(x, y, entry);
         let _ = ast.add_goto(entry, "L1", assn);
         let output = ast.to_c_ast().print();
@@ -703,7 +702,7 @@ mod test {
     fn simple_c_ast_return_test() {
         let mut ast = SimpleCAST::new("main");
         let entry = ast.entry;
-        let x = ast.var("x");
+        let x = ast.var("x", None);
         let _ = ast.add_return(Some(x), entry);
         let output = ast.to_c_ast().print();
         println!("{}", output);
@@ -721,8 +720,8 @@ mod test {
     fn simple_c_ast_insert_goto_test() {
         let mut ast = SimpleCAST::new("main");
         let entry = ast.entry;
-        let x = ast.var("x");
-        let y = ast.var("y");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
         let assn = ast.assign(x, y, entry);
         let ret = ast.add_return(Some(x), assn);
         let _ = ast.insert_goto(entry, assn, ret, "L1");
@@ -750,12 +749,12 @@ mod test {
     fn simple_c_ast_complex_test() {
         let mut ast = SimpleCAST::new("main");
         let entry = ast.entry;
-        let x = ast.var("x");
-        let y = ast.var("y");
-        let w = ast.var("w");
-        let z = ast.var("z");
-        let v = ast.var("v");
-        let cond = ast.var("cond");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
+        let w = ast.var("w", None);
+        let z = ast.var("z", None);
+        let v = ast.var("v", None);
+        let cond = ast.var("cond", None);
         let assn1 = ast.assign(x, y, entry);
         let add = ast.expr(&[x, w], c_simple::Expr::Add);
         let assn2 = ast.assign(x, add, assn1);
@@ -787,12 +786,12 @@ mod test {
     fn simple_c_ast_complex1_test() {
         let mut ast = SimpleCAST::new("main");
         let entry = ast.entry;
-        let x = ast.var("x");
-        let y = ast.var("y");
-        let w = ast.var("w");
-        let z = ast.var("z");
-        let v = ast.var("v");
-        let cond = ast.var("cond");
+        let x = ast.var("x", None);
+        let y = ast.var("y", None);
+        let w = ast.var("w", None);
+        let z = ast.var("z", None);
+        let v = ast.var("v", None);
+        let cond = ast.var("cond", None);
         let assn1 = ast.assign(x, y, entry);
         let add = ast.expr(&[x, w], c_simple::Expr::Add);
         let assn2 = ast.assign(x, add, assn1);
