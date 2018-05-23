@@ -23,6 +23,7 @@ pub mod matcher {
     pub mod gmatch;
 }
 
+pub mod vsa;
 pub mod interproc;
 pub mod tie;
 pub mod reference_marking;
