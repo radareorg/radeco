@@ -37,14 +37,14 @@ log = { version = "0.4.0", optional = true }
 env_logger = { version = "0.5.0", optional = true }
 
 [dependencies.r2pipe]
-git = "https://github.com/radare/r2pipe.rs"
+git = "https://github.com/radareorg/r2pipe.rs"
 
 [dependencies.r2api]
 git = "https://github.com/radare/radare2-r2pipe-api"
 #path = "../radare2-r2pipe-api/rust/"
 
 [dependencies.esil]
-git = "https://github.com/radare/esil-rs"
+git = "https://github.com/radareorg/esil-rs"
 #path = "../esil-rs"
 
 [dependencies.capstone_rust]
