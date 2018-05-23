@@ -1,7 +1,7 @@
 # radeco-lib
 
-[![Build Status](https://travis-ci.org/radare/radeco-lib.svg?branch=master)](https://travis-ci.org/radare/radeco-lib)
-[![Coverage Status](https://coveralls.io/repos/github/radare/radeco-lib/badge.svg?branch=master)](https://coveralls.io/github/radare/radeco-lib?branch=master)
+[![Build Status](https://travis-ci.org/radareorg/radeco-lib.svg?branch=master)](https://travis-ci.org/radare/radeco-lib)
+[![Coverage Status](https://coveralls.io/repos/github/radareorg/radeco-lib/badge.svg?branch=master)](https://coveralls.io/github/radare/radeco-lib?branch=master)
 
 A radare2 based binary analysis framework
 
