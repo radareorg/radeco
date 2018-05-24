@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 
 use super::c_simple;
 use super::c_simple::{Ty, CAST, CASTNode};
+use middle::ssa::ssastorage::{NodeData, SSAStorage};
+use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
 use frontend::radeco_containers::RadecoFunction;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::visit::EdgeRef;
@@ -416,6 +418,51 @@ impl SimpleCAST {
     pub fn to_c_ast(&self) -> CAST {
         let mut converter = CASTConverter::new(&self);
         converter.to_c_ast()
+    }
+
+}
+
+// TODO more efficient algorithm
+struct UnionFind {
+    g: HashMap<NodeIndex, NodeIndex>,
+}
+
+impl UnionFind {
+    fn add(&mut self, root: NodeIndex, node: NodeIndex) {
+        let r = self.root(root);
+        self.g.insert(r, node);
+    }
+
+    fn root(&mut self, node: NodeIndex) -> NodeIndex {
+        match self.g.get(&node) {
+            Some(&n) if n == node => n,
+            Some(&n) => self.root(n),
+            _ => node,
+        }
+    }
+}
+
+fn recover_data_flow(rfn: &RadecoFunction) {
+}
+
+fn data_flow_from_ssa(ssa: &SSAStorage) {
+    for block in ssa.inorder_walk() {
+        if ssa.is_expr(block) {
+        } else if ssa.is_phi(block) {
+        } else if ssa.is_selector(block) {
+        }
+    }
+}
+
+impl From<RadecoFunction> for SimpleCAST {
+    fn from(rfn: RadecoFunction) -> Self {
+        // TODO
+        let ast = SimpleCAST::new(&rfn.name);
+        // Gather variables, constants
+        unimplemented!();
+        // Recover expression, statement
+        unimplemented!();
+        ast
     }
 }
 
