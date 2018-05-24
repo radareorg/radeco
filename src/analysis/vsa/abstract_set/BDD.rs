@@ -5,13 +5,10 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Module that implements value set analysis on radeco IR.
-//! More information are available from Gogul Balakrishnan's Ph.D. Thesis.
+//! Module that implements math operation on the BDD.
+//!
+//! More information are available from "BDD-based Value Analysis for X86 Executables".
 //! Please refer here:
-//!     * https://research.cs.wisc.edu/wpis/papers/balakrishnan_thesis.pdf
+//!     * https://tubdok.tub.tuhh.de/bitstream/11420/1510/1/dis.pdf
+//!
 
-pub mod abstract_set {
-    pub mod abstract_set;
-    pub mod strided_interval;
-    pub mod BDD;
-}
