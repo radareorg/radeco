@@ -19,6 +19,9 @@ use std::fmt;
 use std::ops::{Neg, Add, Sub, Div, Rem, Mul};
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
+use num::bigint::BigInt;
+use num::Signed;
+
 use super::abstract_set::{inum, _bits};
 use super::abstract_set::{AbstractSet, Container};
 
@@ -192,7 +195,7 @@ impl StridedInterval {
         let _lb = n_in_k_bits!(self.lb, k);
         let _ub = n_in_k_bits!(self.ub, k);
         let (mut lb, mut ub) = if _lb > _ub {
-            radeco_err!("lb({:?}) is bigger than ub({:?}), exchange these two", 
+            radeco_warn!("lb({:?}) is bigger than ub({:?}), exchange these two", 
                         _lb, _ub);
             (_ub, _lb)
         } else {
@@ -203,12 +206,12 @@ impl StridedInterval {
         let mut s = if let Some(_s) = self.s.checked_abs() {
             _s
         } else {
-            radeco_err!("Strided({:?}) should not be MIN in {:?} bits", 
+            radeco_warn!("Strided({:?}) should not be MIN in {:?} bits", 
                         s, _bits);
             1
         };
         if (s != n_in_k_bits!(s, k)) {
-            radeco_err!("Invalid stride({:?})", s);
+            radeco_warn!("Invalid stride({:?})", s);
             s = 1;
         }
 
@@ -370,7 +373,135 @@ impl Mul for StridedInterval {
     type Output = Self;
 
     fn mul(self, other: Self) -> Self {
-        Self::default()
+        if self.k != other.k {
+            radeco_err!("Addition between two strided intervals with different radices");
+            Self::default()
+        } else if (self.capacity() == 1) && (other.capacity() == 1) {
+            // Two constants
+            StridedInterval::from((
+                    self.k, 
+                    n_in_k_bits!(self.lb.wrapping_mul(other.lb), self.k)
+                ))
+        } else if (self.capacity() == 1) || (other.capacity() == 1) {
+            // A constant multipate by a set.
+            let (cons_si, set_si) = if self.capacity() == 1 {
+                (&self, &other)
+            } else {
+                (&other, &self)
+            };
+            
+            // XXX: Remove Bigint to improve performance
+            // XXX: BigInt uses a non-common presentation for Rem and Div:
+            //      e.g.
+            //          -13 % 8 = -3
+            //          -13 / 8 = -1
+            //          13 % 8 = 5
+            //          13 / 8 = 1
+            //      Thus, we need some tricks to change it into something like:
+            //      e.g.
+            //          -13 % 8 = 5
+            //          -13 / 8 = -2
+            //          13 % 8 = 5
+            //          13 / 8 = 1
+
+            // Cannot fail in expect
+            let n = cons_si.constant().expect("StridedInterval is not a constant");
+            if n == 0 {
+                StridedInterval::from((self.k, 0))
+            } else {
+                let (_lb, _ub) = if n > 0 {
+                    (BigInt::from(set_si.lb), BigInt::from(set_si.ub))
+                } else {
+                    (BigInt::from(set_si.ub), BigInt::from(set_si.lb))
+                };
+                let _n = BigInt::from(n);
+                let k_period: BigInt = BigInt::from(max_in_k_bits!(self.k)) + 1;
+
+                // New bounds for Mul
+                let __u = _lb.clone() * _n.clone();
+                let __v = _ub.clone() * _n.clone();
+
+                let _u = __u.clone() - __u.clone() % k_period.clone() - 
+                            if (__u < BigInt::from(0)) && 
+                                (__u.clone() % k_period.clone() != BigInt::from(0))  {
+                                k_period.clone() 
+                            } else {
+                                BigInt::from(0)
+                            };
+                let _v = __v.clone() - __v.clone() % k_period.clone() - 
+                            if (__v < BigInt::from(0)) && 
+                                (__v.clone() % k_period.clone() != BigInt::from(0))  {
+                                k_period.clone()
+                            } else {
+                                BigInt::from(0)
+                            };
+
+                let u = _u.clone() / k_period.clone();
+                let v = _v.clone() / k_period.clone();
+
+                // Check new bounds are inside the same round of k bits 
+                if v.clone() == u.clone() ||
+                    ((v.clone() % 2 == BigInt::from(0)) && (v - u == BigInt::from(1))) {
+                    StridedInterval::new(
+                        self.k,
+                        n_in_k_bits!(set_si.s * n.wrapping_abs(), self.k),
+                        n_in_k_bits!(set_si.lb.wrapping_mul(n), self.k),
+                        n_in_k_bits!(set_si.ub.wrapping_mul(n), self.k),
+                    )
+                } else {
+                    StridedInterval::default_k(self.k)
+                }
+            }
+        } else {
+            // Both are set
+            let _poles = vec![
+                (BigInt::from(self.lb) * BigInt::from(other.lb), self.lb, other.lb),
+                (BigInt::from(self.lb) * BigInt::from(other.ub), self.lb, other.ub),
+                (BigInt::from(self.ub) * BigInt::from(other.lb), self.ub, other.lb),
+                (BigInt::from(self.ub) * BigInt::from(other.ub), self.ub, other.ub),
+            ];
+            
+            // Similar with above code
+            let _max = _poles.iter().fold(None, |max, x| match max {
+                None => Some(x),
+                Some(y) => Some(if x.0 > y.0 { x } else { y }),
+            }).expect("No elements in _poles");
+            let _min = _poles.iter().fold(None, |min, x| match min {
+                None => Some(x),
+                Some(y) => Some(if x.0 < y.0 { x } else { y }),
+            }).expect("No elements in _poles");
+
+            let k_period: BigInt = BigInt::from(max_in_k_bits!(self.k)) + 1;
+
+            let _u = _min.0.clone() - _min.0.clone() % k_period.clone() - 
+                        if (_min.0 < BigInt::from(0)) && 
+                            (_min.0.clone() % k_period.clone() != BigInt::from(0))  {
+                            k_period.clone() 
+                        } else {
+                            BigInt::from(0)
+                        };
+            let _v = _max.0.clone() - _max.0.clone() % k_period.clone() - 
+                        if (_max.0 < BigInt::from(0)) && 
+                            (_max.0.clone() % k_period.clone() != BigInt::from(0))  {
+                            k_period.clone()
+                        } else {
+                            BigInt::from(0)
+                        };
+            let u = _u.clone() / k_period.clone();
+            let v = _v.clone() / k_period.clone();
+
+            if v.clone() == u.clone() ||
+                ((v.clone() % 2 == BigInt::from(0)) && (v - u == BigInt::from(1))) {
+                StridedInterval::new(
+                    self.k,
+                    gcd(self.s, other.s),
+                    n_in_k_bits!(_min.1.wrapping_mul(_min.2), self.k),
+                    n_in_k_bits!(_max.1.wrapping_mul(_max.2), self.k),
+                )
+            } else {
+                StridedInterval::default_k(self.k)
+            }
+        } 
     }
 }
 
@@ -582,5 +713,53 @@ mod test {
         let op1 = StridedInterval::new(4, 1, -8, -5);
         let op2 = StridedInterval::new(4, 1, -8, -5);
         assert_eq!(StridedInterval::new(4, 1, -8, 7), op1 - op2);
+    }
+
+    #[test]
+    fn strided_interval_test_mul() {
+        let a: inum = 0xdeadbeef;
+        let b: inum = 0xbadcaffe;
+        let op1 = StridedInterval::from(a);
+        let op2 = StridedInterval::from(b);
+        assert_eq!(StridedInterval::from(n_in_k_bits!(a.wrapping_mul(b), _bits)),
+                    op1 * op2);
+
+        let op1 = StridedInterval::new(_bits, 16, 0xdeadbeef, 0xdddddddf);
+        let op2 = StridedInterval::from(0);
+        assert_eq!(StridedInterval::from(0), op1 * op2);
+
+        let op1 = StridedInterval::new(_bits, 1, 0, b);
+        let op2 = StridedInterval::from(a);
+        assert_eq!(StridedInterval::default(), op1 * op2);
+
+        let op1 = StridedInterval::new(_bits, 2, inum::max_value() - 2, inum::max_value());
+        let op2 = StridedInterval::from(2);
+        assert_eq!(StridedInterval::new(_bits, 4, -6, -2), 
+                   op1 * op2);
+
+        let op1 = StridedInterval::new(4, 2, 3, 5);
+        let op2 = StridedInterval::from((4, -3));
+        assert_eq!(StridedInterval::new(4, 6, 1, 7), 
+                   op1 * op2);
+
+        let op1 = StridedInterval::new(4, 2, 3, 9);
+        let op2 = StridedInterval::from((4, -3));
+        assert_eq!(StridedInterval::new(4, 1, -8, 7), 
+                   op1 * op2);
+
+        let op1 = StridedInterval::new(4, 2, 4, 6);
+        let op2 = StridedInterval::new(4, 3, -4, -3);
+        assert_eq!(StridedInterval::new(4, 1, -8, 0), 
+                   op1 * op2);
+
+        let op1 = StridedInterval::new(4, 2, 4, 6);
+        let op2 = StridedInterval::new(4, 1, -4, -3);
+        assert_eq!(StridedInterval::new(4, 1, -8, 4), 
+                   op1 * op2);
+
+        let op1 = StridedInterval::new(4, 2, 2, 6);
+        let op2 = StridedInterval::new(4, 1, -4, -3);
+        assert_eq!(StridedInterval::new(4, 1, -8, 7), 
+                   op1 * op2);
     }
 }
