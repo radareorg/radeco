@@ -6,6 +6,8 @@
 // except according to those terms.
 
 //! Module that implements trait to abstract set of integers.
+//! This Trait allows us to use other abstract domains for integer set, not 
+//! only strided interval.
 //!
 //! As for Gogul Balakrishnan's Ph.D. Thesis, the abstract set of integers is 
 //! strided interval.
@@ -62,6 +64,16 @@ pub trait AbstractSet: Neg + Add + Sub + Div + Rem + Mul +
 
     // Returns the AbstractSet obtained by remoing upper bound for `self`
     fn removes_upper_bound(self) -> Self {
+        unimplemented!()
+    }
+
+    // Returns Some(cons) if the AbstractSet only contains one constant, None otherwise.
+    fn constant(self) -> Option<inum> {
+        unimplemented!()
+    }
+     
+    // Returns capacity of AbstractSet. 
+    fn capacity(self) -> inum {
         unimplemented!()
     }
 }
