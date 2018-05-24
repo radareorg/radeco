@@ -12,3 +12,4 @@ pub mod scf;
 pub mod x86 {
     pub mod x86_idioms;
 }
+pub mod ctrl_flow_struct;
