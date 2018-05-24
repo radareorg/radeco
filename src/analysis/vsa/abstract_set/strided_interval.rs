@@ -271,7 +271,13 @@ impl Neg for StridedInterval {
     type Output = Self;
 
     fn neg(self) -> Self {
-        Self::default()
+        if self.capacity() == 1 {
+            StridedInterval::from((self.k, -self.lb))
+        } else if self.lb == min_in_k_bits!(self.k) {
+            StridedInterval::default_k(self.k)
+        } else {
+            StridedInterval::new(self.k, self.s, -self.ub, -self.lb)            
+        }
     }
 }
 
@@ -317,7 +323,7 @@ impl Sub for StridedInterval {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        Self::default()
+        self + (-other)
     }
 }
 
@@ -483,5 +489,40 @@ mod test {
         let op1 = StridedInterval::new(4, 4, -1, 3);
         let op2 = StridedInterval::new(4, 2, -2, 4);
         assert_eq!(StridedInterval::new(4, 2, -3, 7), op1 + op2);
+    }
+
+    #[test]
+    fn strided_interval_test_neg() {
+        let op = StridedInterval::new(64, 1, 0xbadcaffe, 0xdeadbeef);
+        assert_eq!(StridedInterval::new(64, 1, -0xdeadbeef, -0xbadcaffe), -op);
+
+        let op = StridedInterval::new(4, 1, -8, 2);
+        assert_eq!(StridedInterval::new(4, 1, -8, 7), -op);
+
+        let op = StridedInterval::new(4, 1, -8, -8);
+        assert_eq!(StridedInterval::new(4, 1, -8, -8), -op);
+    }
+
+    #[test]
+    fn strided_interval_test_sub() {
+        let op1 = StridedInterval::new(4, 0, 7, 7);
+        let op2 = StridedInterval::new(4, 0, 6, 6);
+        assert_eq!(StridedInterval::new(4, 0, 1, 1), op1 - op2);
+
+        let op1 = StridedInterval::new(4, 1, -2, 7);
+        let op2 = StridedInterval::new(4, 1, -5, 0);
+        assert_eq!(StridedInterval::new(4, 1, -8, 7), op1 - op2);
+
+        let op1 = StridedInterval::new(4, 1, 1, 7);
+        let op2 = StridedInterval::new(4, 1, 2, 6);
+        assert_eq!(StridedInterval::new(4, 1, -5, 5), op1 - op2);
+
+        let op1 = StridedInterval::new(4, 1, -5, 7);
+        let op2 = StridedInterval::new(4, 1, -5, 6);
+        assert_eq!(StridedInterval::new(4, 1, -8, 7), op1 - op2);
+
+        let op1 = StridedInterval::new(4, 1, -8, -5);
+        let op2 = StridedInterval::new(4, 1, -8, -5);
+        assert_eq!(StridedInterval::new(4, 1, -8, 7), op1 - op2);
     }
 }
