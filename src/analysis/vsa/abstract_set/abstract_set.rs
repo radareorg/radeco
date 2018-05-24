@@ -23,6 +23,8 @@
 
 use std::ops::{Neg, Add, Sub, Div, Rem, Mul};
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
+use std::fmt::Debug;
+use std::hash::Hash;
 
 // XXX: Try to support 128-bit registers in the future
 // type inum = i128; <-- this one do influence performance
@@ -33,47 +35,53 @@ pub type inum = i64;
 // All members (except k) in AbstractSet will be hold in _bits bits
 pub const _bits: u8 = 64;
 
-pub trait AbstractSet: Neg + Add + Sub + Div + Rem + Mul +
+
+// Trait used to indicate this is a container which contains something
+pub trait Container<T: Clone> {
+    // Returns true if the Container `self` contains `object`, false otherwise.
+    fn contains(&self, object: &T) -> bool {
+        false
+    }
+}
+
+pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
+                        Neg + Add + Sub + Div + Rem + Mul +
                         BitAnd + BitOr + BitXor + Not + Shl + Shr +
+                        Container<inum> + Container<Self> + Container<Vec<inum>> +
                         From<inum> + Default
 {
-    // Returns true if the AbstractSet `self` contains `other`, false otherwise.
-    fn contains(self, other: Self) -> bool {
-        unimplemented!();
-    }
-
     // Returns the meet (intersection) of AbstractSet `self` and `other`.
-    fn meets(self, other: Self) -> Self {
+    fn meet(&self, other: &Self) -> Self {
         unimplemented!();
     }
 
     // Returns the join (union) of AbstractSet `self` and `other`.
-    fn joins(self, other: Self) -> Self {
+    fn join(&self, other: &Self) -> Self {
         unimplemented!();
     }
 
     // Returns the AbstractSet obtained by widening `self` with respect to `other`
-    fn widens(self, other: Self) -> Self {
+    fn widens(&self, other: &Self) -> Self {
         unimplemented!();
     }
 
     // Returns the AbstractSet obtained by remoing lower bound for `self`
-    fn removes_lower_bound(self) -> Self {
+    fn remove_lower_bound(&self) -> Self {
         unimplemented!()
     }
 
     // Returns the AbstractSet obtained by remoing upper bound for `self`
-    fn removes_upper_bound(self) -> Self {
+    fn remove_upper_bound(&self) -> Self {
         unimplemented!()
     }
 
     // Returns Some(cons) if the AbstractSet only contains one constant, None otherwise.
-    fn constant(self) -> Option<inum> {
+    fn constant(&self) -> Option<inum> {
         unimplemented!()
     }
      
     // Returns capacity of AbstractSet. 
-    fn capacity(self) -> inum {
+    fn capacity(&self) -> inum {
         unimplemented!()
     }
 }

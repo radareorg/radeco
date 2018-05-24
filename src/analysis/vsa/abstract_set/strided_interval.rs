@@ -20,7 +20,7 @@ use std::ops::{Neg, Add, Sub, Div, Rem, Mul};
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
 use super::abstract_set::{inum, _bits};
-use super::abstract_set::AbstractSet;
+use super::abstract_set::{AbstractSet, Container};
 
 // Avoid integet overflow when k equls to _bits
 macro_rules! min_in_k_bits {
@@ -112,7 +112,9 @@ pub struct StridedInterval {
 }
 
 
+//
 // Utility functions go here
+//
 
 impl fmt::LowerHex for StridedInterval {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -144,7 +146,11 @@ impl fmt::Display for StridedInterval {
     }
 }
 
-// Basic functions for StridedInterval
+
+//
+// Basic functions for StridedInterval go here
+//
+
 impl StridedInterval {
     // Returns a default strided interval in k bits;
     pub fn default_k(k: u8) -> Self {
@@ -161,6 +167,7 @@ impl StridedInterval {
         }
     }
 
+    // XXX: Generate StridedInterval only by new and from
     pub fn new(k: u8, s: inum, lb: inum, ub: inum) -> Self {
        let mut si = StridedInterval {
            k: k,
@@ -224,7 +231,9 @@ impl StridedInterval {
 }
 
 
+//
 // Operations for StridedInterval go here
+//
 
 impl Default for StridedInterval {
     fn default() -> Self {
@@ -264,6 +273,36 @@ impl From<(u8, inum)> for StridedInterval {
             lb: n_in_k_bits!(n, k),
             ub: n_in_k_bits!(n, k),
         }
+    }
+}
+
+impl Container<inum> for StridedInterval {
+    fn contains(&self, object: &inum) -> bool {
+        if (*object < self.lb) || (*object > self.ub) {
+            false
+        } else if ((*object - self.lb) % self.s == 0) {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Container<StridedInterval> for StridedInterval {
+    fn contains(&self, object: &StridedInterval) -> bool {
+        if object.capacity() == 1 {
+            self.contains(&object.constant().unwrap_or(0))
+        } else if object.s % self.s != 0 {
+            false
+        } else {
+            self.contains(&object.lb) && self.contains(&object.ub)
+        }
+    }
+}
+
+impl Container<Vec<inum>> for StridedInterval {
+    fn contains(&self, object: &Vec<inum>) -> bool {
+        object.iter().fold(true, |acc, x| acc & self.contains(x))
     }
 }
 
@@ -401,21 +440,21 @@ impl Shl for StridedInterval {
 
 // Implement trait AbstractSet for StridedInterval
 impl AbstractSet for StridedInterval {
-   fn constant(self) -> Option<inum> {
-       if (self.s != 0) || (self.lb != self.ub) {
-           None
-       } else {
-           Some(self.lb)
-       }
-   }
+    fn constant(&self) -> Option<inum> {
+        if (self.s != 0) || (self.lb != self.ub) {
+            None
+        } else {
+            Some(self.lb)
+        }
+    }
 
-   fn capacity(self) -> inum {
-       if self.s == 0 {
-           1
-       } else {
-           (self.ub - self.lb) / self.s
-       }
-   }
+    fn capacity(&self) -> inum {
+        if self.s == 0 {
+            1
+        } else {
+            (self.ub - self.lb) / self.s + 1
+        }
+    }
 }
 
 #[cfg(test)]
@@ -429,7 +468,7 @@ mod test {
         assert_eq!(-9223372036854775808, min_in_k_bits!(64));
         assert_eq!(9223372036854775807, max_in_k_bits!(64));
         assert_eq!(0xffff, mask_in_k_bits!(16));
-        assert_eq!(0xffffffffffffffff, mask_in_k_bits!(64));
+        assert_eq!(-1i64, mask_in_k_bits!(64));
         assert_eq!(0xdeadbeef, n_in_k_bits!(0xdeadbeef, 64));
         assert_eq!(1, n_in_k_bits!(0xf0001, 16));
         assert_eq!(-32767, n_in_k_bits!(0xf8001, 16));
@@ -450,6 +489,25 @@ mod test {
                    StridedInterval::from(0xdeadbeef));
         assert_eq!(StridedInterval{k: _bits, s: 3, lb: -2, ub: 28}, 
                    StridedInterval::new(0, -3, -2, 29));
+        assert!(StridedInterval::new(64, 4, 0, 4096).contains(&1024));
+        assert!(!StridedInterval::new(64, 4, 0, 4096).contains(&1022));
+        assert!(!StridedInterval::new(64, 4, 0, 4096).contains(&-4));
+        assert!(StridedInterval::new(64, 4, 0, 4096).contains(&vec![0, 4, 16, 20]));
+        assert!(!StridedInterval::new(64, 4, 0, 4096).contains(&vec![0, 4, 14, 20]));
+        assert!(StridedInterval::new(64, 4, 0, 4096)
+                .contains(&StridedInterval::from(16)));
+        assert!(!StridedInterval::new(64, 4, 0, 4096)
+                .contains(&StridedInterval::from(-16)));
+        assert!(!StridedInterval::new(64, 4, 0, 4096)
+                .contains(&StridedInterval::from(1022)));
+        assert!(StridedInterval::new(64, 7, 0, 7000)
+                .contains(&StridedInterval::new(64, 49, 0, 490)));
+        assert!(!StridedInterval::new(64, 7, 0, 7000)
+                .contains(&StridedInterval::new(64, 50, 0, 100)));
+        assert!(!StridedInterval::new(64, 7, 0, 7000)
+                .contains(&StridedInterval::new(64, 49, -1, 48)));
+        assert!(!StridedInterval::new(64, 7, 0, 7000)
+                .contains(&StridedInterval::new(64, 49, 1, 40)));
     }
 
     #[test]
