@@ -283,6 +283,12 @@ impl Container<inum> for StridedInterval {
     fn contains(&self, object: &inum) -> bool {
         if (*object < self.lb) || (*object > self.ub) {
             false
+        } else if self.s == 0 {
+            if self.lb == *object {
+                true
+            } else {
+                false
+            }
         } else if ((*object - self.lb) % self.s == 0) {
             true
         } else {
@@ -329,7 +335,7 @@ impl Add for StridedInterval {
     fn add(self, other: Self) -> Self {
         if self.k != other.k {
             radeco_err!("Addition between two strided intervals with different radices");
-            Self::default()
+            StridedInterval::default()
         } else if (self.capacity() == 1) && (other.capacity() == 1) {
             // two constants
             let n: inum = n_in_k_bits!(self.lb.wrapping_add(other.lb), self.k); 
@@ -374,8 +380,8 @@ impl Mul for StridedInterval {
 
     fn mul(self, other: Self) -> Self {
         if self.k != other.k {
-            radeco_err!("Addition between two strided intervals with different radices");
-            Self::default()
+            radeco_err!("Multiplication between two strided intervals with different radices");
+            StridedInterval::default()
         } else if (self.capacity() == 1) && (other.capacity() == 1) {
             // Two constants
             StridedInterval::from((
@@ -509,7 +515,88 @@ impl Div for StridedInterval {
     type Output = Self;
 
     fn div(self, other: Self) -> Self {
-        Self::default()
+        println!("{} / {}", self, other);
+        if self.k != other.k {
+            radeco_err!("Division between two strided intervals with different radices");
+            StridedInterval::default()
+        } else if other.contains(&0) {
+            // Divided by zero
+            StridedInterval::default_k(self.k)
+        } else if self.contains(&min_in_k_bits!(self.k)) && other.contains(&-1) {
+            // overflow, because -min_in_k_bits!(self.k) not in k-bits rand
+            StridedInterval::default_k(self.k)
+        } else if (self.capacity() == 1) && (other.capacity() == 1) {
+            // Two constants
+            StridedInterval::from((self.k, self.lb / other.lb))
+        } else if (other.capacity() == 1) {
+            // A constant divided by a set.
+            let n = other.lb;
+            if self.s % n != 0 {
+                // if self.s % other.constant() != 0, the stride should be 1
+                StridedInterval::new(
+                    self.k,
+                    1,
+                    self.lb / n,
+                    self.ub / n,
+                )
+            } else {
+                // if self.s % other.constant() == 0
+                // the situations when self.lb % n != 0 could be split into:
+                //      * self.lb < 0 && self.ub < 0: stride == self.s / n
+                //      * self.lb >=0 && self.ub >=0: stride == self.s / n
+                //      * self.lb < 0 && self.ub > 0: stride == 1
+                //          .e.g.
+                //              4[-7, 5] / 2 -> {-7, -3, 1, 5} / 2 -> {-3, -1, 0, 2}
+                if (self.lb % n != 0 ) && (self.lb < 0) && (self.ub > 0) {
+                    StridedInterval::new(
+                        self.k,
+                        1,
+                        self.lb / n,
+                        self.ub / n,
+                    )
+                } else {
+                    StridedInterval::new(
+                        self.k,
+                        self.s / n,
+                        self.lb / n,
+                        self.ub / n,
+                    )
+                }
+            }
+        } else {
+            // Divition between two sets
+            let mut _poles = vec![
+                self.lb / other.lb,
+                self.ub / other.lb,
+                self.lb / other.ub,
+                self.ub / other.ub,
+            ];
+            if (other.lb < 0) && (other.ub > 0) {
+                let u = other.ub % other.s;
+                let v = u - other.s;
+                _poles.extend_from_slice(&[
+                self.lb / u,
+                self.lb / v,
+                self.ub / u,
+                self.ub / v,
+                ])
+            }
+            let _max = _poles.iter().fold(None, |max, x| match max {
+                None => Some(x),
+                Some(y) => Some(if x > y { x } else { y }),
+            }).expect("No elements in _poles");
+            let _min = _poles.iter().fold(None, |min, x| match min {
+                None => Some(x),
+                Some(y) => Some(if x < y { x } else { y }),
+            }).expect("No elements in _poles");
+
+            StridedInterval::new(
+                self.k,
+                1,
+                *_min,
+                *_max,
+            )
+        }
     }
 }
 
@@ -761,5 +848,56 @@ mod test {
         let op2 = StridedInterval::new(4, 1, -4, -3);
         assert_eq!(StridedInterval::new(4, 1, -8, 7), 
                    op1 * op2);
+    }
+
+    #[test]
+    fn strided_interval_test_div() {
+        let op1 = StridedInterval::from((4, -7));
+        let op2 = StridedInterval::from((4, 0));
+        assert_eq!(StridedInterval::default_k(4), op1 / op2);
+
+        let op1 = StridedInterval::from((4, -7));
+        let op2 = StridedInterval::new(4, 2, -4, 6);
+        assert_eq!(StridedInterval::default_k(4), op1 / op2);
+
+        let op1 = StridedInterval::from(-7);
+        let op2 = StridedInterval::from(2);
+        assert_eq!(StridedInterval::from(-3), op1 / op2);
+
+        let op1 = StridedInterval::from((4, -7));
+        let op2 = StridedInterval::from((4, 2));
+        assert_eq!(StridedInterval::from((4, -3)), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 2, -8, 0);
+        let op2 = StridedInterval::from((4, -1));
+        assert_eq!(StridedInterval::default_k(4), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 2, -8, 2);
+        let op2 = StridedInterval::from((4, 3));
+        assert_eq!(StridedInterval::new(4, 1, -2, 0), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 4, -7, 5);
+        let op2 = StridedInterval::from((4, 2));
+        assert_eq!(StridedInterval::new(4, 1, -3, 2), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 4, -7, -3);
+        let op2 = StridedInterval::from((4, 2));
+        assert_eq!(StridedInterval::new(4, 2, -3, -1), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 4, -8, 4);
+        let op2 = StridedInterval::from((4, 2));
+        assert_eq!(StridedInterval::new(4, 2, -4, 2), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 4, -8, 4);
+        let op2 = StridedInterval::new(4, 2, 1, 7);
+        assert_eq!(StridedInterval::new(4, 1, -8, 4), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 4, -8, 4);
+        let op2 = StridedInterval::new(4, 2, -7, 7);
+        assert_eq!(StridedInterval::new(4, 1, -8, 7), op1 / op2);
+
+        let op1 = StridedInterval::new(4, 4, -8, 4);
+        let op2 = StridedInterval::new(4, 4, -6, 6);
+        assert_eq!(StridedInterval::new(4, 1, -4, 4), op1 / op2);
     }
 }

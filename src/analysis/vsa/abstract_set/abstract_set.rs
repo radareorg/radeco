@@ -40,7 +40,7 @@ pub const _bits: u8 = 64;
 pub trait Container<T: Clone> {
     // Returns true if the Container `self` contains `object`, false otherwise.
     fn contains(&self, object: &T) -> bool {
-        false
+        unimplemented!();
     }
 }
 
