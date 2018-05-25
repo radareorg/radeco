@@ -4,6 +4,7 @@
 
 #![allow(unused)]
 
+mod graph_utils;
 #[cfg(test)]
 mod tests;
 
@@ -55,7 +56,20 @@ enum Condition {
 
 impl ControlFlowGraph {
     fn structure_whole(mut self) -> AstNode {
-        let (backedges, podfs_trace) = self.do_dfs();
+        let mut backedges = HashMap::new();
+        let mut podfs_trace = Vec::new();
+        graph_utils::depth_first_search(&self.graph, self.entry, |ev| {
+            use self::graph_utils::DfsEvent::*;
+            match ev {
+                BackEdge(e) => backedges
+                    .entry(e.target())
+                    .or_insert(Vec::new())
+                    .push(e.id()),
+                Finish(n) => podfs_trace.push(n),
+                _ => (),
+            }
+        });
+
         for n in podfs_trace {
             if let Some(backedges) = backedges.get(&n) {
                 // loop
@@ -88,11 +102,7 @@ impl ControlFlowGraph {
 
     /// Convert the acyclic, single entry, single exit region bound by `header`
     /// and `successor` into an `AstNode`.
-    fn structure_acyclic_sese_region(
-        &mut self,
-        header: NodeIndex,
-        successor: NodeIndex,
-    ) -> () {
+    fn structure_acyclic_sese_region(&mut self, header: NodeIndex, successor: NodeIndex) -> () {
         println!(
             "acyclic sese region: {:?} ==> {:?}",
             self.graph[header], self.graph[successor],
@@ -106,70 +116,30 @@ impl ControlFlowGraph {
         };
 
         // remove all region nodes from the cfg and add them to an AstNode::Seq
-        let repl_ast: Vec<_> = region_postorder.into_iter().rev().map(|n| {
-            let reaching_cond = Condition::Simple(SimpleCondition("".to_owned())); // XXX
-            let n_ast = if n == header {
-                // we don't want to remove `header` since that will also remove
-                // incoming edges, which we need to keep
-                // instead we replace it with a dummy value that will be
-                // later replaced with the actual value
-                mem::replace(&mut self.graph[header], AstNode::Seq(Vec::new()))
-            } else {
-                self.graph.remove_node(n).unwrap()
-            };
-            let n_cond_ast = AstNode::Cond(reaching_cond, Box::new(n_ast), None);
-            println!("  {:?}", n_cond_ast);
-            n_cond_ast
-        }).collect();
+        let repl_ast: Vec<_> = region_postorder
+            .into_iter()
+            .rev()
+            .map(|n| {
+                let reaching_cond = Condition::Simple(SimpleCondition("".to_owned())); // XXX
+                let n_ast = if n == header {
+                    // we don't want to remove `header` since that will also remove
+                    // incoming edges, which we need to keep
+                    // instead we replace it with a dummy value that will be
+                    // later replaced with the actual value
+                    mem::replace(&mut self.graph[header], AstNode::Seq(Vec::new()))
+                } else {
+                    self.graph.remove_node(n).unwrap()
+                };
+                let n_cond_ast = AstNode::Cond(reaching_cond, Box::new(n_ast), None);
+                println!("  {:?}", n_cond_ast);
+                n_cond_ast
+            })
+            .collect();
         mem::replace(&mut self.graph[header], AstNode::Seq(repl_ast));
 
         // the region's successor is still this node's successor.
         self.graph
             .add_edge(header, successor, SimpleCondition("".to_owned()));
-    }
-
-    // petgraph's dfs doesn't give us edge indices, so we have to re-implement it here
-    fn do_dfs(&self) -> (HashMap<NodeIndex, Vec<EdgeIndex>>, Vec<NodeIndex>) {
-        struct DfsState<G: IntoEdges + Visitable>
-        where
-            G::NodeId: Hash + Eq,
-        {
-            graph: G,
-            discovered: G::Map,
-            finished: G::Map,
-            backedges: HashMap<G::NodeId, Vec<G::EdgeId>>,
-            podfs_trace: Vec<G::NodeId>,
-        }
-        impl<G: IntoEdges + Visitable> DfsState<G>
-        where
-            G::NodeId: Hash + Eq,
-        {
-            fn go_rec(&mut self, u: G::NodeId) -> () {
-                if self.discovered.visit(u) {
-                    for e in self.graph.edges(u) {
-                        let v = e.target();
-                        if !self.discovered.is_visited(&v) {
-                            self.go_rec(v);
-                        } else if !self.finished.is_visited(&v) {
-                            self.backedges.entry(v).or_insert(Vec::new()).push(e.id());
-                        }
-                    }
-                    let first_finish = self.finished.visit(u);
-                    debug_assert!(first_finish);
-                    self.podfs_trace.push(u);
-                }
-            }
-        }
-
-        let mut dfs = DfsState {
-            graph: &self.graph,
-            discovered: self.graph.visit_map(),
-            finished: self.graph.visit_map(),
-            backedges: HashMap::new(),
-            podfs_trace: Vec::new(),
-        };
-        dfs.go_rec(self.entry);
-        (dfs.backedges, dfs.podfs_trace)
     }
 
     /// Returns the set of nodes that `h` dominates.

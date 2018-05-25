@@ -44,6 +44,9 @@
 #![feature(slice_patterns)]
 #![feature(try_trait)]
 
+#![cfg_attr(test, feature(plugin))]
+#![cfg_attr(test, plugin(quickcheck_macros))]
+
 extern crate regex;
 extern crate petgraph;
 extern crate serde_json;
@@ -51,6 +54,9 @@ extern crate serde_json;
 extern crate fixedbitset;
 extern crate either;
 extern crate vec_map;
+
+#[cfg(test)]
+extern crate quickcheck;
 
 #[cfg(feature="trace_log")]
 #[macro_use] extern crate log;
