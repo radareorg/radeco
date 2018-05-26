@@ -4,10 +4,11 @@ use analysis::inst_combine;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::dce;
 use middle::ir;
-use middle::regfile::{RegisterId, RegisterUsage, SubRegisterFile};
+use middle::regfile::*;
 use middle::ssa::cfg_traits::*;
 use middle::ssa::ssa_traits::*;
 use middle::ssa::ssastorage::SSAStorage;
+use middle::ssa::utils;
 
 use petgraph::visit::{DfsPostOrder, Walker};
 
@@ -119,11 +120,8 @@ impl Inferer {
         let (call_tgt_addr, call_reg_map) = direct_call_info(fn_map[&fn_addr].ssa(), call_node)?;
 
         // remove unread args
-        for (reg_idx, &op_node) in (0..).zip(&call_reg_map) {
-            if fn_map[&call_tgt_addr]
-                .regusage
-                .is_ignored(RegisterId::from_usize(reg_idx))
-            {
+        for (regid, &op_node) in &call_reg_map {
+            if fn_map[&call_tgt_addr].regusage.is_ignored(regid) {
                 fn_map
                     .get_mut(&fn_addr)
                     .unwrap()
@@ -133,25 +131,13 @@ impl Inferer {
         }
 
         // bridge preserved registers
-        // TODO: use utils::call_rets
-        for use_node in fn_map[&fn_addr].ssa().uses_of(call_node) {
-            let reg_idx = match fn_map[&fn_addr]
-                .ssa()
-                .sparse_operands_of(use_node)
-                .as_slice()
-            {
-                &[(reg_idx, _)] => reg_idx,
-                _ => panic!("invalid use of call as operand"),
-            };
-            if fn_map[&call_tgt_addr]
-                .regusage
-                .is_preserved(RegisterId::from_u8(reg_idx))
-            {
+        for (regid, (use_node, _)) in utils::call_rets(call_node, fn_map[&fn_addr].ssa()) {
+            if fn_map[&call_tgt_addr].regusage.is_preserved(regid) {
                 fn_map
                     .get_mut(&fn_addr)
                     .unwrap()
                     .ssa_mut()
-                    .replace_value(use_node, call_reg_map[reg_idx as usize]);
+                    .replace_value(use_node, call_reg_map[regid]);
             }
         }
 
@@ -165,32 +151,30 @@ impl Inferer {
         let exit_regstate_node = ssa.registers_in(ssa.exit_node()?)?;
         // some registers may not be present in the entry node;
         // this means that the function neither reads nor preserves that register
-        let entry_regstate: Vec<Option<_>> = register_state_info(ssa, entry_regstate_node);
-        // every register must be present in the exit node though
-        let exit_regstate: Vec<_> = register_state_info(ssa, exit_regstate_node)
-            .into_iter()
-            .collect::<Option<_>>()?;
+        let entry_regstate = utils::register_state_info(entry_regstate_node, ssa);
+        let exit_regstate = utils::register_state_info(exit_regstate_node, ssa);
 
         let mut ret = reginfo.new_register_usage();
         ret.set_all_ignored();
 
-        // ignore registers not in entry regstate
-        let regstate_iter = (0..)
-            .zip(exit_regstate)
-            .zip(entry_regstate)
-            .filter_map(|((i, x), on)| on.map(|n| (i, n, x)));
+        for regid in ssa.regfile.iter_register_ids() {
+            // ignore registers not in entry regstate
+            if let Some(&(reg_val_entry, _)) = entry_regstate.get(regid) {
+                // bail if a register isn't present in exit regstate
+                let &(reg_val_exit, _) = exit_regstate.get(regid)?;
 
-        for (i, reg_val_entry, reg_val_exit) in regstate_iter {
-            if reg_val_exit == reg_val_entry {
-                ret.set_preserved(RegisterId::from_u8(i));
-            }
+                if reg_val_exit == reg_val_entry {
+                    ret.set_preserved(regid);
+                }
 
-            // find all uses, ignoring entry/exit register state
-            let mut uses_iter = ssa.uses_of(reg_val_entry)
-                .into_iter()
-                .filter(|&n| n != entry_regstate_node && n != exit_regstate_node);
-            if uses_iter.next().is_some() {
-                ret.set_read(RegisterId::from_u8(i));
+                // find all uses, ignoring entry/exit register state
+                let mut uses_iter = ssa
+                    .uses_of(reg_val_entry)
+                    .into_iter()
+                    .filter(|&n| n != entry_regstate_node && n != exit_regstate_node);
+                if uses_iter.next().is_some() {
+                    ret.set_read(regid);
+                }
             }
         }
 
@@ -198,42 +182,10 @@ impl Inferer {
     }
 }
 
-/// Extracts the value of all registers at a `RegisterState` SSA node.
-/// The length of the returned `Vec` is exactly `ssa.regnames.len() + 1`.
-fn register_state_info(
-    ssa: &SSAStorage,
-    regstate_node: <SSAStorage as SSA>::ValueRef,
-) -> Vec<Option<<SSAStorage as SSA>::ValueRef>> {
-    let mut reg_opt_map: Vec<Option<_>> = vec![None; ssa.regnames.len() + 1];
-    for (op_idx, op_node) in ssa.sparse_operands_of(regstate_node) {
-        if let Some(p) = reg_opt_map.get_mut(op_idx as usize) {
-            *p = Some(op_node);
-        }
-    }
-    reg_opt_map
-}
-
-/// Extracts the call target address and the value of all registers
-/// The length of the returned `Vec` is exactly `ssa.regnames.len() + 1`.
-/// Returns `None` if the call is indirect or if not all registers have a value.
-// TODO: use new utils::call_info
 fn direct_call_info(
     ssa: &SSAStorage,
     call_node: <SSAStorage as SSA>::ValueRef,
-) -> Option<(u64, Vec<<SSAStorage as SSA>::ValueRef>)> {
-    let mut tgt_opt: Option<u64> = None;
-    let mut reg_opt_map: Vec<Option<_>> = vec![None; ssa.regnames.len() + 1];
-
-    for (op_idx, op_node) in ssa.sparse_operands_of(call_node) {
-        if op_idx == 0 {
-            tgt_opt = tgt_opt.or_else(|| ssa.constant(op_node));
-        } else {
-            if let Some(p) = reg_opt_map.get_mut((op_idx - 1) as usize) {
-                *p = Some(op_node);
-            }
-        }
-    }
-
-    let reg_map_opt: Option<Vec<_>> = reg_opt_map.into_iter().collect();
-    Some((tgt_opt?, reg_map_opt?))
+) -> Option<(u64, RegisterMap<<SSAStorage as SSA>::ValueRef>)> {
+    let callinfo = utils::call_info(call_node, ssa)?;
+    Some((ssa.constant(callinfo.target)?, callinfo.register_args))
 }

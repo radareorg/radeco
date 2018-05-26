@@ -9,9 +9,9 @@ use middle::ssa::ssa_traits::{SSAMod, ValueInfo, SSA};
 use middle::ssa::ssastorage::SSAStorage;
 
 use std::collections::HashMap;
-use std::fmt::Write;
 use std::error;
 use std::fmt;
+use std::fmt::Write;
 
 pub type Result<T> = ::std::result::Result<T, LoweringError>;
 
@@ -70,7 +70,6 @@ impl<'a> LowerSsa<'a> {
     }
 
     fn lower_function(mut self, sfn: sast::Function) -> Result<()> {
-
         self.lower_entry_reg_state(sfn.entry_reg_state)?;
 
         let mut first = true;
@@ -223,7 +222,9 @@ impl<'a> LowerSsa<'a> {
                     if let Some(addr) = opt_addr {
                         write!(comment, "@{}", addr).unwrap();
                     }
-                    let val = self.ssa.insert_comment(lower_valueinfo(sret.value.1), comment)?;
+                    let val = self
+                        .ssa
+                        .insert_comment(lower_valueinfo(sret.value.1), comment)?;
                     self.ssa.op_use(val, regid.to_u8(), res);
                     self.values.insert(sret.value.0, val);
                 }
@@ -259,18 +260,14 @@ impl<'a> LowerSsa<'a> {
 
     fn index_of_reg(&self, sreg: &sast::PhysReg) -> Result<RegisterId> {
         if sreg.0 == "mem" {
-            Ok(RegisterId::from_usize(
-                self.ssa.regfile.whole_names.len(),
-            ))
+            Ok(self.ssa.regfile.mem_id())
         } else {
-            if let Some(x) = self.ssa.regfile.register_id_by_name(&sreg.0) {
-                Ok(RegisterId::from_usize(x as usize))
-            } else {
-                Err(LoweringError::InvalidAst(format!(
-                    "no physical register: {}",
-                    sreg.0
-                )))
-            }
+            self.ssa
+                .regfile
+                .register_id_by_name(&sreg.0)
+                .ok_or_else(|| {
+                    LoweringError::InvalidAst(format!("no physical register: {}", sreg.0))
+                })
         }
     }
 }
