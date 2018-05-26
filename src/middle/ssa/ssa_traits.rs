@@ -315,9 +315,6 @@ pub trait SSAMod: SSA + CFGMod {
 
     /// Remove control flow edge. This is a part of SSAMod as this potentially modifies the ssa.
     fn remove_data_edge(&mut self, i: Self::CFEdgeRef);
-
-    /// Map register names into SSA Graph
-    fn map_registers(&mut self, regs: Vec<String>);
 }
 
 /// Extras. TODO

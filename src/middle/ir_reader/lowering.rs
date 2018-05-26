@@ -88,9 +88,6 @@ impl<'a> LowerSsa<'a> {
 
         self.lower_final_reg_state(sfn.final_reg_state)?;
 
-        let regs = self.ssa.regfile.whole_names.clone();
-        self.ssa.map_registers(regs);
-
         Ok(())
     }
 

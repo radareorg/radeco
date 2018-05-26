@@ -169,8 +169,6 @@ pub struct SSAStorage {
     entry_node: NodeIndex,
     exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
-    #[deprecated(note = "use regfile instead")]
-    pub regnames: Vec<String>,
     pub regfile: Arc<SubRegisterFile>,
     pub constants: HashMap<u64, NodeIndex>,
 }
@@ -182,7 +180,6 @@ impl default::Default for SSAStorage {
             entry_node: NodeIndex::end(),
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
-            regnames: Vec::new(),
             regfile: Arc::default(),
             constants: HashMap::new(),
         }
@@ -196,7 +193,6 @@ impl SSAStorage {
             entry_node: NodeIndex::end(),
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
-            regnames: Vec::new(),
             regfile: Arc::default(),
             constants: HashMap::new(),
         }
@@ -1063,10 +1059,6 @@ impl SSAMod for SSAStorage {
         }
 
         self.g.remove_edge(i);
-    }
-
-    fn map_registers(&mut self, regs: Vec<String>) {
-        self.regnames = regs;
     }
 }
 
