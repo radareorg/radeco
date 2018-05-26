@@ -420,6 +420,44 @@ impl SimpleCAST {
         converter.to_c_ast()
     }
 
+    //TODO Move to other trait, struct
+    fn recover_from_node(&mut self, node: NodeData) {
+        unimplemented!();
+        // if ssa.is_expr(block) {
+        // } else if ssa.is_phi(block) {
+        // } else if ssa.is_selector(block) {
+        // }
+    }
+
+    // TODO rename
+    fn declare_vars_from_rfn(&mut self) {
+        unimplemented!()
+    }
+
+    fn recover_data_flow(&mut self, rfn: &RadecoFunction) {
+        unimplemented!()
+    }
+
+    fn recover(&mut self, ssa: &SSAStorage, node: NodeIndex) {
+        unimplemented!()
+    }
+
+    fn is_recover_node(&self, ssa: &SSAStorage, node: NodeIndex) -> bool {
+        unimplemented!()
+    }
+
+    fn data_flow_from_ssa(&mut self, ssa: &SSAStorage) {
+        let union_find = UnionFind::new();
+        for block in ssa.inorder_walk() {
+            if self.is_recover_node(ssa, block) {
+                self.recover(ssa, block);
+            }
+            // Update UnionFind
+            // let (dst, srcs) = unimplemented!();
+            // let src = unimplemented!();
+            // unimplemented!();
+        }
+    }
 }
 
 // TODO more efficient algorithm
@@ -428,6 +466,12 @@ struct UnionFind {
 }
 
 impl UnionFind {
+    fn new() -> UnionFind {
+        UnionFind {
+            g: HashMap::new(),
+        }
+    }
+
     fn add(&mut self, root: NodeIndex, node: NodeIndex) {
         let r = self.root(root);
         self.g.insert(r, node);
@@ -438,18 +482,6 @@ impl UnionFind {
             Some(&n) if n == node => n,
             Some(&n) => self.root(n),
             _ => node,
-        }
-    }
-}
-
-fn recover_data_flow(rfn: &RadecoFunction) {
-}
-
-fn data_flow_from_ssa(ssa: &SSAStorage) {
-    for block in ssa.inorder_walk() {
-        if ssa.is_expr(block) {
-        } else if ssa.is_phi(block) {
-        } else if ssa.is_selector(block) {
         }
     }
 }
