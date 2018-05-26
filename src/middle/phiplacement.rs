@@ -1005,9 +1005,6 @@ impl<'a, T> PhiPlacer<'a, T>
             }
         }
 
-        // TODO: remove
-        self.ssa.map_registers(self.regfile.whole_names.clone());
-
         // Associate basic block with correct block sizes.
         for opn in ops.windows(2) {
             let op1 = &opn[0];

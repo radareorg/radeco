@@ -398,28 +398,28 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
             let handle = thread::Builder::new().name(f.name.as_ref().unwrap().to_owned()).spawn(move || {
                 let mut rfn = ssa_single_fn(&f, &reg_info, instructions, offset);
                 // Attach additional information as necessay from `FunctionInfo`.
-                {
-                    // Add all defined registers to bindings.
-                    let regs = {
-                        let ssa = rfn.ssa_mut();
-                        let start = ssa.entry_node().expect("Incomplete CFG graph");
-                        let rs = ssa.registers_in(start).expect("No registers state node found");
-                        ssa.operands_of(rs)
-                    };
-                    for (i, reg) in regs.iter().enumerate() {
-                        let mut bind = Binding::default();
-                        bind.mark_register(rfn.ssa
-                            .regnames
-                            .get(i)
-                            .cloned()
-                            .unwrap_or_else(String::new));
-                        bind.add_refs(vec![*reg]);
-                        // Set the initial bind as register name, which may be
-                        // changed after analyzed.
-                        bind.set_name(rfn.ssa.regnames.get(i).cloned().unwrap_or_else(String::new));
-                        rfn.bindings.insert(bind);
-                    }
-                }
+                // {
+                //     // Add all defined registers to bindings.
+                //     let regs = {
+                //         let ssa = rfn.ssa_mut();
+                //         let start = ssa.entry_node().expect("Incomplete CFG graph");
+                //         let rs = ssa.registers_in(start).expect("No registers state node found");
+                //         ssa.operands_of(rs)
+                //     };
+                //     for (i, reg) in regs.iter().enumerate() {
+                //         let mut bind = Binding::default();
+                //         bind.mark_register(rfn.ssa
+                //             .regnames
+                //             .get(i)
+                //             .cloned()
+                //             .unwrap_or_else(String::new));
+                //         bind.add_refs(vec![*reg]);
+                //         // Set the initial bind as register name, which may be
+                //         // changed after analyzed.
+                //         bind.set_name(rfn.ssa.regnames.get(i).cloned().unwrap_or_else(String::new));
+                //         rfn.bindings.insert(bind);
+                //     }
+                // }
                 rfn.offset = offset;
                 fix_call_info(&mut rfn);
                 load_datarefs(&mut rfn, f.datarefs);
