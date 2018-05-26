@@ -1,3 +1,4 @@
+use super::condition::*;
 use super::*;
 
 // #[test]
@@ -22,36 +23,46 @@ fn nmg_example() {
     let n8 = graph.add_node(AstNode::BasicBlock("n8".to_owned()));
     let n9 = graph.add_node(AstNode::BasicBlock("n9".to_owned()));
 
-    graph.add_edge(entry, c1, SimpleCondition("A".to_owned()));
-    graph.add_edge(entry, b1, SimpleCondition("-A".to_owned()));
-    // R1
-    graph.add_edge(c1, n1, SimpleCondition("c1".to_owned()));
-    graph.add_edge(n1, c1, SimpleCondition("".to_owned()));
-    graph.add_edge(c1, c2, SimpleCondition("-c1".to_owned()));
-    graph.add_edge(c2, n2, SimpleCondition("c2".to_owned()));
-    graph.add_edge(n2, n9, SimpleCondition("".to_owned()));
-    graph.add_edge(c2, n3, SimpleCondition("-c2".to_owned()));
-    graph.add_edge(n3, c3, SimpleCondition("".to_owned()));
-    graph.add_edge(c3, c1, SimpleCondition("c3".to_owned()));
-    graph.add_edge(c3, n9, SimpleCondition("-c3".to_owned()));
-    // R2
-    graph.add_edge(b1, b2, SimpleCondition("b1".to_owned()));
-    graph.add_edge(b2, n6, SimpleCondition("b2".to_owned()));
-    graph.add_edge(n6, n7, SimpleCondition("".to_owned()));
-    graph.add_edge(n7, d1, SimpleCondition("".to_owned()));
-    graph.add_edge(b2, n5, SimpleCondition("-b2".to_owned()));
-    graph.add_edge(n5, n7, SimpleCondition("".to_owned()));
-    graph.add_edge(b1, n4, SimpleCondition("-b1".to_owned()));
-    graph.add_edge(n4, n5, SimpleCondition("".to_owned()));
-    // R3
-    graph.add_edge(d1, d3, SimpleCondition("d1".to_owned()));
-    graph.add_edge(d3, n8, SimpleCondition("d3".to_owned()));
-    graph.add_edge(n8, d1, SimpleCondition("".to_owned()));
-    graph.add_edge(d3, n9, SimpleCondition("-d3".to_owned()));
-    graph.add_edge(d1, d2, SimpleCondition("-d1".to_owned()));
-    graph.add_edge(d2, n8, SimpleCondition("d2".to_owned()));
-    graph.add_edge(d2, n9, SimpleCondition("-d2".to_owned()));
+    fn cond(c: &str) -> Option<SimpleCondition> {
+        Some(SimpleCondition(c.to_owned()))
+    }
 
-    let cfg = ControlFlowGraph { graph, entry };
+    graph.add_edge(entry, c1, cond("A"));
+    graph.add_edge(entry, b1, cond("-A"));
+    // R1
+    graph.add_edge(c1, n1, cond("c1"));
+    graph.add_edge(n1, c1, None);
+    graph.add_edge(c1, c2, cond("-c1"));
+    graph.add_edge(c2, n2, cond("c2"));
+    graph.add_edge(n2, n9, None);
+    graph.add_edge(c2, n3, cond("-c2"));
+    graph.add_edge(n3, c3, None);
+    graph.add_edge(c3, c1, cond("c3"));
+    graph.add_edge(c3, n9, cond("-c3"));
+    // R2
+    graph.add_edge(b1, b2, cond("b1"));
+    graph.add_edge(b2, n6, cond("b2"));
+    graph.add_edge(n6, n7, None);
+    graph.add_edge(n7, d1, None);
+    graph.add_edge(b2, n5, cond("-b2"));
+    graph.add_edge(n5, n7, None);
+    graph.add_edge(b1, n4, cond("-b1"));
+    graph.add_edge(n4, n5, None);
+    // R3
+    graph.add_edge(d1, d3, cond("d1"));
+    graph.add_edge(d3, n8, cond("d3"));
+    graph.add_edge(n8, d1, None);
+    graph.add_edge(d3, n9, cond("-d3"));
+    graph.add_edge(d1, d2, cond("-d1"));
+    graph.add_edge(d2, n8, cond("d2"));
+    graph.add_edge(d2, n9, cond("-d2"));
+
+    for n in graph.node_indices() {
+        println!("{:?}: {:?}", n, graph[n]);
+    }
+
+    let cstore = ConditionStorage::new();
+    let cctx = ConditionContext::new(&cstore);
+    let cfg = ControlFlowGraph { graph, entry, cctx };
     cfg.structure_whole();
 }

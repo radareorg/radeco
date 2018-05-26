@@ -1,6 +1,10 @@
 use fixedbitset::FixedBitSet;
-use petgraph::prelude::{NodeIndex, StableDiGraph};
-use petgraph::visit::{EdgeRef, GraphBase, IntoEdges, NodeIndexable, VisitMap, Visitable};
+use petgraph::graph::GraphIndex;
+use petgraph::visit::{
+    EdgeRef, FilterNode, GraphBase, IntoEdges, NodeIndexable, VisitMap, Visitable,
+};
+
+use std::iter;
 
 pub enum DfsEvent<G>
 where
@@ -65,15 +69,25 @@ where
     }.go_rec(start);
 }
 
-/// Returns the union of all simple paths from `start` to `end`.
-fn slice<N, E>(
-    graph: &StableDiGraph<N, E>,
-    start: NodeIndex,
-    end: NodeIndex,
-) -> (FixedBitSet, FixedBitSet) {
+/// Returns the union of all simple paths from `start` to a node in `end_set`,
+/// including the nodes in `end_set`.
+/// Also returns a topological ordering of this subgraph.
+pub fn slice<G, F>(
+    graph: G,
+    start: G::NodeId,
+    end_set: F,
+) -> (FixedBitSet, FixedBitSet, Vec<G::NodeId>)
+where
+    G: IntoEdges + Visitable + NodeIndexable,
+    G::NodeId: GraphIndex,
+    G::EdgeId: GraphIndex,
+    F: FilterNode<G::NodeId>,
+{
     let mut ret_nodes = FixedBitSet::with_capacity(graph.node_bound());
     // petgraph doesn't expose `edge_bound` :(
     let mut ret_edges = FixedBitSet::with_capacity(0);
+    // we push nodes into this in post-order, then reverse at the end
+    let mut ret_topo_order = Vec::new();
 
     let mut cur_node_stack = vec![start];
     let mut cur_edge_stack = Vec::new();
@@ -83,7 +97,7 @@ fn slice<N, E>(
             TreeEdge(te) => {
                 cur_edge_stack.push(te.id());
                 cur_node_stack.push(te.target());
-                if te.target() == end {
+                if end_set.include_node(te.target()) {
                     // found a simple path from `start` to `end`
                     ret_nodes.extend(cur_node_stack.iter().map(|n| n.index()));
                     ret_edges.extend(cur_edge_stack.iter().map(|e| e.index()));
@@ -92,49 +106,103 @@ fn slice<N, E>(
             CrossForwardEdge(cfe) => {
                 debug_assert!(cur_node_stack.iter().all(|&n| n != cfe.target()));
                 debug_assert!(cur_edge_stack.iter().all(|&e| e != cfe.id()));
+                debug_assert!(cur_node_stack[0] == start);
                 if ret_nodes[cfe.target().index()] {
                     // found a simple path from `start` to a node already in the
                     // slice, which is on a simple path to `end`
                     ret_nodes.extend(cur_node_stack.iter().map(|n| n.index()));
                     ret_edges.extend(cur_edge_stack.iter().map(|e| e.index()));
+                    ret_edges.extend(iter::once(cfe.id().index()));
                 }
             }
             Finish(f) => {
                 let _pop_n = cur_node_stack.pop();
                 let _pop_e = cur_edge_stack.pop();
                 debug_assert!(_pop_n == Some(f));
-                if f != start {
-                    debug_assert!(graph.edge_endpoints(_pop_e.unwrap()).unwrap().1 == f);
+                debug_assert!(_pop_e.is_some() == (f != start));
+                if ret_nodes[f.index()] {
+                    ret_topo_order.push(f);
                 }
             }
             _ => (),
         }
     });
 
-    (ret_nodes, ret_edges)
+    ret_topo_order.reverse();
+    (ret_nodes, ret_edges, ret_topo_order)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use petgraph::algo;
-    use petgraph::prelude::StableDiGraph;
+    use petgraph::prelude::{NodeIndex, StableDiGraph};
     use petgraph::stable_graph;
-    use petgraph::visit::{EdgeFiltered, NodeFiltered};
+    use petgraph::visit::IntoEdgeReferences;
 
     use quickcheck::TestResult;
+    use std::collections::HashMap;
+    use std::hash::Hash;
 
     #[quickcheck]
-    fn qc_slice(graph: StableDiGraph<(), ()>, start_i: usize, end_i: usize) -> TestResult {
+    fn qc_slice(
+        mut graph: StableDiGraph<(), ()>,
+        start_i: usize,
+        end_is: Vec<usize>,
+    ) -> TestResult {
         let nodes: Vec<_> = graph.node_indices().collect();
         if nodes.is_empty() {
             return TestResult::discard();
         }
         let start = nodes[start_i % nodes.len()];
-        let end = nodes[end_i % nodes.len()];
-        let (slice_nodes, slice_edges) = slice(&graph, start, end);
-        let subgraph = NodeFiltered(&graph, slice_nodes);
-        let subgraph = EdgeFiltered::from_fn(&subgraph, |e| slice_edges[e.id().index()]);
-        TestResult::from_bool(!algo::is_cyclic_directed(&subgraph))
+        let ends: FixedBitSet = end_is
+            .into_iter()
+            .map(|end_i| nodes[end_i % nodes.len()].index())
+            .collect();
+        println!("start: {:?}", start);
+        println!("ends: {:?}", ends);
+        let (slice_nodes, slice_edges, slice_topo_order) = slice(&graph, start, ends);
+        let mut trace_nodes = FixedBitSet::with_capacity(graph.node_bound());
+        trace_nodes.extend(slice_topo_order.iter().map(|n| n.index()));
+        if trace_nodes != slice_nodes {
+            println!("wrong nodes in topo_order:");
+            println!(
+                "  real: {:?}",
+                slice_nodes
+                    .ones()
+                    .map(|i| NodeIndex::new(i))
+                    .collect::<Vec<NodeIndex>>()
+            );
+            println!("  order: {:?}", slice_topo_order);
+            return TestResult::failed();
+        }
+        graph.retain_nodes(|_, n| slice_nodes[n.index()]);
+        graph.retain_edges(|_, e| slice_edges[e.index()]);
+        if algo::is_cyclic_directed(&graph) {
+            println!("cyclic slice:");
+            println!("  slice: {:?}", graph);
+            return TestResult::failed();
+        }
+        if !is_topological_ordering(&graph, &slice_topo_order) {
+            println!("bad topological ordering: {:?}", slice_topo_order);
+            println!("  slice: {:?}", graph);
+            return TestResult::failed();
+        }
+        TestResult::passed()
+    }
+
+    fn is_topological_ordering<G>(graph: G, topo_order: &[G::NodeId]) -> bool
+    where
+        G: IntoEdgeReferences,
+        G::NodeId: Eq + Hash,
+    {
+        let order_idx: HashMap<_, _> = topo_order
+            .into_iter()
+            .enumerate()
+            .map(|(i, n)| (n, i))
+            .collect();
+        graph
+            .edge_references()
+            .all(|e| order_idx[&e.source()] < order_idx[&e.target()])
     }
 }

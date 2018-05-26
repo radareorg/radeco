@@ -4,13 +4,17 @@
 
 #![allow(unused)]
 
+mod condition;
 mod graph_utils;
 #[cfg(test)]
 mod tests;
 
+use self::condition::*;
+
 use petgraph::algo::dominators;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
 use petgraph::visit::*;
+use petgraph::Incoming;
 
 use fixedbitset::FixedBitSet;
 
@@ -20,42 +24,38 @@ use std::iter;
 use std::mem;
 
 #[derive(Debug)]
-struct ControlFlowGraph {
-    graph: StableDiGraph<AstNode, SimpleCondition>,
+struct ControlFlowGraph<'cd> {
+    graph: StableDiGraph<AstNode<'cd>, Option<SimpleCondition>>,
     entry: NodeIndex,
+    cctx: ConditionContext<'cd, SimpleCondition>,
 }
 
 #[derive(Debug)]
-enum AstNode {
+enum AstNode<'cd> {
     BasicBlock(String), // XXX
-    Seq(Vec<AstNode>),
-    Cond(Condition, Box<AstNode>, Option<Box<AstNode>>),
-    Loop(LoopType, Box<AstNode>),
-    Switch(Variable, Vec<(ValueSet, AstNode)>, Box<AstNode>),
+    Seq(Vec<AstNode<'cd>>),
+    Cond(Condition<'cd>, Box<AstNode<'cd>>, Option<Box<AstNode<'cd>>>),
+    Loop(LoopType<'cd>, Box<AstNode<'cd>>),
+    Switch(Variable, Vec<(ValueSet, AstNode<'cd>)>, Box<AstNode<'cd>>),
 }
 
 #[derive(Debug)]
-enum LoopType {
-    PreChecked(Condition),
-    PostChecked(Condition),
+enum LoopType<'cd> {
+    PreChecked(Condition<'cd>),
+    PostChecked(Condition<'cd>),
     Endless,
 }
 
 type Variable = (); // XXX
 type ValueSet = (); // XXX
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SimpleCondition(String); // XXX
 
-#[derive(Debug)]
-enum Condition {
-    Simple(SimpleCondition),
-    And(Vec<Condition>),
-    Or(Vec<Condition>),
-}
+type Condition<'cd> = condition::BaseCondition<'cd, SimpleCondition>;
 
-impl ControlFlowGraph {
-    fn structure_whole(mut self) -> AstNode {
+impl<'cd> ControlFlowGraph<'cd> {
+    fn structure_whole(mut self) -> AstNode<'cd> {
         let mut backedges = HashMap::new();
         let mut podfs_trace = Vec::new();
         graph_utils::depth_first_search(&self.graph, self.entry, |ev| {
@@ -104,23 +104,21 @@ impl ControlFlowGraph {
     /// and `successor` into an `AstNode`.
     fn structure_acyclic_sese_region(&mut self, header: NodeIndex, successor: NodeIndex) -> () {
         println!(
-            "acyclic sese region: {:?} ==> {:?}",
+            "structuring acyclic sese region: {:?} ==> {:?}",
             self.graph[header], self.graph[successor],
         );
 
-        let mut region_postorder: Vec<_> = {
-            let mut visitor = DfsPostOrder::new(&self.graph, header);
-            // stop dfs at `successor`
-            visitor.discovered.visit(successor);
-            visitor.iter(&self.graph).collect()
-        };
+        let (reaching_conds, mut region_topo_order) =
+            self.reaching_conditions(header, |n| n == successor);
+        // slice includes `successor`, but its not actually part of the region.
+        let _popped = region_topo_order.pop();
+        debug_assert!(_popped == Some(successor));
 
         // remove all region nodes from the cfg and add them to an AstNode::Seq
-        let repl_ast: Vec<_> = region_postorder
-            .into_iter()
-            .rev()
-            .map(|n| {
-                let reaching_cond = Condition::Simple(SimpleCondition("".to_owned())); // XXX
+        let repl_ast: Vec<_> = region_topo_order
+            .iter()
+            .map(|&n| {
+                let reaching_cond = reaching_conds[&n];
                 let n_ast = if n == header {
                     // we don't want to remove `header` since that will also remove
                     // incoming edges, which we need to keep
@@ -130,16 +128,60 @@ impl ControlFlowGraph {
                 } else {
                     self.graph.remove_node(n).unwrap()
                 };
-                let n_cond_ast = AstNode::Cond(reaching_cond, Box::new(n_ast), None);
-                println!("  {:?}", n_cond_ast);
-                n_cond_ast
+                AstNode::Cond(reaching_cond, Box::new(n_ast), None)
             })
             .collect();
+        println!("  ast: {:#?}", repl_ast);
         mem::replace(&mut self.graph[header], AstNode::Seq(repl_ast));
 
         // the region's successor is still this node's successor.
-        self.graph
-            .add_edge(header, successor, SimpleCondition("".to_owned()));
+        self.graph.add_edge(header, successor, None);
+    }
+
+    /// Computes the reaching condition for every node in the graph slice from
+    /// `start` to `end_set`. Also returns a topological ordering of that slice.
+    fn reaching_conditions<F: FilterNode<NodeIndex>>(
+        &self,
+        start: NodeIndex,
+        end_set: F,
+    ) -> (HashMap<NodeIndex, Condition<'cd>>, Vec<NodeIndex>) {
+        let (slice_nodes, slice_edges, slice_topo_order) =
+            graph_utils::slice(&self.graph, start, end_set);
+        // {Node, Edge}Filtered don't implement IntoNeighborsDirected :(
+        // https://github.com/bluss/petgraph/pull/219
+        // Also EdgeFiltered<Reversed<_>, _> isn't Into{Neighbors, Edges}
+        // because Reversed<_> isn't IntoEdges
+
+        let mut ret = HashMap::with_capacity(slice_topo_order.len());
+
+        {
+            let mut iter = slice_topo_order.iter();
+            let _first = iter.next();
+            debug_assert!(_first == Some(&start));
+            ret.insert(start, self.cctx.mk_true());
+
+            for &n in iter {
+                let reach_cond = self.cctx.mk_or_iter(
+                    // manually restrict to slice
+                    self.graph
+                        .edges_directed(n, Incoming)
+                        .filter(|e| slice_edges[e.id().index()])
+                        .map(|e| {
+                            // TODO: can we remove this edge to avoid cloning?
+                            if let Some(ec) = &self.graph[e.id()] {
+                                self.cctx
+                                    .mk_and(ret[&e.source()], self.cctx.mk_simple(ec.clone()))
+                            } else {
+                                ret[&e.source()]
+                            }
+                        }),
+                );
+                let _old = ret.insert(n, reach_cond);
+                debug_assert!(_old.is_none());
+            }
+        }
+
+        (ret, slice_topo_order)
     }
 
     /// Returns the set of nodes that `h` dominates.

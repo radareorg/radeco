@@ -54,6 +54,7 @@ extern crate serde_json;
 extern crate fixedbitset;
 extern crate either;
 extern crate vec_map;
+extern crate typed_arena;
 
 #[cfg(test)]
 extern crate quickcheck;
