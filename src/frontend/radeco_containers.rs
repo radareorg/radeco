@@ -651,7 +651,7 @@ impl<'a> ModuleLoader<'a> {
                             })
                             .unwrap_or(&NodeIndex::end());
                     }
-                    vb.ridx = sub_reg_f.register_id_by_alias(alias);
+                    vb.ridx = sub_reg_f.register_id_by_alias(alias).map(|rid| rid.to_u8() as u64);
                     Some(vb)
                 } else {
                     None

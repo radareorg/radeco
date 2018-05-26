@@ -149,7 +149,7 @@ define-fun main(unknown) -> unknown {
         let frs_node = ssa.registers_in(exit).unwrap();
         let frs = utils::register_state_info(frs_node, &ssa);
 
-        let rax_i = ssa.regfile.register_id_by_name("rax").unwrap() as usize;
+        let rax_i = ssa.regfile.register_id_by_name("rax").unwrap().to_usize();
         let v1 = frs[RegisterId::from_usize(rax_i)].0;
         assert!(exprs.contains(&v1));
         assert_eq!(
@@ -171,7 +171,7 @@ define-fun main(unknown) -> unknown {
                 "rdi".to_owned()
             )
         );
-        let rdi_i = ssa.regfile.register_id_by_name("rdi").unwrap() as usize;
+        let rdi_i = ssa.regfile.register_id_by_name("rdi").unwrap().to_usize();
         assert_eq!(cmt_rdi, ers[RegisterId::from_usize(rdi_i)].0);
     }
 
