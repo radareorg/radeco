@@ -89,6 +89,8 @@ where
     // we push nodes into this in post-order, then reverse at the end
     let mut ret_topo_order = Vec::new();
 
+    ret_nodes.put(start.index());
+
     let mut cur_node_stack = vec![start];
     let mut cur_edge_stack = Vec::new();
     depth_first_search(graph, start, |ev| {
@@ -136,14 +138,16 @@ where
 mod tests {
     use super::*;
     use petgraph::algo;
-    use petgraph::prelude::{NodeIndex, StableDiGraph};
+    use petgraph::prelude::{EdgeIndex, NodeIndex, Outgoing, StableDiGraph};
     use petgraph::stable_graph;
     use petgraph::visit::IntoEdgeReferences;
 
     use quickcheck::TestResult;
     use std::collections::HashMap;
     use std::hash::Hash;
+    use std::iter;
 
+    /// Tests that `slice` returns an acyclic graph and a topological ordering.
     #[quickcheck]
     fn qc_slice(
         mut graph: StableDiGraph<(), ()>,
@@ -189,6 +193,46 @@ mod tests {
             return TestResult::failed();
         }
         TestResult::passed()
+    }
+
+    /// Tests that `slice`ing a connected rooted acyclic graph is a no-op.
+    #[quickcheck]
+    fn qc_slice_acyclic(mut graph: StableDiGraph<(), ()>, root_i: usize) -> TestResult {
+        let nodes: Vec<_> = graph.node_indices().collect();
+        if nodes.is_empty() {
+            return TestResult::discard();
+        }
+        let root = nodes[root_i % nodes.len()];
+        let mut reachable = FixedBitSet::with_capacity(graph.node_bound());
+        let mut back_edges = FixedBitSet::with_capacity(0);
+        depth_first_search(&graph, root, |ev| {
+            use super::DfsEvent::*;
+            match ev {
+                Discover(n) => reachable.set(n.index(), true),
+                BackEdge(e) => back_edges.extend(iter::once(e.id().index())),
+                _ => (),
+            }
+        });
+        graph.retain_nodes(|_, n| reachable[n.index()]);
+        graph.retain_edges(|_, e| !back_edges[e.index()]);
+        println!("graph: {:?}", graph);
+        println!("root: {:?}", root);
+        assert!(!algo::is_cyclic_directed(&graph));
+        let (slice_nodes, slice_edges, _) = slice(&graph, root, |n| {
+            graph.edges_directed(n, Outgoing).next().is_none()
+        });
+        println!("slice_nodes: {:?}", slice_nodes.ones().collect::<Vec<_>>());
+        println!(
+            "slice_edges: {:?}",
+            slice_edges
+                .ones()
+                .map(|ei| graph.edge_endpoints(EdgeIndex::new(ei)).unwrap())
+                .collect::<Vec<_>>()
+        );
+        TestResult::from_bool(
+            graph.node_indices().all(|n| slice_nodes[n.index()])
+                && graph.edge_indices().all(|e| slice_edges[e.index()]),
+        )
     }
 
     fn is_topological_ordering<G>(graph: G, topo_order: &[G::NodeId]) -> bool
