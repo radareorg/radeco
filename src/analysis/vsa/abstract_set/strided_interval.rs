@@ -789,7 +789,12 @@ impl Not for StridedInterval {
     type Output = Self;
 
     fn not(self) -> Self {
-        Self::default()
+        StridedInterval::new(
+            self.k,
+            self.s,
+            n_in_k_bits!(!self.ub, self.k),
+            n_in_k_bits!(!self.lb, self.k)
+        )
     }
 }
 
