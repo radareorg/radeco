@@ -3,8 +3,11 @@ use std::collections::{HashMap, HashSet};
 
 use super::c_simple;
 use super::c_simple::{Ty, CAST, CASTNode};
+use middle::ir::MOpcode;
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
+use middle::ssa::ssa_traits::NodeData as TNodeData;
+use middle::ssa::ssa_traits::NodeType as TNodeType;
 use frontend::radeco_containers::RadecoFunction;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::visit::EdgeRef;
@@ -420,6 +423,25 @@ impl SimpleCAST {
         converter.to_c_ast()
     }
 
+    // TODO rename
+    fn declare_vars_from_rfn(&mut self) {
+        unimplemented!()
+    }
+
+    fn ssa_node_value(ssa: &SSAStorage, node: NodeIndex) -> Option<ValueInfo> {
+        match ssa.node_data(node) {
+            Ok(n) => Some(n.vt),
+            Err(_) => None,
+        }
+    }
+
+    fn ssa_node_type(ssa: &SSAStorage, node: NodeIndex) -> Option<TNodeType> {
+        match ssa.node_data(node) {
+            Ok(n) => Some(n.nt),
+            Err(_) => None,
+        }
+    }
+
     //TODO Move to other trait, struct
     fn recover_from_node(&mut self, node: NodeData) {
         unimplemented!();
@@ -429,35 +451,65 @@ impl SimpleCAST {
         // }
     }
 
-    // TODO rename
-    fn declare_vars_from_rfn(&mut self) {
-        unimplemented!()
-    }
-
     fn recover_data_flow(&mut self, rfn: &RadecoFunction) {
         unimplemented!()
     }
 
     fn recover(&mut self, ssa: &SSAStorage, node: NodeIndex) {
+        assert!(self.is_recover_node(ssa, node));
         unimplemented!()
     }
 
     fn is_recover_node(&self, ssa: &SSAStorage, node: NodeIndex) -> bool {
+        match Self::ssa_node_type(ssa, node) {
+            Some(TNodeType::Op(op)) => {
+                match(op) {
+                    MOpcode::OpStore
+                        | MOpcode::OpCall
+                        // ?
+                        | MOpcode::OpCJmp
+                        | MOpcode::OpIf
+                        | MOpcode::OpLoad => true,
+                    _ => false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    fn update_values(&self, vm: &mut ValueManager, ssa: &SSAStorage, node: NodeIndex) {
         unimplemented!()
     }
 
     fn data_flow_from_ssa(&mut self, ssa: &SSAStorage) {
-        let union_find = UnionFind::new();
+        let mut v_manager = ValueManager::new();
         for block in ssa.inorder_walk() {
             if self.is_recover_node(ssa, block) {
                 self.recover(ssa, block);
             }
-            // Update UnionFind
-            // let (dst, srcs) = unimplemented!();
-            // let src = unimplemented!();
-            // unimplemented!();
+            self.update_values(&mut v_manager, ssa, block);
         }
     }
+}
+
+// TODO Rename
+struct ValueManager {
+    value_map: HashMap<NodeIndex, ValueExpr>,
+    uf: UnionFind,
+}
+
+impl ValueManager {
+    fn new() -> ValueManager {
+        ValueManager {
+            value_map: HashMap::new(),
+            uf: UnionFind::new(),
+        }
+    }
+}
+
+enum ValueExpr {
+    Expr(c_simple::Expr, Box<ValueExpr>, Box<ValueExpr>),
+    SSAVal(NodeIndex),
 }
 
 // TODO more efficient algorithm
