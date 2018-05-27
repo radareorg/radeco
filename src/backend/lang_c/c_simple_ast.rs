@@ -428,29 +428,7 @@ impl SimpleCAST {
         unimplemented!()
     }
 
-    fn ssa_node_value(ssa: &SSAStorage, node: NodeIndex) -> Option<ValueInfo> {
-        match ssa.node_data(node) {
-            Ok(n) => Some(n.vt),
-            Err(_) => None,
-        }
-    }
-
-    fn ssa_node_type(ssa: &SSAStorage, node: NodeIndex) -> Option<TNodeType> {
-        match ssa.node_data(node) {
-            Ok(n) => Some(n.nt),
-            Err(_) => None,
-        }
-    }
-
     //TODO Move to other trait, struct
-    fn recover_from_node(&mut self, node: NodeData) {
-        unimplemented!();
-        // if ssa.is_expr(block) {
-        // } else if ssa.is_phi(block) {
-        // } else if ssa.is_selector(block) {
-        // }
-    }
-
     fn recover_data_flow(&mut self, rfn: &RadecoFunction) {
         unimplemented!()
     }
@@ -461,18 +439,14 @@ impl SimpleCAST {
     }
 
     fn is_recover_node(&self, ssa: &SSAStorage, node: NodeIndex) -> bool {
-        match Self::ssa_node_type(ssa, node) {
-            Some(TNodeType::Op(op)) => {
-                match(op) {
-                    MOpcode::OpStore
-                        | MOpcode::OpCall
-                        // ?
-                        | MOpcode::OpCJmp
-                        | MOpcode::OpIf
-                        | MOpcode::OpLoad => true,
-                    _ => false
-                }
-            }
+        let op = ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
+        match op {
+            MOpcode::OpStore
+                | MOpcode::OpCall
+                // ?
+                | MOpcode::OpCJmp
+                | MOpcode::OpIf
+                | MOpcode::OpLoad => true,
             _ => false,
         }
     }
