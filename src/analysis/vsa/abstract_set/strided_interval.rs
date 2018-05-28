@@ -765,7 +765,7 @@ impl BitAnd for StridedInterval {
     type Output = Self;
 
     fn bitand(self, other: Self) -> Self {
-        Self::default()
+        !((!self) | (!other))
     }
 }
 
@@ -781,7 +781,7 @@ impl BitXor for StridedInterval {
     type Output = Self;
 
     fn bitxor(self, other: Self) -> Self {
-        Self::default()
+        (!((!self)|other))|(!((!other)|self))
     }
 }
 
