@@ -1,5 +1,6 @@
 use fixedbitset::FixedBitSet;
 use petgraph::graph::GraphIndex;
+use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
 use petgraph::visit::{
     EdgeRef, FilterNode, GraphBase, IntoEdges, NodeIndexable, VisitMap, Visitable,
 };
@@ -132,6 +133,16 @@ where
 
     ret_topo_order.reverse();
     (ret_nodes, ret_edges, ret_topo_order)
+}
+
+pub fn retarget_edge<N, E>(
+    graph: &mut StableDiGraph<N, E>,
+    edge: EdgeIndex,
+    new_target: NodeIndex,
+) -> EdgeIndex {
+    let source = graph.edge_endpoints(edge).expect("no edge").0;
+    let w = graph.remove_edge(edge).expect("no edge");
+    graph.add_edge(source, new_target, w)
 }
 
 #[cfg(test)]
