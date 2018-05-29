@@ -4,28 +4,24 @@ use super::*;
 // #[test]
 fn nmg_example() {
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(AstNode::BasicBlock("A".to_owned()));
-    let c1 = graph.add_node(AstNode::BasicBlock("c1".to_owned()));
-    let c2 = graph.add_node(AstNode::BasicBlock("c2".to_owned()));
-    let c3 = graph.add_node(AstNode::BasicBlock("c3".to_owned()));
-    let b1 = graph.add_node(AstNode::BasicBlock("b1".to_owned()));
-    let b2 = graph.add_node(AstNode::BasicBlock("b2".to_owned()));
-    let d1 = graph.add_node(AstNode::BasicBlock("d1".to_owned()));
-    let d2 = graph.add_node(AstNode::BasicBlock("d2".to_owned()));
-    let d3 = graph.add_node(AstNode::BasicBlock("d3".to_owned()));
-    let n1 = graph.add_node(AstNode::BasicBlock("n1".to_owned()));
-    let n2 = graph.add_node(AstNode::BasicBlock("n2".to_owned()));
-    let n3 = graph.add_node(AstNode::BasicBlock("n3".to_owned()));
-    let n4 = graph.add_node(AstNode::BasicBlock("n4".to_owned()));
-    let n5 = graph.add_node(AstNode::BasicBlock("n5".to_owned()));
-    let n6 = graph.add_node(AstNode::BasicBlock("n6".to_owned()));
-    let n7 = graph.add_node(AstNode::BasicBlock("n7".to_owned()));
-    let n8 = graph.add_node(AstNode::BasicBlock("n8".to_owned()));
-    let n9 = graph.add_node(AstNode::BasicBlock("n9".to_owned()));
-
-    fn cond(c: &str) -> Option<SimpleCondition> {
-        Some(SimpleCondition(c.to_owned()))
-    }
+    let entry = graph.add_node(node("A"));
+    let c1 = graph.add_node(node("c1"));
+    let c2 = graph.add_node(node("c2"));
+    let c3 = graph.add_node(node("c3"));
+    let b1 = graph.add_node(node("b1"));
+    let b2 = graph.add_node(node("b2"));
+    let d1 = graph.add_node(node("d1"));
+    let d2 = graph.add_node(node("d2"));
+    let d3 = graph.add_node(node("d3"));
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+    let n4 = graph.add_node(node("n4"));
+    let n5 = graph.add_node(node("n5"));
+    let n6 = graph.add_node(node("n6"));
+    let n7 = graph.add_node(node("n7"));
+    let n8 = graph.add_node(node("n8"));
+    let n9 = graph.add_node(node("n9"));
 
     graph.add_edge(entry, c1, cond("A"));
     graph.add_edge(entry, b1, cond("-A"));
@@ -65,4 +61,56 @@ fn nmg_example() {
     let cctx = ConditionContext::new(&cstore);
     let cfg = ControlFlowGraph { graph, entry, cctx };
     cfg.structure_whole();
+}
+
+// #[test]
+fn abnormal_entries() {
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(node("entry"));
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+    let n4 = graph.add_node(node("n4"));
+    let n5 = graph.add_node(node("n5"));
+    let f = graph.add_node(node("f"));
+    let l1 = graph.add_node(node("l1"));
+    let l2 = graph.add_node(node("l2"));
+    let l3 = graph.add_node(node("l3"));
+
+    graph.add_edge(entry, l1, cond("e1"));
+    graph.add_edge(entry, n1, cond("-e1"));
+    graph.add_edge(n1, n2, cond("n1"));
+    graph.add_edge(n2, n3, cond("n2"));
+    graph.add_edge(n3, n4, cond("n3"));
+    graph.add_edge(n4, n5, cond("n4"));
+    graph.add_edge(n5, f, cond("n5"));
+    // loop
+    graph.add_edge(l1, l2, cond("l1"));
+    graph.add_edge(l2, l3, None);
+    graph.add_edge(l3, l1, None);
+    // loop exit
+    graph.add_edge(l1, f, cond("-l1"));
+    // abnormal entries
+    graph.add_edge(n1, l1, cond("-n1"));
+    graph.add_edge(n2, l2, cond("-n2"));
+    graph.add_edge(n3, l3, cond("-n3"));
+    graph.add_edge(n4, l2, cond("-n4"));
+    graph.add_edge(n5, l2, cond("-n5"));
+
+    for n in graph.node_indices() {
+        println!("{:?}: {:?}", n, graph[n]);
+    }
+
+    let cstore = ConditionStorage::new();
+    let cctx = ConditionContext::new(&cstore);
+    let cfg = ControlFlowGraph { graph, entry, cctx };
+    cfg.structure_whole();
+}
+
+fn cond(c: &str) -> Option<SimpleCondition> {
+    Some(SimpleCondition(c.to_owned()))
+}
+
+fn node(n: &str) -> CfgNode {
+    CfgNode::Code(AstNode::BasicBlock(n.to_owned()))
 }

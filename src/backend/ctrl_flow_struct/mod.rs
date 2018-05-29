@@ -25,9 +25,19 @@ use std::mem;
 
 #[derive(Debug)]
 struct ControlFlowGraph<'cd> {
-    graph: StableDiGraph<AstNode<'cd>, Option<SimpleCondition>>,
+    graph: StableDiGraph<CfgNode<'cd>, Option<SimpleCondition>>,
     entry: NodeIndex,
     cctx: ConditionContext<'cd, SimpleCondition>,
+}
+
+#[derive(Debug)]
+enum CfgNode<'cd> {
+    /// out-degree <= 1
+    Code(AstNode<'cd>),
+    /// out-degree >= 2
+    Condition,
+    /// only appears temporarily in the middle of algorithms
+    Dummy(&'static str),
 }
 
 #[derive(Debug)]
@@ -56,12 +66,12 @@ type Condition<'cd> = condition::BaseCondition<'cd, SimpleCondition>;
 
 impl<'cd> ControlFlowGraph<'cd> {
     fn structure_whole(mut self) -> AstNode<'cd> {
-        let mut backedges = HashMap::new();
+        let mut backedge_map = HashMap::new();
         let mut podfs_trace = Vec::new();
         graph_utils::depth_first_search(&self.graph, self.entry, |ev| {
             use self::graph_utils::DfsEvent::*;
             match ev {
-                BackEdge(e) => backedges
+                BackEdge(e) => backedge_map
                     .entry(e.target())
                     .or_insert(Vec::new())
                     .push(e.id()),
@@ -71,9 +81,8 @@ impl<'cd> ControlFlowGraph<'cd> {
         });
 
         for n in podfs_trace {
-            if let Some(backedges) = backedges.get(&n) {
+            if let Some(backedges) = backedge_map.get(&n) {
                 // loop
-                // TODO
                 println!("cycle: {:?}", self.graph[n]);
                 for &backedge in backedges {
                     println!(
@@ -81,6 +90,18 @@ impl<'cd> ControlFlowGraph<'cd> {
                         self.graph[self.graph.edge_endpoints(backedge).unwrap().0],
                     );
                 }
+                let mut latch_nodes: FixedBitSet = backedges
+                    .iter()
+                    .map(|&e| self.graph.edge_endpoints(e).unwrap().0.index())
+                    .collect();
+                let (mut loop_nodes, _, _) = graph_utils::slice(&self.graph, n, latch_nodes);
+                // retarget backedges to a "loop continue" node
+                let loop_continue = self.graph.add_node(CfgNode::Dummy("loop continue"));
+                for &backedge in backedges {
+                    graph_utils::retarget_edge(&mut self.graph, backedge, loop_continue);
+                }
+                let header = self.funnel_abnormal_entries(n, &loop_nodes);
+                // TODO
             } else {
                 // acyclic
                 let region = self.dominates_set(n);
@@ -117,22 +138,29 @@ impl<'cd> ControlFlowGraph<'cd> {
         // remove all region nodes from the cfg and add them to an AstNode::Seq
         let repl_ast: Vec<_> = region_topo_order
             .iter()
-            .map(|&n| {
-                let reaching_cond = reaching_conds[&n];
-                let n_ast = if n == header {
+            .filter_map(|&n| {
+                let cfg_node = if n == header {
                     // we don't want to remove `header` since that will also remove
                     // incoming edges, which we need to keep
                     // instead we replace it with a dummy value that will be
                     // later replaced with the actual value
-                    mem::replace(&mut self.graph[header], AstNode::Seq(Vec::new()))
+                    mem::replace(&mut self.graph[header], CfgNode::Dummy("replaced header"))
                 } else {
                     self.graph.remove_node(n).unwrap()
                 };
-                AstNode::Cond(reaching_cond, Box::new(n_ast), None)
+                if let CfgNode::Code(ast) = cfg_node {
+                    let reaching_cond = reaching_conds[&n];
+                    Some(AstNode::Cond(reaching_cond, Box::new(ast), None))
+                } else {
+                    None
+                }
             })
             .collect();
         println!("  ast: {:#?}", repl_ast);
-        mem::replace(&mut self.graph[header], AstNode::Seq(repl_ast));
+        mem::replace(
+            &mut self.graph[header],
+            CfgNode::Code(AstNode::Seq(repl_ast)),
+        );
 
         // the region's successor is still this node's successor.
         self.graph.add_edge(header, successor, None);
@@ -182,6 +210,102 @@ impl<'cd> ControlFlowGraph<'cd> {
         }
 
         (ret, slice_topo_order)
+    }
+
+    /// Transforms the loop into a single-entry loop.
+    /// Returns the new loop header.
+    fn funnel_abnormal_entries(
+        &mut self,
+        header: NodeIndex,
+        loop_nodes: &FixedBitSet,
+    ) -> NodeIndex {
+        let mut entry_map = HashMap::new();
+        for ni in loop_nodes.ones() {
+            let n = NodeIndex::new(ni);
+            for e in self.graph.edges_directed(n, Incoming) {
+                if !loop_nodes[e.source().index()] {
+                    entry_map.entry(n).or_insert(Vec::new()).push(e.id());
+                }
+            }
+        }
+        println!("entries: {:?}", entry_map);
+        // loop must be reachable, so the header must have entries
+        let header_entries = entry_map.remove(&header).unwrap();
+        debug_assert!(!header_entries.is_empty());
+        let abnormal_entry_map = entry_map;
+        if abnormal_entry_map.is_empty() {
+            // no abnormal entries
+            return header;
+        }
+        let abnormal_entry_iter = (1..).zip(&abnormal_entry_map);
+
+        let struct_var = "i".to_owned(); // XXX
+
+        // make condition cascade
+        let new_header = {
+            let abnormal_entry_iter = abnormal_entry_iter.clone().map(|(n, (&t, _))| (n, t));
+
+            let dummy_preheader = self.graph.add_node(CfgNode::Dummy("loop \"preheader\""));
+
+            let mut prev_cascade_node = dummy_preheader;
+            let mut prev_entry_target = header;
+            let mut prev_out_cond = None;
+            let mut prev_entry_num = 0;
+
+            // we make the condition node for the *previous* entry target b/c
+            // the current one might be the last one, which shouldn't get a
+            // condition node because it's the only possible target
+            for (entry_num, entry_target) in abnormal_entry_iter {
+                let cascade_node = self.graph.add_node(CfgNode::Condition);
+                self.graph
+                    .add_edge(prev_cascade_node, cascade_node, prev_out_cond);
+                self.graph.add_edge(
+                    cascade_node,
+                    prev_entry_target,
+                    Some(SimpleCondition(format!(
+                        "{} == {}",
+                        struct_var, prev_entry_num
+                    ))),
+                ); // XXX
+                let struct_reset = self.graph.add_node(CfgNode::Code(AstNode::BasicBlock(
+                    format!("{} = 0", struct_var),
+                ))); // XXX
+                self.graph.add_edge(struct_reset, entry_target, None);
+                prev_cascade_node = cascade_node;
+                prev_entry_target = struct_reset;
+                prev_out_cond = Some(SimpleCondition(format!(
+                    "{} != {}",
+                    struct_var, prev_entry_num
+                ))); // XXX
+                prev_entry_num = entry_num;
+            }
+
+            self.graph
+                .add_edge(prev_cascade_node, prev_entry_target, prev_out_cond);
+
+            // we always add an edge from dummy_preheader
+            let new_header = self.graph.neighbors(dummy_preheader).next().unwrap();
+            self.graph.remove_node(dummy_preheader);
+            new_header
+        };
+
+        // redirect entries
+        for (entry_num, entry_edges) in
+            iter::once((0, &header_entries)).chain(abnormal_entry_iter.map(|(n, (_, e))| (n, e)))
+        {
+            let struct_assign = self
+                .graph
+                .add_node(CfgNode::Code(AstNode::BasicBlock(format!(
+                    "{} = {}",
+                    struct_var, entry_num
+                )))); // XXX
+            self.graph.add_edge(struct_assign, new_header, None);
+            for &entry_edge in entry_edges {
+                graph_utils::retarget_edge(&mut self.graph, entry_edge, struct_assign);
+            }
+        }
+
+        new_header
     }
 
     /// Returns the set of nodes that `h` dominates.
