@@ -179,7 +179,7 @@ impl SimpleCAST {
                 self.ast.add_edge(node, next_action, SimpleCASTEdge::Action(ActionEdge::Normal));
             },
             _ => {
-                radeco_warn!("Invalid nodes {}, {}", prev_action, next_action);
+                radeco_warn!("Invalid nodes {:?}, {:?}", prev_action, next_action);
             },
         }
     }
