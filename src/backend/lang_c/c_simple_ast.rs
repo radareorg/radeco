@@ -3,11 +3,12 @@ use std::collections::{HashMap, HashSet};
 
 use super::c_simple;
 use super::c_simple::{Ty, CAST, CASTNode};
+use middle::ir;
 use middle::ir::MOpcode;
+use middle::ssa::utils;
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
+use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
-use middle::ssa::ssa_traits::NodeData as TNodeData;
-use middle::ssa::ssa_traits::NodeType as TNodeType;
 use frontend::radeco_containers::RadecoFunction;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::visit::EdgeRef;
@@ -422,6 +423,42 @@ impl SimpleCAST {
         let mut converter = CASTConverter::new(&self);
         converter.to_c_ast()
     }
+}
+
+// TODO
+#[derive(Debug)]
+struct Value {
+    name: String,
+    // TODO Type information
+    vt: ValueInfo,
+}
+
+/// CASTBuilder is a constructor from RadecoFunction
+struct CASTBuilder<'a> {
+    ast: SimpleCAST,
+    rfn: &'a RadecoFunction,
+    // SSA of RadecoFunction
+    ssa: &'a SSAStorage,
+    data_graph: Graph<Value, (u8, c_simple::Expr)>,
+    // Hashmap from node of SSAStorage to one of self.data_graph
+    node_map: HashMap<NodeIndex, NodeIndex>,
+    reg_map: HashMap<String, NodeIndex>,
+    seen: HashSet<NodeIndex>,
+}
+
+impl<'a> CASTBuilder<'a> {
+    pub fn new(f: &'a RadecoFunction) -> CASTBuilder {
+        CASTBuilder {
+            ast: SimpleCAST::new(f.name.as_ref()),
+            rfn: f,
+            ssa: f.ssa(),
+            data_graph: Graph::new(),
+            node_map: HashMap::new(),
+            reg_map: HashMap::new(),
+            seen: HashSet::new(),
+            // XXX
+        }
+    }
 
     // TODO rename
     fn declare_vars_from_rfn(&mut self) {
@@ -429,17 +466,17 @@ impl SimpleCAST {
     }
 
     //TODO Move to other trait, struct
-    fn recover_data_flow(&mut self, rfn: &RadecoFunction) {
+    fn recover_data_flow(&mut self) {
         unimplemented!()
     }
 
-    fn recover(&mut self, ssa: &SSAStorage, node: NodeIndex) {
-        assert!(self.is_recover_node(ssa, node));
+    fn recover(&mut self, node: NodeIndex) {
+        assert!(self.is_recover_node(node));
         unimplemented!()
     }
 
-    fn is_recover_node(&self, ssa: &SSAStorage, node: NodeIndex) -> bool {
-        let op = ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
+    fn is_recover_node(&self, node: NodeIndex) -> bool {
+        let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         match op {
             MOpcode::OpStore
                 | MOpcode::OpCall
@@ -451,64 +488,181 @@ impl SimpleCAST {
         }
     }
 
-    fn update_values(&self, vm: &mut ValueManager, ssa: &SSAStorage, node: NodeIndex) {
-        unimplemented!()
+    fn handle_binop(&mut self, ret_node: NodeIndex, ops: Vec<NodeIndex>,
+                    expr: c_simple::Expr) {
+        for (i, op) in ops.into_iter().enumerate() {
+            self.data_graph.add_edge(ret_node, op, (i as u8, expr.clone()));
+        }
     }
 
-    fn data_flow_from_ssa(&mut self, ssa: &SSAStorage) {
-        let mut v_manager = ValueManager::new();
-        for block in ssa.inorder_walk() {
-            if self.is_recover_node(ssa, block) {
-                self.recover(ssa, block);
+    fn handle_op(&mut self, node: NodeIndex) {
+        // TODO avoid unwrap
+        let ret_node = self.node_map.get(&node).unwrap();
+    }
+
+    fn update_values(&mut self, node: NodeIndex) {
+        assert!(self.ssa.is_expr(node));
+        radeco_trace!("CASTBuilder::update_values {:?}", node);
+        if self.seen.contains(&node) {
+            return;
+        }
+        self.seen.insert(node);
+        let ops = self.ssa.operands_of(node);
+        let ret_node = {
+            let v = self.new_value(node);
+            self.data_graph.add_node(v)
+        };
+        self.node_map.insert(node, ret_node);
+
+        let mut ns = Vec::new();
+        for op in ops {
+            if let Some(&n) = self.node_map.get(&op) {
+                ns.push(n);
+            } else {
+                radeco_warn!("Invalid operand");
             }
-            self.update_values(&mut v_manager, ssa, block);
+        }
+        radeco_trace!("CASTBuilder::update_values opcode: {:?}", self.ssa.opcode(node));
+        // TODO update data_graph
+        match self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid) {
+            MOpcode::OpStore => {
+                // TODO add reference to source nodes
+                for (i, op) in ns.into_iter().skip(1).enumerate() {
+                    self.data_graph
+                        .add_edge(ret_node,
+                                  op,
+                                  (i as u8, c_simple::Expr::Add));
+                }
+            }
+            MOpcode::OpLoad => {
+                self.data_graph
+                    .add_edge(ret_node,
+                              ns[1],
+                              (0, c_simple::Expr::Assign));
+            },
+            MOpcode::OpAdd => self.handle_binop(ret_node, ns, c_simple::Expr::Add),
+            MOpcode::OpAnd => self.handle_binop(ret_node, ns, c_simple::Expr::And),
+            MOpcode::OpDiv => self.handle_binop(ret_node, ns, c_simple::Expr::Div),
+            MOpcode::OpEq => self.handle_binop(ret_node, ns, c_simple::Expr::Eq),
+            MOpcode::OpGt => self.handle_binop(ret_node, ns, c_simple::Expr::Gt),
+            MOpcode::OpLsl => {
+                //unimplemented!()
+            },
+            MOpcode::OpLsr => {
+                //unimplemented!()
+            },
+            MOpcode::OpLt => self.handle_binop(ret_node, ns, c_simple::Expr::Lt),
+            MOpcode::OpMod => self.handle_binop(ret_node, ns, c_simple::Expr::Mod),
+            MOpcode::OpMul => self.handle_binop(ret_node, ns, c_simple::Expr::Mul),
+            MOpcode::OpNarrow(size) => {
+                self.data_graph
+                    .add_edge(ret_node,
+                              ns[0],
+                              (0, c_simple::Expr::Cast(size as usize)));
+            },
+            MOpcode::OpNot => self.handle_binop(ret_node, ns, c_simple::Expr::Not),
+            MOpcode::OpOr => self.handle_binop(ret_node, ns, c_simple::Expr::Or),
+            MOpcode::OpRol => unimplemented!(),
+            MOpcode::OpRor => unimplemented!(),
+            MOpcode::OpSignExt(size) => {
+                self.data_graph.add_edge(ret_node, ns[0], (0, c_simple::Expr::Cast(size as usize)));
+            },
+            MOpcode::OpSub => self.handle_binop(ret_node, ns, c_simple::Expr::Sub),
+            MOpcode::OpXor => self.handle_binop(ret_node, ns, c_simple::Expr::Xor),
+            MOpcode::OpZeroExt(size) => {
+                self.data_graph.add_edge(ret_node, ns[0], (0, c_simple::Expr::Cast(size as usize)));
+            },
+            MOpcode::OpCall => {
+                self.update_regs_by_call(node);
+            },
+            _ => {},
         }
     }
-}
 
-// TODO Rename
-struct ValueManager {
-    value_map: HashMap<NodeIndex, ValueExpr>,
-    uf: UnionFind,
-}
-
-impl ValueManager {
-    fn new() -> ValueManager {
-        ValueManager {
-            value_map: HashMap::new(),
-            uf: UnionFind::new(),
-        }
-    }
-}
-
-enum ValueExpr {
-    Expr(c_simple::Expr, Box<ValueExpr>, Box<ValueExpr>),
-    SSAVal(NodeIndex),
-}
-
-// TODO more efficient algorithm
-struct UnionFind {
-    g: HashMap<NodeIndex, NodeIndex>,
-}
-
-impl UnionFind {
-    fn new() -> UnionFind {
-        UnionFind {
-            g: HashMap::new(),
+    fn prepare_consts(&mut self) {
+        for (&val, &node) in self.ssa.constants.iter() {
+            if let Ok(n) = self.ssa.node_data(node) {
+                // TODO
+                let v = Value {
+                    name: val.to_string(),
+                    vt: n.vt,
+                };
+                let const_node = self.data_graph.add_node(v);
+                self.node_map.insert(node, const_node);
+            } else {
+                radeco_warn!("Invalid constant");
+            }
         }
     }
 
-    fn add(&mut self, root: NodeIndex, node: NodeIndex) {
-        let r = self.root(root);
-        self.g.insert(r, node);
+    fn update_regs_by_call(&mut self, call_node: NodeIndex) {
+        radeco_trace!("CASTBuilder::update_regs_by_call {:?}", call_node);
+        let reg_map = utils::call_rets(call_node, self.ssa);
+        for (idx, (node, vt)) in reg_map.into_iter() {
+            let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
+            // TODO
+            let v = Value {
+                name: "return value".to_string(),
+                vt: vt,
+            };
+            let _node = self.data_graph.add_node(v);
+            self.node_map.insert(node, _node);
+            if let Some(&reg_node) = self.reg_map.get(&name) {
+                self.data_graph.add_edge(_node, reg_node, (0, c_simple::Expr::Assign));
+            }
+        }
     }
 
-    fn root(&mut self, node: NodeIndex) -> NodeIndex {
-        match self.g.get(&node) {
-            Some(&n) if n == node => n,
-            Some(&n) => self.root(n),
-            _ => node,
+    fn prepare_regs(&mut self) {
+        let entry_node = self.ssa.entry_node();
+        if entry_node.is_none() {
+            radeco_warn!("Entry node not found");
+            return;
         }
+        // TODO avoid unwrap
+        let reg_state = self.ssa.registers_in(self.ssa.entry_node().unwrap());
+        if reg_state.is_none() {
+            radeco_warn!("RegisterState not found");
+            return;
+        }
+        let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
+        for (idx, (node, vt)) in reg_map.into_iter() {
+            let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
+            // TODO
+            let v = Value {
+                name: name.clone(),
+                vt: vt,
+            };
+            let _node = self.data_graph.add_node(v);
+            self.reg_map.insert(name, _node);
+            self.node_map.insert(node, _node);
+        }
+    }
+
+    fn new_value(&mut self, ssa_node: NodeIndex) -> Value {
+        // TODO avoid unwrap
+        let vt = self.ssa.node_data(ssa_node).unwrap().vt;
+        // TODO
+        Value {
+            name: "TODO@new_value".to_string(),
+            vt: vt,
+        }
+    }
+
+    pub fn data_flow_from_ssa(&mut self) {
+        self.prepare_consts();
+        self.prepare_regs();
+        for block in self.ssa.inorder_walk() {
+            // TODO Phi node
+            if self.ssa.is_expr(block) {
+                self.update_values(block);
+            }
+        }
+        // for block in self.ssa.inorder_walk() {
+        //     if self.is_recover_node(block) {
+        //         self.recover(block);
+        //     }
+        // }
     }
 }
 
@@ -524,6 +678,7 @@ impl From<RadecoFunction> for SimpleCAST {
     }
 }
 
+/// This is used for translating SimpleCAST to CAST
 struct CASTConverter<'a> {
     ast: &'a SimpleCAST,
     /// HashMap from SimpleCAST's node to CAST's node
