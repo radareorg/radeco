@@ -495,9 +495,23 @@ impl<'a> CASTBuilder<'a> {
         }
     }
 
-    fn handle_op(&mut self, node: NodeIndex) {
-        // TODO avoid unwrap
-        let ret_node = self.node_map.get(&node).unwrap();
+    fn handle_phi(&mut self, node: NodeIndex) {
+        assert!(self.ssa.is_phi(node));
+        radeco_trace!("CASTBuilder::handle_phi {:?}", node);
+        if self.seen.contains(&node) {
+            return;
+        }
+        let ops = self.ssa.operands_of(node);
+        // TODO
+        let ret_node = {
+            let v = Value {
+                name: "TODO@phi".to_string(),
+                vt: self.ssa.node_data(node).unwrap().vt,
+            };
+            self.data_graph.add_node(v)
+        };
+        self.seen.insert(node);
+        self.node_map.insert(node, ret_node);
     }
 
     fn update_values(&mut self, node: NodeIndex) {
@@ -653,8 +667,9 @@ impl<'a> CASTBuilder<'a> {
         self.prepare_consts();
         self.prepare_regs();
         for block in self.ssa.inorder_walk() {
-            // TODO Phi node
-            if self.ssa.is_expr(block) {
+            if self.ssa.is_phi(block) {
+                self.handle_phi(block);
+            } else if self.ssa.is_expr(block) {
                 self.update_values(block);
             }
         }
