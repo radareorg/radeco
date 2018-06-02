@@ -29,6 +29,8 @@ enum ActionNode {
     Return,
     If,
     Goto,
+    Dummy(String),
+    DummyGoto,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -152,6 +154,18 @@ impl SimpleCAST {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Assignment));
         let _ = self.ast.add_edge(node, dst, SimpleCASTEdge::Value(ValueEdge::AssignDst));
         let _ = self.ast.add_edge(node, src, SimpleCASTEdge::Value(ValueEdge::AssignSrc));
+        let _ = self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        node
+    }
+
+    pub fn dummy_goto(&mut self, prev_action: NodeIndex) -> NodeIndex {
+        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::DummyGoto));
+        let _ = self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        node
+    }
+
+    pub fn dummy(&mut self, prev_action: NodeIndex, s: String) -> NodeIndex {
+        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Dummy(s)));
         let _ = self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
         node
     }
@@ -425,35 +439,33 @@ impl SimpleCAST {
     }
 }
 
-// TODO
-#[derive(Debug)]
-struct Value {
-    name: String,
-    // TODO Type information
-    vt: ValueInfo,
-}
-
 /// CASTBuilder is a constructor from RadecoFunction
 struct CASTBuilder<'a> {
     ast: SimpleCAST,
+    //NodeIndex of SimpleCAST
+    last_action: NodeIndex,
     rfn: &'a RadecoFunction,
     // SSA of RadecoFunction
     ssa: &'a SSAStorage,
-    data_graph: Graph<Value, (u8, c_simple::Expr)>,
+    data_graph: Graph<ValueNode, (u8, c_simple::Expr)>,
     // Hashmap from node of SSAStorage to one of self.data_graph
     node_map: HashMap<NodeIndex, NodeIndex>,
+    action_map: HashMap<NodeIndex, NodeIndex>,
     reg_map: HashMap<String, NodeIndex>,
     seen: HashSet<NodeIndex>,
 }
 
 impl<'a> CASTBuilder<'a> {
     pub fn new(f: &'a RadecoFunction) -> CASTBuilder {
+        let ast = SimpleCAST::new(f.name.as_ref());
         CASTBuilder {
-            ast: SimpleCAST::new(f.name.as_ref()),
+            last_action: ast.entry,
+            ast: ast,
             rfn: f,
             ssa: f.ssa(),
             data_graph: Graph::new(),
             node_map: HashMap::new(),
+            action_map: HashMap::new(),
             reg_map: HashMap::new(),
             seen: HashSet::new(),
             // XXX
@@ -470,19 +482,46 @@ impl<'a> CASTBuilder<'a> {
         unimplemented!()
     }
 
-    fn recover(&mut self, node: NodeIndex) {
+    // For debugging
+    fn dummy_goto(&mut self) -> NodeIndex {
+        self.last_action = self.ast.dummy_goto(self.last_action);
+        self.last_action
+    }
+
+    // For debugging
+    fn dummy_action(&mut self, s: String) -> NodeIndex {
+        self.last_action = self.ast.dummy(self.last_action, s);
+        self.last_action
+    }
+
+    fn call_action(&mut self) -> NodeIndex {
+        self.last_action = self.ast.call_func("", &[], self.last_action, None);
+        self.last_action
+    }
+
+    fn recover(&mut self, node: NodeIndex) -> NodeIndex {
         assert!(self.is_recover_node(node));
-        unimplemented!()
+        let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
+        radeco_trace!("CASTBuilder::recover {:?} @ {:?}", op, node);
+        match op {
+            MOpcode::OpCall => {
+                self.call_action()
+            },
+            MOpcode::OpStore => {
+                self.dummy_action(format!("{:?}", op))
+            },
+            MOpcode::OpLoad => {
+                self.dummy_action(format!("{:?}", op))
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn is_recover_node(&self, node: NodeIndex) -> bool {
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         match op {
-            MOpcode::OpStore
-                | MOpcode::OpCall
-                // ?
-                | MOpcode::OpCJmp
-                | MOpcode::OpIf
+            MOpcode::OpCall
+                | MOpcode::OpStore
                 | MOpcode::OpLoad => true,
             _ => false,
         }
@@ -504,10 +543,7 @@ impl<'a> CASTBuilder<'a> {
         let ops = self.ssa.operands_of(node);
         // TODO
         let ret_node = {
-            let v = Value {
-                name: "TODO@phi".to_string(),
-                vt: self.ssa.node_data(node).unwrap().vt,
-            };
+            let v = ValueNode::Variable(None, "TODO@phi".to_string());
             self.data_graph.add_node(v)
         };
         self.seen.insert(node);
@@ -597,10 +633,7 @@ impl<'a> CASTBuilder<'a> {
         for (&val, &node) in self.ssa.constants.iter() {
             if let Ok(n) = self.ssa.node_data(node) {
                 // TODO
-                let v = Value {
-                    name: val.to_string(),
-                    vt: n.vt,
-                };
+                let v = ValueNode::Constant(None, val.to_string());
                 let const_node = self.data_graph.add_node(v);
                 self.node_map.insert(node, const_node);
             } else {
@@ -615,10 +648,7 @@ impl<'a> CASTBuilder<'a> {
         for (idx, (node, vt)) in reg_map.into_iter() {
             let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
             // TODO
-            let v = Value {
-                name: "return value".to_string(),
-                vt: vt,
-            };
+            let v = ValueNode::Variable(None, "return value".to_string());
             let _node = self.data_graph.add_node(v);
             self.node_map.insert(node, _node);
             if let Some(&reg_node) = self.reg_map.get(&name) {
@@ -643,41 +673,105 @@ impl<'a> CASTBuilder<'a> {
         for (idx, (node, vt)) in reg_map.into_iter() {
             let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
             // TODO
-            let v = Value {
-                name: name.clone(),
-                vt: vt,
-            };
+            let v = ValueNode::Variable(None, name.clone());
             let _node = self.data_graph.add_node(v);
             self.reg_map.insert(name, _node);
             self.node_map.insert(node, _node);
         }
     }
 
-    fn new_value(&mut self, ssa_node: NodeIndex) -> Value {
+    fn new_value(&mut self, ssa_node: NodeIndex) -> ValueNode {
         // TODO avoid unwrap
         let vt = self.ssa.node_data(ssa_node).unwrap().vt;
-        // TODO
-        Value {
-            name: "TODO@new_value".to_string(),
-            vt: vt,
+        // TODO use vt
+        ValueNode::Variable(None, "TODO@new_value".to_string())
+    }
+
+    fn replace_tmp_with_goto(&mut self) {
+        let mut last = None;
+        for node in self.ssa.inorder_walk() {
+            // TODO avoid unwrap
+            if last.is_some() && self.ssa.is_block(node) {
+                let s = self.action_map.get(&node).unwrap();
+                if let Some(succ) = self.ssa.unconditional_block(node) {
+                    if let Some(selector) = self.ssa.selector_in(node) {
+                        //indirect jump
+                        // TODO replace node with goto
+                        radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
+                        // unimplemented!()
+                    } else {
+                        //jump
+                        // TODO replace node with goto
+                        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
+                        let src_node = self.action_map.get(&node).unwrap();
+                        let dst_node = self.action_map.get(&succ).unwrap();
+                        self.ast.ast.add_edge(*src_node, *dst_node, SimpleCASTEdge::Value(ValueEdge::GotoDst));
+                        // unimplemented!()
+                    }
+                } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
+                    // conditional jump
+                    // TODO replace node with goto
+                    radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
+                    {
+                        let src_node = self.action_map.get(&node).unwrap();
+                        let dst_node = self.action_map.get(&blk_cond_info.true_side).unwrap();
+                        self.ast.ast.add_edge(*src_node, *dst_node, SimpleCASTEdge::Action(ActionEdge::IfThen));
+                    }
+                    {
+                        let src_node = self.action_map.get(&node).unwrap();
+                        let dst_node = self.action_map.get(&blk_cond_info.false_side).unwrap();
+                        self.ast.ast.add_edge(*src_node, *dst_node, SimpleCASTEdge::Action(ActionEdge::IfElse));
+                    }
+                    // unimplemented!()
+                } else {
+                    unreachable!();
+                }
+            } else if self.ssa.is_block(node) {
+                last = Some(node);
+            }
         }
     }
 
     pub fn data_flow_from_ssa(&mut self) {
         self.prepare_consts();
         self.prepare_regs();
-        for block in self.ssa.inorder_walk() {
-            if self.ssa.is_phi(block) {
-                self.handle_phi(block);
-            } else if self.ssa.is_expr(block) {
-                self.update_values(block);
+        for node in self.ssa.inorder_walk() {
+            if self.ssa.is_block(node) {
+                radeco_trace!("CASTBuilder::data_flow_from_ssa BasicBlock");
+            } else if self.ssa.is_phi(node) {
+                self.handle_phi(node);
+            } else if self.ssa.is_expr(node) {
+                self.update_values(node);
             }
         }
-        // for block in self.ssa.inorder_walk() {
-        //     if self.is_recover_node(block) {
-        //         self.recover(block);
-        //     }
-        // }
+        self.cfg_from_blocks(self.ssa.entry_node().unwrap(), &mut HashSet::new());
+        self.replace_tmp_with_goto();
+    }
+
+    fn cfg_from_nodes(&mut self, block: NodeIndex) {
+        let nodes = self.ssa.nodes_in(block);
+        for node in nodes {
+            if self.is_recover_node(node) {
+                let n = self.recover(node);
+                self.action_map.insert(node, n);
+            }
+        }
+    }
+
+    fn cfg_from_blocks(&mut self, block: NodeIndex, visited: &mut HashSet<NodeIndex>) {
+        if visited.contains(&block) {
+            return;
+        }
+        visited.insert(block);
+        let next_blocks = self.ssa.next_blocks(block);
+        for blk in next_blocks {
+            {
+                let n = self.dummy_goto();
+                self.action_map.insert(blk, n);
+            }
+            self.cfg_from_nodes(blk);
+            self.cfg_from_blocks(blk, visited);
+        }
     }
 }
 
