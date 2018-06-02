@@ -728,9 +728,23 @@ impl<'a> CASTBuilder<'a> {
         }
     }
 
-    pub fn data_flow_from_ssa(&mut self) {
+    pub fn from_ssa(&mut self) {
+        self.prepare();
+        self.data_flow_from_ssa();
+        self.cfg_from_ssa();
+    }
+
+    fn prepare(&mut self) {
         self.prepare_consts();
         self.prepare_regs();
+    }
+
+    fn cfg_from_ssa(&mut self) {
+        self.cfg_from_blocks(self.ssa.entry_node().unwrap(), &mut HashSet::new());
+        self.replace_tmp_with_goto();
+    }
+
+    fn data_flow_from_ssa(&mut self) {
         for node in self.ssa.inorder_walk() {
             if self.ssa.is_phi(node) {
                 self.handle_phi(node);
@@ -738,8 +752,6 @@ impl<'a> CASTBuilder<'a> {
                 self.update_values(node);
             }
         }
-        self.cfg_from_blocks(self.ssa.entry_node().unwrap(), &mut HashSet::new());
-        self.replace_tmp_with_goto();
     }
 
     fn cfg_from_nodes(&mut self, block: NodeIndex) {
