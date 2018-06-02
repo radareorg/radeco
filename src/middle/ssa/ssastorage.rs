@@ -201,6 +201,32 @@ impl SSAStorage {
             constants: HashMap::new(),
         }
     }
+
+    pub fn nodes_in(&self, block: NodeIndex) -> Vec<NodeIndex> {
+        let mut exprs = self.exprs_in(block)
+            .iter()
+            .chain(self.phis_in(block).iter())
+            .rev()
+            .cloned()
+            .collect::<Vec<NodeIndex>>();
+        exprs.sort_by(|x, y| {
+            let addr_x = self.address(*x)
+                .expect("No address information found");
+            let addr_y = self.address(*y)
+                .expect("No address information found");
+            addr_x.cmp(&addr_y)
+        });
+        exprs
+    }
+
+    pub fn next_blocks(&self, node: NodeIndex) -> Vec<NodeIndex> {
+        let edges = self.outgoing_edges(node);
+        edges.into_iter()
+            .flat_map(|(e, _)| match self.g.edge_endpoints(e) {
+                Some((_, x)) => Some(x),
+                _ => None,
+            }).collect()
+    }
 }
 
 /// //////////////////////////////////////////////////////////////////////////
