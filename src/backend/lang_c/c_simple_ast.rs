@@ -14,6 +14,17 @@ use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::visit::EdgeRef;
 use petgraph::{EdgeDirection, Direction, Directed};
 
+macro_rules! add_jump_to_cfg {
+    ($self: ident, $source: expr, $target: expr, $edge: expr) => {
+        let src_node = $self.action_map.get(&$source).unwrap();
+        let dst_node = $self.action_map.get(&$target).unwrap();
+        $self.ast.ast.add_edge(*src_node, *dst_node, $edge);
+    };
+    ($self: ident, $source: expr, $target: expr) => {
+        add_jump_to_cfg!($self, $source, $target, SimpleCASTEdge::Value(ValueEdge::GotoDst));
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum SimpleCASTNode {
     /// Entry node of target function
@@ -690,39 +701,24 @@ impl<'a> CASTBuilder<'a> {
     fn replace_tmp_with_goto(&mut self) {
         let mut last = None;
         for node in self.ssa.inorder_walk() {
-            // TODO avoid unwrap
             if last.is_some() && self.ssa.is_block(node) {
-                let s = self.action_map.get(&node).unwrap();
+                let s = self.action_map.get(&node).expect("The node should be added to action_map");
                 if let Some(succ) = self.ssa.unconditional_block(node) {
                     if let Some(selector) = self.ssa.selector_in(node) {
-                        //indirect jump
-                        // TODO replace node with goto
+                        // TODO
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
-                        // unimplemented!()
                     } else {
-                        //jump
-                        // TODO replace node with goto
+                        // TODO
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
-                        let src_node = self.action_map.get(&node).unwrap();
-                        let dst_node = self.action_map.get(&succ).unwrap();
-                        self.ast.ast.add_edge(*src_node, *dst_node, SimpleCASTEdge::Value(ValueEdge::GotoDst));
-                        // unimplemented!()
+                        add_jump_to_cfg!(self, node, succ);
                     }
                 } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
-                    // conditional jump
-                    // TODO replace node with goto
+                    // TODO
                     radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
-                    {
-                        let src_node = self.action_map.get(&node).unwrap();
-                        let dst_node = self.action_map.get(&blk_cond_info.true_side).unwrap();
-                        self.ast.ast.add_edge(*src_node, *dst_node, SimpleCASTEdge::Action(ActionEdge::IfThen));
-                    }
-                    {
-                        let src_node = self.action_map.get(&node).unwrap();
-                        let dst_node = self.action_map.get(&blk_cond_info.false_side).unwrap();
-                        self.ast.ast.add_edge(*src_node, *dst_node, SimpleCASTEdge::Action(ActionEdge::IfElse));
-                    }
-                    // unimplemented!()
+                    add_jump_to_cfg!(self, node, blk_cond_info.true_side,
+                                     SimpleCASTEdge::Action(ActionEdge::IfThen));
+                    add_jump_to_cfg!(self, node, blk_cond_info.false_side,
+                                     SimpleCASTEdge::Action(ActionEdge::IfElse));
                 } else {
                     unreachable!();
                 }
@@ -736,9 +732,7 @@ impl<'a> CASTBuilder<'a> {
         self.prepare_consts();
         self.prepare_regs();
         for node in self.ssa.inorder_walk() {
-            if self.ssa.is_block(node) {
-                radeco_trace!("CASTBuilder::data_flow_from_ssa BasicBlock");
-            } else if self.ssa.is_phi(node) {
+            if self.ssa.is_phi(node) {
                 self.handle_phi(node);
             } else if self.ssa.is_expr(node) {
                 self.update_values(node);
@@ -765,10 +759,8 @@ impl<'a> CASTBuilder<'a> {
         visited.insert(block);
         let next_blocks = self.ssa.next_blocks(block);
         for blk in next_blocks {
-            {
-                let n = self.dummy_goto();
-                self.action_map.insert(blk, n);
-            }
+            let n = self.dummy_goto();
+            self.action_map.insert(blk, n);
             self.cfg_from_nodes(blk);
             self.cfg_from_blocks(blk, visited);
         }
