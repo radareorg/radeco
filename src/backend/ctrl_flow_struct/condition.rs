@@ -1,10 +1,11 @@
+use std::fmt;
+use std::ptr;
 use typed_arena::Arena;
 
-#[derive(Debug)]
 pub struct BaseCondition<'cd, T: 'cd>(&'cd BaseConditionS<'cd, T>);
-#[derive(Debug)]
 enum BaseConditionS<'cd, T: 'cd> {
     Simple(T),
+    Not(BaseCondition<'cd, T>),
     And(Box<[BaseCondition<'cd, T>]>),
     Or(Box<[BaseCondition<'cd, T>]>),
 }
@@ -92,6 +93,18 @@ impl<'cd, T> ConditionContext<'cd, T> {
         }
     }
 
+    pub fn mk_not(&self, cond: BaseCondition<'cd, T>) -> BaseCondition<'cd, T> {
+        if ptr::eq(cond.0, self.true_.0) {
+            self.false_
+        } else if ptr::eq(cond.0, self.false_.0) {
+            self.true_
+        } else if let &BaseConditionS::Not(c) = cond.0 {
+            c
+        } else {
+            self.store.mk_cond(BaseConditionS::Not(cond))
+        }
+    }
+
     pub fn mk_true(&self) -> BaseCondition<'cd, T> {
         self.true_
     }
@@ -112,8 +125,6 @@ impl<'cd, T> ConditionStorage<'cd, T> {
     }
 }
 
-use std::fmt;
-
 impl<'cd, T> fmt::Debug for ConditionStorage<'cd, T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.write_str("<ConditionStorage>")
@@ -127,6 +138,17 @@ impl<'cd, T> Clone for BaseCondition<'cd, T> {
 }
 
 impl<'cd, T> Copy for BaseCondition<'cd, T> {}
+
+impl<'cd, T: fmt::Debug> fmt::Debug for BaseCondition<'cd, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0 {
+            BaseConditionS::Simple(t) => write!(f, "{:?}", t),
+            BaseConditionS::Not(c) => write!(f, "-{:?}", c),
+            BaseConditionS::And(c) => write!(f, "And({:?})", c),
+            BaseConditionS::Or(c) => write!(f, "Or({:?})", c),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
