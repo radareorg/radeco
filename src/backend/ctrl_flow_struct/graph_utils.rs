@@ -1,9 +1,7 @@
-use fixedbitset::FixedBitSet;
+use bit_set::BitSet;
 use petgraph::graph::GraphIndex;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
-use petgraph::visit::{
-    EdgeRef, FilterNode, GraphBase, IntoEdges, NodeIndexable, VisitMap, Visitable,
-};
+use petgraph::visit::{EdgeRef, FilterNode, IntoEdges, NodeIndexable, VisitMap, Visitable};
 
 use std::iter;
 
@@ -57,7 +55,7 @@ where
 }
 
 /// Like [`petgraph::visit::depth_first_search`], but with edges.
-pub fn depth_first_search<G, F>(graph: G, start: G::NodeId, mut visitor: F) -> ()
+pub fn depth_first_search<G, F>(graph: G, start: G::NodeId, visitor: F) -> ()
 where
     G: IntoEdges + Visitable,
     F: FnMut(DfsEvent<G>) -> (),
@@ -73,24 +71,20 @@ where
 /// Returns the union of all simple paths from `start` to a node in `end_set`,
 /// including the nodes in `end_set`.
 /// Also returns a topological ordering of this subgraph.
-pub fn slice<G, F>(
-    graph: G,
-    start: G::NodeId,
-    end_set: F,
-) -> (FixedBitSet, FixedBitSet, Vec<G::NodeId>)
+pub fn slice<G, F>(graph: G, start: G::NodeId, end_set: F) -> (BitSet, BitSet, Vec<G::NodeId>)
 where
     G: IntoEdges + Visitable + NodeIndexable,
     G::NodeId: GraphIndex,
     G::EdgeId: GraphIndex,
-    F: FilterNode<G::NodeId>,
+    F: Fn(G::NodeId) -> bool,
 {
-    let mut ret_nodes = FixedBitSet::with_capacity(graph.node_bound());
+    let mut ret_nodes = BitSet::with_capacity(graph.node_bound());
     // petgraph doesn't expose `edge_bound` :(
-    let mut ret_edges = FixedBitSet::with_capacity(0);
+    let mut ret_edges = BitSet::with_capacity(0);
     // we push nodes into this in post-order, then reverse at the end
     let mut ret_topo_order = Vec::new();
 
-    ret_nodes.put(start.index());
+    ret_nodes.insert(start.index());
 
     let mut cur_node_stack = vec![start];
     let mut cur_edge_stack = Vec::new();
@@ -110,7 +104,7 @@ where
                 debug_assert!(cur_node_stack.iter().all(|&n| n != cfe.target()));
                 debug_assert!(cur_edge_stack.iter().all(|&e| e != cfe.id()));
                 debug_assert!(cur_node_stack[0] == start);
-                if ret_nodes[cfe.target().index()] {
+                if ret_nodes.contains(cfe.target().index()) {
                     // found a simple path from `start` to a node already in the
                     // slice, which is on a simple path to `end`
                     ret_nodes.extend(cur_node_stack.iter().map(|n| n.index()));
@@ -123,7 +117,7 @@ where
                 let _pop_e = cur_edge_stack.pop();
                 debug_assert!(_pop_n == Some(f));
                 debug_assert!(_pop_e.is_some() == (f != start));
-                if ret_nodes[f.index()] {
+                if ret_nodes.contains(f.index()) {
                     ret_topo_order.push(f);
                 }
             }
@@ -143,6 +137,30 @@ pub fn retarget_edge<N, E>(
     let source = graph.edge_endpoints(edge).expect("no edge").0;
     let w = graph.remove_edge(edge).expect("no edge");
     graph.add_edge(source, new_target, w)
+}
+
+// ideally this would be <G: IntoEdges> so we can enforce that this is actually
+// a path, but Reversed doesn't implement that
+pub struct NonEmptyPath<NI: Copy, EI: Copy> {
+    pub start: NI,
+    pub segments: Vec<(EI, NI)>,
+}
+
+impl<NI: Copy, EI: Copy> NonEmptyPath<NI, EI> {
+    pub fn new(start: NI) -> Self {
+        Self {
+            start,
+            segments: Vec::new(),
+        }
+    }
+
+    pub fn last_node(&self) -> NI {
+        self.segments.last().map_or(self.start, |s| s.1)
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item=NI> + '_ {
+        iter::once(self.start).chain(self.segments.iter().map(|&e| e.1))
+    }
 }
 
 #[cfg(test)]
@@ -170,29 +188,30 @@ mod tests {
             return TestResult::discard();
         }
         let start = nodes[start_i % nodes.len()];
-        let ends: FixedBitSet = end_is
+        let ends: BitSet = end_is
             .into_iter()
             .map(|end_i| nodes[end_i % nodes.len()].index())
             .collect();
         println!("start: {:?}", start);
         println!("ends: {:?}", ends);
-        let (slice_nodes, slice_edges, slice_topo_order) = slice(&graph, start, ends);
-        let mut trace_nodes = FixedBitSet::with_capacity(graph.node_bound());
+        let (slice_nodes, slice_edges, slice_topo_order) =
+            slice(&graph, start, |n| ends.contains(n.index()));
+        let mut trace_nodes = BitSet::with_capacity(graph.node_bound());
         trace_nodes.extend(slice_topo_order.iter().map(|n| n.index()));
         if trace_nodes != slice_nodes {
             println!("wrong nodes in topo_order:");
             println!(
                 "  real: {:?}",
                 slice_nodes
-                    .ones()
+                    .iter()
                     .map(|i| NodeIndex::new(i))
                     .collect::<Vec<NodeIndex>>()
             );
             println!("  order: {:?}", slice_topo_order);
             return TestResult::failed();
         }
-        graph.retain_nodes(|_, n| slice_nodes[n.index()]);
-        graph.retain_edges(|_, e| slice_edges[e.index()]);
+        graph.retain_nodes(|_, n| slice_nodes.contains(n.index()));
+        graph.retain_edges(|_, e| slice_edges.contains(e.index()));
         if algo::is_cyclic_directed(&graph) {
             println!("cyclic slice:");
             println!("  slice: {:?}", graph);
@@ -214,35 +233,41 @@ mod tests {
             return TestResult::discard();
         }
         let root = nodes[root_i % nodes.len()];
-        let mut reachable = FixedBitSet::with_capacity(graph.node_bound());
-        let mut back_edges = FixedBitSet::with_capacity(0);
+        let mut reachable = BitSet::with_capacity(graph.node_bound());
+        let mut back_edges = BitSet::with_capacity(0);
         depth_first_search(&graph, root, |ev| {
             use super::DfsEvent::*;
             match ev {
-                Discover(n) => reachable.set(n.index(), true),
+                Discover(n) => {
+                    reachable.insert(n.index());
+                }
                 BackEdge(e) => back_edges.extend(iter::once(e.id().index())),
                 _ => (),
             }
         });
-        graph.retain_nodes(|_, n| reachable[n.index()]);
-        graph.retain_edges(|_, e| !back_edges[e.index()]);
+        graph.retain_nodes(|_, n| reachable.contains(n.index()));
+        graph.retain_edges(|_, e| !back_edges.contains(e.index()));
         println!("graph: {:?}", graph);
         println!("root: {:?}", root);
         assert!(!algo::is_cyclic_directed(&graph));
         let (slice_nodes, slice_edges, _) = slice(&graph, root, |n| {
             graph.edges_directed(n, Outgoing).next().is_none()
         });
-        println!("slice_nodes: {:?}", slice_nodes.ones().collect::<Vec<_>>());
+        println!("slice_nodes: {:?}", slice_nodes);
         println!(
             "slice_edges: {:?}",
             slice_edges
-                .ones()
+                .iter()
                 .map(|ei| graph.edge_endpoints(EdgeIndex::new(ei)).unwrap())
                 .collect::<Vec<_>>()
         );
         TestResult::from_bool(
-            graph.node_indices().all(|n| slice_nodes[n.index()])
-                && graph.edge_indices().all(|e| slice_edges[e.index()]),
+            graph
+                .node_indices()
+                .all(|n| slice_nodes.contains(n.index()))
+                && graph
+                    .edge_indices()
+                    .all(|e| slice_edges.contains(e.index())),
         )
     }
 
