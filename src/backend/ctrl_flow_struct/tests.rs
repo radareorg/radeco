@@ -177,34 +177,6 @@ fn infinite_loop() {
     cfg.structure_whole();
 }
 
-#[test]
-fn nearest_common_dominator() {
-    let cstore = ConditionStorage::new();
-    let cctx = ConditionContext::new(&cstore);
-
-    // TODO: quickcheck test
-    let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(node("entry"));
-    let n1 = graph.add_node(node("n1"));
-    let n2 = graph.add_node(node("n2"));
-    let n3 = graph.add_node(node("n3"));
-    let n4 = graph.add_node(node("n4"));
-    let n5 = graph.add_node(node("n5"));
-
-    graph.add_edge(entry, n1, cond(&cctx, "e1"));
-    graph.add_edge(entry, n2, cond(&cctx, "-e1"));
-    graph.add_edge(n1, n2, None);
-    graph.add_edge(n2, n3, cond(&cctx, "n2"));
-    graph.add_edge(n2, n4, cond(&cctx, "-n2"));
-    graph.add_edge(n4, n5, None);
-    graph.add_edge(n5, n5, None);
-
-    let cfg = ControlFlowGraph { graph, entry, cctx };
-
-    let nodes: BitSet = [n3, n5].into_iter().map(|n| n.index()).collect();
-    assert_eq!(cfg.nearest_common_dominator(&nodes), n2);
-}
-
 fn cond<'cd>(cctx: &ConditionContext<'cd, SimpleCondition>, c: &str) -> Option<Condition<'cd>> {
     Some(cctx.mk_simple(SimpleCondition(c.to_owned())))
 }

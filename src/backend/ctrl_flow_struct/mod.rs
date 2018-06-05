@@ -6,12 +6,12 @@
 
 mod condition;
 mod graph_utils;
+mod ix_bit_set;
 #[cfg(test)]
 mod tests;
 
 use self::condition::*;
 
-use petgraph;
 use petgraph::algo::dominators;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
 use petgraph::visit::*;
@@ -29,6 +29,9 @@ struct ControlFlowGraph<'cd> {
     entry: NodeIndex,
     cctx: ConditionContext<'cd, SimpleCondition>,
 }
+
+type NodeSet = ix_bit_set::IxBitSet<NodeIndex>;
+type EdgeSet = ix_bit_set::IxBitSet<EdgeIndex>;
 
 #[derive(Debug)]
 enum CfgNode<'cd> {
@@ -97,17 +100,22 @@ impl<'cd> ControlFlowGraph<'cd> {
 
                 let loop_header = self.funnel_abnormal_entries(n, &loop_nodes);
 
-                let mut succ_nodes = self.strict_successors_of_set(&loop_nodes);
+                let mut succ_nodes =
+                    graph_utils::strict_successors_of_set(&self.graph, &loop_nodes);
                 self.refine_loop(n, &mut loop_nodes, &mut succ_nodes);
 
                 let mut final_succ_opt = podfs_trace
                     .iter()
-                    .find(|n| succ_nodes.contains(n.index()))
+                    .find(|&&n| succ_nodes.contains(n))
                     .cloned();
                 if let Some(final_succ) = final_succ_opt {
-                    succ_nodes.remove(final_succ.index());
-                    final_succ_opt =
-                        Some(self.funnel_abnormal_exits(&loop_nodes, loop_continue, final_succ, &succ_nodes));
+                    succ_nodes.remove(final_succ);
+                    final_succ_opt = Some(self.funnel_abnormal_exits(
+                        &loop_nodes,
+                        loop_continue,
+                        final_succ,
+                        &succ_nodes,
+                    ));
                 }
 
                 let loop_body = self.structure_acyclic_sese_region(loop_header, loop_continue);
@@ -119,19 +127,18 @@ impl<'cd> ControlFlowGraph<'cd> {
                 }
             } else {
                 // acyclic
-                let region = self.dominates_set(n);
+                let region = graph_utils::dominates_set(&self.graph, self.entry, n);
                 // single-block regions aren't interesting
                 if region.len() > 1 {
-                    let succs = self.strict_successors_of_set(&region);
+                    let succs = graph_utils::strict_successors_of_set(&self.graph, &region);
                     // is `region` single-exit?
                     let mut succs_iter = succs.iter();
                     if let Some(succ) = succs_iter.next() {
                         if succs_iter.next().is_none() {
                             // sese region
-                            let repl_ast =
-                                self.structure_acyclic_sese_region(n, NodeIndex::new(succ));
+                            let repl_ast = self.structure_acyclic_sese_region(n, succ);
                             self.graph[n] = CfgNode::Code(repl_ast);
-                            self.graph.add_edge(n, NodeIndex::new(succ), None);
+                            self.graph.add_edge(n, succ, None);
                         }
                     }
                 }
@@ -227,7 +234,7 @@ impl<'cd> ControlFlowGraph<'cd> {
                     // manually restrict to slice
                     self.graph
                         .edges_directed(n, Incoming)
-                        .filter(|e| slice_edges.contains(e.id().index()))
+                        .filter(|e| slice_edges.contains(e.id()))
                         .map(|e| {
                             if let Some(ec) = self.graph[e.id()] {
                                 self.cctx.mk_and(ret[&e.source()], ec)
@@ -246,17 +253,16 @@ impl<'cd> ControlFlowGraph<'cd> {
 
     /// Transforms the loop into a single-entry loop.
     /// Returns the new loop header.
-    fn funnel_abnormal_entries(&mut self, header: NodeIndex, loop_nodes: &BitSet) -> NodeIndex {
+    fn funnel_abnormal_entries(&mut self, header: NodeIndex, loop_nodes: &NodeSet) -> NodeIndex {
         if header == self.entry {
             // all entries must go through `entry` aka `header`
             return header;
         }
 
         let mut entry_map = HashMap::new();
-        for ni in loop_nodes {
-            let n = NodeIndex::new(ni);
+        for n in loop_nodes {
             for e in self.graph.edges_directed(n, Incoming) {
-                if !loop_nodes.contains(e.source().index()) {
+                if !loop_nodes.contains(e.source()) {
                     entry_map.entry(n).or_insert(Vec::new()).push(e.id());
                 }
             }
@@ -346,29 +352,28 @@ impl<'cd> ControlFlowGraph<'cd> {
     fn refine_loop(
         &self,
         loop_header: NodeIndex,
-        loop_nodes: &mut BitSet,
-        succ_nodes: &mut BitSet,
+        loop_nodes: &mut NodeSet,
+        succ_nodes: &mut NodeSet,
     ) -> () {
         let dominators = dominators::simple_fast(&self.graph, self.entry);
-        let mut new_nodes = self.mk_node_set();
-        let mut old_nodes = self.mk_node_set();
+        let mut new_nodes = NodeSet::new();
+        let mut old_nodes = NodeSet::new();
         while succ_nodes.len() > 1 {
             new_nodes.clear();
             old_nodes.clear();
-            for ni in &*succ_nodes {
-                let n = NodeIndex::new(ni);
+            for n in &*succ_nodes {
                 if self
                     .graph
                     .neighbors_directed(n, Incoming)
-                    .all(|pred| loop_nodes.contains(pred.index()))
+                    .all(|pred| loop_nodes.contains(pred))
                 {
-                    loop_nodes.insert(ni);
-                    old_nodes.insert(ni);
+                    loop_nodes.insert(n);
+                    old_nodes.insert(n);
                     for s in self.graph.neighbors(n) {
-                        if !loop_nodes.contains(s.index())
+                        if !loop_nodes.contains(s)
                             && dominators.dominators(s).unwrap().any(|d| d == loop_header)
                         {
-                            new_nodes.insert(s.index());
+                            new_nodes.insert(s);
                         }
                     }
                 }
@@ -385,22 +390,26 @@ impl<'cd> ControlFlowGraph<'cd> {
     /// Returns the new loop successor.
     fn funnel_abnormal_exits(
         &mut self,
-        loop_nodes: &BitSet,
+        loop_nodes: &NodeSet,
         loop_continue: NodeIndex,
         final_succ: NodeIndex,
-        abn_succ_nodes: &BitSet,
+        abn_succ_nodes: &NodeSet,
     ) -> NodeIndex {
         let new_successor = if !abn_succ_nodes.is_empty() {
             let reaching_conds = {
-                let abn_exit_sources: BitSet = abn_succ_nodes
+                let abn_exit_sources: NodeSet = abn_succ_nodes
                     .iter()
-                    .flat_map(|ni| self.graph.edges_directed(NodeIndex::new(ni), Incoming))
-                    .map(|e| e.source().index())
-                    .filter(|&ni| loop_nodes.contains(ni))
+                    .flat_map(|n| self.graph.edges_directed(n, Incoming))
+                    .map(|e| e.source())
+                    .filter(|&n| loop_nodes.contains(n))
                     .collect();
 
-                let ncd = self.nearest_common_dominator(&abn_exit_sources);
-                self.reaching_conditions(ncd, |n| abn_succ_nodes.contains(n.index()))
+                let ncd = graph_utils::nearest_common_dominator(
+                    &self.graph,
+                    self.entry,
+                    &abn_exit_sources,
+                );
+                self.reaching_conditions(ncd, |n| abn_succ_nodes.contains(n))
                     .0
             };
 
@@ -412,8 +421,7 @@ impl<'cd> ControlFlowGraph<'cd> {
                 let mut prev_cascade_node = dummy_presuccessor;
                 let mut prev_out_cond = None;
 
-                for ni in abn_succ_nodes {
-                    let exit_target = NodeIndex::new(ni);
+                for exit_target in abn_succ_nodes {
                     let reaching_cond = reaching_conds[&exit_target];
                     let cascade_node = self.graph.add_node(CfgNode::Condition);
                     self.graph
@@ -436,190 +444,23 @@ impl<'cd> ControlFlowGraph<'cd> {
         };
 
         // replace exit edges with "break"
-        let exit_edges: BitSet = loop_nodes
+        let exit_edges: EdgeSet = loop_nodes
             .iter()
-            .flat_map(|ni| self.graph.edges(NodeIndex::new(ni)))
-            .filter(|e| !loop_nodes.contains(e.target().index()))
-            .map(|e| e.id().index())
+            .flat_map(|n| self.graph.edges(n))
+            .filter(|e| !loop_nodes.contains(e.target()))
+            .map(|e| e.id())
             .collect();
-        for ei in &exit_edges {
+        for exit_edge in &exit_edges {
             let break_node = self
                 .graph
                 .add_node(CfgNode::Code(AstNode::BasicBlock("break".to_owned()))); // XXX
-            graph_utils::retarget_edge(&mut self.graph, EdgeIndex::new(ei), break_node);
+            graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
             // connect to `loop_continue` so that the graph slice from the loop
             // header to `loop_continue` contains these "break" nodes
-            self.graph.add_edge(break_node, loop_continue, Some(self.cctx.mk_false()));
+            self.graph
+                .add_edge(break_node, loop_continue, Some(self.cctx.mk_false()));
         }
 
         new_successor
-    }
-
-    // https://doi.org/10.1016/0196-6774(92)90063-I
-    pub fn nearest_common_dominator(&self, nodes: &BitSet) -> NodeIndex {
-        use self::graph_utils::NonEmptyPath;
-        if nodes.is_empty() {
-            panic!("nearest common dominator of empty set");
-        }
-        let mut reentered = nodes.clone();
-        let mut visited_nodes = self.mk_node_set();
-        // petgraph doesn't expose `edge_bound` :(
-        let mut visited_edges = BitSet::with_capacity(0);
-
-        // "initialize one stack for each u in U and mark u as re-entered"
-        let mut stacks: Vec<NonEmptyPath<NodeIndex, EdgeIndex>> = nodes
-            .iter()
-            .map(|ni| NonEmptyPath::new(NodeIndex::new(ni)))
-            .collect();
-
-        // <invariant: forall stack in stacks, reentered.contains(stack.start)>
-
-        // "repeat"
-        let stack = loop {
-            // "while there are more than one non-empty stacks do"
-            let mut stack = loop {
-                debug_assert!(!stacks.is_empty());
-                if let Some(stack) = remove_if_singleton(&mut stacks) {
-                    break stack;
-                }
-                // "perform one round of multiple depth first search"
-                // "for each non-empty stack do"
-                // TODO: can we do this in-place?
-                stacks = stacks
-                    .into_iter()
-                    .filter_map(|mut stack| {
-                        // "if the top stack element is not s, the source then"
-                        if stack.last_node() != self.entry {
-                            // "perform one dfs-step for this stack"
-                            // "while the stack is not empty do"
-                            let dfs_step_res = loop {
-                                // "let w be the node on the top of the stack"
-                                let w = stack.last_node();
-                                // "unvisited arc (v, w) for w"
-                                let new_edge_opt = self
-                                    .graph
-                                    .edges_directed(w, Incoming)
-                                    .find(|e| !visited_edges.contains(e.id().index()));
-
-                                // rev "if there is no unvisited arc (v, w) for w then"
-                                if let Some(new_edge) = new_edge_opt {
-                                    // "break"
-                                    break Some((new_edge, stack));
-                                } else {
-                                    // "pop the stack"
-                                    // "while the stack is not empty"
-                                    if stack.segments.pop().is_none() {
-                                        break None;
-                                    }
-                                }
-                            };
-
-                            // "if the stack is not empty then"
-                            if let Some((new_edge, mut stack)) = dfs_step_res {
-                                // "let w be the node on the top of the stack and (v, w) be an unvisited arc"
-                                let v = new_edge.source();
-                                // "mark (v, w) as visited"
-                                visited_edges.insert(new_edge.id().index());
-                                // "if v is unvisited then"
-                                // <marking visited if visited is fine>
-                                // "mark v as visited"
-                                if visited_nodes.insert(v.index()) {
-                                    // "push v onto the stack"
-                                    stack.segments.push((new_edge.id(), v));
-                                } else {
-                                    // "mark v as re-entered"
-                                    reentered.insert(v.index());
-                                }
-                                Some(stack)
-                            } else {
-                                None
-                            }
-                        } else {
-                            // "else skip"
-                            Some(stack)
-                        }
-                    })
-                    .collect();
-            };
-
-            // "let x be the top most stack element marked as re-entered"
-            // "for each node v on top of x do"
-            // "pop the stack"
-            // <stack.start is re-entered, so stopping at start is fine>
-            while let Some((e, v)) = stack.segments.pop() {
-                if reentered.contains(v.index()) {
-                    // undo "pop the stack"
-                    stack.segments.push((e, v));
-                    break;
-                } else {
-                    // "let w be the node just beneath v in the stack"
-                    // "mark v and (v, w) as unvisited"
-                    visited_nodes.remove(v.index());
-                    visited_edges.remove(e.index());
-                }
-            }
-
-            // "for each node remains in the stack do"
-            for node in stack.nodes() {
-                // "move the node to a new stack by itself"
-                stacks.push(NonEmptyPath::new(node));
-                // "mark it as re-entered"
-                reentered.insert(node.index());
-            }
-
-            // "until there is only one non-empty stack"
-            if let Some(stack) = remove_if_singleton(&mut stacks) {
-                break stack;
-            }
-        };
-
-        // "the single node in the non-empty stack is d"
-        debug_assert!(stack.segments.is_empty());
-        stack.start
-    }
-
-    /// Returns the set of nodes that `h` dominates.
-    fn dominates_set(&self, h: NodeIndex) -> BitSet {
-        let mut ret = self.mk_node_set();
-        // TODO: this is horrifically inefficient
-        let doms = dominators::simple_fast(&self.graph, self.entry);
-        for (n, _) in self.graph.node_references() {
-            if doms
-                .dominators(n)
-                .map(|mut ds| ds.any(|d| d == h))
-                .unwrap_or(false)
-            {
-                ret.insert(n.index());
-            }
-        }
-        ret
-    }
-
-    /// Returns the union of the successors of each node in `set` differenced
-    /// with `set`.
-    fn strict_successors_of_set(&self, set: &BitSet) -> BitSet {
-        let mut ret = self.mk_node_set();
-        for ni in set {
-            for succ in self.graph.neighbors(NodeIndex::new(ni)) {
-                if !set.contains(succ.index()) {
-                    ret.insert(succ.index());
-                }
-            }
-        }
-        ret
-    }
-
-    fn mk_node_set(&self) -> BitSet {
-        BitSet::with_capacity(self.graph.node_bound())
-    }
-}
-
-/// If `v` contains exactly 1 element, removes and returns it.
-/// Does nothing otherwise.
-fn remove_if_singleton<T>(v: &mut Vec<T>) -> Option<T> {
-    if v.len() == 1 {
-        Some(v.pop().unwrap())
-    } else {
-        None
     }
 }
