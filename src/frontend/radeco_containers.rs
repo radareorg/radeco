@@ -46,7 +46,7 @@ use petgraph::Direction;
 use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
-use r2api::structs::{LOpInfo, LSymbolInfo, LRelocInfo, LExportInfo,
+use r2api::structs::{LVarInfo, LOpInfo, LSymbolInfo, LRelocInfo, LExportInfo,
                      LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
 
 use r2pipe::r2::R2;
@@ -190,13 +190,13 @@ pub enum FunctionType {
     Import(u16),
 }
 
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BindingType {
     // Arguments - ith argument
     RegisterArgument(usize),
     StackArgument(usize),
-    // Local variables
-    RegisterLocal,
+    // Local variables - base register, offset
+    RegisterLocal(String, i64),
     // Stack offset (from "SP")
     StackLocal(usize),
     // Return
@@ -222,7 +222,7 @@ impl BindingType {
 
     pub fn is_local(&self) -> bool {
         match *self {
-            BindingType::RegisterLocal |
+            BindingType::RegisterLocal(_, _) |
             BindingType::StackLocal(_) => true,
             _ => false,
         }
@@ -240,6 +240,7 @@ impl BindingType {
 pub struct VarBinding {
     pub btype: BindingType,
     name: Cow<'static, str>,
+    type_str: String,
     // Index of the register in regfile that represents this varbinding
     pub ridx: Option<u64>,
     pub idx: NodeIndex, // Some arbitrary, serializable data can be added to these fields later.
@@ -247,10 +248,12 @@ pub struct VarBinding {
 }
 
 impl VarBinding {
-    pub fn new(btype: BindingType, name: Option<String>, idx: NodeIndex, ridx: Option<u64>) -> VarBinding {
+    pub fn new(btype: BindingType, ty_str: String, name: Option<String>,
+               idx: NodeIndex, ridx: Option<u64>) -> VarBinding {
         let name = Cow::from(name.unwrap_or_default());
         VarBinding {
             name: name,
+            type_str: ty_str,
             btype: btype,
             idx: idx,
             ridx: ridx,
@@ -258,12 +261,18 @@ impl VarBinding {
         }
     }
 
+    fn local(local: LVarInfo) -> VarBinding {
+        let r = local.reference.unwrap();
+        let btype = BindingType::RegisterLocal(r.base.unwrap(), r.offset.unwrap());
+        VarBinding::new(btype, local.vtype.unwrap(), local.name, NodeIndex::end(), None)
+    }
+
     pub fn index(&self) -> NodeIndex {
         self.idx
     }
 
     pub fn btype(&self) -> BindingType {
-        self.btype
+        self.btype.clone()
     }
 
     pub fn btype_mut(&mut self) -> &mut BindingType {
@@ -660,7 +669,7 @@ impl<'a> ModuleLoader<'a> {
             .collect();
 
         tbindings.sort_by(|x, y| {
-            match (x.btype, y.btype) {
+            match (&x.btype, &y.btype) {
                 (BindingType::RegisterArgument(i), BindingType::RegisterArgument(ref j)) => {
                     i.cmp(j)
                 }
@@ -829,9 +838,9 @@ impl<'a> ModuleLoader<'a> {
                             .map(|s| s.locals_of(rfn.offset));
                         let mut locals = match locals_res {
                             Some(Ok(_locals)) => {
-                                // TODO
-                                radeco_err!("Not implemented yet");
-                                Vec::new()
+                                _locals.into_iter()
+                                    .map(|l| VarBinding::local(l))
+                                    .collect::<Vec<_>>()
                             },
                             Some(Err(e)) => {
                                 radeco_warn!("{:?}", e);
@@ -1081,11 +1090,14 @@ impl RadecoFunction {
         &self.datarefs
     }
 
-    pub fn locals(&self) -> &VarBindings {
-        unimplemented!()
+    pub fn locals(&self) -> VarBindings {
+        self.bindings.iter()
+            .filter(|vb| vb.btype.is_local())
+            .map(|vb| vb.clone())
+            .collect::<Vec<_>>()
     }
 
-    pub fn args(&self) -> &VarBindings {
+    pub fn args(&self) -> VarBindings {
         unimplemented!()
     }
 
