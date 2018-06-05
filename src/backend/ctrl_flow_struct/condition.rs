@@ -155,7 +155,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn do_thing() {
+    fn it_works() {
         let cstore = ConditionStorage::new();
         let cctx = ConditionContext::new(&cstore);
         let ab = mk_ab(cctx);
