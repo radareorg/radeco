@@ -462,6 +462,9 @@ struct CASTBuilder<'a> {
     // Hashmap from node of SSAStorage to one of self.data_graph
     node_map: HashMap<NodeIndex, NodeIndex>,
     action_map: HashMap<NodeIndex, NodeIndex>,
+    // a map from node of data_graph to one of SimpleCAST's value
+    var_map: HashMap<NodeIndex, NodeIndex>,
+    // a map from node of data_graph to one of SimpleCAST's register
     reg_map: HashMap<String, NodeIndex>,
     seen: HashSet<NodeIndex>,
 }
@@ -477,20 +480,11 @@ impl<'a> CASTBuilder<'a> {
             data_graph: Graph::new(),
             node_map: HashMap::new(),
             action_map: HashMap::new(),
+            var_map: HashMap::new(),
             reg_map: HashMap::new(),
             seen: HashSet::new(),
             // XXX
         }
-    }
-
-    // TODO rename
-    fn declare_vars_from_rfn(&mut self) {
-        unimplemented!()
-    }
-
-    //TODO Move to other trait, struct
-    fn recover_data_flow(&mut self) {
-        unimplemented!()
     }
 
     // For debugging
@@ -531,9 +525,7 @@ impl<'a> CASTBuilder<'a> {
     fn is_recover_node(&self, node: NodeIndex) -> bool {
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         match op {
-            MOpcode::OpCall
-                | MOpcode::OpStore
-                | MOpcode::OpLoad => true,
+            MOpcode::OpCall | MOpcode::OpStore => true,
             _ => false,
         }
     }
@@ -592,7 +584,7 @@ impl<'a> CASTBuilder<'a> {
                     self.data_graph
                         .add_edge(ret_node,
                                   op,
-                                  (i as u8, c_simple::Expr::Add));
+                                  (i as u8, c_simple::Expr::Assign));
                 }
             }
             MOpcode::OpLoad => {
@@ -645,8 +637,11 @@ impl<'a> CASTBuilder<'a> {
             if let Ok(n) = self.ssa.node_data(node) {
                 // TODO
                 let v = ValueNode::Constant(None, val.to_string());
-                let const_node = self.data_graph.add_node(v);
-                self.node_map.insert(node, const_node);
+                let data_node = self.data_graph.add_node(v);
+                // TODO add type
+                let ast_node = self.ast.constant(&val.to_string(), None);
+                self.node_map.insert(node, data_node);
+                self.var_map.insert(data_node, ast_node);
             } else {
                 radeco_warn!("Invalid constant");
             }
@@ -691,7 +686,7 @@ impl<'a> CASTBuilder<'a> {
         }
     }
 
-    fn new_value(&mut self, ssa_node: NodeIndex) -> ValueNode {
+    fn new_value(&self, ssa_node: NodeIndex) -> ValueNode {
         // TODO avoid unwrap
         let vt = self.ssa.node_data(ssa_node).unwrap().vt;
         // TODO use vt
