@@ -6,21 +6,18 @@
 
 mod condition;
 mod graph_utils;
-mod ix_bit_set;
 #[cfg(test)]
 mod tests;
 
 use self::condition::*;
+use self::graph_utils::ix_bit_set::IxBitSet;
 
-use petgraph::algo::dominators;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
-use petgraph::visit::*;
+use petgraph::visit::EdgeRef;
 use petgraph::Incoming;
 
-use bit_set::BitSet;
-
 use std::collections::HashMap;
-use std::iter;
+use std::iter::{self, FromIterator};
 use std::mem;
 
 #[derive(Debug)]
@@ -30,8 +27,8 @@ struct ControlFlowGraph<'cd> {
     cctx: ConditionContext<'cd, SimpleCondition>,
 }
 
-type NodeSet = ix_bit_set::IxBitSet<NodeIndex>;
-type EdgeSet = ix_bit_set::IxBitSet<EdgeIndex>;
+type NodeSet = IxBitSet<NodeIndex>;
+type EdgeSet = IxBitSet<EdgeIndex>;
 
 #[derive(Debug)]
 enum CfgNode<'cd> {
@@ -77,9 +74,9 @@ impl<'cd> ControlFlowGraph<'cd> {
                 BackEdge(e) => {
                     let (ref mut sources, ref mut edges) = backedge_map
                         .entry(e.target())
-                        .or_insert((BitSet::new(), Vec::new()));
-                    sources.insert(e.source().index());
-                    edges.push(e.id())
+                        .or_insert((NodeSet::new(), EdgeSet::new()));
+                    sources.insert(e.source());
+                    edges.insert(e.id());
                 }
                 Finish(n) => podfs_trace.push(n),
                 _ => (),
@@ -89,45 +86,51 @@ impl<'cd> ControlFlowGraph<'cd> {
         for &n in &podfs_trace {
             if let Some((latch_nodes, backedges)) = backedge_map.get(&n) {
                 // loop
-                let (mut loop_nodes, _, _) =
-                    graph_utils::slice(&self.graph, n, |v| latch_nodes.contains(v.index()));
 
                 // retarget backedges to a "loop continue" node
                 let loop_continue = self.graph.add_node(CfgNode::Dummy("loop continue"));
-                for &backedge in backedges {
+                for backedge in backedges {
                     graph_utils::retarget_edge(&mut self.graph, backedge, loop_continue);
                 }
 
-                let loop_header = self.funnel_abnormal_entries(n, &loop_nodes);
+                let (initial_loop_nodes, _, _) = graph_utils::slice(&self.graph, n, latch_nodes);
 
-                let mut succ_nodes =
-                    graph_utils::strict_successors_of_set(&self.graph, &loop_nodes);
-                self.refine_loop(n, &mut loop_nodes, &mut succ_nodes);
+                let loop_header = self.funnel_abnormal_entries(n, &initial_loop_nodes);
 
-                let mut final_succ_opt = podfs_trace
-                    .iter()
-                    .find(|&&n| succ_nodes.contains(n))
-                    .cloned();
-                if let Some(final_succ) = final_succ_opt {
-                    succ_nodes.remove(final_succ);
-                    final_succ_opt = Some(self.funnel_abnormal_exits(
-                        &loop_nodes,
-                        loop_continue,
-                        final_succ,
-                        &succ_nodes,
-                    ));
-                }
+                let loop_succ_opt = {
+                    let mut succ_nodes =
+                        graph_utils::strict_successors_of_set(&self.graph, &initial_loop_nodes);
+                    let mut loop_nodes = initial_loop_nodes;
+                    self.refine_loop(&mut loop_nodes, &mut succ_nodes);
+
+                    // pick the successor with the smallest post-order
+                    let final_succ_opt = podfs_trace
+                        .iter()
+                        .find(|&&n| succ_nodes.contains(n))
+                        .cloned();
+                    if let Some(final_succ) = final_succ_opt {
+                        succ_nodes.remove(final_succ);
+                        Some(self.funnel_abnormal_exits(
+                            &loop_nodes,
+                            loop_continue,
+                            final_succ,
+                            &succ_nodes,
+                        ))
+                    } else {
+                        None
+                    }
+                };
 
                 let loop_body = self.structure_acyclic_sese_region(loop_header, loop_continue);
                 self.graph.remove_node(loop_continue);
                 let repl_ast = AstNode::Loop(LoopType::Endless, Box::new(loop_body));
                 self.graph[loop_header] = CfgNode::Code(repl_ast);
-                if let Some(final_succ) = final_succ_opt {
-                    self.graph.add_edge(loop_header, final_succ, None);
+                if let Some(loop_succ) = loop_succ_opt {
+                    self.graph.add_edge(loop_header, loop_succ, None);
                 }
             } else {
                 // acyclic
-                let region = graph_utils::dominates_set(&self.graph, self.entry, n);
+                let region = graph_utils::dominated_by(&self.graph, self.entry, n);
                 // single-block regions aren't interesting
                 if region.len() > 1 {
                     let succs = graph_utils::strict_successors_of_set(&self.graph, &region);
@@ -173,13 +176,8 @@ impl<'cd> ControlFlowGraph<'cd> {
         header: NodeIndex,
         successor: NodeIndex,
     ) -> AstNode<'cd> {
-        println!(
-            "structuring acyclic sese region: {:?} ==> {:?}",
-            self.graph[header], self.graph[successor],
-        );
-
         let (reaching_conds, mut region_topo_order) =
-            self.reaching_conditions(header, |n| n == successor);
+            self.reaching_conditions(header, &NodeSet::from_iter(&[successor]));
         // slice includes `successor`, but its not actually part of the region.
         let _popped = region_topo_order.pop();
         debug_assert!(_popped == Some(successor));
@@ -210,10 +208,10 @@ impl<'cd> ControlFlowGraph<'cd> {
 
     /// Computes the reaching condition for every node in the graph slice from
     /// `start` to `end_set`. Also returns a topological ordering of that slice.
-    fn reaching_conditions<F: Fn(NodeIndex) -> bool>(
+    fn reaching_conditions(
         &self,
         start: NodeIndex,
-        end_set: F,
+        end_set: &NodeSet,
     ) -> (HashMap<NodeIndex, Condition<'cd>>, Vec<NodeIndex>) {
         let (_, slice_edges, slice_topo_order) = graph_utils::slice(&self.graph, start, end_set);
         // {Node, Edge}Filtered don't implement IntoNeighborsDirected :(
@@ -230,13 +228,13 @@ impl<'cd> ControlFlowGraph<'cd> {
             ret.insert(start, self.cctx.mk_true());
 
             for &n in iter {
-                let reach_cond = self.cctx.mk_or_iter(
+                let reach_cond = self.cctx.mk_or_from_iter(
                     // manually restrict to slice
                     self.graph
                         .edges_directed(n, Incoming)
                         .filter(|e| slice_edges.contains(e.id()))
                         .map(|e| {
-                            if let Some(ec) = self.graph[e.id()] {
+                            if let &Some(ec) = e.weight() {
                                 self.cctx.mk_and(ret[&e.source()], ec)
                             } else {
                                 ret[&e.source()]
@@ -267,7 +265,6 @@ impl<'cd> ControlFlowGraph<'cd> {
                 }
             }
         }
-        println!("entries: {:?}", entry_map);
         // loop must be reachable, so the header must have entries
         let header_entries = entry_map.remove(&header).unwrap();
         debug_assert!(!header_entries.is_empty());
@@ -347,42 +344,40 @@ impl<'cd> ControlFlowGraph<'cd> {
         new_header
     }
 
-    /// Incrementally adds nodes dominated by the loop header to the loop until
+    /// Incrementally adds nodes dominated by the loop to the loop until
     /// there's only one successor or there are no more nodes to add.
     fn refine_loop(
         &self,
-        loop_header: NodeIndex,
         loop_nodes: &mut NodeSet,
         succ_nodes: &mut NodeSet,
     ) -> () {
-        let dominators = dominators::simple_fast(&self.graph, self.entry);
+        // reuse this `NodeSet` so we avoid allocating
         let mut new_nodes = NodeSet::new();
-        let mut old_nodes = NodeSet::new();
         while succ_nodes.len() > 1 {
-            new_nodes.clear();
-            old_nodes.clear();
             for n in &*succ_nodes {
                 if self
                     .graph
                     .neighbors_directed(n, Incoming)
                     .all(|pred| loop_nodes.contains(pred))
                 {
+                    // post-pone removal from `succ_nodes` b/c rust ownership
                     loop_nodes.insert(n);
-                    old_nodes.insert(n);
-                    for s in self.graph.neighbors(n) {
-                        if !loop_nodes.contains(s)
-                            && dominators.dominators(s).unwrap().any(|d| d == loop_header)
-                        {
-                            new_nodes.insert(s);
-                        }
-                    }
+                    new_nodes.extend(
+                        self.graph
+                            .neighbors(n)
+                            .filter(|&u| !loop_nodes.contains(u)),
+                    );
                 }
             }
+
+            // do the removal
+            succ_nodes.difference_with(&loop_nodes);
+
             if new_nodes.is_empty() {
                 break;
             }
-            succ_nodes.difference_with(&old_nodes);
             succ_nodes.union_with(&new_nodes);
+            new_nodes.clear();
         }
     }
 
@@ -409,8 +404,7 @@ impl<'cd> ControlFlowGraph<'cd> {
                     self.entry,
                     &abn_exit_sources,
                 );
-                self.reaching_conditions(ncd, |n| abn_succ_nodes.contains(n))
-                    .0
+                self.reaching_conditions(ncd, abn_succ_nodes).0
             };
 
             // make condition cascade
@@ -434,6 +428,7 @@ impl<'cd> ControlFlowGraph<'cd> {
 
                 self.graph
                     .add_edge(prev_cascade_node, final_succ, prev_out_cond);
+
                 // we always add an edge from dummy_presuccessor
                 let new_successor = self.graph.neighbors(dummy_presuccessor).next().unwrap();
                 self.graph.remove_node(dummy_presuccessor);

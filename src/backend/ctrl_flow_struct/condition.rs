@@ -1,8 +1,19 @@
+//! API for working with conditions.
+//!
+//! Conditions are arena-allocated. Only freely-copyable references are exposed
+//! through this API. This allows them to be manipulated without worrying about
+//! ownership.
+
 use std::fmt;
 use std::ptr;
 use typed_arena::Arena;
 
+/// A condition. This can be freely copied.
+/// Use [`ConditionContext`] to make one.
 pub struct BaseCondition<'cd, T: 'cd>(&'cd BaseConditionS<'cd, T>);
+
+/// *Really* a condition. These are the referents of [`BaseCondition`]s and are
+/// what live in [`ConditionStorage`]s.
 enum BaseConditionS<'cd, T: 'cd> {
     Simple(T),
     Not(BaseCondition<'cd, T>),
@@ -10,6 +21,7 @@ enum BaseConditionS<'cd, T: 'cd> {
     Or(Box<[BaseCondition<'cd, T>]>),
 }
 
+/// Helper for creating new conditions.
 #[derive(Copy, Clone, Debug)]
 pub struct ConditionContext<'cd, T: 'cd> {
     store: &'cd ConditionStorage<'cd, T>,
@@ -17,6 +29,7 @@ pub struct ConditionContext<'cd, T: 'cd> {
     false_: BaseCondition<'cd, T>,
 }
 
+/// Backing storage for [`BaseCondition`]s.
 pub struct ConditionStorage<'cd, T: 'cd> {
     arena: Arena<BaseConditionS<'cd, T>>,
 }
@@ -72,7 +85,7 @@ impl<'cd, T> ConditionContext<'cd, T> {
         }
     }
 
-    pub fn mk_or_iter<I>(&self, iter: I) -> BaseCondition<'cd, T>
+    pub fn mk_or_from_iter<I>(&self, iter: I) -> BaseCondition<'cd, T>
     where
         I: IntoIterator<Item = BaseCondition<'cd, T>>,
     {

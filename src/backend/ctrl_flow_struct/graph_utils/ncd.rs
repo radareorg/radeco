@@ -1,10 +1,21 @@
-//! https://doi.org/10.1016/0196-6774(92)90063-I
+//! see [`nearest_common_dominator`]
 
+use super::ix_bit_set::{IndexLike, IxBitSet};
 use super::NonEmptyPath;
-use backend::ctrl_flow_struct::ix_bit_set::{IndexLike, IxBitSet};
 use petgraph::visit::{EdgeRef, GraphBase, IntoEdgesDirected};
 use petgraph::Incoming;
 
+/// Finds the nearest common dominator of a set of nodes.
+///
+/// A *common dominator* of a set of nodes is a node that dominates every node
+/// in that set.
+///
+/// The *nearest common dominator* is the unique node that:
+///   1. is a common dominator
+///   2. does not dominate any other common dominator
+///
+/// This implements the algorithm described in
+/// [this paper](https://doi.org/10.1016/0196-6774(92)90063-I).
 pub fn nearest_common_dominator<G>(
     graph: G,
     entry: G::NodeId,
@@ -84,6 +95,7 @@ where
                         }
                     })
                     .collect();
+                // prevent infinite loop
                 assert!(!stacks.is_empty());
             };
 
@@ -91,6 +103,7 @@ where
             // "for each node v on top of x do"
             // "pop the stack"
             // <stack.start is re-entered, so stopping at start is fine>
+            debug_assert!(self.reentered.contains(stack.start));
             while let Some((e, v)) = stack.segments.pop() {
                 if self.reentered.contains(v) {
                     // undo "pop the stack"

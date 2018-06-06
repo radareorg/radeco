@@ -22,7 +22,7 @@ fn qc_slice(mut graph: StableDiGraph<(), ()>, start_i: usize, end_is: Vec<usize>
         .collect();
     println!("start: {:?}", start);
     println!("ends: {:?}", ends);
-    let (slice_nodes, slice_edges, slice_topo_order) = slice(&graph, start, |n| ends.contains(n));
+    let (slice_nodes, slice_edges, slice_topo_order) = slice(&graph, start, &ends);
     let trace_nodes = IxBitSet::from_iter(&slice_topo_order);
     if trace_nodes != slice_nodes {
         println!("wrong nodes in topo_order:");
@@ -56,9 +56,11 @@ fn qc_slice_acyclic(mut graph: StableDiGraph<(), ()>, root_i: usize) -> TestResu
     println!("graph: {:?}", graph);
     println!("root: {:?}", root);
     assert!(!algo::is_cyclic_directed(&graph));
-    let (slice_nodes, slice_edges, _) = slice(&graph, root, |n| {
-        graph.edges_directed(n, Outgoing).next().is_none()
-    });
+    let sinks: IxBitSet<_> = graph
+        .node_indices()
+        .filter(|&n| graph.edges_directed(n, Outgoing).next().is_none())
+        .collect();
+    let (slice_nodes, slice_edges, _) = slice(&graph, root, &sinks);
     println!("slice_nodes: {:?}", slice_nodes);
     println!(
         "slice_edges: {:?}",
@@ -125,7 +127,7 @@ fn qc_nearest_common_dominator(
 }
 
 #[quickcheck]
-fn qc_dominates_set(mut graph: StableDiGraph<(), ()>, root_i: usize, h_i: usize) -> TestResult {
+fn qc_dominated_by(mut graph: StableDiGraph<(), ()>, root_i: usize, h_i: usize) -> TestResult {
     let root = if let Some(root) = mk_rooted_graph(&mut graph, root_i, false) {
         root
     } else {
@@ -140,7 +142,7 @@ fn qc_dominates_set(mut graph: StableDiGraph<(), ()>, root_i: usize, h_i: usize)
         .filter(|&n| dominators.dominators(n).unwrap().any(|d| d == h))
         .collect();
 
-    let dom_set = dominates_set(&graph, root, h);
+    let dom_set = dominated_by(&graph, root, h);
 
     TestResult::from_bool(dom_set == true_dom_set)
 }
