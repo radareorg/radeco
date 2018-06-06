@@ -1,12 +1,16 @@
-//! Various graph algorithms
+//! Various generic graph algorithms
+//!
+//! Anything that doesn't need to know anything about the node/edge weights of
+//! a graph goes here.
 
+pub mod ix_bit_set;
 mod ncd;
 #[cfg(test)]
 mod tests;
 
 pub use self::ncd::nearest_common_dominator;
 
-use super::ix_bit_set::{IndexLike, IxBitSet};
+use self::ix_bit_set::{IndexLike, IxBitSet};
 
 use petgraph::graph::IndexType;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
@@ -58,13 +62,15 @@ where
                     (self.visitor)(DfsEvent::CrossForwardEdge(e));
                 }
             }
-            let first_finish = self.finished.visit(u);
-            debug_assert!(first_finish);
+            let _first_finish = self.finished.visit(u);
+            debug_assert!(_first_finish);
             (self.visitor)(DfsEvent::Finish(u));
         }
     }
 }
 
+#[allow(unused_imports)]
+use petgraph;
 /// Like [`petgraph::visit::depth_first_search`], but with edges.
 pub fn depth_first_search<G, F>(graph: G, start: G::NodeId, visitor: F) -> ()
 where
@@ -82,63 +88,62 @@ where
 /// Returns the union of all simple paths from `start` to a node in `end_set`,
 /// including the nodes in `end_set`.
 /// Also returns a topological ordering of this subgraph.
-pub fn slice<G, F>(
+pub fn slice<G>(
     graph: G,
     start: G::NodeId,
-    end_set: F,
+    end_set: &IxBitSet<G::NodeId>,
 ) -> (IxBitSet<G::NodeId>, IxBitSet<G::EdgeId>, Vec<G::NodeId>)
 where
     G: IntoEdges + Visitable,
     G::NodeId: IndexLike,
     G::EdgeId: IndexLike,
-    F: Fn(G::NodeId) -> bool,
 {
     let mut ret_nodes = IxBitSet::new();
-    // petgraph doesn't expose `edge_bound` :(
     let mut ret_edges = IxBitSet::new();
     // we push nodes into this in post-order, then reverse at the end
     let mut ret_topo_order = Vec::new();
 
     ret_nodes.insert(start);
 
-    let mut cur_node_stack = vec![start];
-    let mut cur_edge_stack = Vec::new();
+    let mut cur_stack = NonEmptyPath::new(start);
     depth_first_search(graph, start, |ev| {
         use self::DfsEvent::*;
         match ev {
             TreeEdge(te) => {
-                cur_edge_stack.push(te.id());
-                cur_node_stack.push(te.target());
-                if end_set(te.target()) {
+                cur_stack.segments.push((te.id(), te.target()));
+                if end_set.contains(te.target()) {
                     // found a simple path from `start` to `end`
-                    ret_nodes.extend(&cur_node_stack);
-                    ret_edges.extend(&cur_edge_stack);
+                    ret_nodes.extend(cur_stack.nodes());
+                    ret_edges.extend(cur_stack.edges());
                 }
             }
             CrossForwardEdge(cfe) => {
-                debug_assert!(cur_node_stack.iter().all(|&n| n != cfe.target()));
-                debug_assert!(cur_edge_stack.iter().all(|&e| e != cfe.id()));
-                debug_assert!(cur_node_stack[0] == start);
+                debug_assert!(cur_stack.nodes().all(|n| n != cfe.target()));
+                debug_assert!(cur_stack.edges().all(|e| e != cfe.id()));
                 if ret_nodes.contains(cfe.target()) {
                     // found a simple path from `start` to a node already in the
                     // slice, which is on a simple path to `end`
-                    ret_nodes.extend(&cur_node_stack);
-                    ret_edges.extend(&cur_edge_stack);
+                    ret_nodes.extend(cur_stack.nodes());
+                    ret_edges.extend(cur_stack.edges());
                     ret_edges.insert(cfe.id());
                 }
             }
             Finish(f) => {
-                let _pop_n = cur_node_stack.pop();
-                let _pop_e = cur_edge_stack.pop();
-                debug_assert!(_pop_n == Some(f));
-                debug_assert!(_pop_e.is_some() == (f != start));
-                if ret_nodes.contains(f) {
-                    ret_topo_order.push(f);
+                if f != start {
+                    let _popped = cur_stack.segments.pop();
+                    debug_assert!(_popped.unwrap().1 == f);
+                    if ret_nodes.contains(f) {
+                        ret_topo_order.push(f);
+                    }
+                } else {
+                    debug_assert!(cur_stack.segments.is_empty());
                 }
             }
             _ => (),
         }
     });
+
+    ret_topo_order.push(start);
 
     ret_topo_order.reverse();
     (ret_nodes, ret_edges, ret_topo_order)
@@ -168,7 +173,7 @@ where
 }
 
 /// Returns the set of nodes that `h` dominates.
-pub fn dominates_set<G>(graph: G, entry: G::NodeId, h: G::NodeId) -> IxBitSet<G::NodeId>
+pub fn dominated_by<G>(graph: G, entry: G::NodeId, h: G::NodeId) -> IxBitSet<G::NodeId>
 where
     G: IntoNeighbors + IntoNodeIdentifiers + Visitable,
     G::NodeId: IndexLike,
@@ -179,7 +184,10 @@ where
         let mut dfs = Dfs::new(graph, entry);
         dfs.discovered.visit(h);
         let inv_dom_set: IxBitSet<_> = dfs.iter(graph).collect();
-        graph.node_identifiers().filter(|&n| !inv_dom_set.contains(n)).collect()
+        graph
+            .node_identifiers()
+            .filter(|&n| !inv_dom_set.contains(n))
+            .collect()
     }
 }
 
@@ -203,7 +211,11 @@ impl<NI: Copy, EI: Copy> NonEmptyPath<NI, EI> {
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = NI> + '_ {
-        iter::once(self.start).chain(self.segments.iter().map(|&e| e.1))
+        iter::once(self.start).chain(self.segments.iter().map(|&(_, n)| n))
+    }
+
+    pub fn edges(&self) -> impl Iterator<Item = EI> + '_ {
+        self.segments.iter().map(|&(e, _)| e)
     }
 }
 

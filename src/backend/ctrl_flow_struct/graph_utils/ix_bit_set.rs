@@ -1,3 +1,5 @@
+//! see [`IxBitSet`]
+
 use bit_set::{self, BitSet};
 use std::iter::{Extend, FromIterator};
 use std::marker::PhantomData;
