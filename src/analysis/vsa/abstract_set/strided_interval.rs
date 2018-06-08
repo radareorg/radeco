@@ -30,7 +30,7 @@ use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 use num::bigint::BigInt;
 use num::Signed;
 
-use super::abstract_set::{inum, _bits};
+use super::abstract_set::{inum, unum, _bits};
 use super::abstract_set::{AbstractSet, Container};
 
 // XXX: Distiguish imul/umul idiv/udiv urem/irem logic_shr/arith_shr
@@ -67,7 +67,7 @@ macro_rules! n_in_k_bits {
     ($n:expr, $k:expr) => {
         // Both branches return the same value, but we need a check for overflow.
         if (max_in_k_bits!($k) < ($n) as inum) || (min_in_k_bits!($k) > ($n) as inum) {
-            radeco_err!("{:?} cannot be hold by {:?} bits", $n, $k);
+            radeco_warn!("{:?} cannot be hold by {:?} bits", $n, $k);
             ((((((($n) as inum) & mask_in_k_bits!($k)) << 
                 (_bits - ($k))) >> 
                 (_bits - 1)) & 
@@ -164,15 +164,81 @@ impl fmt::Display for StridedInterval {
 // Help functions go here
 //
 
-/// Returns the min value in (a | b)
-fn minOr(a: &StridedInterval, b: &StridedInterval) -> inum {
-    unimplemented!();
+/// Returns the number of trailing zeroes of x
+fn ntz(_x: inum) -> inum {
+    let x = _x as unum;
+    let mut n: inum = 0;
+    let mut y = (!x) & x.wrapping_add(unum::max_value());
+    while (y != 0) {
+        n += 1;
+        y >>= 1;
+    }
+    n
 }
 
-/// Returns the max value in (a | b)
-fn maxOr(a: &StridedInterval, b: &StridedInterval) -> inum {
-    unimplemented!();
+/// Returns the min value in `unsigned` interval ([a, b] | [c, d])
+fn minOr(_a: inum, _b: inum, _c: inum, _d: inum) -> inum {
+    let (mut a, mut b, mut c, mut d) = (
+        _a as unum,
+        _b as unum,
+        _c as unum,
+        _d as unum,
+    );
+    let mut temp: unum;
+
+    let mut m = (1 as unum) << (_bits - 1);
+
+    while (m != 0) {
+        if ((!a) & c & m) != 0 {
+            temp = (a | m) & (!m).wrapping_add(1);
+            if temp <= b {
+                a = temp;
+                break;
+            }
+        } else if (a & (!c) & m) != 0 {
+            temp = (c | m) & (!m).wrapping_add(1);
+            if temp <= d {
+                c = temp;
+                break;
+            }
+        }
+        m >>= 1;
+    }
+
+    (a | c) as inum
 }
+
+/// Returns the max value in `unsigned` interval ([a, b] | [c, d])
+fn maxOr(_a: inum, _b: inum, _c: inum, _d: inum) -> inum {
+    let (mut a, mut b, mut c, mut d) = (
+        _a as unum,
+        _b as unum,
+        _c as unum,
+        _d as unum,
+    );
+    let mut temp: unum;
+
+    let mut m = (1 as unum) << (_bits - 1);
+
+    while (m != 0) {
+        if (b & d & m) != 0 {
+            temp = (b ^ m) | m.wrapping_add(unum::max_value());
+            if temp >= a {
+                b = temp;
+                break;
+            }
+            temp = (d ^ m) | m.wrapping_add(unum::max_value());
+            if temp >= c {
+                d = temp;
+                break;
+            }
+        }
+        m >>= 1;
+    }
+
+    (b | d) as inum
+}
+
 
 //
 // Basic functions for StridedInterval go here
@@ -649,7 +715,6 @@ impl Rem for StridedInterval {
     type Output = Self;
 
     fn rem(self, other: Self) -> Self {
-        println!("{} % {}", self, other);
         if self.k != other.k {
             radeco_err!("Remainder between two strided intervals with different radices");
             StridedInterval::default()
@@ -792,7 +857,79 @@ impl BitOr for StridedInterval {
     type Output = Self;
 
     fn bitor(self, other: Self) -> Self {
-        Self::default()
+        if self.k != other.k {
+            radeco_err!("BitOr between two strided intervals with different radices");
+            StridedInterval::default()
+        } else if (self.constant().is_some()) && (other.constant().is_some()) {
+            // Two constants
+            StridedInterval::new(
+                self.k,
+                0,
+                self.lb | other.lb,
+                self.lb | other.lb,
+            )
+        } else if (self.constant().is_some()) && (self.contains(&0)) {
+            // self is 0
+            other.clone()
+        } else if (other.constant().is_some()) && (other.contains(&0)) {
+            // other is 0
+            self.clone()
+        } else {
+            // Two sets
+            let t = cmp::min(ntz(self.s), ntz(other.s));        
+            let s = (1 as inum) << t;
+            let mask = ((1 as inum) << t).wrapping_sub(1);
+            let r = (self.lb & mask) | (other.lb & mask);
+
+            // Signed minOr goes like following table 
+            //      si1: s1[a, b]; si2 s2[c, d]
+            // ------------------------------------------------------------
+            //   a |  b |  c |  d |     signed minOr    |   signed maxOr
+            // ------------------------------------------------------------
+            //  <0 | <0 | <0 | <0 | minOr(a, b, c, d)   | maxOr(a, b, c, d)
+            //  <0 | <0 | <0 | >=0| a                   | -1
+            //  <0 | <0 | >=0| >=0| minOr(a, b, c, d)   | maxOr(a, b, c, d)
+            //  <0 | >=0| <0 | <0 | c                   | -1
+            //  <0 | >=0| <0 | >=0| min(a, c)           | maxOr(0, b, 0, d)
+            //  <0 | >=0| >=0| >=0| minOr(a, -1, c, d)  | maxOr(0, b, c, d)
+            //  >=0| >=0| <0 | <0 | minOr(a, b, c, d)   | maxOr(a, b, c, d)
+            //  >=0| >=0| <0 | >=0| minOr(a, b, c, -1)  | maxOr(a, b, 0, d)
+            //  >=0| >=0| >=0| >=0| minOr(a, b, c, d)   | maxOr(a, b, c, d)
+            
+            let (a, b, c, d) = (self.lb, self.ub, other.lb, other.ub);
+            let (lb, ub) = match (a < 0, b < 0, c < 0, d < 0) {
+                (true, true, true, true) => { 
+                    (minOr(a, b, c, d), maxOr(a, b, c, d))
+                },
+                (true, true, true, false) => {
+                    (a, -1)
+                },
+                (true, true, false, false) => {
+                    (minOr(a, b, c, d), maxOr(a, b, c, d))
+                }, 
+                (true, false, true, true) => {
+                    (c, -1)
+                },
+                (true, false, true, false) => {
+                    (cmp::min(a, c), maxOr(0, b, 0, d))
+                },
+                (true, false, false, false) => {
+                    (minOr(a, -1, c, d), maxOr(0, b, c, d))
+                },
+                (false, false, true, true) => {
+                    (minOr(a, b, c, d), maxOr(a, b, c, d))
+                },
+                (false, false, true, false) => {
+                    (minOr(a, b, c, -1), maxOr(a, b, 0, d))
+                },
+                (false, false, false, false) => {
+                    (minOr(a, b, c, d), maxOr(a, b, c, d))
+                },
+                _ => { unimplemented!(); }
+            };
+
+            StridedInterval::default()
+        }
     }
 }
 
@@ -875,6 +1012,11 @@ mod test {
 
     #[test]
     fn strided_interval_test_basicfn() {
+        assert_eq!(ntz(0x0001000), 12);
+        assert_eq!(ntz(0x0), 64);
+        assert_eq!(ntz(inum::min_value()), 63);
+        assert_eq!(minOr(0x0000101, 0x0001001, 0x0010011, 0x0101001), 0x0010101);
+        assert_eq!(maxOr(0x0000101, 0x0001001, 0x0010011, 0x0101001), 0x0101fff);
         assert_eq!(StridedInterval{k: _bits, s: 1, lb: -9223372036854775808, ub: 9223372036854775807}, 
                    StridedInterval::default());
         assert_eq!(StridedInterval{k: _bits, s: 1, lb: inum::min_value(), ub: inum::max_value()}, 
@@ -1141,5 +1283,21 @@ mod test {
         let op2 = StridedInterval::new(_bits, 1, inum::min_value(), -1);
         assert_eq!(StridedInterval::new(_bits, 1, inum::min_value() + 1, 0), 
                    op1 % op2);
+    }
+
+    #[test]
+    fn strided_interval_test_bitor() {
+        let op1 = StridedInterval::from((4, 0x1));
+        let op2 = StridedInterval::from((8, 0x6));
+        assert_eq!(StridedInterval::default(), op1|op2);
+
+        let op1 = StridedInterval::from((4, 0x1));
+        let op2 = StridedInterval::from((4, 0x6));
+        assert_eq!(StridedInterval::from((4, 0x7)), op1|op2);
+
+        let op1 = StridedInterval::from(0);
+        let op2 = StridedInterval::new(64, 1, 45, 59);
+        assert_eq!(op2, op1|op2);
+        assert_eq!(op2, op2|op1);
     }
 }
