@@ -4,11 +4,13 @@
 
 #![allow(dead_code)]
 
+pub mod ast_context;
 mod condition;
 mod graph_utils;
 #[cfg(test)]
 mod tests;
 
+use self::ast_context::*;
 use self::condition::*;
 use self::graph_utils::ix_bit_set::IxBitSet;
 
@@ -17,55 +19,57 @@ use petgraph::visit::EdgeRef;
 use petgraph::Incoming;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::iter::{self, FromIterator};
 use std::mem;
 
-#[derive(Debug)]
-struct ControlFlowGraph<'cd> {
-    graph: StableDiGraph<CfgNode<'cd>, Option<Condition<'cd>>>,
+struct ControlFlowGraph<'cd, A: AstContext> {
+    graph: StableDiGraph<CfgNode<'cd, A>, Option<Condition<'cd, A>>>,
     entry: NodeIndex,
-    cctx: ConditionContext<'cd, SimpleCondition>,
+    cctx: ConditionContext<'cd, A::Condition>,
+    actx: A,
 }
 
 type NodeSet = IxBitSet<NodeIndex>;
 type EdgeSet = IxBitSet<EdgeIndex>;
 
-#[derive(Debug)]
-enum CfgNode<'cd> {
+enum CfgNode<'cd, A: AstContext> {
     /// out-degree <= 1; out-edge weights are `None`
-    Code(AstNode<'cd>),
+    Code(AstNode<'cd, A>),
     /// out-degree >= 2; out-edge weights are `Some(..)`
     Condition,
     /// only appears temporarily in the middle of algorithms
     Dummy(&'static str),
 }
 
-#[derive(Debug)]
-enum AstNode<'cd> {
-    BasicBlock(String), // XXX
-    Seq(Vec<AstNode<'cd>>),
-    Cond(Condition<'cd>, Box<AstNode<'cd>>, Option<Box<AstNode<'cd>>>),
-    Loop(LoopType<'cd>, Box<AstNode<'cd>>),
-    Switch(Variable, Vec<(ValueSet, AstNode<'cd>)>, Box<AstNode<'cd>>),
+enum AstNode<'cd, A: AstContext> {
+    BasicBlock(A::Block),
+    Seq(Vec<AstNode<'cd, A>>),
+    Cond(
+        Condition<'cd, A>,
+        Box<AstNode<'cd, A>>,
+        Option<Box<AstNode<'cd, A>>>,
+    ),
+    Loop(LoopType<'cd, A>, Box<AstNode<'cd, A>>),
+    Switch(
+        A::Variable,
+        Vec<(ValueSet, AstNode<'cd, A>)>,
+        Box<AstNode<'cd, A>>,
+    ),
 }
 
-#[derive(Debug)]
-enum LoopType<'cd> {
-    PreChecked(Condition<'cd>),
-    PostChecked(Condition<'cd>),
+enum LoopType<'cd, A: AstContext> {
+    PreChecked(Condition<'cd, A>),
+    PostChecked(Condition<'cd, A>),
     Endless,
 }
 
-type Variable = (); // XXX
 type ValueSet = (); // XXX
 
-#[derive(Debug)]
-struct SimpleCondition(String); // XXX
+type Condition<'cd, A> = condition::BaseCondition<'cd, <A as AstContext>::Condition>;
 
-type Condition<'cd> = condition::BaseCondition<'cd, SimpleCondition>;
-
-impl<'cd> ControlFlowGraph<'cd> {
-    fn structure_whole(mut self) -> AstNode<'cd> {
+impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
+    fn structure_whole(mut self) -> AstNode<'cd, A> {
         let mut backedge_map = HashMap::new();
         let mut podfs_trace = Vec::new();
         graph_utils::depth_first_search(&self.graph, self.entry, |ev| {
@@ -175,7 +179,7 @@ impl<'cd> ControlFlowGraph<'cd> {
         &mut self,
         header: NodeIndex,
         successor: NodeIndex,
-    ) -> AstNode<'cd> {
+    ) -> AstNode<'cd, A> {
         let (reaching_conds, mut region_topo_order) =
             self.reaching_conditions(header, &NodeSet::from_iter(&[successor]));
         // slice includes `successor`, but its not actually part of the region.
@@ -212,7 +216,7 @@ impl<'cd> ControlFlowGraph<'cd> {
         &self,
         start: NodeIndex,
         end_set: &NodeSet,
-    ) -> (HashMap<NodeIndex, Condition<'cd>>, Vec<NodeIndex>) {
+    ) -> (HashMap<NodeIndex, Condition<'cd, A>>, Vec<NodeIndex>) {
         let (_, slice_edges, slice_topo_order) = graph_utils::slice(&self.graph, start, end_set);
         // {Node, Edge}Filtered don't implement IntoNeighborsDirected :(
         // https://github.com/bluss/petgraph/pull/219
@@ -275,7 +279,7 @@ impl<'cd> ControlFlowGraph<'cd> {
         }
         let abnormal_entry_iter = (1..).zip(&abnormal_entry_map);
 
-        let struct_var = "i".to_owned(); // XXX
+        let struct_var = self.actx.mk_fresh_var();
 
         // make condition cascade
         let new_header = {
@@ -292,27 +296,23 @@ impl<'cd> ControlFlowGraph<'cd> {
             // the current one might be the last one, which shouldn't get a
             // condition node because it's the only possible target
             for (entry_num, entry_target) in abnormal_entry_iter {
+                let prev_cond_eq = self
+                    .cctx
+                    .mk_simple(self.actx.mk_cond_equals(&struct_var, prev_entry_num));
                 let cascade_node = self.graph.add_node(CfgNode::Condition);
                 self.graph
                     .add_edge(prev_cascade_node, cascade_node, prev_out_cond);
-                self.graph.add_edge(
-                    cascade_node,
-                    prev_entry_target,
-                    Some(self.cctx.mk_simple(SimpleCondition(format!(
-                        "{} == {}",
-                        struct_var, prev_entry_num
-                    )))),
-                ); // XXX
+                self.graph
+                    .add_edge(cascade_node, prev_entry_target, Some(prev_cond_eq));
+
                 let struct_reset = self.graph.add_node(CfgNode::Code(AstNode::BasicBlock(
-                    format!("{} = 0", struct_var),
-                ))); // XXX
+                    self.actx.mk_var_assign(&struct_var, 0),
+                )));
                 self.graph.add_edge(struct_reset, entry_target, None);
+
                 prev_cascade_node = cascade_node;
                 prev_entry_target = struct_reset;
-                prev_out_cond = Some(self.cctx.mk_simple(SimpleCondition(format!(
-                    "{} != {}",
-                    struct_var, prev_entry_num
-                )))); // XXX
+                prev_out_cond = Some(self.cctx.mk_not(prev_cond_eq));
                 prev_entry_num = entry_num;
             }
 
@@ -329,12 +329,9 @@ impl<'cd> ControlFlowGraph<'cd> {
         for (entry_num, entry_edges) in
             iter::once((0, &header_entries)).chain(abnormal_entry_iter.map(|(n, (_, e))| (n, e)))
         {
-            let struct_assign = self
-                .graph
-                .add_node(CfgNode::Code(AstNode::BasicBlock(format!(
-                    "{} = {}",
-                    struct_var, entry_num
-                )))); // XXX
+            let struct_assign = self.graph.add_node(CfgNode::Code(AstNode::BasicBlock(
+                self.actx.mk_var_assign(&struct_var, entry_num),
+            )));
             self.graph.add_edge(struct_assign, new_header, None);
             for &entry_edge in entry_edges {
                 graph_utils::retarget_edge(&mut self.graph, entry_edge, struct_assign);
@@ -346,11 +343,7 @@ impl<'cd> ControlFlowGraph<'cd> {
 
     /// Incrementally adds nodes dominated by the loop to the loop until
     /// there's only one successor or there are no more nodes to add.
-    fn refine_loop(
-        &self,
-        loop_nodes: &mut NodeSet,
-        succ_nodes: &mut NodeSet,
-    ) -> () {
+    fn refine_loop(&self, loop_nodes: &mut NodeSet, succ_nodes: &mut NodeSet) -> () {
         // reuse this `NodeSet` so we avoid allocating
         let mut new_nodes = NodeSet::new();
         while succ_nodes.len() > 1 {
@@ -362,11 +355,7 @@ impl<'cd> ControlFlowGraph<'cd> {
                 {
                     // post-pone removal from `succ_nodes` b/c rust ownership
                     loop_nodes.insert(n);
-                    new_nodes.extend(
-                        self.graph
-                            .neighbors(n)
-                            .filter(|&u| !loop_nodes.contains(u)),
-                    );
+                    new_nodes.extend(self.graph.neighbors(n).filter(|&u| !loop_nodes.contains(u)));
                 }
             }
 
@@ -448,7 +437,7 @@ impl<'cd> ControlFlowGraph<'cd> {
         for exit_edge in &exit_edges {
             let break_node = self
                 .graph
-                .add_node(CfgNode::Code(AstNode::BasicBlock("break".to_owned()))); // XXX
+                .add_node(CfgNode::Code(AstNode::BasicBlock(self.actx.mk_break())));
             graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
             // connect to `loop_continue` so that the graph slice from the loop
             // header to `loop_continue` contains these "break" nodes
@@ -457,5 +446,75 @@ impl<'cd> ControlFlowGraph<'cd> {
         }
 
         new_successor
+    }
+}
+
+impl<'cd, A> fmt::Debug for ControlFlowGraph<'cd, A>
+where
+    A: AstContext + fmt::Debug,
+    A::Block: fmt::Debug,
+    A::Variable: fmt::Debug,
+    A::Condition: fmt::Debug,
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("ControlFlowGraph")
+            .field("graph", &self.graph)
+            .field("entry", &self.entry)
+            .field("cctx", &self.cctx)
+            .field("actx", &self.actx)
+            .finish()
+    }
+}
+
+impl<'cd, A> fmt::Debug for CfgNode<'cd, A>
+where
+    A: AstContext,
+    A::Block: fmt::Debug,
+    A::Variable: fmt::Debug,
+    A::Condition: fmt::Debug,
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CfgNode::Code(c) => fmt.debug_tuple("Code").field(c).finish(),
+            CfgNode::Condition => fmt.write_str("Condition"),
+            CfgNode::Dummy(s) => fmt.debug_tuple("Dummy").field(s).finish(),
+        }
+    }
+}
+
+impl<'cd, A> fmt::Debug for AstNode<'cd, A>
+where
+    A: AstContext,
+    A::Block: fmt::Debug,
+    A::Variable: fmt::Debug,
+    A::Condition: fmt::Debug,
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AstNode::BasicBlock(b) => fmt.debug_tuple("BasicBlock").field(b).finish(),
+            AstNode::Seq(s) => fmt.debug_tuple("Seq").field(s).finish(),
+            AstNode::Cond(c, t, e) => fmt.debug_tuple("Cond").field(c).field(t).field(e).finish(),
+            AstNode::Loop(t, b) => fmt.debug_tuple("Loop").field(t).field(b).finish(),
+            AstNode::Switch(v, c, d) => fmt
+                .debug_tuple("Switch")
+                .field(v)
+                .field(c)
+                .field(d)
+                .finish(),
+        }
+    }
+}
+
+impl<'cd, A> fmt::Debug for LoopType<'cd, A>
+where
+    A: AstContext,
+    A::Condition: fmt::Debug,
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LoopType::PreChecked(c) => fmt.debug_tuple("PreChecked").field(c).finish(),
+            LoopType::PostChecked(c) => fmt.debug_tuple("PostChecked").field(c).finish(),
+            LoopType::Endless => fmt.write_str("Endless"),
+        }
     }
 }
