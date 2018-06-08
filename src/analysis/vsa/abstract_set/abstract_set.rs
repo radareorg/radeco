@@ -32,6 +32,8 @@ use std::hash::Hash;
 
 /// All numbers (except k) in AbstractSet will be stored as `inum` type
 pub type inum = i64;
+/// Unsigned type according to inum
+pub type unum = u64;
 /// All members (except k) in AbstractSet will be hold in `_bits` bits
 pub const _bits: u8 = 64;
 
