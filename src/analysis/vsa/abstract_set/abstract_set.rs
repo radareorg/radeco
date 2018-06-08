@@ -30,11 +30,10 @@ use std::hash::Hash;
 // type inum = i128; <-- this one do influence performance
 // const full_bits: u8 = 128;
 
-/// All numbers (except k) in AbstractSet will be stored as inum 
+/// All numbers (except k) in AbstractSet will be stored as `inum` type
 pub type inum = i64;
-/// All members (except k) in AbstractSet will be hold in _bits bits
+/// All members (except k) in AbstractSet will be hold in `_bits` bits
 pub const _bits: u8 = 64;
-
 
 /// Trait used to indicate this is a container which contains something
 pub trait Container<T: Clone> {
@@ -42,6 +41,15 @@ pub trait Container<T: Clone> {
     fn contains(&self, object: &T) -> bool {
         unimplemented!();
     }
+}
+
+/// Type of abstract set. 
+/// According to demand, users could choose which kind of abstract set they wanna
+/// use in their VSA.
+pub enum AbstractSetType {
+    StridedInterval,
+    BDD,
+    Polynomial,
 }
 
 pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
@@ -73,6 +81,21 @@ pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
     /// Returns the AbstractSet obtained by remoing upper bound for `self`
     fn remove_upper_bound(&self) -> Self {
         unimplemented!()
+    }
+
+    /// Returns the AbstractSet narrowed into a new k-bit-filed, for OpNarrow.
+    fn narrow(&self, k: u8) -> Self {
+        unimplemented!();
+    }
+
+    /// Returns the AbstractSet sign extended into a new k-bit-filed, for OpSignExt.
+    fn sign_extend(&self, k: u8) -> Self {
+        unimplemented!();
+    }
+
+    /// Returns the AbstractSet zero extended into a new k-bit-filed, for OpZeroExt.
+    fn zero_extend(&self, k: u8) -> Self {
+        unimplemented!();
     }
 
     /// Returns Some(cons) if the AbstractSet only contains one constant, None otherwise.

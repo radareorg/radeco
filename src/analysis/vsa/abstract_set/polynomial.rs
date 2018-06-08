@@ -5,12 +5,12 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Module that implements math operation on the BDD.
+//! Module that implements math operation on the multivariate polynomial.
 //!
-//! More information are available from "BDD-based Value Analysis for X86 Executables".
-//! Please refer here:
-//!     * https://tubdok.tub.tuhh.de/bitstream/11420/1510/1/dis.pdf
-//!
+//! A polynomial abstract set goes like:
+//!     base + [a1]x1 + [a2]x2 + ... + [an]xn
+//! which means:
+//!     {base + k1 * x1 + k2 * x2 + ... + kn * xn | 0 <= ki <= ai}     
 
 
 // TODO

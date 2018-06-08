@@ -14,4 +14,5 @@ pub mod abstract_set {
     pub mod abstract_set;
     pub mod strided_interval;
     pub mod BDD;
+    pub mod polynomial;
 }
