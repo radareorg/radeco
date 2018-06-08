@@ -160,6 +160,19 @@ impl fmt::Display for StridedInterval {
     }
 }
 
+// 
+// Help functions go here
+//
+
+/// Returns the min value in (a | b)
+fn minOr(a: &StridedInterval, b: &StridedInterval) -> inum {
+    unimplemented!();
+}
+
+/// Returns the max value in (a | b)
+fn maxOr(a: &StridedInterval, b: &StridedInterval) -> inum {
+    unimplemented!();
+}
 
 //
 // Basic functions for StridedInterval go here
@@ -407,6 +420,13 @@ impl Mul for StridedInterval {
                     self.k, 
                     n_in_k_bits!(self.lb.wrapping_mul(other.lb), self.k)
                 ))
+        // Following code is used to handle multipatication with at least one set in.
+        // The main idea is to find the max bound and min bound, then check whether
+        // these two bounds are in the same k-bit-filed.
+        //      e.g.
+        //          For 4 bits: [-8, 7], [8, 15], [-16, -9] is a 4-bit-filed.
+        //          Thus, (9, 14) are in the same 4-bit-filed, even though there is overflow.
+        //          On the other hand, (9, 16) is not in the same 4-bit-filed. 
         } else if (self.constant().is_some()) || (other.constant().is_some()) {
             // A constant multipate by a set.
             let (cons_si, set_si) = if self.constant().is_some() {
@@ -416,7 +436,7 @@ impl Mul for StridedInterval {
             };
             
             // XXX: Remove Bigint to improve performance
-            // XXX: BigInt uses a non-common presentation (for math, not computer
+            // XXX: BigInt uses a non-common presentation (in math, not computer
             // science) for Rem and Div:
             //      e.g.
             //          -13 % 8 = -5
@@ -451,6 +471,7 @@ impl Mul for StridedInterval {
                 let __u = _lb.clone() * _n.clone();
                 let __v = _ub.clone() * _n.clone();
 
+                // Try to get the stable step function mentioned above.
                 let _u = __u.clone() - __u.clone() % k_period.clone() - 
                             if (__u < BigInt::from(0)) && 
                                 (__u.clone() % k_period.clone() != BigInt::from(0))  {
@@ -538,6 +559,7 @@ impl Mul for StridedInterval {
 impl Div for StridedInterval {
     type Output = Self;
 
+    // Div is difficult because to many special cases.
     fn div(self, other: Self) -> Self {
         if self.k != other.k {
             radeco_err!("Division between two strided intervals with different radices");
@@ -662,7 +684,6 @@ impl Rem for StridedInterval {
                 // Nice! Finally we could use positive value.
                 let n = -n;
                 let s = gcd(self.s, n);
-                println!("{} {}", s, n);
 
                 if s == n {
                     // self.s % n == 0, which means the remainder could only be one 
@@ -687,7 +708,6 @@ impl Rem for StridedInterval {
                     } else {
                         (self.lb % s, self.lb % s - n)
                     };
-                    println!("{} {}", _neg_lb, _pos_lb);
                     
                     if (self.lb < 0) && (self.ub > 0) {
                         // -n < i < n
@@ -731,7 +751,6 @@ impl Rem for StridedInterval {
                 other.ub - 1
             };
             let n_sub_one = cmp::max(_lb, _ub);
-            println!("{}", n_sub_one);
 
             if self.lb >= 0 {
                 // all number in self is non-negative
