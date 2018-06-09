@@ -1136,6 +1136,10 @@ impl Shl for StridedInterval {
 
 // Implement trait AbstractSet for StridedInterval
 impl AbstractSet for StridedInterval {
+    fn meet(&self, other: &Self) -> Self {
+        StridedInterval::default_k(self.k)
+    }
+
     fn join(&self, other: &Self) -> Self {
         if self.k != other.k {
             radeco_err!("Join between two strided intervals with different radices");
@@ -1153,6 +1157,92 @@ impl AbstractSet for StridedInterval {
                 cmp::max(self.ub, other.ub),
             )
         }
+    }
+
+    fn widens(&self, other: &Self) -> Self {
+        unimplemented!();
+    }
+
+    fn remove_lower_bound(&self) -> Self {
+        let min = min_in_k_bits!(self.k);
+        let ub_mod_s = self.ub % self.s;
+        let min_mod_s = min % self.s; // min_mod_s must be negative
+        let offset = (ub_mod_s - min_mod_s + self.s) % self.s;
+        assert!(min_mod_s <= 0, "min_in_k_bits must be non-positive");
+        StridedInterval::new(
+            self.k,
+            self.s,
+            n_in_k_bits!(min + offset, self.k),
+            self.ub,
+        )
+    }
+
+    fn remove_upper_bound(&self) -> Self {
+        StridedInterval::new(
+            self.k,
+            self.s,
+            self.lb,
+            max_in_k_bits!(self.k),
+        )
+    }
+
+    fn narrow(&self, k: u8) -> Self {
+        if (k > self.k) {
+            radeco_warn!("StridedInterval cannot be narrowed to a bigger bits");
+            self.clone()
+        } else if k == self.k {
+            self.clone()
+        } else {
+            // all numbers in si should be positive in self.k-bits-filed
+            let mut si = *self & StridedInterval::from((self.k, mask_in_k_bits!(k)));
+            
+            // k cannot be _bits in this branch
+            let division_k = min_in_k_bits!(k) & mask_in_k_bits!(k);
+            assert!(division_k > 0, "division_k must be positive");
+            if si.ub < division_k {
+                // all number is si are positive in k-bits-filed
+                si.k = k;
+                si
+            } else if si.lb >= division_k {
+                // all number is si are negative in k-bits-filed
+                StridedInterval::new(
+                    k,
+                    si.s,
+                    n_in_k_bits!(si.ub, k),
+                    n_in_k_bits!(si.lb, k),
+                )
+            } else {
+                // number is si are both negative and positive in k-bits-filed
+                let pos_si = StridedInterval::new(
+                    k,
+                    si.s,
+                    si.lb,
+                    max_in_k_bits!(k),
+                );
+                let neg_si = StridedInterval::new(
+                    k,
+                    si.s,
+                    n_in_k_bits!(si.ub, k) - si.s,
+                    n_in_k_bits!(si.ub, k),
+                ).remove_lower_bound();
+                pos_si.join(&neg_si)
+            }
+        }
+    }
+
+    fn sign_extend(&self, k: u8) -> Self {
+        let mut si = self.clone();
+        if (k < self.k) {
+            radeco_warn!("StridedInterval cannot be extended to a smaller bits");
+            si
+        } else {
+            si.k = k;
+            si
+        }
+    }
+
+    fn zero_extend(&self, k: u8) -> Self {
+        unimplemented!();
     }
 
     fn constant(&self) -> Option<inum> {
@@ -1562,5 +1652,36 @@ mod test {
         let op1 = StridedInterval::new(16, 30, 1, 901);
         let op2 = StridedInterval::new(16, 15, 6, 606);
         assert_eq!(StridedInterval::new(16, 5, 1, 901), op1.join(&op2));
+
+        let op1 = StridedInterval::new(4, 3, 0, 6);
+        assert_eq!(StridedInterval::new(4, 3, -6, 6), op1.remove_lower_bound());
+
+        let op1 = StridedInterval::new(4, 3, 1, 7);
+        assert_eq!(StridedInterval::new(4, 3, -8, 7), op1.remove_lower_bound());
+
+        let op1 = StridedInterval::new(4, 3, 2, 5);
+        assert_eq!(StridedInterval::new(4, 3, -7, 5), op1.remove_lower_bound());
+
+        let op1 = StridedInterval::new(4, 3, -7, 2);
+        assert_eq!(StridedInterval::new(4, 3, -7, 5), op1.remove_upper_bound());
+
+        let op1 = StridedInterval::new(4, 3, -7, 2);
+        assert_eq!(StridedInterval::new(4, 3, -7, 2), op1.narrow(4));
+
+        let op1 = StridedInterval::new(8, 4, 0x10, 0x3c);
+        assert_eq!(StridedInterval::new(4, 4, -0x8, 0x4), op1.narrow(4));
+
+        let op1 = StridedInterval::new(8, 3, 0x10, 0x1c);
+        // op1.narrow(4) = {0, 3, 6, 9, 12} -(4bits)-> {0, 3, 6, -7, -4}
+        assert_eq!(StridedInterval::new(4, 1, -7, 6), op1.narrow(4));
+
+        let op1 = StridedInterval::new(8, 3, 0x10, 0x16);
+        assert_eq!(StridedInterval::new(4, 3, 0, 6), op1.narrow(4));
+
+        let op1 = StridedInterval::new(8, 3, 0x19, 0x1f);
+        assert_eq!(StridedInterval::new(4, 3, -7, -1), op1.narrow(4));
+
+        let op1 = StridedInterval::new(8, 3, 0x19, 0x1f);
+        assert_eq!(StridedInterval::new(16, 3, 0x19, 0x1f), op1.sign_extend(16));
     }
 }
