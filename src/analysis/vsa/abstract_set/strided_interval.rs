@@ -108,7 +108,7 @@ fn gcd(x: inum, y: inum) -> inum {
 }
 
 
-/// A k-bit strided interval s[lb, ub].
+/// A k-bits strided interval s[lb, ub].
 ///
 /// s[lb, ub] := {i| lb <= i <= ub, (i - lb) % s = 0}
 /// Without loss of generality, we will assume that all strided intervals are 
@@ -163,6 +163,35 @@ impl fmt::Display for StridedInterval {
 // 
 // Help functions go here
 //
+
+/// Returns the period number on k-bits-filed
+// Try to get the stable step function mentioned in math div.
+//      e.g.
+//          {-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6} / 4
+//        = {-2, -2, -1, -1, -1, -1, 0, 0, 0, 0, 1, 1, 1}
+fn periodNr<T>(x: T, period: T) -> T 
+        where T: Clone + PartialEq + Eq + Ord + From<inum> + 
+                    Add<Output=T> + Sub<Output=T> + Rem<Output=T> + Div<Output=T>
+{
+    // period must be positive
+    assert!(period > T::from(0), "Period must be positive");
+    // if x >= 0 || 8 |  x :
+    //      u = x - x % k_period = i * k_period
+    //      e.g. 4 bits: 9 -> 8, 8 -> 8, 0 -> 0, -8 -> -8
+    // if x < 0 && x % 8 != 0:
+    //      u = x - x % k_period - k_period = i * k_period
+    //      e.g. 4 bits: -1 -> -8, -7 -> -8, -9 -> -16
+    // in which i is a stable step function
+    let _x = x.clone() - x.clone() % period.clone() - 
+                if (x < T::from(0)) && 
+                    (x.clone() % period.clone() != T::from(0))  {
+                    period.clone() 
+                } else {
+                    T::from(0)
+                };
+
+    _x.clone() / period.clone()
+}
 
 /// Returns the number of trailing zeroes of x
 fn ntz(_x: inum) -> u8 {
@@ -420,7 +449,13 @@ impl Neg for StridedInterval {
             // Avoid overflow when k equals to _bits
             StridedInterval::from((self.k, (!self.lb).wrapping_add(1)))
         } else if self.lb == min_in_k_bits!(self.k) {
-            StridedInterval::default_k(self.k)
+            // -min_in_k_bits == min_in_k_bits on k-bits-filed.
+            StridedInterval::new(
+                self.k,
+                self.s,
+                -self.ub,
+                -(self.lb + self.s),
+            ).join(&StridedInterval::from((self.k, min_in_k_bits!(self.k))))
         } else {
             StridedInterval::new(self.k, self.s, -self.ub, -self.lb)            
         }
@@ -485,10 +520,10 @@ impl Mul for StridedInterval {
             StridedInterval::from((
                     self.k, 
                     n_in_k_bits!(self.lb.wrapping_mul(other.lb), self.k)
-                ))
-        // Following code is used to handle multipatication with at least one set in.
+            ))
+        // Following code is used to handle multipatication with at least one set.
         // The main idea is to find the max bound and min bound, then check whether
-        // these two bounds are in the same k-bit-filed.
+        // these two bounds are in the same k-bits-filed.
         //      e.g.
         //          For 4 bits: [-8, 7], [8, 15], [-16, -9] is a 4-bit-filed.
         //          Thus, (9, 14) are in the same 4-bit-filed, even though there is overflow.
@@ -531,32 +566,20 @@ impl Mul for StridedInterval {
                     (BigInt::from(set_si.ub), BigInt::from(set_si.lb))
                 };
                 let _n = BigInt::from(n);
+                // e.g.
+                //      4 bits: k_period = 8
+                //      5 bits: k_period = 16
                 let k_period: BigInt = BigInt::from(max_in_k_bits!(self.k)) + 1;
 
                 // New bounds for Mul
                 let __u = _lb.clone() * _n.clone();
                 let __v = _ub.clone() * _n.clone();
 
-                // Try to get the stable step function mentioned above.
-                let _u = __u.clone() - __u.clone() % k_period.clone() - 
-                            if (__u < BigInt::from(0)) && 
-                                (__u.clone() % k_period.clone() != BigInt::from(0))  {
-                                k_period.clone() 
-                            } else {
-                                BigInt::from(0)
-                            };
-                let _v = __v.clone() - __v.clone() % k_period.clone() - 
-                            if (__v < BigInt::from(0)) && 
-                                (__v.clone() % k_period.clone() != BigInt::from(0))  {
-                                k_period.clone()
-                            } else {
-                                BigInt::from(0)
-                            };
-
-                let u = _u.clone() / k_period.clone();
-                let v = _v.clone() / k_period.clone();
+                let u = periodNr(__u, k_period.clone());
+                let v = periodNr(__v, k_period.clone());
 
                 // Check new bounds are inside the same round of k bits 
+                // (-3, -2) (-1, 0) (1, 2) is in the same round of k bits
                 if v.clone() == u.clone() ||
                     ((v.clone() % 2 == BigInt::from(0)) && (v - u == BigInt::from(1))) {
                     StridedInterval::new(
@@ -590,22 +613,8 @@ impl Mul for StridedInterval {
 
             let k_period: BigInt = BigInt::from(max_in_k_bits!(self.k)) + 1;
 
-            let _u = _min.0.clone() - _min.0.clone() % k_period.clone() - 
-                        if (_min.0 < BigInt::from(0)) && 
-                            (_min.0.clone() % k_period.clone() != BigInt::from(0))  {
-                            k_period.clone() 
-                        } else {
-                            BigInt::from(0)
-                        };
-            let _v = _max.0.clone() - _max.0.clone() % k_period.clone() - 
-                        if (_max.0 < BigInt::from(0)) && 
-                            (_max.0.clone() % k_period.clone() != BigInt::from(0))  {
-                            k_period.clone()
-                        } else {
-                            BigInt::from(0)
-                        };
-            let u = _u.clone() / k_period.clone();
-            let v = _v.clone() / k_period.clone();
+            let u = periodNr(_min.0.clone(), k_period.clone());
+            let v = periodNr(_max.0.clone(), k_period.clone());
 
             if v.clone() == u.clone() ||
                 ((v.clone() % 2 == BigInt::from(0)) && (v - u == BigInt::from(1))) {
@@ -632,6 +641,7 @@ impl Div for StridedInterval {
             StridedInterval::default()
         } else if other.contains(&0) {
             // Divided by zero
+            radeco_err!("Divied by zero");
             StridedInterval::default_k(self.k)
         } else if self.contains(&min_in_k_bits!(self.k)) && other.contains(&-1) {
             // overflow, because -min_in_k_bits!(self.k) not in k-bits rand
@@ -720,6 +730,7 @@ impl Rem for StridedInterval {
             StridedInterval::default()
         } else if other.contains(&0) {
             // Divided by zero
+            radeco_err!("Divied by zero");
             StridedInterval::default_k(self.k)
         } else if (self.constant().is_some()) && (other.constant().is_some()) {
             StridedInterval::from((self.k, self.lb % other.lb))
@@ -728,30 +739,45 @@ impl Rem for StridedInterval {
             
             // XXX: Trick
             // Use the negative value of n, to avoid overflow
-            let n = if other.lb < 0 {
+            let neg_n = if other.lb < 0 {
                 other.lb
             } else {
                 -other.lb
             };
             
-            if (n < self.lb) && (n.saturating_add(self.ub) < 0) {
-                // n covers all the value in self: n < self.lb <= self.ub < -n
-                // return self itself
-                self.clone()
-            } else if self.lb == min_in_k_bits!(self.k) {
-                // n and self.lb are both min_in_k_bits!(self.k)
-                StridedInterval::new(
+            if (neg_n <= self.lb) && (neg_n.saturating_add(self.ub) <= 0) {
+                // n covers all the value in self, but maybe except self.lb/self.ub: 
+                //              -n <= self.lb <= self.ub <= n
+                let lb = if (neg_n == self.lb) {
+                    // n doesn't cover self.lb
+                    self.lb + self.s
+                } else {
+                    self.lb
+                };
+                let ub = if (neg_n.saturating_add(self.ub) == 0) {
+                    // n doesn't cover self.ub
+                    self.ub - self.s
+                } else {
+                    self.ub
+                };
+                let si = StridedInterval::new(
                     self.k,
                     self.s,
-                    self.lb + self.s,
-                    self.ub,
-                ).join(&StridedInterval::from((self.k, 0)))
+                    lb,
+                    ub,
+                );
+                if (self.lb != lb) || (self.ub != ub) {
+                    // self.lb/self.ub % n == 0
+                    si.join(&StridedInterval::from((self.k, 0)))
+                } else {
+                    si
+                }
             } else {
                 // When we get into this branch, it means n cannot be min_in_k_bits!(self.k).
                 // Nice! Finally we could use positive value.
-                let n = -n;
+                let n = -neg_n;
                 let s = gcd(self.s, n);
-
+    
                 if self.lb / n == self.ub / n {
                     // All numbers are in the same n-filed
                     //      e.g.
@@ -901,14 +927,13 @@ impl BitOr for StridedInterval {
                 self.lb | other.lb,
                 self.lb | other.lb,
             )
-        } else if (self.constant().is_some()) && (self.contains(&0)) {
+        } else if self.constant() == Some(0) {
             // self is 0
             other.clone()
-        } else if (other.constant().is_some()) && (other.contains(&0)) {
+        } else if other.constant() == Some(0) {
             // other is 0
             self.clone()
-        } else if ((self.constant().is_some()) && (self.contains(&-1))) ||
-                    ((other.constant().is_some()) && (other.contains(&-1))) {
+        } else if (self.constant() == Some(-1)) || (other.constant() == Some(-1)) {
             // constant is -1
             StridedInterval::from((self.k, -1))
         } else {
@@ -1017,16 +1042,21 @@ impl Shr for StridedInterval {
         } else if (self.lb < 0) && (self.ub > 0) {
             // Logical shift will distroy the stride when there are negative and 
             // positive numbers at one time
+            
             let lb = if other.contains(&0) {
+                // self.lb will be the smallest number in result strided interval
                 self.lb
             } else {
+                // _lb_shr_1 is the smallest number in self >> 1
                 let _lb_shr_1 = cmp::min((self.lb >> 1) ^ min_in_k_bits!(self.k), 
                                          (self.ub - (self.ub / self.s) * self.s) >> 1);
                 _lb_shr_1 >> (other.ub - 1)
             };
             let ub = if other.ub == 0 {
+                // other == 0[0, 0]
                 self.ub
             } else {
+                // _ub_shr_1 is the biggest number in self >> 1
                 let _ub_shr_1 = cmp::max(
                     ((self.ub - (self.ub / self.s) * self.s - self.s) >> 1) 
                         ^ min_in_k_bits!(self.k),
@@ -1045,12 +1075,13 @@ impl Shr for StridedInterval {
                 n_in_k_bits!(ub, self.k),
             )
         } else {
+            // all numbers in self are with the same sign
             let mut res: Option<StridedInterval> = None;
             let _shr_one = StridedInterval::new(
                                self.k,
                                cmp::max(self.s / 2, 1),
-                               (self.lb >> 1) & (!min_in_k_bits!(self.k)),
-                               (self.ub >> 1) & (!min_in_k_bits!(self.k)),
+                               (self.lb >> 1) & (!min_in_k_bits!(self.k)) & mask_in_k_bits!(self.k),
+                               (self.ub >> 1) & (!min_in_k_bits!(self.k)) & mask_in_k_bits!(self.k),
                            );
             for i in 0..self.k {
                 if other.contains(&(i as inum)) {
@@ -1112,7 +1143,9 @@ impl AbstractSet for StridedInterval {
         } else {
             let mut s = gcd(self.s, other.s);
             // Trick to avoid overflow
-            s = gcd(s, ((self.lb % s) - (other.lb % s)).abs());
+            let (min_lb, max_lb) = (cmp::min(self.lb, other.lb), cmp::max(self.lb, other.lb));
+            // add 2 * s to make sure all arguments in gcd is positive
+            s = gcd(s, max_lb % s - min_lb % s + 2 * s);
             StridedInterval::new(
                 self.k,
                 s,
@@ -1244,6 +1277,10 @@ mod test {
 
         let op = StridedInterval::new(4, 1, -8, 2);
         assert_eq!(StridedInterval::new(4, 1, -8, 7), -op);
+
+        let op = StridedInterval::new(4, 2, -8, 2);
+        // -{-8, -6, -4, -2, 0, 2} = {-8, 6, 4, 2, 0, -2}
+        assert_eq!(StridedInterval::new(4, 2, -8, 6), -op);
 
         let op = StridedInterval::new(4, 1, -8, -8);
         assert_eq!(StridedInterval::new(4, 1, -8, -8), -op);
