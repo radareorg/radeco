@@ -109,4 +109,9 @@ pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
     fn capacity(&self) -> inum {
         unimplemented!()
     }
+     
+    /// Returns whether the AbstractSet is empty. 
+    fn is_empty(&self) -> bool {
+        unimplemented!()
+    }
 }
