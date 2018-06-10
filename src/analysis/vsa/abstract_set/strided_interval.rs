@@ -107,6 +107,15 @@ fn gcd(x: inum, y: inum) -> inum {
     x
 }
 
+/// Returns (s, y) which make sx + ty = gcd(x, y)
+fn exgcd(x: inum, y: inum) -> (inum, inum) {
+    if y == 0 {
+        (1, 0)
+    } else {
+        let (s, t) = exgcd(y, x % y);
+        (t, s - (x / y) * t)
+    }
+}
 
 /// A k-bits strided interval s[lb, ub].
 ///
@@ -1113,7 +1122,7 @@ impl Shr for StridedInterval {
             StridedInterval::default_k(self.k)
         } else if (self.lb < 0) && (self.ub > 0) {
             // Logical shift will distroy the stride when there are negative and 
-            // positive numbers at one time
+            // positive numbers in self at one time
             
             let lb = if other.contains(&0) {
                 // self.lb will be the smallest number in result strided interval
@@ -1212,7 +1221,133 @@ impl Shl for StridedInterval {
 // Implement trait AbstractSet for StridedInterval
 impl AbstractSet for StridedInterval {
     fn meet(&self, other: &Self) -> Self {
-        StridedInterval::default_k(self.k)
+        if self.is_empty() || other.is_empty() {
+            // meet an empty set --> empty set
+            StridedInterval::null()
+        } else if self.k != other.k {
+            radeco_err!("Meet two strided intervals with different radices");
+            StridedInterval::default()
+        } else if let Some(n) = self.constant() {
+            // self is a constant
+            if other.contains(&n) {
+                StridedInterval::from((self.k, n))
+            } else {
+                StridedInterval::null()
+            }
+        } else if let Some(n) = other.constant() {
+            // other is a constant
+            if self.contains(&n) {
+                StridedInterval::from((self.k, n))
+            } else {
+                StridedInterval::null()
+            }
+        } else {
+            // Meet two set
+            // It comes to a very insteresting math problem.
+            
+            // self.s and othr.s cannot be zero in this branch
+            let s = self.s / gcd(self.s, other.s) * other.s;
+
+            // At beginning, we need to find the smallest number in result set
+            if self.lb == other.lb {
+                // self.lb is the smallest number in result
+                StridedInterval::new(
+                    self.k,
+                    s,
+                    self.lb,
+                    cmp::max(self.ub, other.ub),
+                )
+            } else {
+                let (min_lb, min_s, max_lb, max_s) = if self.lb < other.lb {
+                    (self.lb, self.s, other.lb, other.s)
+                } else {
+                    (other.lb, other.s, self.lb, self.s)
+                };
+                assert!(min_lb < max_lb && min_s > 0 && max_s > 0);
+                // For the smallest number n:
+                //      min_lb + x * min_s = max_lb + y * max_s = n
+                //      ( x >= 0, y >= 0)
+                //  =>  max_lb - min_lb = x * min_s - y * max_s
+                //  let: s_ = gcd(min_s, max_s)
+                //  if (max_lb - min_lb) % s_ != 0 
+                //      then there is no number in the result set
+                //  let: lb_ = (max_lb - min_lb) / s_
+                //      --> lb_ != 0
+                //  let: min_s_ = min_s / s_
+                //  let: max_s_ = max_s / s_  
+                //      --> gcd(min_s_, max_s_) = 1
+                //  =>  lb_ = x * min_s_ - y * max_s_
+                //  =>  lb_ % max_s_ = (x * min_s_) % max_s_ 
+                //      because gcd(min_s_, max_s_) = 1, thus we have
+                //          (rev_min_s_ * min_s_) % max_s_ = 1
+                //  => x % max_s_ = ((lb_ % max_s_) * rev_min_s_) % max_s_
+                //  As we want to find the smallest number, which means
+                //      x should be as small as it can
+                //  let x_ = x % max_s_, then we solve the equation:
+                //      lb_ = x_ * min_s_ - y_ * max_s_
+                //  thus:
+                //      x = x_ + i * max_s_ 
+                //      y = y_ + i * min_s_
+                //  then we found the smallest positive i, which make x > 0 && y > 0
+                //  n = min_lb + x * min_s
+                
+                let s_ = gcd(min_s, max_s);
+                if (max_lb - min_lb) % s_ != 0 {
+                    StridedInterval::null()
+                } else {
+                    // lb_ = x * min_s_ - y * max_s_
+                    let lb_ = (max_lb - min_lb) / s_;
+                    let max_s_ = max_s / s_;
+                    let min_s_ = min_s / s_;
+                    assert!(lb_ != 0);
+                    assert!(gcd(max_s_, min_s_) == 1);
+
+                    // x_ = x % max_s_ = ((lb_ % max_s_) * rev_min_s_) % max_s_
+                    let (a, b) = exgcd(min_s_, max_s_);
+                    // a * min_s_ + b * min_s_ = gcd(max_s_, min_s_) = 1
+                    assert_eq!(a * min_s_ + b * max_s_, gcd(min_s_, max_s_));
+                    let rev_min_s_ = a - periodNr(a, max_s_) * max_s_;
+                    assert_eq!((rev_min_s_ * min_s_) % max_s_, 1);
+                    let x_ = ((lb_ % max_s_) * rev_min_s_) % max_s_;
+                    assert!(x_ > 0);
+
+                    // let x_ = x % max_s_, then we solve the equation:
+                    //     lb_ = x_ * min_s_ - y_ * max_s_
+                    if (x_ * min_s_ - lb_) % max_s_ != 0 {
+                        // Cannot find the integer ans for the equation
+                        return StridedInterval::null();
+                    }
+                    let y_ = (x_ * min_s_ - lb_) / max_s_;
+                
+                    // thus:
+                    //     x = x_ + i * max_s_ 
+                    //     y = y_ + i * min_s_
+                    // then we found the smallest positive i, which make x > 0 && y > 0
+                    // n = min_lb + x * min_s
+                    let (x, y) = if y_ < 0 {
+                        let y = y_ - periodNr(y_, min_s_) * min_s_;
+                        let i = (y - y_) / min_s_;
+                        (x_ + i * max_s_, y)
+                    } else {
+                        (x_, y_)
+                    };
+
+                    assert_eq!(min_lb + x * min_s, max_lb + y * max_s);
+                    assert!(x > 0 && y > 0);
+                    let n = min_lb + x * min_s;
+                    if self.contains(&n) && other.contains(&n) {
+                        StridedInterval::new(
+                            self.k,
+                            s,
+                            n,
+                            cmp::max(self.ub, other.ub),
+                        )
+                    } else {
+                        StridedInterval::null()
+                    }
+                }
+            }
+        }
     }
 
     fn join(&self, other: &Self) -> Self {
@@ -1221,7 +1356,7 @@ impl AbstractSet for StridedInterval {
         } else if other.is_empty() {
             self.clone()
         } else if self.k != other.k {
-            radeco_err!("Join between two strided intervals with different radices");
+            radeco_err!("Join two strided intervals with different radices");
             StridedInterval::default()
         } else {
             let mut s = gcd(self.s, other.s);
@@ -1335,7 +1470,44 @@ impl AbstractSet for StridedInterval {
     }
 
     fn zero_extend(&self, k: u8) -> Self {
-        unimplemented!();
+        let mut si = self.clone();
+        if self.is_empty() {
+            radeco_warn!("Empty StridedInterval cannot be narrow");
+            si
+        } else if k < self.k {
+            radeco_warn!("StridedInterval cannot be extended to a smaller bits");
+            si
+        } else if k == self.k {
+            si
+        } else {
+            if si.ub < 0 {
+                // all number in si is negative 
+                si.lb = n_in_k_bits!(si.lb & mask_in_k_bits!(si.k), k);
+                si.ub = n_in_k_bits!(si.ub & mask_in_k_bits!(si.k), k);
+                si.k = k;
+                si
+            } else if si.lb >= 0 {
+                // all number in si is non-negative
+                // thus we can change the k-bits directly
+                si.k = k;
+                si
+            } else {
+                // number is si are both negative and positive in k-bits-filed
+                let pos_si = StridedInterval::new(
+                    k,
+                    si.s,
+                    si.ub % si.s,
+                    si.ub,
+                );
+                let neg_si = StridedInterval::new(
+                    k,
+                    si.s,
+                    n_in_k_bits!(si.lb & mask_in_k_bits!(si.k), k),
+                    n_in_k_bits!(inum::from(-1) & mask_in_k_bits!(si.k), k),
+                );
+                pos_si.join(&neg_si)
+            }
+        }
     }
 
     fn constant(&self) -> Option<inum> {
@@ -1391,6 +1563,18 @@ mod test {
         assert_eq!(ntz(inum::min_value()), 63);
         assert_eq!(minOr(0x0000101, 0x0001001, 0x0010011, 0x0101001), 0x0010101);
         assert_eq!(maxOr(0x0000101, 0x0001001, 0x0010011, 0x0101001), 0x0101fff);
+        let (x, y) = (3, 8);
+        let (s, t) = exgcd(x, y);
+        assert_eq!(x * s + y * t, gcd(x, y));
+        let (x, y) = (8, 3);
+        let (s, t) = exgcd(x, y);
+        assert_eq!(x * s + y * t, gcd(x, y));
+        let (x, y) = (3, 9);
+        let (s, t) = exgcd(x, y);
+        assert_eq!(x * s + y * t, gcd(x, y));
+        let (x, y) = (3, 0);
+        let (s, t) = exgcd(x, y);
+        assert_eq!(x * s + y * t, gcd(x, y));
         assert_eq!(StridedInterval{k: _bits, s: 1, lb: -9223372036854775808, ub: 9223372036854775807}, 
                    StridedInterval::default());
         assert_eq!(StridedInterval{k: _bits, s: 1, lb: inum::min_value(), ub: inum::max_value()}, 
@@ -1765,6 +1949,46 @@ mod test {
         assert_eq!(StridedInterval::new(16, 30, 1, 901), op1.join(&op2));
         assert_eq!(StridedInterval::new(16, 30, 1, 901), op2.join(&op1));
 
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        let op2 = StridedInterval::null();
+        assert_eq!(op2, op1.meet(&op2));
+        assert_eq!(op2, op2.meet(&op1));
+
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        let op2 = StridedInterval::from((16, 31));
+        let op3 = StridedInterval::from((16, 32));
+        assert_eq!(op2, op1.meet(&op2));
+        assert_eq!(op2, op2.meet(&op1));
+        assert_eq!(StridedInterval::null(), op1.meet(&op3));
+        assert_eq!(StridedInterval::null(), op3.meet(&op1));
+        assert_eq!(StridedInterval::null(), op2.meet(&op3));
+        assert_eq!(StridedInterval::null(), op3.meet(&op2));
+
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        let op2 = StridedInterval::new(16, 15, 1, 601);
+        assert_eq!(StridedInterval::new(16, 30, 1, 901), op1.meet(&op2));
+        assert_eq!(StridedInterval::new(16, 30, 1, 901), op2.meet(&op1));
+
+        let op1 = StridedInterval::new(16, 12, 1, 121);
+        let op2 = StridedInterval::new(16, 15, 6, 606);
+        assert_eq!(StridedInterval::null(), op1.meet(&op2));
+        assert_eq!(StridedInterval::null(), op2.meet(&op1));
+
+        let op1 = StridedInterval::new(16, 12, 1, 121);
+        let op2 = StridedInterval::new(16, 15, 10, 610);
+        assert_eq!(StridedInterval::new(16, 60, 25, 565), op1.meet(&op2));
+        assert_eq!(StridedInterval::new(16, 60, 25, 565), op2.meet(&op1));
+
+        let op1 = StridedInterval::new(16, 12, 1, 121);
+        let op2 = StridedInterval::new(16, 15, 40, 610);
+        assert_eq!(StridedInterval::new(16, 60, 85, 565), op1.meet(&op2));
+        assert_eq!(StridedInterval::new(16, 60, 85, 565), op2.meet(&op1));
+
+        let op1 = StridedInterval::new(16, 12, 1, 73);
+        let op2 = StridedInterval::new(16, 15, 40, 610);
+        assert_eq!(StridedInterval::null(), op1.meet(&op2));
+        assert_eq!(StridedInterval::null(), op2.meet(&op1));
+
         let op1 = StridedInterval::new(4, 3, 0, 6);
         assert_eq!(StridedInterval::new(4, 3, -6, 6), op1.remove_lower_bound());
 
@@ -1795,5 +2019,16 @@ mod test {
 
         let op1 = StridedInterval::new(8, 3, 0x19, 0x1f);
         assert_eq!(StridedInterval::new(16, 3, 0x19, 0x1f), op1.sign_extend(16));
+
+        let op1 = StridedInterval::new(4, 3, 0x1, 0x7);
+        assert_eq!(StridedInterval::new(8, 3, 0x1, 0x7), op1.zero_extend(8));
+
+        let op1 = StridedInterval::new(4, 3, -8, -2);
+        assert_eq!(StridedInterval::new(8, 3, 0x8, 0xe), op1.zero_extend(8));
+
+        let op1 = StridedInterval::new(4, 3, -8, 7);
+        // {-8, -5, -2, 1, 3, 7} -->
+        //      {8, 11, 14, 1, 3, 7}
+        assert_eq!(StridedInterval::new(8, 1, 1, 0xe), op1.zero_extend(8));
     }
 }

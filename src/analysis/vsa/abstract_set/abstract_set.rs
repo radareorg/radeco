@@ -58,7 +58,7 @@ pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
                         Neg + Add + Sub + Div + Rem + Mul +
                         BitAnd + BitOr + BitXor + Not + Shl + Shr +
                         Container<inum> + Container<Self> + Container<Vec<inum>> +
-                        From<inum> + Default
+                        From<inum> + From<(u8, inum)> + Default
 {
     /// Returns the meet (intersection) of AbstractSet `self` and `other`.
     fn meet(&self, other: &Self) -> Self {
