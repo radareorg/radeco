@@ -33,7 +33,7 @@ use num::Signed;
 use super::abstract_set::{inum, unum, _bits};
 use super::abstract_set::{AbstractSet, Container};
 
-// XXX: Distiguish imul/umul idiv/udiv urem/irem logic_shr/arith_shr
+// XXX: Distiguish imul/umul idiv/udiv urem/irem 
 // XXX: Might fail when k bits is one bit (k == 1)
 
 // Avoid integet overflow when k equls to _bits
@@ -117,6 +117,7 @@ fn gcd(x: inum, y: inum) -> inum {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StridedInterval {
     // Used for indicate radix of strided interval (k-bits)
+    // k == 0 means this StridedInterval is an empty set
     pub k: u8,
     // stride of strided interval
     pub s: inum,
@@ -169,13 +170,16 @@ impl fmt::Display for StridedInterval {
 //      e.g.
 //          {-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6} / 4
 //        = {-2, -2, -1, -1, -1, -1, 0, 0, 0, 0, 1, 1, 1}
+//        --> periodNr(-5, 4) = -2
+//            periodNr(3, 4) = 0
 fn periodNr<T>(x: T, period: T) -> T 
         where T: Clone + PartialEq + Eq + Ord + From<inum> + 
                     Add<Output=T> + Sub<Output=T> + Rem<Output=T> + Div<Output=T>
 {
     // period must be positive
     assert!(period > T::from(0), "Period must be positive");
-    // if x >= 0 || 8 |  x :
+    // For period == 8:
+    // if x >= 0 || x % 8 == 0:
     //      u = x - x % k_period = i * k_period
     //      e.g. 4 bits: 9 -> 8, 8 -> 8, 0 -> 0, -8 -> -8
     // if x < 0 && x % 8 != 0:
@@ -274,18 +278,32 @@ fn maxOr(_a: inum, _b: inum, _c: inum, _d: inum) -> inum {
 //
 
 impl StridedInterval {
-    // Returns a default strided interval in k bits;
+    /// Returns the empty set of StridedInterval.
+    pub fn null() -> Self {
+        StridedInterval::default_k(0)
+    }
+
+    /// Returns a default strided interval in k bits.
     pub fn default_k(k: u8) -> Self {
-        let k = if (k > _bits) || (k == 0) {
-            _bits
+        if k == 0 {
+            StridedInterval {
+                k: 0,
+                s: 0,
+                lb: 0,
+                ub: 0,
+            }
         } else {
-            k
-        };
-        StridedInterval {
-            k: k,
-            s: 1,
-            lb: min_in_k_bits!(k),
-            ub: max_in_k_bits!(k),
+            let k = if k > _bits {
+                _bits
+            } else {
+                k
+            };
+            StridedInterval {
+                k: k,
+                s: 1,
+                lb: min_in_k_bits!(k),
+                ub: max_in_k_bits!(k),
+            }
         }
     }
 
@@ -301,10 +319,19 @@ impl StridedInterval {
        si
     }
     
-    // Automatically correct variable to generate StridedInterval. 
+    /// Automatically correct variable to generate StridedInterval. 
+    // Algorithm's correctness is heavily depended on this function
     pub fn validate(&mut self) {
+        // Check whether self is empty
+        if self.k == 0 {
+            self.s = 0;
+            self.lb = 0;
+            self.ub = 0;
+            return;
+        }
+
         // Correct k
-        let mut k = if (self.k > _bits) || (self.k == 0) {
+        let mut k = if self.k > _bits {
             _bits
         } else {
             self.k
@@ -388,24 +415,30 @@ impl From<inum> for StridedInterval {
 impl From<(u8, inum)> for StridedInterval {
     fn from(number_k: (u8, inum)) -> Self {
         let mut k = number_k.0;
-        let n = number_k.1;
-        k = if (k > _bits) || (k == 0) {
-            _bits
+        if k == 0 {
+            StridedInterval::null()
         } else {
-            k
-        };
-        StridedInterval {
-            k: k,
-            s: 0,
-            lb: n_in_k_bits!(n, k),
-            ub: n_in_k_bits!(n, k),
+            let n = number_k.1;
+            k = if (k > _bits) || (k == 0) {
+                _bits
+            } else {
+                k
+            };
+            StridedInterval {
+                k: k,
+                s: 0,
+                lb: n_in_k_bits!(n, k),
+                ub: n_in_k_bits!(n, k),
+            }
         }
     }
 }
 
 impl Container<inum> for StridedInterval {
     fn contains(&self, object: &inum) -> bool {
-        if (*object < self.lb) || (*object > self.ub) {
+        if self.is_empty() {
+            false
+        } else if (*object < self.lb) || (*object > self.ub) {
             false
         } else if self.s == 0 {
             if self.lb == *object {
@@ -425,7 +458,16 @@ impl Container<inum> for StridedInterval {
 
 impl Container<StridedInterval> for StridedInterval {
     fn contains(&self, object: &StridedInterval) -> bool {
-        if object.constant().is_some() {
+        if self.is_empty() && object.is_empty() {
+            // both are empty set
+            true
+        } else if self.is_empty() {
+            // self is empty but objuect is not
+            false
+        } else if object.is_empty() {
+            // object is empty but self is not
+            true
+        } else if object.constant().is_some() {
             self.contains(&object.constant().unwrap_or(0))
         } else if object.s % self.s != 0 {
             false
@@ -445,7 +487,10 @@ impl Neg for StridedInterval {
     type Output = Self;
 
     fn neg(self) -> Self {
-        if self.constant().is_some() {
+        if self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if self.constant().is_some() {
             // Avoid overflow when k equals to _bits
             StridedInterval::from((self.k, (!self.lb).wrapping_add(1)))
         } else if self.lb == min_in_k_bits!(self.k) {
@@ -466,7 +511,10 @@ impl Add for StridedInterval {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        if self.k != other.k {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if self.k != other.k {
             radeco_err!("Addition between two strided intervals with different radices");
             StridedInterval::default()
         } else if (self.constant().is_some()) && (other.constant().is_some()) {
@@ -512,7 +560,10 @@ impl Mul for StridedInterval {
     type Output = Self;
 
     fn mul(self, other: Self) -> Self {
-        if self.k != other.k {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if self.k != other.k {
             radeco_err!("Multiplication between two strided intervals with different radices");
             StridedInterval::default()
         } else if (self.constant().is_some()) && (other.constant().is_some()) {
@@ -636,7 +687,10 @@ impl Div for StridedInterval {
 
     // Div is difficult because to many special cases.
     fn div(self, other: Self) -> Self {
-        if self.k != other.k {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if self.k != other.k {
             radeco_err!("Division between two strided intervals with different radices");
             StridedInterval::default()
         } else if other.contains(&0) {
@@ -725,7 +779,10 @@ impl Rem for StridedInterval {
     type Output = Self;
 
     fn rem(self, other: Self) -> Self {
-        if self.k != other.k {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if self.k != other.k {
             radeco_err!("Remainder between two strided intervals with different radices");
             StridedInterval::default()
         } else if other.contains(&0) {
@@ -887,6 +944,10 @@ impl BitAnd for StridedInterval {
     type Output = Self;
 
     fn bitand(self, other: Self) -> Self {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            return StridedInterval::default();
+        }
         // In most common situation, bitand work as a mask.
         // Thus, we take care of this special case.
         if (self.k == other.k) {
@@ -916,7 +977,10 @@ impl BitOr for StridedInterval {
     type Output = Self;
 
     fn bitor(self, other: Self) -> Self {
-        if self.k != other.k {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if self.k != other.k {
             radeco_err!("BitOr between two strided intervals with different radices");
             StridedInterval::default()
         } else if (self.constant().is_some()) && (other.constant().is_some()) {
@@ -1022,12 +1086,17 @@ impl Not for StridedInterval {
     type Output = Self;
 
     fn not(self) -> Self {
-        StridedInterval::new(
-            self.k,
-            self.s,
-            n_in_k_bits!(!self.ub, self.k),
-            n_in_k_bits!(!self.lb, self.k)
-        )
+        if self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else {
+            StridedInterval::new(
+                self.k,
+                self.s,
+                n_in_k_bits!(!self.ub, self.k),
+                n_in_k_bits!(!self.lb, self.k)
+            )
+        }
     }
 }
 
@@ -1036,7 +1105,10 @@ impl Shr for StridedInterval {
 
     // All shift right in ESIl is logical shift
     fn shr(self, other: Self) -> Self {
-        if other.lb < 0 {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if other.lb < 0 {
             radeco_err!("Bitwise shift's operation cannot be negative");
             StridedInterval::default_k(self.k)
         } else if (self.lb < 0) && (self.ub > 0) {
@@ -1110,7 +1182,10 @@ impl Shl for StridedInterval {
     type Output = Self;
 
     fn shl(self, other: Self) -> Self {
-        if other.lb < 0 {
+        if other.is_empty() || self.is_empty() {
+            radeco_err!("Empty set cannot be used in arithmetical operation");
+            StridedInterval::default()
+        } else if other.lb < 0 {
             radeco_err!("Bitwise shift's operation cannot be negative");
             StridedInterval::default_k(self.k)
         } else {
@@ -1141,7 +1216,11 @@ impl AbstractSet for StridedInterval {
     }
 
     fn join(&self, other: &Self) -> Self {
-        if self.k != other.k {
+        if self.is_empty() {
+            other.clone()
+        } else if other.is_empty() {
+            self.clone()
+        } else if self.k != other.k {
             radeco_err!("Join between two strided intervals with different radices");
             StridedInterval::default()
         } else {
@@ -1164,30 +1243,41 @@ impl AbstractSet for StridedInterval {
     }
 
     fn remove_lower_bound(&self) -> Self {
-        let min = min_in_k_bits!(self.k);
-        let ub_mod_s = self.ub % self.s;
-        let min_mod_s = min % self.s; // min_mod_s must be negative
-        let offset = (ub_mod_s - min_mod_s + self.s) % self.s;
-        assert!(min_mod_s <= 0, "min_in_k_bits must be non-positive");
-        StridedInterval::new(
-            self.k,
-            self.s,
-            n_in_k_bits!(min + offset, self.k),
-            self.ub,
-        )
+        if self.is_empty() {
+            self.clone()
+        } else {
+            let min = min_in_k_bits!(self.k);
+            let ub_mod_s = self.ub % self.s;
+            let min_mod_s = min % self.s; // min_mod_s must be negative
+            let offset = (ub_mod_s - min_mod_s + self.s) % self.s;
+            assert!(min_mod_s <= 0, "min_in_k_bits must be non-positive");
+            StridedInterval::new(
+                self.k,
+                self.s,
+                n_in_k_bits!(min + offset, self.k),
+                self.ub,
+            )
+        }
     }
 
     fn remove_upper_bound(&self) -> Self {
-        StridedInterval::new(
-            self.k,
-            self.s,
-            self.lb,
-            max_in_k_bits!(self.k),
-        )
+        if self.is_empty() {
+            self.clone()
+        } else {
+            StridedInterval::new(
+                self.k,
+                self.s,
+                self.lb,
+                max_in_k_bits!(self.k),
+            )
+        }
     }
 
     fn narrow(&self, k: u8) -> Self {
-        if (k > self.k) {
+        if self.is_empty() {
+            radeco_warn!("Empty StridedInterval cannot be narrow");
+            self.clone()
+        } else if k > self.k {
             radeco_warn!("StridedInterval cannot be narrowed to a bigger bits");
             self.clone()
         } else if k == self.k {
@@ -1232,7 +1322,10 @@ impl AbstractSet for StridedInterval {
 
     fn sign_extend(&self, k: u8) -> Self {
         let mut si = self.clone();
-        if (k < self.k) {
+        if self.is_empty() {
+            radeco_warn!("Empty StridedInterval cannot be extended");
+            si
+        } else if k < self.k {
             radeco_warn!("StridedInterval cannot be extended to a smaller bits");
             si
         } else {
@@ -1246,7 +1339,9 @@ impl AbstractSet for StridedInterval {
     }
 
     fn constant(&self) -> Option<inum> {
-        if (self.s != 0) || (self.lb != self.ub) {
+        if self.is_empty() {
+            None
+        } else if (self.s != 0) || (self.lb != self.ub) {
             None
         } else {
             Some(self.lb)
@@ -1255,11 +1350,17 @@ impl AbstractSet for StridedInterval {
 
     // XXX: overflow when capacity > inum::max_value()
     fn capacity(&self) -> inum {
-        if self.s == 0 {
+        if self.is_empty() {
+            0
+        } else if self.s == 0 {
             1
         } else {
             (self.ub - self.lb) / self.s + 1
         }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.k == 0
     }
 }
 
@@ -1298,7 +1399,7 @@ mod test {
                    StridedInterval::default_k(8));
         assert_eq!(StridedInterval{k: _bits, s: 0, lb: 0xdeadbeef, ub: 0xdeadbeef}, 
                    StridedInterval::from(0xdeadbeef));
-        assert_eq!(StridedInterval{k: _bits, s: 3, lb: -2, ub: 28}, 
+        assert_eq!(StridedInterval{k: 0, s: 0, lb: 0, ub: 0},  // empty set 
                    StridedInterval::new(0, -3, -2, 29));
         assert!(StridedInterval::new(64, 4, 0, 4096).contains(&1024));
         assert!(!StridedInterval::new(64, 4, 0, 4096).contains(&1022));
@@ -1307,6 +1408,12 @@ mod test {
         assert!(!StridedInterval::new(64, 4, 0, 4096).contains(&vec![0, 4, 14, 20]));
         assert!(StridedInterval::new(64, 4, 0, 4096)
                 .contains(&StridedInterval::from(16)));
+        assert!(!StridedInterval::null()
+                .contains(&StridedInterval::from(16)));
+        assert!(StridedInterval::new(64, 4, 0, 4096)
+                .contains(&StridedInterval::null()));
+        assert!(StridedInterval::null()
+                .contains(&StridedInterval::null()));
         assert!(!StridedInterval::new(64, 4, 0, 4096)
                 .contains(&StridedInterval::from(-16)));
         assert!(!StridedInterval::new(64, 4, 0, 4096)
@@ -1652,6 +1759,11 @@ mod test {
         let op1 = StridedInterval::new(16, 30, 1, 901);
         let op2 = StridedInterval::new(16, 15, 6, 606);
         assert_eq!(StridedInterval::new(16, 5, 1, 901), op1.join(&op2));
+
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        let op2 = StridedInterval::null();
+        assert_eq!(StridedInterval::new(16, 30, 1, 901), op1.join(&op2));
+        assert_eq!(StridedInterval::new(16, 30, 1, 901), op2.join(&op1));
 
         let op1 = StridedInterval::new(4, 3, 0, 6);
         assert_eq!(StridedInterval::new(4, 3, -6, 6), op1.remove_lower_bound());
