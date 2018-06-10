@@ -32,6 +32,7 @@ enum SimpleCASTNode {
     Entry,
     Action(ActionNode),
     Value(ValueNode),
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -95,6 +96,8 @@ pub struct SimpleCAST {
     fname: String,
     /// Entry node of this function
     pub entry: NodeIndex,
+    /// Unknown node
+    pub unknown: NodeIndex,
     ast: Graph<SimpleCASTNode, SimpleCASTEdge>,
     /// Variables declared in this function
     vars: HashSet<NodeIndex>,
@@ -127,9 +130,11 @@ impl SimpleCAST {
     pub fn new(fn_name: &str) -> SimpleCAST {
         let mut ast = Graph::new();
         let entry = ast.add_node(SimpleCASTNode::Entry);
+        let unknown = ast.add_node(SimpleCASTNode::Unknown);
         SimpleCAST {
             fname: fn_name.to_string(),
             entry: entry,
+            unknown: unknown,
             ast: ast,
             vars: HashSet::new(),
             consts: HashSet::new(),
@@ -173,6 +178,8 @@ impl SimpleCAST {
     pub fn deref(&mut self, operand: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(c_simple::Expr::DeRef)));
         let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::DeRef));
+        // XXX
+        let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::Operand(0)));
         self.exprs.push(node);
         node
     }
@@ -649,6 +656,9 @@ impl<'a> CASTConverter<'a> {
     /// Entry point of Simple-C-AST to C-AST conversion.
     pub fn to_c_ast(&mut self) -> CAST {
         let mut c_ast = CAST::new(&self.ast.fname);
+        // XXX
+        let unknown_node = c_ast.declare_vars(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()])[0];
+        self.node_map.insert(self.ast.unknown, unknown_node);
         for var in self.ast.vars.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(*var) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
@@ -665,7 +675,7 @@ impl<'a> CASTConverter<'a> {
                             n
                         } else {
                             radeco_warn!("NodeIndex {:?} not found", _n);
-                            NodeIndex::end()
+                            unknown_node
                         }
                     }).collect::<Vec<_>>();
                 let n = c_ast.expr(op.clone(), &operands);
@@ -761,9 +771,15 @@ impl<'a> CASTConverter<'a> {
             },
             Some(SimpleCASTNode::Entry) => {},
             Some(SimpleCASTNode::Action(ActionNode::Dummy(_))) => {
-                // XXX
-            }
-            _ => unreachable!(),
+                // TODO
+            },
+            Some(SimpleCASTNode::Action(ActionNode::DummyGoto)) => {
+                // TODO
+            },
+            _ => {
+                radeco_err!("Unreachable node {:?}", idx);
+                unreachable!()
+            },
         };
         for n in self.ast.next_actions(current_node) {
             self.to_c_ast_body(c_ast, n);
