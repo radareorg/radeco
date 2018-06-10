@@ -1373,8 +1373,33 @@ impl AbstractSet for StridedInterval {
         }
     }
 
-    fn widens(&self, other: &Self) -> Self {
-        unimplemented!();
+    fn widen(&self, other: &Self) -> Self {
+        if self.is_empty() {
+            other.clone()
+        } else if other.is_empty() {
+            self.clone()
+        } else if self.k != other.k {
+            radeco_err!("Widen two strided intervals with different radices");
+            StridedInterval::default()
+        } else {
+            let s = gcd(self.s, other.s);
+            let lb = if self.lb <= other.lb {
+                self.lb
+            } else {
+                min_in_k_bits!(self.k)
+            };
+            let ub = if self.ub >= other.ub {
+                self.ub
+            } else {
+                max_in_k_bits!(self.k)
+            };
+            StridedInterval::new(
+                self.k,
+                s,
+                lb,
+                ub,
+            )
+        }
     }
 
     fn remove_lower_bound(&self) -> Self {
@@ -1395,6 +1420,26 @@ impl AbstractSet for StridedInterval {
         }
     }
 
+    fn set_lower_bound(&self, x: inum) -> Self {
+        let mut si = self.clone();
+        if self.is_empty() {
+            si
+        } else if x > si.ub {
+            radeco_warn!("Set a lower bound which is bigger than upper bound");
+            StridedInterval::null()
+        } else {
+            let offset = self.ub - periodNr(self.ub, self.s) * self.s;
+            let offset_ = x - periodNr(x, self.s) * self.s;
+            si.lb = if offset >= offset_ {
+                x + offset - offset_
+            } else {
+                x + offset - offset_ + self.s
+            };
+            si.validate();
+            si
+        }
+    }
+
     fn remove_upper_bound(&self) -> Self {
         if self.is_empty() {
             self.clone()
@@ -1405,6 +1450,20 @@ impl AbstractSet for StridedInterval {
                 self.lb,
                 max_in_k_bits!(self.k),
             )
+        }
+    }
+
+    fn set_upper_bound(&self, x: inum) -> Self {
+        let mut si = self.clone();
+        if self.is_empty() {
+            si
+        } else if x < si.lb {
+            radeco_warn!("Set a upper bound which is smaller than lower bound");
+            StridedInterval::null()
+        } else {
+            si.ub = x;
+            si.validate();
+            si
         }
     }
 
@@ -1427,6 +1486,7 @@ impl AbstractSet for StridedInterval {
             if si.ub < division_k {
                 // all number is si are positive in k-bits-filed
                 si.k = k;
+                si.validate();
                 si
             } else if si.lb >= division_k {
                 // all number is si are negative in k-bits-filed
@@ -1465,6 +1525,7 @@ impl AbstractSet for StridedInterval {
             si
         } else {
             si.k = k;
+            si.validate();
             si
         }
     }
@@ -1485,11 +1546,13 @@ impl AbstractSet for StridedInterval {
                 si.lb = n_in_k_bits!(si.lb & mask_in_k_bits!(si.k), k);
                 si.ub = n_in_k_bits!(si.ub & mask_in_k_bits!(si.k), k);
                 si.k = k;
+                si.validate();
                 si
             } else if si.lb >= 0 {
                 // all number in si is non-negative
                 // thus we can change the k-bits directly
                 si.k = k;
+                si.validate();
                 si
             } else {
                 // number is si are both negative and positive in k-bits-filed
@@ -1940,6 +2003,27 @@ mod test {
 
     #[test]
     fn strided_interval_test_setop() {
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        assert_eq!(StridedInterval::null(), op1.set_lower_bound(902));
+        assert_eq!(StridedInterval::new(16, 30, 31, 901), op1.set_lower_bound(2));
+
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        assert_eq!(StridedInterval::null(), op1.set_upper_bound(-1));
+        assert_eq!(StridedInterval::new(16, 30, 1, 31), op1.set_upper_bound(33));
+
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        let op2 = StridedInterval::new(16, 15, 6, 606);
+        let op3 = StridedInterval::null();
+        assert_eq!(StridedInterval::new(16, 15, 1, 901), op1.widen(&op2));
+        assert_eq!(StridedInterval::new(16, 15, min_in_k_bits!(16), max_in_k_bits!(16)), op2.widen(&op1));
+        assert_eq!(op1, op1.widen(&op3));
+        assert_eq!(op1, op3.widen(&op1));
+
+        let op1 = StridedInterval::new(16, 30, 1, 901);
+        let op2 = StridedInterval::new(16, 15, -4, 696);
+        assert_eq!(StridedInterval::new(16, 15, min_in_k_bits!(16), 901), op1.widen(&op2));
+        assert_eq!(StridedInterval::new(16, 15, -4, max_in_k_bits!(16)), op2.widen(&op1));
+
         let op1 = StridedInterval::new(16, 30, 1, 901);
         let op2 = StridedInterval::new(16, 15, 6, 606);
         assert_eq!(StridedInterval::new(16, 5, 1, 901), op1.join(&op2));

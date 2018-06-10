@@ -71,7 +71,7 @@ pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
     }
 
     /// Returns the AbstractSet obtained by widening `self` with respect to `other`
-    fn widens(&self, other: &Self) -> Self {
+    fn widen(&self, other: &Self) -> Self {
         unimplemented!();
     }
 
@@ -80,8 +80,18 @@ pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
         unimplemented!()
     }
 
+    /// Returns the AbstractSet obtained by setting lower bound as x for `self`
+    fn set_lower_bound(&self, x: inum) -> Self {
+        unimplemented!()
+    }
+
     /// Returns the AbstractSet obtained by remoing upper bound for `self`
     fn remove_upper_bound(&self) -> Self {
+        unimplemented!()
+    }
+
+    /// Returns the AbstractSet obtained by setting upper bound as x for `self`
+    fn set_upper_bound(&self, x: inum) -> Self {
         unimplemented!()
     }
 
