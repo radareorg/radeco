@@ -48,13 +48,23 @@ impl<'a> CASTDataGraph<'a> {
     fn handle_binop(&mut self, ret_node: NodeIndex, ops: Vec<NodeIndex>,
                     expr: c_simple::Expr, ast: &mut SimpleCAST) {
         // XXX for debbuging, do not use filter_map
-        let ops_mapped = ops.into_iter()
-            .filter_map(|op| self.var_map.get(&op))
-            .map(|n| *n)
+        let ops_mapped = ops.iter()
+            .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(ast.unknown))
             .collect::<Vec<_>>();
-        let expr_node = ast.expr(ops_mapped.as_slice(), expr);
-        radeco_trace!("Add {:?} to {:?}", ret_node, expr_node);
+        assert!(ops.len() == ops_mapped.len());
+        let expr_node = ast.expr(ops_mapped.as_slice(), expr.clone());
+        radeco_trace!("Add {:?} to {:?}, Operator: {:?}", ret_node, expr_node, expr);
         self.var_map.insert(ret_node, expr_node);
+    }
+
+    fn handle_uniop(&mut self, ret_node: NodeIndex, op: NodeIndex,
+                    expr: c_simple::Expr, ast: &mut SimpleCAST) {
+        if let Some(&n) = self.var_map.get(&op) {
+            let expr_node = ast.expr(&[n], expr);
+            self.var_map.insert(ret_node, expr_node);
+        } else {
+            radeco_warn!("Operand not found: {:?}", op);
+        }
     }
 
     fn deref(&self, node: NodeIndex, ast: &mut SimpleCAST) -> NodeIndex {
@@ -72,9 +82,8 @@ impl<'a> CASTDataGraph<'a> {
         let ops = self.ssa.operands_of(node);
         // TODO
         // XXX
-        if let Some(head) = ops.into_iter()
+        if let Some(&head) = ops.into_iter()
            .filter_map(|n| self.var_map.get(&n))
-           .map(|n| *n)
            .next() {
            self.var_map.insert(node, head);
         }
@@ -106,32 +115,28 @@ impl<'a> CASTDataGraph<'a> {
             MOpcode::OpDiv => self.handle_binop(ret_node, ops, c_simple::Expr::Div, ast),
             MOpcode::OpEq => self.handle_binop(ret_node, ops, c_simple::Expr::Eq, ast),
             MOpcode::OpGt => self.handle_binop(ret_node, ops, c_simple::Expr::Gt, ast),
-            MOpcode::OpLsl => {
-                // TODO
-                //unimplemented!()
-            },
-            MOpcode::OpLsr => {
-                // TODO
-                //unimplemented!()
-            },
+            // XXX Shl might be wrong operator
+            MOpcode::OpLsl => self.handle_binop(ret_node, ops, c_simple::Expr::Shl, ast),
+            // XXX Shr might be wrong operator
+            MOpcode::OpLsr => self.handle_binop(ret_node, ops, c_simple::Expr::Shr, ast),
             MOpcode::OpLt => self.handle_binop(ret_node, ops, c_simple::Expr::Lt, ast),
             MOpcode::OpMod => self.handle_binop(ret_node, ops, c_simple::Expr::Mod, ast),
             MOpcode::OpMul => self.handle_binop(ret_node, ops, c_simple::Expr::Mul, ast),
-            MOpcode::OpNarrow(size) => {
-                // TODO
-            },
+            // TODO Add `Narrow` info
+            MOpcode::OpNarrow(size) => self.handle_uniop(ret_node, ops[0],
+                                                         c_simple::Expr::Cast(size as usize), ast),
             MOpcode::OpNot => self.handle_binop(ret_node, ops, c_simple::Expr::Not, ast),
             MOpcode::OpOr => self.handle_binop(ret_node, ops, c_simple::Expr::Or, ast),
             MOpcode::OpRol => unimplemented!(),
             MOpcode::OpRor => unimplemented!(),
-            MOpcode::OpSignExt(size) => {
-                // TODO
-            },
+            // TODO Add `SignExt`
+            MOpcode::OpSignExt(size) => self.handle_uniop(ret_node, ops[0],
+                                                          c_simple::Expr::Cast(size as usize), ast),
             MOpcode::OpSub => self.handle_binop(ret_node, ops, c_simple::Expr::Sub, ast),
             MOpcode::OpXor => self.handle_binop(ret_node, ops, c_simple::Expr::Xor, ast),
-            MOpcode::OpZeroExt(size) => {
-                // TODO
-            },
+            // TODO Add `ZeroExt`
+            MOpcode::OpZeroExt(size) => self.handle_uniop(ret_node, ops[0],
+                                                          c_simple::Expr::Cast(size as usize), ast),
             MOpcode::OpCall => {
                 self.update_data_graph_by_call(ret_node);
             },

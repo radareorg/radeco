@@ -463,7 +463,7 @@ impl CAST {
                     Expr::Mul => format!("({} * {})",
                                          format_with_indent(&op_str[0], indent),
                                          &op_str[1]),
-                    Expr::DeRef => format!("*{}", format_with_indent(&op_str[0], indent)),
+                    Expr::DeRef => format!("{}*({})", format_with_indent("", indent), &op_str[0]),
                     Expr::Div => format!("({} / {})",
                                          format_with_indent(&op_str[0], indent),
                                          &op_str[1]),
