@@ -2,6 +2,7 @@ use std::{default, iter, fmt};
 use std::collections::{HashMap, HashSet};
 
 use super::c_simple;
+use super::c_simple_ast_builder::CASTDataGraph;
 use super::c_simple::{Ty, CAST, CASTNode};
 use middle::ir;
 use middle::ir::MOpcode;
@@ -45,7 +46,7 @@ enum ActionNode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ValueNode {
+pub enum ValueNode {
     /// The string is the name of variable
     Variable(Option<Ty>, String),
     /// Constant or immidiate value
@@ -68,6 +69,7 @@ enum ActionEdge {
 
 #[derive(Debug, Clone, PartialEq)]
 enum ValueEdge {
+    DeRef,
     /// Source Node of assignment action
     AssignSrc,
     /// Destination Node of assignment action
@@ -88,7 +90,7 @@ enum ValueEdge {
     GotoDst,
 }
 
-struct SimpleCAST {
+pub struct SimpleCAST {
     /// Name of function of this AST
     fname: String,
     /// Entry node of this function
@@ -99,7 +101,7 @@ struct SimpleCAST {
     /// Constants declared in this function
     consts: HashSet<NodeIndex>,
     /// Expressions declared in this function
-    exprs: HashSet<NodeIndex>,
+    exprs: Vec<NodeIndex>,
     /// Hashmap from label node to string it represents
     label_map: HashMap<NodeIndex, String>,
 }
@@ -131,7 +133,7 @@ impl SimpleCAST {
             ast: ast,
             vars: HashSet::new(),
             consts: HashSet::new(),
-            exprs: HashSet::new(),
+            exprs: Vec::new(),
             label_map: HashMap::new(),
         }
     }
@@ -156,7 +158,22 @@ impl SimpleCAST {
         for (i, operand) in operands.iter().enumerate() {
             let _ = self.ast.add_edge(node, *operand, SimpleCASTEdge::Value(ValueEdge::Operand(i as u8)));
         }
-        self.exprs.insert(node);
+        self.exprs.push(node);
+        node
+    }
+
+    pub fn derefed_node(&self, node: NodeIndex) -> Option<NodeIndex> {
+        // TODO check whether there are more than two derefed nodes
+        self.ast.edges_directed(node, Direction::Incoming)
+            .filter(|e| *e.weight() == SimpleCASTEdge::Value(ValueEdge::DeRef))
+            .next()
+            .map(|e| e.target())
+    }
+
+    pub fn deref(&mut self, operand: NodeIndex) -> NodeIndex {
+        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(c_simple::Expr::DeRef)));
+        let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::DeRef));
+        self.exprs.push(node);
         node
     }
 
@@ -458,15 +475,8 @@ struct CASTBuilder<'a> {
     rfn: &'a RadecoFunction,
     // SSA of RadecoFunction
     ssa: &'a SSAStorage,
-    data_graph: Graph<ValueNode, (u8, c_simple::Expr)>,
-    // Hashmap from node of SSAStorage to one of self.data_graph
-    node_map: HashMap<NodeIndex, NodeIndex>,
     action_map: HashMap<NodeIndex, NodeIndex>,
-    // a map from node of data_graph to one of SimpleCAST's value
-    var_map: HashMap<NodeIndex, NodeIndex>,
-    // a map from node of data_graph to one of SimpleCAST's register
-    reg_map: HashMap<String, NodeIndex>,
-    seen: HashSet<NodeIndex>,
+    datagraph: CASTDataGraph<'a>,
 }
 
 impl<'a> CASTBuilder<'a> {
@@ -477,13 +487,8 @@ impl<'a> CASTBuilder<'a> {
             ast: ast,
             rfn: f,
             ssa: f.ssa(),
-            data_graph: Graph::new(),
-            node_map: HashMap::new(),
             action_map: HashMap::new(),
-            var_map: HashMap::new(),
-            reg_map: HashMap::new(),
-            seen: HashSet::new(),
-            // XXX
+            datagraph: CASTDataGraph::new(f),
         }
     }
 
@@ -499,13 +504,27 @@ impl<'a> CASTBuilder<'a> {
         self.last_action
     }
 
+    fn declare_vars(&mut self) {
+        for (ref name, _) in self.datagraph.reg_map.iter() {
+            let _ = self.ast.var(&name, None);
+        }
+        for ref val in self.datagraph.consts.iter() {
+            let _ = self.ast.var(&val, None);
+        }
+    }
+
+    fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {
+        self.last_action = self.ast.assign(dst, src, self.last_action);
+        self.last_action
+    }
+
     fn call_action(&mut self) -> NodeIndex {
         self.last_action = self.ast.call_func("", &[], self.last_action, None);
         self.last_action
     }
 
-    fn recover(&mut self, node: NodeIndex) -> NodeIndex {
-        assert!(self.is_recover_node(node));
+    fn recover_action(&mut self, node: NodeIndex) -> NodeIndex {
+        assert!(self.is_recover_action(node));
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         radeco_trace!("CASTBuilder::recover {:?} @ {:?}", op, node);
         match op {
@@ -513,184 +532,36 @@ impl<'a> CASTBuilder<'a> {
                 self.call_action()
             },
             MOpcode::OpStore => {
-                self.dummy_action(format!("{:?}", op))
-            },
-            MOpcode::OpLoad => {
-                self.dummy_action(format!("{:?}", op))
+                let ops = self.ssa.operands_of(node);
+                let (dst, src) = {
+                    let dst = if let Some(&_dst) = self.datagraph.var_map.get(&ops[1]) {
+                        self.ast.derefed_node(_dst)
+                    } else {
+                        None
+                    };
+                    // XXX
+                    let src = self.datagraph.var_map.get(&ops[2]).map(|n| *n);
+                    (dst, src)
+                };
+                // // self.last_action = self.ast.assign(dst, src, self.last_action);
+                // self.dummy_action(format!("{:?} {:?} = {:?}", op, dst, src))
+                radeco_trace!("PO {:?}, {:?}", dst, src);
+                if let (Some(d), Some(s)) = (dst, src) {
+                    self.assign(d, s)
+                } else {
+                    self.dummy_action(format!("{:?} @ {:?}", op, node))
+                }
             },
             _ => unreachable!(),
         }
     }
 
-    fn is_recover_node(&self, node: NodeIndex) -> bool {
+    fn is_recover_action(&self, node: NodeIndex) -> bool {
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         match op {
             MOpcode::OpCall | MOpcode::OpStore => true,
             _ => false,
         }
-    }
-
-    fn handle_binop(&mut self, ret_node: NodeIndex, ops: Vec<NodeIndex>,
-                    expr: c_simple::Expr) {
-        for (i, op) in ops.into_iter().enumerate() {
-            self.data_graph.add_edge(ret_node, op, (i as u8, expr.clone()));
-        }
-    }
-
-    fn handle_phi(&mut self, node: NodeIndex) {
-        assert!(self.ssa.is_phi(node));
-        radeco_trace!("CASTBuilder::handle_phi {:?}", node);
-        if self.seen.contains(&node) {
-            return;
-        }
-        let ops = self.ssa.operands_of(node);
-        // TODO
-        let ret_node = {
-            let v = ValueNode::Variable(None, "TODO@phi".to_string());
-            self.data_graph.add_node(v)
-        };
-        self.seen.insert(node);
-        self.node_map.insert(node, ret_node);
-    }
-
-    fn update_values(&mut self, node: NodeIndex) {
-        assert!(self.ssa.is_expr(node));
-        radeco_trace!("CASTBuilder::update_values {:?}", node);
-        if self.seen.contains(&node) {
-            return;
-        }
-        self.seen.insert(node);
-        let ops = self.ssa.operands_of(node);
-        let ret_node = {
-            let v = self.new_value(node);
-            self.data_graph.add_node(v)
-        };
-        self.node_map.insert(node, ret_node);
-
-        let mut ns = Vec::new();
-        for op in ops {
-            if let Some(&n) = self.node_map.get(&op) {
-                ns.push(n);
-            } else {
-                radeco_warn!("Invalid operand");
-            }
-        }
-        radeco_trace!("CASTBuilder::update_values opcode: {:?}", self.ssa.opcode(node));
-        // TODO update data_graph
-        match self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid) {
-            MOpcode::OpStore => {
-                // TODO add reference to source nodes
-                for (i, op) in ns.into_iter().skip(1).enumerate() {
-                    self.data_graph
-                        .add_edge(ret_node,
-                                  op,
-                                  (i as u8, c_simple::Expr::Assign));
-                }
-            }
-            MOpcode::OpLoad => {
-                self.data_graph
-                    .add_edge(ret_node,
-                              ns[1],
-                              (0, c_simple::Expr::Assign));
-            },
-            MOpcode::OpAdd => self.handle_binop(ret_node, ns, c_simple::Expr::Add),
-            MOpcode::OpAnd => self.handle_binop(ret_node, ns, c_simple::Expr::And),
-            MOpcode::OpDiv => self.handle_binop(ret_node, ns, c_simple::Expr::Div),
-            MOpcode::OpEq => self.handle_binop(ret_node, ns, c_simple::Expr::Eq),
-            MOpcode::OpGt => self.handle_binop(ret_node, ns, c_simple::Expr::Gt),
-            MOpcode::OpLsl => {
-                //unimplemented!()
-            },
-            MOpcode::OpLsr => {
-                //unimplemented!()
-            },
-            MOpcode::OpLt => self.handle_binop(ret_node, ns, c_simple::Expr::Lt),
-            MOpcode::OpMod => self.handle_binop(ret_node, ns, c_simple::Expr::Mod),
-            MOpcode::OpMul => self.handle_binop(ret_node, ns, c_simple::Expr::Mul),
-            MOpcode::OpNarrow(size) => {
-                self.data_graph
-                    .add_edge(ret_node,
-                              ns[0],
-                              (0, c_simple::Expr::Cast(size as usize)));
-            },
-            MOpcode::OpNot => self.handle_binop(ret_node, ns, c_simple::Expr::Not),
-            MOpcode::OpOr => self.handle_binop(ret_node, ns, c_simple::Expr::Or),
-            MOpcode::OpRol => unimplemented!(),
-            MOpcode::OpRor => unimplemented!(),
-            MOpcode::OpSignExt(size) => {
-                self.data_graph.add_edge(ret_node, ns[0], (0, c_simple::Expr::Cast(size as usize)));
-            },
-            MOpcode::OpSub => self.handle_binop(ret_node, ns, c_simple::Expr::Sub),
-            MOpcode::OpXor => self.handle_binop(ret_node, ns, c_simple::Expr::Xor),
-            MOpcode::OpZeroExt(size) => {
-                self.data_graph.add_edge(ret_node, ns[0], (0, c_simple::Expr::Cast(size as usize)));
-            },
-            MOpcode::OpCall => {
-                self.update_regs_by_call(node);
-            },
-            _ => {},
-        }
-    }
-
-    fn prepare_consts(&mut self) {
-        for (&val, &node) in self.ssa.constants.iter() {
-            if let Ok(n) = self.ssa.node_data(node) {
-                // TODO
-                let v = ValueNode::Constant(None, val.to_string());
-                let data_node = self.data_graph.add_node(v);
-                // TODO add type
-                let ast_node = self.ast.constant(&val.to_string(), None);
-                self.node_map.insert(node, data_node);
-                self.var_map.insert(data_node, ast_node);
-            } else {
-                radeco_warn!("Invalid constant");
-            }
-        }
-    }
-
-    fn update_regs_by_call(&mut self, call_node: NodeIndex) {
-        radeco_trace!("CASTBuilder::update_regs_by_call {:?}", call_node);
-        let reg_map = utils::call_rets(call_node, self.ssa);
-        for (idx, (node, vt)) in reg_map.into_iter() {
-            let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-            // TODO
-            let v = ValueNode::Variable(None, "return value".to_string());
-            let _node = self.data_graph.add_node(v);
-            self.node_map.insert(node, _node);
-            if let Some(&reg_node) = self.reg_map.get(&name) {
-                self.data_graph.add_edge(_node, reg_node, (0, c_simple::Expr::Assign));
-            }
-        }
-    }
-
-    fn prepare_regs(&mut self) {
-        let entry_node = self.ssa.entry_node();
-        if entry_node.is_none() {
-            radeco_warn!("Entry node not found");
-            return;
-        }
-        // TODO avoid unwrap
-        let reg_state = self.ssa.registers_in(self.ssa.entry_node().unwrap());
-        if reg_state.is_none() {
-            radeco_warn!("RegisterState not found");
-            return;
-        }
-        let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
-        for (idx, (node, vt)) in reg_map.into_iter() {
-            let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-            // TODO
-            let v = ValueNode::Variable(None, name.clone());
-            let _node = self.data_graph.add_node(v);
-            self.reg_map.insert(name, _node);
-            self.node_map.insert(node, _node);
-        }
-    }
-
-    fn new_value(&self, ssa_node: NodeIndex) -> ValueNode {
-        // TODO avoid unwrap
-        let vt = self.ssa.node_data(ssa_node).unwrap().vt;
-        // TODO use vt
-        ValueNode::Variable(None, "TODO@new_value".to_string())
     }
 
     fn replace_tmp_with_goto(&mut self) {
@@ -724,36 +595,20 @@ impl<'a> CASTBuilder<'a> {
     }
 
     pub fn from_ssa(&mut self) {
-        self.prepare();
-        self.data_flow_from_ssa();
-        self.cfg_from_ssa();
-    }
-
-    fn prepare(&mut self) {
-        self.prepare_consts();
-        self.prepare_regs();
-    }
-
-    fn cfg_from_ssa(&mut self) {
+        // XXX
+        let data_graph = CASTDataGraph::yo(&self.rfn, &mut self.ast);
+        self.datagraph = data_graph;
+        self.declare_vars();
+        // Recover control flow graph
         self.cfg_from_blocks(self.ssa.entry_node().unwrap(), &mut HashSet::new());
         self.replace_tmp_with_goto();
-    }
-
-    fn data_flow_from_ssa(&mut self) {
-        for node in self.ssa.inorder_walk() {
-            if self.ssa.is_phi(node) {
-                self.handle_phi(node);
-            } else if self.ssa.is_expr(node) {
-                self.update_values(node);
-            }
-        }
     }
 
     fn cfg_from_nodes(&mut self, block: NodeIndex) {
         let nodes = self.ssa.nodes_in(block);
         for node in nodes {
-            if self.is_recover_node(node) {
-                let n = self.recover(node);
+            if self.is_recover_action(node) {
+                let n = self.recover_action(node);
                 self.action_map.insert(node, n);
             }
         }
@@ -771,18 +626,6 @@ impl<'a> CASTBuilder<'a> {
             self.cfg_from_nodes(blk);
             self.cfg_from_blocks(blk, visited);
         }
-    }
-}
-
-impl From<RadecoFunction> for SimpleCAST {
-    fn from(rfn: RadecoFunction) -> Self {
-        // TODO
-        let ast = SimpleCAST::new(&rfn.name);
-        // Gather variables, constants
-        unimplemented!();
-        // Recover expression, statement
-        unimplemented!();
-        ast
     }
 }
 
@@ -917,6 +760,9 @@ impl<'a> CASTConverter<'a> {
                 }
             },
             Some(SimpleCASTNode::Entry) => {},
+            Some(SimpleCASTNode::Action(ActionNode::Dummy(_))) => {
+                // XXX
+            }
             _ => unreachable!(),
         };
         for n in self.ast.next_actions(current_node) {
@@ -1185,6 +1031,9 @@ mod test {
 
 #[cfg(feature="trace_log")] extern crate env_logger;
     // XXX For debbuging
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
     use frontend::radeco_containers::*;
     use analysis;
     use analysis::sccp;
@@ -1281,8 +1130,18 @@ mod test {
                     }
                 }
                 let mut b = CASTBuilder::new(&rfn);
-                b.data_flow_from_ssa();
-                println!("{:?}", Dot::new(&b.data_graph));
+                b.from_ssa();
+                {
+                    // println!("{:?}", Dot::new(&b.ast.ast));
+                    let mut df = File::create("cfg.dot").expect("Unable to create .dot file");
+                    writeln!(df, "{:?}", Dot::new(&b.ast.ast));
+                }
+                {
+                    let mut df = File::create("output").expect("Unable to create output");
+                    let output = b.ast.to_c_ast().print();
+                    writeln!(df, "{}", output);
+                    // println!("{}", output);
+                }
             }
         }
     }
