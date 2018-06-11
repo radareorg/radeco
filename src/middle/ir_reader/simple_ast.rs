@@ -5,6 +5,7 @@
 //! [`SSAStorage`]: ::middle::ssa::ssastorage::SSAStorage
 
 use middle::ir;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct Function {
@@ -105,10 +106,10 @@ pub struct NewValue(pub ValueRef, pub Type);
 #[derive(Debug)]
 pub struct Type(pub WidthSpec, pub RefSpec);
 
-#[derive(Hash, PartialEq, Eq, Debug)]
+#[derive(Hash, PartialEq, Eq)]
 pub struct ValueRef(pub u64);
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq)]
 pub struct PhysReg(pub String);
 
 #[derive(Debug)]
@@ -119,4 +120,16 @@ pub enum RefSpec {
     Scalar,
     Reference,
     Unknown,
+}
+
+impl fmt::Debug for ValueRef {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "%{}", self.0)
+    }
+}
+
+impl fmt::Debug for PhysReg {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "${}", self.0)
+    }
 }

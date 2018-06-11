@@ -180,11 +180,7 @@ impl<'a, O: Write> IRWriter<'a, O> {
         for (reg_id, (reg_val, vt)) in utils::register_state_info(entry_regstate, self.ssa) {
             self.indent(2)?;
             self.emit_new_value(reg_val, vt)?;
-            let regname = self
-                .ssa
-                .regfile
-                .get_name(reg_id)
-                .unwrap_or("mem");
+            let regname = self.ssa.regfile.get_name(reg_id).unwrap_or("mem");
             writeln!(self.output, "${};", regname)?;
         }
         Ok(())
@@ -386,25 +382,30 @@ impl<'a, O: Write> IRWriter<'a, O> {
     fn emit_operand(&mut self, operand: NodeIndex) -> fmt::Result {
         match self.ssa.g[operand] {
             NodeData::Op(MOpcode::OpConst(c), _) => write!(self.output, "#x{:x}", c),
-            _ => match self.seen.get(&operand) {
-                Some(&idx) => write!(self.output, "%{}", idx),
-                None => log_emit_err!(self, "node {:?} used before defined", operand),
-            },
+            _ => {
+                let idx = self.value(operand);
+                write!(self.output, "%{}", idx)
+            }
         }
     }
 
     fn emit_new_value(&mut self, node: NodeIndex, vt: ValueInfo) -> fmt::Result {
-        let idx = self.new_value(node);
+        let idx = self.value(node);
         write!(self.output, "%{}: ", idx)?;
         self.emit_valueinfo(vt)?;
         write!(self.output, " = ")?;
         Ok(())
     }
 
-    fn new_value(&mut self, node: NodeIndex) -> u64 {
-        self.ctr += 1;
-        self.seen.insert(node, self.ctr);
-        self.ctr
+    fn value(&mut self, node: NodeIndex) -> u64 {
+        use std::collections::hash_map::Entry;
+        match self.seen.entry(node) {
+            Entry::Occupied(o) => *o.get(),
+            Entry::Vacant(v) => {
+                self.ctr += 1;
+                *v.insert(self.ctr)
+            }
+        }
     }
 
     fn emit_valueinfo(&mut self, vt: ValueInfo) -> fmt::Result {

@@ -185,6 +185,11 @@ define-fun main(unknown) -> unknown {
         roundtrip_file("main".to_owned(), "test_files/bin1_main_ssa");
     }
 
+    #[test]
+    fn roundtrip_loopy_main() {
+        roundtrip_file("sym.main".to_owned(), "test_files/loopy_main_ssa");
+    }
+
     fn roundtrip_file<P: AsRef<Path>>(fn_name: String, file_path: P) {
         let ssa_txt = {
             let mut ssa_txt_file = File::open(file_path).expect("Error opening file");

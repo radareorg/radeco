@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fmt::Write;
+use std::mem;
 
 pub type Result<T> = ::std::result::Result<T, LoweringError>;
 
@@ -42,6 +43,8 @@ struct LowerSsa<'a> {
     exit_node: SSABlock,
     blocks: HashMap<ir::MAddress, SSABlock>,
     values: HashMap<sast::ValueRef, SSAValue>,
+    fw_ref_values: HashMap<sast::ValueRef, SSAValue>,
+    phi_operands: Vec<(SSAValue, Vec<sast::Operand>)>,
 }
 
 impl<'a> LowerSsa<'a> {
@@ -66,6 +69,8 @@ impl<'a> LowerSsa<'a> {
             exit_node,
             blocks: HashMap::new(),
             values: HashMap::new(),
+            fw_ref_values: HashMap::new(),
+            phi_operands: Vec::new(),
         })
     }
 
@@ -88,6 +93,21 @@ impl<'a> LowerSsa<'a> {
 
         self.lower_final_reg_state(sfn.final_reg_state)?;
 
+        for (phi, sops) in mem::replace(&mut self.phi_operands, Vec::new()) {
+            for sop in sops.into_iter().rev() {
+                let op = self.lower_operand(sop)?;
+                self.ssa.phi_use(phi, op);
+            }
+        }
+
+        if !self.fw_ref_values.is_empty() {
+            let undefined_values: Vec<_> = self.fw_ref_values.keys().collect();
+            return Err(LoweringError::InvalidAst(format!(
+                "values were used but not defined: {:?}",
+                undefined_values
+            )));
+        }
+
         Ok(())
     }
 
@@ -100,7 +120,7 @@ impl<'a> LowerSsa<'a> {
             let regid = self.index_of_reg(&sreg)?;
             let val = self.ssa.insert_comment(lower_valueinfo(ty), sreg.0)?;
             self.ssa.op_use(regstate, regid.to_u8(), val);
-            self.values.insert(vr, val);
+            self.insert_new_value(vr, val)?;
         }
         Ok(())
     }
@@ -174,11 +194,11 @@ impl<'a> LowerSsa<'a> {
             sast::Operation::Phi(sast::NewValue(vr, ty), sops) => {
                 let vi = lower_valueinfo(ty);
                 let res = self.ssa.insert_phi(vi)?;
-                for sop in sops.into_iter().rev() {
-                    let op = self.lower_operand(sop)?;
-                    self.ssa.phi_use(res, op);
-                }
-                self.values.insert(vr, res);
+                // replacing forward refs with their values changes the order of
+                // phi node operands, so we wait until forward refs have been
+                // resolved before adding operands
+                self.phi_operands.push((res, sops));
+                self.insert_new_value(vr, res)?;
                 (res, None)
             }
 
@@ -200,7 +220,7 @@ impl<'a> LowerSsa<'a> {
                     let op = self.lower_operand(sop)?;
                     self.ssa.op_use(res, i as u8, op);
                 }
-                self.values.insert(vr, res);
+                self.insert_new_value(vr, res)?;
                 (res, opt_addr)
             }
 
@@ -223,7 +243,7 @@ impl<'a> LowerSsa<'a> {
                         .ssa
                         .insert_comment(lower_valueinfo(sret.value.1), comment)?;
                     self.ssa.op_use(val, regid.to_u8(), res);
-                    self.values.insert(sret.value.0, val);
+                    self.insert_new_value(sret.value.0, val)?;
                 }
                 (res, opt_addr)
             }
@@ -231,19 +251,45 @@ impl<'a> LowerSsa<'a> {
     }
 
     fn lower_operand(&mut self, sop: sast::Operand) -> Result<SSAValue> {
-        match sop {
+        use std::collections::hash_map::Entry;
+        Ok(match sop {
             sast::Operand::ValueRef(r) => {
                 if let Some(x) = self.values.get(&r).cloned() {
-                    Ok(x)
+                    x
                 } else {
-                    Err(LoweringError::InvalidAst(format!(
-                        "no value reference: %{}",
-                        r.0
-                    )))
+                    match self.fw_ref_values.entry(r) {
+                        Entry::Occupied(o) => *o.get(),
+                        Entry::Vacant(v) => {
+                            *v.insert(self.ssa.insert_undefined(ValueInfo::new_unresolved(
+                                ir::WidthSpec::Unknown,
+                            ))?)
+                        }
+                    }
                 }
             }
-            sast::Operand::Const(v) => Ok(self.ssa.insert_const(v)?),
+            sast::Operand::Const(v) => self.ssa.insert_const(v)?,
+        })
+    }
+
+    fn insert_new_value(&mut self, vr: sast::ValueRef, val: SSAValue) -> Result<()> {
+        use std::collections::hash_map::Entry;
+        if let Some(fw_ref_val) = self.fw_ref_values.remove(&vr) {
+            self.ssa.replace_value(fw_ref_val, val);
         }
+
+        match self.values.entry(vr) {
+            Entry::Vacant(v) => {
+                v.insert(val);
+            }
+            Entry::Occupied(o) => {
+                return Err(LoweringError::InvalidAst(format!(
+                    "value defined twice: {:?}",
+                    o.key()
+                )))
+            }
+        }
+
+        Ok(())
     }
 
     fn block_at(&mut self, at: ir::MAddress) -> Result<SSABlock> {
@@ -263,7 +309,7 @@ impl<'a> LowerSsa<'a> {
                 .regfile
                 .register_id_by_name(&sreg.0)
                 .ok_or_else(|| {
-                    LoweringError::InvalidAst(format!("no physical register: {}", sreg.0))
+                    LoweringError::InvalidAst(format!("no physical register: {:?}", sreg))
                 })
         }
     }

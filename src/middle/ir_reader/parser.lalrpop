@@ -156,4 +156,7 @@ MAddress: ir::MAddress =
         };
 
 Comma<E>: Vec<E> =
+    <Comma0<E>?>                                            => <>.unwrap_or(Vec::new());
+
+Comma0<E>: Vec<E> =
     <v0:(<E> ",")*> <e:E>                                   => { let mut v = v0; v.push(e); v };
