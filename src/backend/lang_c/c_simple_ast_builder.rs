@@ -171,19 +171,23 @@ impl<'a> CASTDataGraph<'a> {
             radeco_warn!("Entry node not found");
             return;
         }
-        // TODO avoid unwrap
-        let reg_state = self.ssa.registers_in(self.ssa.entry_node().unwrap());
-        if reg_state.is_none() {
-            radeco_warn!("RegisterState not found");
-            return;
-        }
-        let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
-        for (idx, (node, vt)) in reg_map.into_iter() {
-            let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-            // XXX
-            let ast_node = ast.constant(&name, None);
-            self.reg_map.insert(name, ast_node);
-            self.var_map.insert(node, ast_node);
+        for walk_node in self.ssa.inorder_walk() {
+            // TODO avoid unwrap
+            let reg_state = self.ssa.registers_in(walk_node);
+            if reg_state.is_none() {
+                radeco_warn!("RegisterState not found");
+                return;
+            }
+            let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
+            for (idx, (node, vt)) in reg_map.into_iter() {
+                let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
+                // XXX
+                let ast_node = ast.constant(&name, None);
+                // XXX
+                self.reg_map.insert(name, ast_node);
+                radeco_trace!("Add register {:?}", node);
+                self.var_map.insert(node, ast_node);
+            }
         }
     }
 

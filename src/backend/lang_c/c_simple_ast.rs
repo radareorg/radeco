@@ -172,7 +172,7 @@ impl SimpleCAST {
         self.ast.edges_directed(node, Direction::Incoming)
             .filter(|e| *e.weight() == SimpleCASTEdge::Value(ValueEdge::DeRef))
             .next()
-            .map(|e| e.target())
+            .map(|e| e.source())
     }
 
     pub fn deref(&mut self, operand: NodeIndex) -> NodeIndex {
@@ -659,11 +659,18 @@ impl<'a> CASTConverter<'a> {
         // XXX
         let unknown_node = c_ast.declare_vars(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()])[0];
         self.node_map.insert(self.ast.unknown, unknown_node);
-        for var in self.ast.vars.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(*var) {
+        for &con in self.ast.consts.iter() {
+            if let Some(&SimpleCASTNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
+                let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
+                let n = c_ast.declare_vars(ty, &[value_name.to_string()]);
+                self.node_map.insert(con, n[0]);
+            }
+        }
+        for &var in self.ast.vars.iter() {
+            if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
                 let n = c_ast.declare_vars(ty, &[var_name.to_string()]);
-                self.node_map.insert(*var, n[0]);
+                self.node_map.insert(var, n[0]);
             }
         }
         for expr in self.ast.exprs.iter() {
