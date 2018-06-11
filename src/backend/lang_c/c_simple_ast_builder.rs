@@ -96,6 +96,12 @@ impl<'a> CASTDataGraph<'a> {
             return;
         }
         self.seen.insert(ret_node);
+        let regs = self.ssa.registers(ret_node);
+        if regs.len() > 0 {
+            let ast_node = ast.constant(&regs[0], None);
+            self.var_map.insert(ret_node, ast_node);
+            return;
+        }
         let ops = self.ssa.operands_of(ret_node);
 
         radeco_trace!("CASTBuilder::update_values opcode: {:?}", self.ssa.opcode(ret_node));
@@ -166,17 +172,11 @@ impl<'a> CASTDataGraph<'a> {
     }
 
     fn prepare_regs(&mut self, ast: &mut SimpleCAST) {
-        let entry_node = self.ssa.entry_node();
-        if entry_node.is_none() {
-            radeco_warn!("Entry node not found");
-            return;
-        }
         for walk_node in self.ssa.inorder_walk() {
             // TODO avoid unwrap
             let reg_state = self.ssa.registers_in(walk_node);
             if reg_state.is_none() {
-                radeco_warn!("RegisterState not found");
-                return;
+                continue;
             }
             let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
             for (idx, (node, vt)) in reg_map.into_iter() {
