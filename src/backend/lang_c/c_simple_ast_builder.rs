@@ -5,13 +5,186 @@ use middle::ssa::utils;
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
 use middle::ssa::cfg_traits::CFG;
-use super::c_simple_ast::{ValueNode, SimpleCAST};
+use super::c_simple_ast::{ValueNode, SimpleCAST, SimpleCASTEdge, ValueEdge, ActionEdge};
 use super::c_simple;
 use petgraph::visit::EdgeRef;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::{EdgeDirection, Direction, Directed};
 
-pub struct CASTDataGraph<'a> {
+macro_rules! add_jump_to_cfg {
+    ($self: ident, $source: expr, $target: expr, $edge: expr) => {
+        let src_node = $self.action_map.get(&$source).unwrap();
+        let dst_node = $self.action_map.get(&$target).unwrap();
+        $self.ast.add_edge(*src_node, *dst_node, $edge);
+    };
+    ($self: ident, $source: expr, $target: expr) => {
+        add_jump_to_cfg!($self, $source, $target, SimpleCASTEdge::Value(ValueEdge::GotoDst));
+    }
+}
+
+/// CASTBuilder constructs SimpleCAST from RadecoFunction
+pub struct CASTBuilder<'a> {
+    ast: SimpleCAST,
+    //NodeIndex of SimpleCAST
+    last_action: NodeIndex,
+    rfn: &'a RadecoFunction,
+    // SSA of RadecoFunction
+    ssa: &'a SSAStorage,
+    action_map: HashMap<NodeIndex, NodeIndex>,
+    datamap: CASTDataMap<'a>,
+}
+
+impl<'a> CASTBuilder<'a> {
+    fn new(f: &'a RadecoFunction) -> CASTBuilder {
+        let ast = SimpleCAST::new(f.name.as_ref());
+        CASTBuilder {
+            last_action: ast.entry,
+            ast: ast,
+            rfn: f,
+            ssa: f.ssa(),
+            action_map: HashMap::new(),
+            datamap: CASTDataMap::new(f),
+        }
+    }
+
+    // XXX For debugging
+    fn dummy_goto(&mut self) -> NodeIndex {
+        self.last_action = self.ast.dummy_goto(self.last_action);
+        self.last_action
+    }
+
+    // XXX For debugging
+    fn dummy_action(&mut self, s: String) -> NodeIndex {
+        self.last_action = self.ast.dummy(self.last_action, s);
+        self.last_action
+    }
+
+    fn declare_vars(&mut self) {
+        for (ref name, _) in self.datamap.reg_map.iter() {
+            let _ = self.ast.var(&name, None);
+        }
+        for ref val in self.datamap.consts.iter() {
+            let _ = self.ast.var(&val, None);
+        }
+    }
+
+    fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {
+        self.last_action = self.ast.assign(dst, src, self.last_action);
+        self.last_action
+    }
+
+    fn call_action(&mut self, func: &str) -> NodeIndex {
+        self.last_action = self.ast.call_func(func, &[], self.last_action, None);
+        self.last_action
+    }
+
+    fn recover_action(&mut self, node: NodeIndex) -> NodeIndex {
+        assert!(self.is_recover_action(node));
+        let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
+        radeco_trace!("CASTBuilder::recover {:?} @ {:?}", op, node);
+        match op {
+            MOpcode::OpCall => {
+                // TODO Add proper argument, require prototype from RadecoFunction
+                self.call_action("func")
+            },
+            MOpcode::OpStore => {
+                let ops = self.ssa.operands_of(node);
+                let (dst, src) = {
+                    let dst = if let Some(&_dst) = self.datamap.var_map.get(&ops[1]) {
+                        self.ast.derefed_node(_dst)
+                    } else {
+                        None
+                    };
+                    // XXX
+                    let src = self.datamap.var_map.get(&ops[2]).map(|n| *n);
+                    (dst, src)
+                };
+                if let (Some(d), Some(s)) = (dst, src) {
+                    self.assign(d, s)
+                } else {
+                    self.dummy_action(format!("{:?} @ {:?}", op, node))
+                }
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn is_recover_action(&self, node: NodeIndex) -> bool {
+        let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
+        match op {
+            MOpcode::OpCall | MOpcode::OpStore => true,
+            _ => false,
+        }
+    }
+
+    fn replace_tmp_with_goto(&mut self) {
+        let mut last = None;
+        for node in self.ssa.inorder_walk() {
+            if last.is_some() && self.ssa.is_block(node) {
+                let s = self.action_map.get(&node).expect("The node should be added to action_map");
+                if let Some(succ) = self.ssa.unconditional_block(node) {
+                    if let Some(selector) = self.ssa.selector_in(node) {
+                        // TODO
+                        radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
+                    } else {
+                        // TODO
+                        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
+                        add_jump_to_cfg!(self, node, succ);
+                    }
+                } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
+                    // TODO
+                    radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
+                    add_jump_to_cfg!(self, node, blk_cond_info.true_side,
+                                     SimpleCASTEdge::Action(ActionEdge::IfThen));
+                    add_jump_to_cfg!(self, node, blk_cond_info.false_side,
+                                     SimpleCASTEdge::Action(ActionEdge::IfElse));
+                } else {
+                    unreachable!();
+                }
+            } else if self.ssa.is_block(node) {
+                last = Some(node);
+            }
+        }
+    }
+
+    pub fn recover_code(rfn: &'a RadecoFunction) -> SimpleCAST {
+        let mut builder = Self::new(rfn);
+        // Recover values
+        let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
+        builder.datamap = data_graph;
+        builder.declare_vars();
+        // Recover control flow graph
+        builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
+        builder.replace_tmp_with_goto();
+        builder.ast
+    }
+
+    fn cfg_from_nodes(&mut self, block: NodeIndex) {
+        let nodes = self.ssa.nodes_in(block);
+        for node in nodes {
+            if self.is_recover_action(node) {
+                let n = self.recover_action(node);
+                self.action_map.insert(node, n);
+            }
+        }
+    }
+
+    fn cfg_from_blocks(&mut self, block: NodeIndex, visited: &mut HashSet<NodeIndex>) {
+        if visited.contains(&block) {
+            return;
+        }
+        visited.insert(block);
+        let next_blocks = self.ssa.next_blocks(block);
+        for blk in next_blocks {
+            let n = self.dummy_goto();
+            self.action_map.insert(blk, n);
+            self.cfg_from_nodes(blk);
+            self.cfg_from_blocks(blk, visited);
+        }
+    }
+}
+
+pub struct CASTDataMap<'a> {
     rfn: &'a RadecoFunction,
     ssa: &'a SSAStorage,
     // Hashmap from node of SSAStorage to one of self.data_graph
@@ -23,9 +196,9 @@ pub struct CASTDataGraph<'a> {
     seen: HashSet<NodeIndex>,
 }
 
-impl<'a> CASTDataGraph<'a> {
-    pub fn new(rfn: &'a RadecoFunction) -> CASTDataGraph<'a> {
-        CASTDataGraph {
+impl<'a> CASTDataMap<'a> {
+    pub fn new(rfn: &'a RadecoFunction) -> CASTDataMap<'a> {
+        CASTDataMap {
             ssa: rfn.ssa(),
             rfn: rfn,
             var_map: HashMap::new(),
@@ -36,12 +209,17 @@ impl<'a> CASTDataGraph<'a> {
     }
 
     // Returns data map from SSAStorage's NodeIndex to SimpleCAST's NodeIndex
-    // pub fn yo(ast: &'a mut SimpleCAST, ssa: &'a SSAStorage) -> HashMap<NodeIndex, NodeIndex> {
-    pub fn yo(rfn: &'a RadecoFunction, ast: &mut SimpleCAST) -> Self {
+    pub fn recover_data(rfn: &'a RadecoFunction, ast: &mut SimpleCAST) -> Self {
         let mut s = Self::new(rfn);
         s.prepare_consts(ast);
         s.prepare_regs(ast);
-        s.recover_data(ast);
+        for node in s.ssa.inorder_walk() {
+            if s.ssa.is_phi(node) {
+                s.handle_phi(node);
+            } else if s.ssa.is_expr(node) {
+                s.update_values(node, ast);
+            }
+        }
         s
     }
 
@@ -190,16 +368,4 @@ impl<'a> CASTDataGraph<'a> {
             }
         }
     }
-
-    fn recover_data(&mut self, ast: &mut SimpleCAST) {
-        for node in self.ssa.inorder_walk() {
-            if self.ssa.is_phi(node) {
-                self.handle_phi(node);
-            } else if self.ssa.is_expr(node) {
-                self.update_values(node, ast);
-            }
-        }
-    }
-
 }
-

@@ -2,11 +2,7 @@ use std::{default, iter, fmt};
 use std::collections::{HashMap, HashSet};
 
 use super::c_simple;
-use super::c_simple_ast_builder::CASTDataGraph;
 use super::c_simple::{Ty, CAST, CASTNode};
-use middle::ir;
-use middle::ir::MOpcode;
-use middle::ssa::utils;
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
@@ -15,19 +11,8 @@ use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::visit::EdgeRef;
 use petgraph::{EdgeDirection, Direction, Directed};
 
-macro_rules! add_jump_to_cfg {
-    ($self: ident, $source: expr, $target: expr, $edge: expr) => {
-        let src_node = $self.action_map.get(&$source).unwrap();
-        let dst_node = $self.action_map.get(&$target).unwrap();
-        $self.ast.ast.add_edge(*src_node, *dst_node, $edge);
-    };
-    ($self: ident, $source: expr, $target: expr) => {
-        add_jump_to_cfg!($self, $source, $target, SimpleCASTEdge::Value(ValueEdge::GotoDst));
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
-enum SimpleCASTNode {
+pub enum SimpleCASTNode {
     /// Entry node of target function
     Entry,
     Action(ActionNode),
@@ -36,7 +21,7 @@ enum SimpleCASTNode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ActionNode {
+pub enum ActionNode {
     Assignment,
     Call(String),
     Return,
@@ -56,20 +41,20 @@ pub enum ValueNode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum SimpleCASTEdge {
+pub enum SimpleCASTEdge {
     Action(ActionEdge),
     Value(ValueEdge),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ActionEdge {
+pub enum ActionEdge {
     IfThen,
     IfElse,
     Normal,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ValueEdge {
+pub enum ValueEdge {
     DeRef,
     /// Source Node of assignment action
     AssignSrc,
@@ -141,6 +126,10 @@ impl SimpleCAST {
             exprs: Vec::new(),
             label_map: HashMap::new(),
         }
+    }
+
+    pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, edge: SimpleCASTEdge) -> EdgeIndex {
+        self.ast.add_edge(source, target, edge)
     }
 
     /// Add ValueNode of variable
@@ -474,167 +463,6 @@ impl SimpleCAST {
     }
 }
 
-/// CASTBuilder is a constructor from RadecoFunction
-struct CASTBuilder<'a> {
-    ast: SimpleCAST,
-    //NodeIndex of SimpleCAST
-    last_action: NodeIndex,
-    rfn: &'a RadecoFunction,
-    // SSA of RadecoFunction
-    ssa: &'a SSAStorage,
-    action_map: HashMap<NodeIndex, NodeIndex>,
-    datagraph: CASTDataGraph<'a>,
-}
-
-impl<'a> CASTBuilder<'a> {
-    pub fn new(f: &'a RadecoFunction) -> CASTBuilder {
-        let ast = SimpleCAST::new(f.name.as_ref());
-        CASTBuilder {
-            last_action: ast.entry,
-            ast: ast,
-            rfn: f,
-            ssa: f.ssa(),
-            action_map: HashMap::new(),
-            datagraph: CASTDataGraph::new(f),
-        }
-    }
-
-    // For debugging
-    fn dummy_goto(&mut self) -> NodeIndex {
-        self.last_action = self.ast.dummy_goto(self.last_action);
-        self.last_action
-    }
-
-    // For debugging
-    fn dummy_action(&mut self, s: String) -> NodeIndex {
-        self.last_action = self.ast.dummy(self.last_action, s);
-        self.last_action
-    }
-
-    fn declare_vars(&mut self) {
-        for (ref name, _) in self.datagraph.reg_map.iter() {
-            let _ = self.ast.var(&name, None);
-        }
-        for ref val in self.datagraph.consts.iter() {
-            let _ = self.ast.var(&val, None);
-        }
-    }
-
-    fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {
-        self.last_action = self.ast.assign(dst, src, self.last_action);
-        self.last_action
-    }
-
-    fn call_action(&mut self) -> NodeIndex {
-        self.last_action = self.ast.call_func("", &[], self.last_action, None);
-        self.last_action
-    }
-
-    fn recover_action(&mut self, node: NodeIndex) -> NodeIndex {
-        assert!(self.is_recover_action(node));
-        let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
-        radeco_trace!("CASTBuilder::recover {:?} @ {:?}", op, node);
-        match op {
-            MOpcode::OpCall => {
-                self.call_action()
-            },
-            MOpcode::OpStore => {
-                let ops = self.ssa.operands_of(node);
-                let (dst, src) = {
-                    let dst = if let Some(&_dst) = self.datagraph.var_map.get(&ops[1]) {
-                        self.ast.derefed_node(_dst)
-                    } else {
-                        None
-                    };
-                    // XXX
-                    let src = self.datagraph.var_map.get(&ops[2]).map(|n| *n);
-                    (dst, src)
-                };
-                // // self.last_action = self.ast.assign(dst, src, self.last_action);
-                // self.dummy_action(format!("{:?} {:?} = {:?}", op, dst, src))
-                radeco_trace!("PO {:?}, {:?}", dst, src);
-                if let (Some(d), Some(s)) = (dst, src) {
-                    self.assign(d, s)
-                } else {
-                    self.dummy_action(format!("{:?} @ {:?}", op, node))
-                }
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    fn is_recover_action(&self, node: NodeIndex) -> bool {
-        let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
-        match op {
-            MOpcode::OpCall | MOpcode::OpStore => true,
-            _ => false,
-        }
-    }
-
-    fn replace_tmp_with_goto(&mut self) {
-        let mut last = None;
-        for node in self.ssa.inorder_walk() {
-            if last.is_some() && self.ssa.is_block(node) {
-                let s = self.action_map.get(&node).expect("The node should be added to action_map");
-                if let Some(succ) = self.ssa.unconditional_block(node) {
-                    if let Some(selector) = self.ssa.selector_in(node) {
-                        // TODO
-                        radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
-                    } else {
-                        // TODO
-                        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
-                        add_jump_to_cfg!(self, node, succ);
-                    }
-                } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
-                    // TODO
-                    radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
-                    add_jump_to_cfg!(self, node, blk_cond_info.true_side,
-                                     SimpleCASTEdge::Action(ActionEdge::IfThen));
-                    add_jump_to_cfg!(self, node, blk_cond_info.false_side,
-                                     SimpleCASTEdge::Action(ActionEdge::IfElse));
-                } else {
-                    unreachable!();
-                }
-            } else if self.ssa.is_block(node) {
-                last = Some(node);
-            }
-        }
-    }
-
-    pub fn from_ssa(&mut self) {
-        // XXX
-        let data_graph = CASTDataGraph::yo(&self.rfn, &mut self.ast);
-        self.datagraph = data_graph;
-        self.declare_vars();
-        // Recover control flow graph
-        self.cfg_from_blocks(self.ssa.entry_node().unwrap(), &mut HashSet::new());
-        self.replace_tmp_with_goto();
-    }
-
-    fn cfg_from_nodes(&mut self, block: NodeIndex) {
-        let nodes = self.ssa.nodes_in(block);
-        for node in nodes {
-            if self.is_recover_action(node) {
-                let n = self.recover_action(node);
-                self.action_map.insert(node, n);
-            }
-        }
-    }
-
-    fn cfg_from_blocks(&mut self, block: NodeIndex, visited: &mut HashSet<NodeIndex>) {
-        if visited.contains(&block) {
-            return;
-        }
-        visited.insert(block);
-        let next_blocks = self.ssa.next_blocks(block);
-        for blk in next_blocks {
-            let n = self.dummy_goto();
-            self.action_map.insert(blk, n);
-            self.cfg_from_nodes(blk);
-            self.cfg_from_blocks(blk, visited);
-        }
-    }
-}
 
 /// This is used for translating SimpleCAST to CAST
 struct CASTConverter<'a> {
@@ -657,19 +485,19 @@ impl<'a> CASTConverter<'a> {
     pub fn to_c_ast(&mut self) -> CAST {
         let mut c_ast = CAST::new(&self.ast.fname);
         // XXX
-        let unknown_node = c_ast.declare_vars(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()])[0];
+        let unknown_node = c_ast.declare_implicit(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()])[0];
         self.node_map.insert(self.ast.unknown, unknown_node);
         for &con in self.ast.consts.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
-                let n = c_ast.declare_vars(ty, &[value_name.to_string()]);
+                let n = c_ast.declare_implicit(ty, &[value_name.to_string()]);
                 self.node_map.insert(con, n[0]);
             }
         }
         for &var in self.ast.vars.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
-                let n = c_ast.declare_vars(ty, &[var_name.to_string()]);
+                let n = c_ast.declare_implicit(ty, &[var_name.to_string()]);
                 self.node_map.insert(var, n[0]);
             }
         }
@@ -1038,134 +866,5 @@ mod test {
         let f = ast.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
         let output = ast.to_c_ast().print();
         println!("{}", output);
-    }
-
-
-    // Filters the functions that were in Radeco output AND requested by user
-    fn filter_with<'a>(all_funcs: &Vec<(u64, &'a str)>,
-                       requested: &Vec<&'a str>)
-                       -> Vec<(u64, &'a str)> {
-
-        all_funcs.iter()
-            .filter(|&&(_, name)| requested.iter().any(|user_req| &name == user_req))
-            .map(|&(addr, name)| (addr, name))
-            .collect()
-    }
-
-#[cfg(feature="trace_log")] extern crate env_logger;
-    // XXX For debbuging
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    use frontend::radeco_containers::*;
-    use analysis;
-    use analysis::sccp;
-    use analysis::cse::cse::CSE;
-    use analysis::interproc::fixcall::CallFixer;
-    use middle::dce;
-    use middle::ssa::verifier;
-    use std::path::PathBuf;
-    use std::fs::{self, File};
-    use std::process;
-    use petgraph::dot::Dot;
-    #[test]
-    fn simple_c_ast_po() {
-        #[cfg(feature="trace_log")] env_logger::init();
-        // let requested_functions = vec!["sym.main"];
-        let requested_functions = vec!["main"];
-        // let proj_name = "./a.out".to_string();
-        // let proj_name = "./po".to_string();
-        let proj_name = "./fact".to_string();
-        let mut rproj = {
-            ProjectLoader::new().path(&proj_name).load()
-        };
-        let regfile = rproj.regfile().clone();
-        for mut xy in rproj.iter_mut() {
-            let rmod = &mut xy.module;
-            {
-                println!("[*] Fixing Callee Information");
-                let bp_name = regfile.get_name_by_alias(&"BP".to_string());
-                let bp_name = bp_name.map(|s| s.to_owned());
-                let sp_name = regfile.get_name_by_alias(&"SP".to_string());
-                let sp_name = sp_name.map(|s| s.to_owned());
-                let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
-                callfixer.rounded_analysis();
-            }
-
-            // Fix call sites
-            analysis::functions::fix_ssa_opcalls::go(rmod);
-
-            // Infer calling conventions
-            analysis::functions::infer_regusage::run(rmod, &*regfile);
-
-            // Filter the data if the user provided some args to be matched upon
-            let matched_func_addrs = if requested_functions.len() != 0 {
-                let mut matched_func_vec: Vec<(u64, &str)> =
-                    rmod.iter().map(|_f| {
-                        let f = _f.function.1;
-                        (f.offset.clone(), &*f.name)
-                    }).collect();
-                let all_func_names: Vec<(&str)> =
-                    matched_func_vec.iter().map(|&(_, name)| name).collect();
-                matched_func_vec = filter_with(&matched_func_vec,
-                                               &requested_functions.iter().map(|s| &s[..]).collect::<Vec<_>>());
-                matched_func_vec.into_iter().map(|(addr, _)| addr).collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            };
-
-            for addr in matched_func_addrs {
-
-                let ref mut rfn = rmod.functions.get_mut(&addr).unwrap();
-
-                println!("[+] Analyzing: {} @ {:#x}", rfn.name, addr);
-                {
-                    println!("  [*] Eliminating Dead Code");
-                    dce::collect(rfn.ssa_mut());
-                }
-                // let mut ssa = {
-                //     // Constant Propagation (sccp)
-                //     println!("  [*] Propagating Constants");
-                //     let mut analyzer = sccp::Analyzer::new(rfn.ssa_mut());
-                //     analyzer.analyze();
-                //     analyzer.emit_ssa()
-                // };
-                // {
-                //     println!("  [*] Eliminating More DeadCode");
-                //     dce::collect(&mut ssa);
-                // }
-                // *rfn.ssa_mut() = ssa;
-                {
-                    // Common SubExpression Elimination (cse)
-                    println!("  [*] Eliminating Common SubExpressions");
-                    let mut cse = CSE::new(rfn.ssa_mut());
-                    cse.run();
-                }
-                {
-                    // Verify SSA
-                    println!("  [*] Verifying SSA's Validity");
-                    match verifier::verify(rfn.ssa()) {
-                        Err(e) => {
-                            println!("  [*] Found Error: {}", e);
-                            process::exit(255);
-                        }
-                        Ok(_) => {  }
-                    }
-                }
-                let mut b = CASTBuilder::new(&rfn);
-                b.from_ssa();
-                {
-                    // println!("{:?}", Dot::new(&b.ast.ast));
-                    let mut df = File::create("cfg.dot").expect("Unable to create .dot file");
-                    writeln!(df, "{:?}", Dot::new(&b.ast.ast));
-                }
-                {
-                    let mut df = File::create("output").expect("Unable to create output");
-                    let output = b.ast.to_c_ast().print();
-                    writeln!(df, "{}", output);
-                    // println!("{}", output);
-                }
-            }
-        }
     }
 }
