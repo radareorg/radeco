@@ -116,6 +116,7 @@ pub enum CASTNode {
 pub enum Expr {
     Assign,
     Add,
+    //Add field `SignExt`, `ZeroExt`, `Narrow`
     Cast(usize),
     Sub,
     Mul,
@@ -363,6 +364,17 @@ impl CAST {
         }
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, decl, CASTEdge::StatementOrd(idx));
+        var_decls
+    }
+
+    // Declare variables/constants without declaration
+    pub fn declare_implicit(&mut self, ty: Ty, vars: &[String]) -> Vec<NodeIndex> {
+        let mut var_decls = Vec::new();
+        for v in vars.iter() {
+            let vn = self.ast.add_node(CASTNode::Var(v.clone()));
+            var_decls.push(vn);
+        }
+        let _ = self.next_edge_idx();
         var_decls
     }
 
