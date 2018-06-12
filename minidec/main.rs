@@ -23,6 +23,7 @@ use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::ir_reader::parse_il;
 use radeco_lib::middle::ssa::verifier;
+use radeco_lib::backend::lang_c::{c_simple_ast, c_simple_ast_builder};
 
 //use radeco_lib::analysis::mark_refs;
 
@@ -218,6 +219,18 @@ fn main() {
                 let mut df = File::create(&fname).expect("Unable to create .dot file");
                 let dot = dot::emit_dot(rfn.ssa());
                 writeln!(df, "{}", dot).expect("Error writing to file");
+            }
+
+            {
+                ////////////////////////
+                // Generate pseudo-C code
+                ///////////////////////
+                println!("  [*] Generating psuedo code");
+                fname.set_extension("c");
+                let mut df = File::create(&fname).expect("Unable to create .dot file");
+                let ast = c_simple_ast_builder::CASTBuilder::recover_code(&rfn);
+                let code = ast.to_c_ast().print();
+                writeln!(df, "{}", code).expect("Error writing to file");
             }
         }
 
