@@ -48,7 +48,6 @@ fn main() {
         let rmod = &mut xy.module;
         let mut dir = PathBuf::from(".");
         dir.push(format!("{}_out", proj_name));
-        dir.push(format!("{}_out", rmod.name()));
         fs::create_dir_all(&dir).expect("Failed to create directory");
 
         // Reduce the complexity of rmod.functions to just a vec of (u64,&String)
