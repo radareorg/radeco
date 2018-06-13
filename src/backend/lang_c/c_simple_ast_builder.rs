@@ -1,3 +1,4 @@
+//! This module for recovering SimpleCAST from IR.
 use std::collections::{HashMap, HashSet};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
@@ -13,8 +14,8 @@ use petgraph::{EdgeDirection, Direction, Directed};
 
 macro_rules! add_jump_to_cfg {
     ($self: ident, $source: expr, $target: expr, $edge: expr) => {
-        let src_node = $self.action_map.get(&$source).unwrap();
-        let dst_node = $self.action_map.get(&$target).unwrap();
+        let src_node = $self.action_map.get(&$source).expect("This can not be None");
+        let dst_node = $self.action_map.get(&$target).expect("This can not be None");
         $self.ast.add_edge(*src_node, *dst_node, $edge);
     };
     ($self: ident, $source: expr, $target: expr) => {
@@ -35,15 +36,15 @@ pub struct CASTBuilder<'a> {
 }
 
 impl<'a> CASTBuilder<'a> {
-    fn new(f: &'a RadecoFunction) -> CASTBuilder {
-        let ast = SimpleCAST::new(f.name.as_ref());
+    fn new(rfn: &'a RadecoFunction) -> CASTBuilder {
+        let ast = SimpleCAST::new(rfn.name.as_ref());
         CASTBuilder {
             last_action: ast.entry,
             ast: ast,
-            rfn: f,
-            ssa: f.ssa(),
+            rfn: rfn,
+            ssa: rfn.ssa(),
             action_map: HashMap::new(),
-            datamap: CASTDataMap::new(f),
+            datamap: CASTDataMap::new(rfn),
         }
     }
 
@@ -89,16 +90,10 @@ impl<'a> CASTBuilder<'a> {
             },
             MOpcode::OpStore => {
                 let ops = self.ssa.operands_of(node);
-                let (dst, src) = {
-                    let dst = if let Some(&_dst) = self.datamap.var_map.get(&ops[1]) {
-                        self.ast.derefed_node(_dst)
-                    } else {
-                        None
-                    };
-                    // XXX
-                    let src = self.datamap.var_map.get(&ops[2]).map(|n| *n);
-                    (dst, src)
-                };
+                let dst = self.datamap
+                    .var_map.get(&ops[1])
+                    .and_then(|&x| self.ast.derefed_node(x));
+                let src = self.datamap.var_map.get(&ops[2]).cloned();
                 if let (Some(d), Some(s)) = (dst, src) {
                     self.assign(d, s)
                 } else {
@@ -225,11 +220,10 @@ impl<'a> CASTDataMap<'a> {
 
     fn handle_binop(&mut self, ret_node: NodeIndex, ops: Vec<NodeIndex>,
                     expr: c_simple::Expr, ast: &mut SimpleCAST) {
-        // XXX for debbuging, do not use filter_map
+        assert!(ops.len() == 2);
         let ops_mapped = ops.iter()
             .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(ast.unknown))
             .collect::<Vec<_>>();
-        assert!(ops.len() == ops_mapped.len());
         let expr_node = ast.expr(ops_mapped.as_slice(), expr.clone());
         radeco_trace!("Add {:?} to {:?}, Operator: {:?}", ret_node, expr_node, expr);
         self.var_map.insert(ret_node, expr_node);
@@ -254,15 +248,10 @@ impl<'a> CASTDataMap<'a> {
     fn handle_phi(&mut self, node: NodeIndex) {
         assert!(self.ssa.is_phi(node));
         radeco_trace!("CASTBuilder::handle_phi {:?}", node);
-        if self.seen.contains(&node) {
-            return;
-        }
         let ops = self.ssa.operands_of(node);
-        // TODO
-        // XXX
+        // Take first available/mappable node of SimpleCAST's node from phi node
         if let Some(&head) = ops.into_iter()
-           .filter_map(|n| self.var_map.get(&n))
-           .next() {
+           .filter_map(|n| self.var_map.get(&n)).next() {
            self.var_map.insert(node, head);
         }
     }
@@ -283,7 +272,6 @@ impl<'a> CASTDataMap<'a> {
         let ops = self.ssa.operands_of(ret_node);
 
         radeco_trace!("CASTBuilder::update_values opcode: {:?}", self.ssa.opcode(ret_node));
-        // TODO update
         match self.ssa.opcode(ret_node).unwrap_or(MOpcode::OpInvalid) {
             MOpcode::OpStore => {
                 assert!(ops.len() == 3);
@@ -332,7 +320,7 @@ impl<'a> CASTDataMap<'a> {
         let reg_map = utils::call_rets(call_node, self.ssa);
         for (idx, (node, vt)) in reg_map.into_iter() {
             let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-            // TODO
+            // TODO Add data dependencies for return values or registers
         }
     }
 
@@ -359,12 +347,12 @@ impl<'a> CASTDataMap<'a> {
             let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
             for (idx, (node, vt)) in reg_map.into_iter() {
                 let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-                // XXX
+                // XXX SimpleCAST::constant may not be proper method for registering regs.
                 let ast_node = ast.constant(&name, None);
-                // XXX
-                self.reg_map.insert(name, ast_node);
                 radeco_trace!("Add register {:?}", node);
                 self.var_map.insert(node, ast_node);
+                // XXX Maybe not needed
+                self.reg_map.insert(name, ast_node);
             }
         }
     }
