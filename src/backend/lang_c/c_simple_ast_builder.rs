@@ -1,4 +1,8 @@
 //! This module is for recovering SimpleCAST from RadecoFunction.
+//!
+//! Usage of this module is to call `c_simple_ast_builder::recover_simple_ast(rfn)`
+//! where `rfn` is an instance of `RadecoFunction`, the function returns an instance of
+//! SimpleCAST and we can obtain higher level representation than Radeco IR.
 
 use std::collections::{HashMap, HashSet};
 use frontend::radeco_containers::RadecoFunction;
