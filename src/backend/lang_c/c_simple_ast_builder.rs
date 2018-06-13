@@ -1,4 +1,5 @@
-//! This module for recovering SimpleCAST from IR.
+//! This module is for recovering SimpleCAST from RadecoFunction.
+
 use std::collections::{HashMap, HashSet};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
@@ -12,6 +13,19 @@ use petgraph::visit::EdgeRef;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::{EdgeDirection, Direction, Directed};
 
+/// This constructs SimpleCAST from an instance of RadecoFunction.
+pub fn recover_simple_ast(rfn: &RadecoFunction) -> SimpleCAST {
+    let mut builder = CASTBuilder::new(rfn);
+    // Recover values
+    let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
+    builder.datamap = data_graph;
+    builder.declare_vars();
+    // Recover control flow graph
+    builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
+    builder.replace_tmp_with_goto();
+    builder.ast
+}
+
 macro_rules! add_jump_to_cfg {
     ($self: ident, $source: expr, $target: expr, $edge: expr) => {
         let src_node = $self.action_map.get(&$source).expect("This can not be None");
@@ -23,10 +37,10 @@ macro_rules! add_jump_to_cfg {
     }
 }
 
-/// CASTBuilder constructs SimpleCAST from RadecoFunction
-pub struct CASTBuilder<'a> {
+// CASTBuilder constructs SimpleCAST from RadecoFunction
+struct CASTBuilder<'a> {
     ast: SimpleCAST,
-    //NodeIndex of SimpleCAST
+    // NodeIndex of SimpleCAST
     last_action: NodeIndex,
     rfn: &'a RadecoFunction,
     // SSA of RadecoFunction
@@ -142,18 +156,6 @@ impl<'a> CASTBuilder<'a> {
         }
     }
 
-    pub fn recover_code(rfn: &'a RadecoFunction) -> SimpleCAST {
-        let mut builder = Self::new(rfn);
-        // Recover values
-        let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
-        builder.datamap = data_graph;
-        builder.declare_vars();
-        // Recover control flow graph
-        builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
-        builder.replace_tmp_with_goto();
-        builder.ast
-    }
-
     fn cfg_from_nodes(&mut self, block: NodeIndex) {
         let nodes = self.ssa.nodes_in(block);
         for node in nodes {
@@ -179,7 +181,7 @@ impl<'a> CASTBuilder<'a> {
     }
 }
 
-pub struct CASTDataMap<'a> {
+struct CASTDataMap<'a> {
     rfn: &'a RadecoFunction,
     ssa: &'a SSAStorage,
     // Hashmap from node of SSAStorage to one of self.data_graph
@@ -192,7 +194,7 @@ pub struct CASTDataMap<'a> {
 }
 
 impl<'a> CASTDataMap<'a> {
-    pub fn new(rfn: &'a RadecoFunction) -> CASTDataMap<'a> {
+    fn new(rfn: &'a RadecoFunction) -> CASTDataMap<'a> {
         CASTDataMap {
             ssa: rfn.ssa(),
             rfn: rfn,
@@ -204,7 +206,7 @@ impl<'a> CASTDataMap<'a> {
     }
 
     // Returns data map from SSAStorage's NodeIndex to SimpleCAST's NodeIndex
-    pub fn recover_data(rfn: &'a RadecoFunction, ast: &mut SimpleCAST) -> Self {
+    fn recover_data(rfn: &'a RadecoFunction, ast: &mut SimpleCAST) -> Self {
         let mut s = Self::new(rfn);
         s.prepare_consts(ast);
         s.prepare_regs(ast);
