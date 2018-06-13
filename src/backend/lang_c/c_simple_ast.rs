@@ -1,3 +1,7 @@
+//! This module is for coverting `CAST` from `SimpleCAST`.
+//!
+//! `SimpleCAST` is CFG-like Graph so that we can do control flow structuring easily.
+
 use std::{default, iter, fmt};
 use std::collections::{HashMap, HashSet};
 
