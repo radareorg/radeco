@@ -226,7 +226,7 @@ fn main() {
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 fname.set_extension("c");
-                let mut df = File::create(&fname).expect("Unable to create .dot file");
+                let mut df = File::create(&fname).expect("Unable to create .c file");
                 let ast = c_simple_ast_builder::recover_simple_ast(&rfn);
                 let code = ast.to_c_ast().print();
                 writeln!(df, "{}", code).expect("Error writing to file");
