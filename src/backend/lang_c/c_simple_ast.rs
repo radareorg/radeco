@@ -289,7 +289,7 @@ impl SimpleCAST {
         }
     }
 
-    fn next_actions(&self, idx: NodeIndex) -> Vec<NodeIndex> {
+    fn next_action(&self, idx: NodeIndex) -> Option<NodeIndex> {
         self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
@@ -297,7 +297,7 @@ impl SimpleCAST {
                     &SimpleCASTEdge::Action(_) => Some(e.target()),
                     _ => None,
                 }
-            }).collect()
+            }).next()
     }
 
     // Returns a pair (IfThen, IfElse)
@@ -494,20 +494,20 @@ impl<'a> CASTConverter<'a> {
     /// Entry point of Simple-C-AST to C-AST conversion.
     pub fn to_c_ast(&mut self) -> CAST {
         let mut c_ast = CAST::new(&self.ast.fname);
-        let unknown_node = c_ast.declare_implicit(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()])
+        let unknown_node = c_ast.declare_vars(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()], true)
             .first().cloned().expect("This can not be None");
         self.node_map.insert(self.ast.unknown, unknown_node);
         for &con in self.ast.consts.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
-                let n = c_ast.declare_implicit(ty, &[value_name.to_string()]);
+                let n = c_ast.declare_vars(ty, &[value_name.to_string()], true);
                 self.node_map.insert(con, n[0]);
             }
         }
         for &var in self.ast.vars.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
-                let n = c_ast.declare_implicit(ty, &[var_name.to_string()]);
+                let n = c_ast.declare_vars(ty, &[var_name.to_string()], true);
                 self.node_map.insert(var, n[0]);
             }
         }
@@ -523,7 +523,7 @@ impl<'a> CASTConverter<'a> {
                             unknown_node
                         }
                     }).collect::<Vec<_>>();
-                let n = c_ast.expr(op.clone(), &operands);
+                let n = c_ast.expr(op.clone(), &operands, true);
                 self.node_map.insert(*expr, n);
             }
         }
@@ -540,7 +540,7 @@ impl<'a> CASTConverter<'a> {
         if let Some(ref l) = self.ast.label_map.get(&current_node) {
             c_ast.label(l);
         };
-        let idx = self.ast.ast.node_weight(current_node).map(|x| x.clone());
+        let idx = self.ast.ast.node_weight(current_node).cloned();
         match idx {
             Some(SimpleCASTNode::Action(ActionNode::Assignment)) => {
                 let tmp = self.ast.assignment(current_node)
@@ -551,7 +551,7 @@ impl<'a> CASTConverter<'a> {
                         }
                     });
                 if let Some((dst, src)) = tmp {
-                    let node = c_ast.expr(c_simple::Expr::Assign, &[dst, src]);
+                    let node = c_ast.expr(c_simple::Expr::Assign, &[dst, src], false);
                     self.node_map.insert(current_node, node);
                 } else {
                     radeco_err!("Something wrong");
@@ -572,7 +572,7 @@ impl<'a> CASTConverter<'a> {
                     .and_then(|x| self.node_map.get(&x).map(|a| *a));
                 let node = c_ast.call_func(name, args);
                 if let Some(ret_node) = ret_node_opt {
-                    c_ast.expr(c_simple::Expr::Assign, &[ret_node, node]);
+                    c_ast.expr(c_simple::Expr::Assign, &[ret_node, node], false);
                 }
                 self.node_map.insert(current_node, node);
             },
@@ -584,9 +584,10 @@ impl<'a> CASTConverter<'a> {
                 self.node_map.insert(current_node, node);
             },
             Some(SimpleCASTNode::Action(ActionNode::If)) => {
-                let cond = self.ast.branch_condition(current_node);
+                let cond = self.ast.branch_condition(current_node)
+                    .unwrap_or(self.ast.unknown);
                 let branches = self.ast.branch(current_node).map(|x| x.clone());
-                if let (Some((if_then, if_else)), Some(cond)) = (branches, cond) {
+                if let Some((if_then, if_else)) = branches {
                     for n in if_then.iter() {
                         self.to_c_ast_body(c_ast, *n);
                     }
@@ -597,8 +598,13 @@ impl<'a> CASTConverter<'a> {
                     }
                     // TODO avoid unwrap
                     let c = *self.node_map.get(&cond).unwrap();
-                    let t = if_then.into_iter().map(|x| *self.node_map.get(&x).unwrap()).collect::<Vec<_>>();
-                    let e = if_else.map(|x| x.iter().map(|y| *self.node_map.get(y).unwrap()).collect::<Vec<_>>());
+                    let t = if_then.into_iter()
+                        .map(|x| {
+                            self.node_map.get(&x).cloned().unwrap_or(self.ast.unknown)
+                        }).collect::<Vec<_>>();
+                    let e = if_else.map(|x| x.iter().map(|y| {
+                        self.node_map.get(y).cloned().unwrap_or(self.ast.unknown)
+                    }).collect::<Vec<_>>());
                     let node = c_ast.new_conditional(c, t, e);
                     self.node_map.insert(current_node, node);
                 }
@@ -626,9 +632,9 @@ impl<'a> CASTConverter<'a> {
                 unreachable!()
             },
         };
-        for n in self.ast.next_actions(current_node) {
+        if let Some(n) = self.ast.next_action(current_node) {
             self.to_c_ast_body(c_ast, n);
-        }
+        };
     }
 }
 

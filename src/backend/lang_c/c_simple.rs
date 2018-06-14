@@ -236,10 +236,13 @@ impl CAST {
         args.iter().map(|x| x.target()).collect()
     }
 
-    pub fn expr(&mut self, operator: Expr, operands: &[NodeIndex]) -> NodeIndex {
+    // Add no line in case is_implicit is true
+    pub fn expr(&mut self, operator: Expr, operands: &[NodeIndex], is_implicit: bool) -> NodeIndex {
         let operator = self.ast.add_node(CASTNode::ExpressionNode(operator));
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, operator, CASTEdge::StatementOrd(idx));
+        if !is_implicit {
+            self.ast.add_edge(self.fn_head, operator, CASTEdge::StatementOrd(idx));
+        }
         for (i, n) in operands.iter().enumerate() {
             if let Some(edx) = self.ast.find_edge(self.fn_head, *n) {
                 self.ast.remove_edge(edx);
@@ -354,7 +357,8 @@ impl CAST {
         self.ast.add_edge(self.fn_head, break_n, CASTEdge::StatementOrd(idx));
     }
 
-    pub fn declare_vars(&mut self, ty: Ty, vars: &[String]) -> Vec<NodeIndex> {
+    // Declare variables/constants without declaration in case is_implicit is true
+    pub fn declare_vars(&mut self, ty: Ty, vars: &[String], is_implicit: bool) -> Vec<NodeIndex> {
         let decl = self.ast.add_node(CASTNode::Declaration(ty));
         let mut var_decls = Vec::new();
         for (i, v) in vars.iter().enumerate() {
@@ -363,18 +367,9 @@ impl CAST {
             var_decls.push(vn);
         }
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, decl, CASTEdge::StatementOrd(idx));
-        var_decls
-    }
-
-    // Declare variables/constants without declaration
-    pub fn declare_implicit(&mut self, ty: Ty, vars: &[String]) -> Vec<NodeIndex> {
-        let mut var_decls = Vec::new();
-        for v in vars.iter() {
-            let vn = self.ast.add_node(CASTNode::Var(v.clone()));
-            var_decls.push(vn);
+        if !is_implicit {
+            self.ast.add_edge(self.fn_head, decl, CASTEdge::StatementOrd(idx));
         }
-        let _ = self.next_edge_idx();
         var_decls
     }
 

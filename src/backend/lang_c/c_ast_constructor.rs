@@ -37,7 +37,7 @@ impl CWriter {
         }
         // TODO: Add real type
         if !locals.is_empty() {
-            cast.declare_vars(Ty::new(BTy::Int, false, 0), locals.as_ref());
+            cast.declare_vars(Ty::new(BTy::Int, false, 0), locals.as_ref(), false);
         }
     }
 
