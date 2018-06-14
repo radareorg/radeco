@@ -283,6 +283,12 @@ impl SimpleCAST {
         node
     }
 
+    pub fn replace_action(&mut self, node: NodeIndex, action: ActionNode) {
+        if let Some(mut n) = self.ast.node_weight_mut(node) {
+            *n = SimpleCASTNode::Action(action);
+        }
+    }
+
     fn next_actions(&self, idx: NodeIndex) -> Vec<NodeIndex> {
         self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
@@ -367,7 +373,7 @@ impl SimpleCAST {
             radeco_warn!("More than 1 labels found as Goto destination");
             return None;
         };
-        goto_dsts.first().map(|n| n.clone())
+        goto_dsts.first().cloned()
     }
 
     // Returns a pair (Dst, Src) which represents Dst = Src
@@ -601,19 +607,19 @@ impl<'a> CASTConverter<'a> {
                 let dst_opt = self.ast.goto(current_node)
                     .and_then(|d| self.ast.label_map.get(&d))
                     .map(|d| d.clone());
-                if let Some(dst) = dst_opt {
-                    let node = c_ast.goto(&dst);
-                    self.node_map.insert(current_node, node);
-                } else {
+                if dst_opt.is_none() {
                     radeco_warn!("Error Goto");
-                }
+                };
+                let dst = dst_opt.unwrap_or("unknown_label".to_string());
+                let node = c_ast.goto(&dst);
+                self.node_map.insert(current_node, node);
             },
             Some(SimpleCASTNode::Entry) => {},
             Some(SimpleCASTNode::Action(ActionNode::Dummy(_))) => {
                 // TODO
             },
             Some(SimpleCASTNode::Action(ActionNode::DummyGoto)) => {
-                // TODO
+                // fallthrough
             },
             _ => {
                 radeco_err!("Unreachable node {:?}", idx);
