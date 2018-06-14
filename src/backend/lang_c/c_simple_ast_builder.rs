@@ -11,7 +11,7 @@ use middle::ssa::utils;
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
 use middle::ssa::cfg_traits::CFG;
-use super::c_simple_ast::{ValueNode, SimpleCAST, SimpleCASTEdge, ValueEdge, ActionEdge};
+use super::c_simple_ast::{ValueNode, SimpleCAST, SimpleCASTEdge, ValueEdge, ActionEdge, ActionNode};
 use super::c_simple;
 use petgraph::visit::EdgeRef;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
@@ -141,12 +141,14 @@ impl<'a> CASTBuilder<'a> {
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
                     } else {
                         // TODO
+                        self.ast.replace_action(*s, ActionNode::Goto);
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
                         add_jump_to_cfg!(self, node, succ);
                     }
                 } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
-                    // TODO
                     radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
+                    // TODO
+                    // self.ast.replace_action(*s, ActionNode::If);
                     add_jump_to_cfg!(self, node, blk_cond_info.true_side,
                                      SimpleCASTEdge::Action(ActionEdge::IfThen));
                     add_jump_to_cfg!(self, node, blk_cond_info.false_side,
@@ -303,7 +305,7 @@ impl<'a> CASTDataMap<'a> {
             // TODO Add `Narrow` info
             MOpcode::OpNarrow(size) => self.handle_uniop(ret_node, ops[0],
                                                          c_simple::Expr::Cast(size as usize), ast),
-            MOpcode::OpNot => self.handle_binop(ret_node, ops, c_simple::Expr::Not, ast),
+            MOpcode::OpNot => self.handle_uniop(ret_node, ops[0], c_simple::Expr::Not, ast),
             MOpcode::OpOr => self.handle_binop(ret_node, ops, c_simple::Expr::Or, ast),
             MOpcode::OpRol => unimplemented!(),
             MOpcode::OpRor => unimplemented!(),
