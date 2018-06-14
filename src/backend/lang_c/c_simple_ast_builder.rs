@@ -147,7 +147,8 @@ impl<'a> CASTBuilder<'a> {
                     }
                 } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
                     radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
-                    // TODO
+                    // XXX Goto is used for debbuging
+                    self.ast.replace_action(*s, ActionNode::Goto);
                     // self.ast.replace_action(*s, ActionNode::If);
                     add_jump_to_cfg!(self, node, blk_cond_info.true_side,
                                      SimpleCASTEdge::Action(ActionEdge::IfThen));
