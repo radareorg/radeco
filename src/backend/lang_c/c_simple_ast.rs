@@ -171,7 +171,7 @@ impl SimpleCAST {
     pub fn deref(&mut self, operand: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(c_simple::Expr::DeRef)));
         let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::DeRef));
-        // XXX
+        // Operand edge is needed so that CAST can evaluate a derefed node from this.
         let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::Operand(0)));
         self.exprs.push(node);
         node
@@ -488,8 +488,8 @@ impl<'a> CASTConverter<'a> {
     /// Entry point of Simple-C-AST to C-AST conversion.
     pub fn to_c_ast(&mut self) -> CAST {
         let mut c_ast = CAST::new(&self.ast.fname);
-        // XXX
-        let unknown_node = c_ast.declare_implicit(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()])[0];
+        let unknown_node = c_ast.declare_implicit(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()])
+            .first().cloned().expect("This can not be None");
         self.node_map.insert(self.ast.unknown, unknown_node);
         for &con in self.ast.consts.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
@@ -709,7 +709,6 @@ mod test {
         let z = ast.var("z", None);
         let w = ast.var("w", None);
         let entry = ast.entry;
-        // XXX
         let assn = ast.assign(x, y, entry);
         let call_test1 = ast.call_func("test1", &[], assn, None);
         let call_f = ast.call_func("func", &[z, w], assn, None);
