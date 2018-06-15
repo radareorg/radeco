@@ -607,10 +607,10 @@ mod test {
     fn c_ast_basic_test() {
         let mut c_ast = CAST::new("main");
         c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
-        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
-        let eq = c_ast.expr(Expr::Eq, &vars);
-        let increment = c_ast.expr(Expr::Add, &vars);
-        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let eq = c_ast.expr(Expr::Eq, &vars, false);
+        let increment = c_ast.expr(Expr::Add, &vars, false);
+        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
         c_ast.new_conditional(eq, vec![assignment], None);
         let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
@@ -620,7 +620,7 @@ mod test {
     fn c_ast_call_test() {
         let mut c_ast = CAST::new("main");
         let args = c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
-        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
         let test_args = args.iter().chain(vars.iter()).map(|n| Some(n.clone())).collect::<Vec<_>>();
         let _ = c_ast.call_func("test_func", test_args);
         let _ = c_ast.ret(None);
@@ -630,7 +630,7 @@ mod test {
     #[test]
     fn c_ast_goto_test() {
         let mut c_ast = CAST::new("main");
-        let _ = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()]);
+        let _ = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
         let lbl_str = "L1";
         let _ = c_ast.label(lbl_str);
         let _ = c_ast.goto(lbl_str);
