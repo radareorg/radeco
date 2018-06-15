@@ -132,7 +132,11 @@ impl<'a> CASTBuilder<'a> {
 
     fn replace_tmp_with_goto(&mut self) {
         let mut last = None;
+        let entry_node = entry_node_err!(self.ssa);
         for node in self.ssa.inorder_walk() {
+            if node == entry_node {
+                continue;
+            }
             if last.is_some() && self.ssa.is_block(node) {
                 let s = self.action_map.get(&node).expect("The node should be added to action_map");
                 if let Some(succ) = self.ssa.unconditional_block(node) {
