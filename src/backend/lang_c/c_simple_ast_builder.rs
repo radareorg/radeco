@@ -150,14 +150,25 @@ impl<'a> CASTBuilder<'a> {
                         add_jump_to_cfg!(self, node, succ);
                     }
                 } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
-                    radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
-                    // XXX Goto is used for debbuging
-                    self.ast.replace_action(*s, ActionNode::Goto);
-                    // self.ast.replace_action(*s, ActionNode::If);
-                    add_jump_to_cfg!(self, node, blk_cond_info.true_side,
-                                     SimpleCASTEdge::Action(ActionEdge::IfThen));
-                    add_jump_to_cfg!(self, node, blk_cond_info.false_side,
-                                     SimpleCASTEdge::Action(ActionEdge::IfElse));
+                    if let Some(selector) = self.ssa.selector_in(node) {
+                        radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
+                        // Add goto statement as `if then` node
+                        let goto_node = {
+                            // TODO generate unique label
+                            let dst_node = self.action_map.get(&blk_cond_info.true_side)
+                                .cloned().expect("This can not be None");
+                            // Edge from `unknown` will be removed later.
+                            let unknown = self.ast.unknown;
+                            self.ast.add_goto(dst_node, "L", unknown)
+                        };
+                        // Add condition node to if statement
+                        let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
+                        // TODO Else branch
+                        let else_nodes = None;
+                        self.ast.conditional_replace(cond, goto_node, else_nodes, *s);
+                    } else {
+                        radeco_warn!("block with conditional successors has no selector {:?}", node);
+                    }
                 } else {
                     unreachable!();
                 }

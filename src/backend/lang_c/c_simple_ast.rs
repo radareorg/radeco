@@ -256,6 +256,32 @@ impl SimpleCAST {
         node
     }
 
+    pub fn conditional_replace(&mut self, condition: NodeIndex, if_then: NodeIndex,
+                   if_else: Option<NodeIndex>, replace_target: NodeIndex) -> NodeIndex {
+        let es = self.ast.edges_directed(replace_target, Direction::Incoming)
+            .into_iter()
+            .filter_map(|e| {
+                match e.weight() {
+                    SimpleCASTEdge::Action(ActionEdge::Normal) => Some((e.source(), e.id())),
+                    _ => None,
+                }
+            }).collect::<Vec<_>>();
+        let (prev, prev_next) = if let Some(&(prev, idx)) = es.first() {
+            self.ast.remove_edge(idx);
+            // XXX Also outgoing edge have to be removed?
+            (prev, self.next_action(replace_target))
+        } else {
+            (self.entry, self.next_action(self.entry))
+        };
+        let if_node = self.conditional(condition, if_then, if_else, prev);
+        self.add_edge(prev, if_node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        if let Some(n) = prev_next {
+            radeco_warn!("AAAAAAAAAAAAAAAA ADD {:?}", self.ast.node_weight(n));
+            self.add_edge(if_node, n, SimpleCASTEdge::Action(ActionEdge::Normal));
+        }
+        if_node
+    }
+
     /// Add ActionNode of return statement
     pub fn add_return(&mut self, ret_val: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Return));
@@ -284,7 +310,7 @@ impl SimpleCAST {
     }
 
     pub fn replace_action(&mut self, node: NodeIndex, action: ActionNode) {
-        if let Some(mut n) = self.ast.node_weight_mut(node) {
+        if let Some(n) = self.ast.node_weight_mut(node) {
             *n = SimpleCASTNode::Action(action);
         }
     }
@@ -294,7 +320,7 @@ impl SimpleCAST {
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Action(_) => Some(e.target()),
+                    &SimpleCASTEdge::Action(ActionEdge::Normal) => Some(e.target()),
                     _ => None,
                 }
             }).next()
@@ -537,9 +563,6 @@ impl<'a> CASTConverter<'a> {
             return;
         };
         self.visited.insert(current_node);
-        if let Some(ref l) = self.ast.label_map.get(&current_node) {
-            c_ast.label(l);
-        };
         let idx = self.ast.ast.node_weight(current_node).cloned();
         match idx {
             Some(SimpleCASTNode::Action(ActionNode::Assignment)) => {
@@ -631,6 +654,9 @@ impl<'a> CASTConverter<'a> {
                 radeco_err!("Unreachable node {:?}", idx);
                 unreachable!()
             },
+        };
+        if let Some(ref l) = self.ast.label_map.get(&current_node) {
+            c_ast.label(l);
         };
         if let Some(n) = self.ast.next_action(current_node) {
             self.to_c_ast_body(c_ast, n);
