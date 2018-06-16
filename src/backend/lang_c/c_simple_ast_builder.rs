@@ -30,17 +30,6 @@ pub fn recover_simple_ast(rfn: &RadecoFunction) -> SimpleCAST {
     builder.ast
 }
 
-macro_rules! add_jump_to_cfg {
-    ($self: ident, $source: expr, $target: expr, $edge: expr) => {
-        let src_node = $self.action_map.get(&$source).expect("This can not be None");
-        let dst_node = $self.action_map.get(&$target).expect("This can not be None");
-        $self.ast.add_edge(*src_node, *dst_node, $edge);
-    };
-    ($self: ident, $source: expr, $target: expr) => {
-        add_jump_to_cfg!($self, $source, $target, SimpleCASTEdge::Value(ValueEdge::GotoDst));
-    }
-}
-
 // CASTBuilder constructs SimpleCAST from RadecoFunction
 struct CASTBuilder<'a> {
     ast: SimpleCAST,
@@ -138,16 +127,17 @@ impl<'a> CASTBuilder<'a> {
                 continue;
             }
             if last.is_some() && self.ssa.is_block(node) {
-                let s = self.action_map.get(&node).expect("The node should be added to action_map");
+                let s = self.action_map.get(&node).cloned().expect("The node should be added to action_map");
                 if let Some(succ) = self.ssa.unconditional_block(node) {
                     if let Some(selector) = self.ssa.selector_in(node) {
                         // TODO
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
                     } else {
-                        // TODO
-                        self.ast.replace_action(*s, ActionNode::Goto);
+                        // TODO generate unique label
+                        let succ_node = self.action_map.get(&succ)
+                            .cloned().expect("This can not be None");
+                        self.ast.replace_with_goto(s, succ_node, "GOTO_DST");
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
-                        add_jump_to_cfg!(self, node, succ);
                     }
                 } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
                     if let Some(selector) = self.ssa.selector_in(node) {
@@ -165,7 +155,8 @@ impl<'a> CASTBuilder<'a> {
                         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
                         // TODO Else branch
                         let else_nodes = None;
-                        self.ast.conditional_replace(cond, goto_node, else_nodes, *s);
+                        let if_node = self.ast.conditional_replace(cond, goto_node, else_nodes, s);
+                        self.action_map.insert(node, if_node);
                     } else {
                         radeco_warn!("block with conditional successors has no selector {:?}", node);
                     }
