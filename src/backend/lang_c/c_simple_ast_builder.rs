@@ -153,9 +153,7 @@ impl<'a> CASTBuilder<'a> {
                         };
                         // Add condition node to if statement
                         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
-                        // TODO Else branch
-                        let else_nodes = None;
-                        let if_node = self.ast.conditional_replace(cond, goto_node, else_nodes, s);
+                        let if_node = self.ast.conditional_replace(cond, goto_node, None, s);
                         self.action_map.insert(node, if_node);
                     } else {
                         radeco_warn!("block with conditional successors has no selector {:?}", node);
