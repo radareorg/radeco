@@ -119,6 +119,36 @@ impl<'a> CASTBuilder<'a> {
         }
     }
 
+    // node: SSA NodeIndex for goto statement
+    // succ: SSA NodeIndex for destination node
+    fn handle_goto(&mut self, node: NodeIndex, succ: NodeIndex) {
+        // TODO generate unique label
+        let succ_node = self.action_map.get(&succ)
+            .cloned().expect("This can not be None");
+        self.ast.replace_with_goto(node, succ_node, "GOTO_DST");
+        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
+    }
+
+    // node: SSA NodeIndex for if statement
+    // selector: SSA NodeIndex for condition expression
+    // true_node: SSA NodeIndex for if-then block
+    fn handle_if(&mut self, node: NodeIndex, selector: NodeIndex, true_node: NodeIndex) {
+        radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
+        // Add goto statement as `if then` node
+        let goto_node = {
+            // TODO generate unique label
+            let dst_node = self.action_map.get(&true_node)
+                .cloned().expect("This can not be None");
+            // Edge from `unknown` will be removed later.
+            let unknown = self.ast.unknown;
+            self.ast.add_goto(dst_node, "L", unknown)
+        };
+        // Add condition node to if statement
+        let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
+        let if_node = self.ast.conditional_replace(cond, goto_node, None, node);
+        self.action_map.insert(node, if_node);
+    }
+
     fn replace_tmp_with_goto(&mut self) {
         let mut last = None;
         let entry_node = entry_node_err!(self.ssa);
@@ -133,28 +163,11 @@ impl<'a> CASTBuilder<'a> {
                         // TODO
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
                     } else {
-                        // TODO generate unique label
-                        let succ_node = self.action_map.get(&succ)
-                            .cloned().expect("This can not be None");
-                        self.ast.replace_with_goto(s, succ_node, "GOTO_DST");
-                        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
+                        self.handle_goto(s, succ);
                     }
                 } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
                     if let Some(selector) = self.ssa.selector_in(node) {
-                        radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
-                        // Add goto statement as `if then` node
-                        let goto_node = {
-                            // TODO generate unique label
-                            let dst_node = self.action_map.get(&blk_cond_info.true_side)
-                                .cloned().expect("This can not be None");
-                            // Edge from `unknown` will be removed later.
-                            let unknown = self.ast.unknown;
-                            self.ast.add_goto(dst_node, "L", unknown)
-                        };
-                        // Add condition node to if statement
-                        let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
-                        let if_node = self.ast.conditional_replace(cond, goto_node, None, s);
-                        self.action_map.insert(node, if_node);
+                        self.handle_if(s, selector, blk_cond_info.true_side);
                     } else {
                         radeco_warn!("block with conditional successors has no selector {:?}", node);
                     }
