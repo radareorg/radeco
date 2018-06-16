@@ -121,18 +121,21 @@ impl<'a> CASTBuilder<'a> {
 
     // node: SSA NodeIndex for goto statement
     // succ: SSA NodeIndex for destination node
-    fn handle_goto(&mut self, node: NodeIndex, succ: NodeIndex) {
+    fn handle_goto(&mut self, ssa_node: NodeIndex, succ: NodeIndex) {
+        let ast_node = self.action_map.get(&ssa_node).cloned().expect("The node should be added to action_map");
         // TODO generate unique label
         let succ_node = self.action_map.get(&succ)
             .cloned().expect("This can not be None");
-        self.ast.replace_with_goto(node, succ_node, "GOTO_DST");
+        let goto_node = self.ast.replace_with_goto(ast_node, succ_node, "GOTO_DST");
+        self.action_map.insert(ssa_node, goto_node);
         radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
     }
 
     // node: SSA NodeIndex for if statement
     // selector: SSA NodeIndex for condition expression
     // true_node: SSA NodeIndex for if-then block
-    fn handle_if(&mut self, node: NodeIndex, selector: NodeIndex, true_node: NodeIndex) {
+    fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex) {
+        let ast_node = self.action_map.get(&ssa_node).cloned().expect("The node should be added to action_map");
         radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
         // Add goto statement as `if then` node
         let goto_node = {
@@ -145,37 +148,36 @@ impl<'a> CASTBuilder<'a> {
         };
         // Add condition node to if statement
         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
-        let if_node = self.ast.conditional_replace(cond, goto_node, None, node);
-        self.action_map.insert(node, if_node);
+        let if_node = self.ast.conditional_replace(cond, goto_node, None, ast_node);
+        self.action_map.insert(ssa_node, if_node);
     }
 
     fn replace_tmp_with_goto(&mut self) {
         let mut last = None;
         let entry_node = entry_node_err!(self.ssa);
-        for node in self.ssa.inorder_walk() {
-            if node == entry_node {
+        for cur_node in self.ssa.inorder_walk() {
+            if cur_node == entry_node {
                 continue;
             }
-            if last.is_some() && self.ssa.is_block(node) {
-                let s = self.action_map.get(&node).cloned().expect("The node should be added to action_map");
-                if let Some(succ) = self.ssa.unconditional_block(node) {
-                    if let Some(selector) = self.ssa.selector_in(node) {
+            if last.is_some() && self.ssa.is_block(cur_node) {
+                if let Some(succ) = self.ssa.unconditional_block(cur_node) {
+                    if let Some(selector) = self.ssa.selector_in(cur_node) {
                         // TODO
                         radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
                     } else {
-                        self.handle_goto(s, succ);
+                        self.handle_goto(cur_node, succ);
                     }
-                } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(node) {
-                    if let Some(selector) = self.ssa.selector_in(node) {
-                        self.handle_if(s, selector, blk_cond_info.true_side);
+                } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(cur_node) {
+                    if let Some(selector) = self.ssa.selector_in(cur_node) {
+                        self.handle_if(cur_node, selector, blk_cond_info.true_side);
                     } else {
-                        radeco_warn!("block with conditional successors has no selector {:?}", node);
+                        radeco_warn!("block with conditional successors has no selector {:?}", cur_node);
                     }
                 } else {
                     unreachable!();
                 }
-            } else if self.ssa.is_block(node) {
-                last = Some(node);
+            } else if self.ssa.is_block(cur_node) {
+                last = Some(cur_node);
             }
         }
     }
