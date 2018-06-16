@@ -276,8 +276,10 @@ impl SimpleCAST {
         let if_node = self.conditional(condition, if_then, if_else, prev);
         self.add_edge(prev, if_node, SimpleCASTEdge::Action(ActionEdge::Normal));
         if let Some(n) = prev_next {
-            radeco_warn!("AAAAAAAAAAAAAAAA ADD {:?}", self.ast.node_weight(n));
             self.add_edge(if_node, n, SimpleCASTEdge::Action(ActionEdge::Normal));
+        }
+        if let Some(l) = self.label_map.get(&replace_target).cloned() {
+            self.label_map.insert(if_node, l);
         }
         if_node
     }
@@ -290,6 +292,13 @@ impl SimpleCAST {
         }
         self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
         node
+    }
+
+    pub fn replace_with_goto(&mut self, target: NodeIndex, dst: NodeIndex, label_str: &str) -> NodeIndex {
+        self.replace_action(target, ActionNode::Goto);
+        self.label_map.insert(dst, label_str.to_string());
+        self.add_edge(target, dst, SimpleCASTEdge::Value(ValueEdge::GotoDst));
+        target
     }
 
     pub fn add_goto(&mut self, dst: NodeIndex, label_str: &str, prev_action: NodeIndex) -> NodeIndex {
