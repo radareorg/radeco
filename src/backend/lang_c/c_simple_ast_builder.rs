@@ -26,7 +26,7 @@ pub fn recover_simple_ast(rfn: &RadecoFunction) -> SimpleCAST {
     builder.declare_vars();
     // Recover control flow graph
     builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
-    builder.replace_tmp_with_goto();
+    builder.insert_jumps();
     builder.ast
 }
 
@@ -134,7 +134,7 @@ impl<'a> CASTBuilder<'a> {
     // ssa_node: SSA NodeIndex for goto statement
     // succ: SSA NodeIndex for destination node
     fn handle_goto(&mut self, ssa_node: NodeIndex, succ: NodeIndex) {
-        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
+        radeco_trace!("CASTBuilder::handle goto");
         let ast_node = self.action_map.get(&ssa_node)
             .cloned().expect("The node should be added to action_map");
         let succ_node = self.action_map.get(&succ)
@@ -147,7 +147,7 @@ impl<'a> CASTBuilder<'a> {
     // selector: SSA NodeIndex for condition expression
     // true_node: SSA NodeIndex for if-then block
     fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex) {
-        radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
+        radeco_trace!("CASTBuilder::handle_if");
         let ast_node = self.action_map.get(&ssa_node)
             .cloned().expect("The node should be added to action_map");
         // Add goto statement as `if then` node
@@ -164,7 +164,8 @@ impl<'a> CASTBuilder<'a> {
         self.ast.conditional_insert(cond, goto_node, None, ast_node);
     }
 
-    fn replace_tmp_with_goto(&mut self) {
+    // Insert goto, if statements
+    fn insert_jumps(&mut self) {
         let mut last = None;
         let entry_node = entry_node_err!(self.ssa);
         for cur_node in self.ssa.inorder_walk() {
@@ -175,7 +176,7 @@ impl<'a> CASTBuilder<'a> {
                 if let Some(succ) = self.ssa.unconditional_block(cur_node) {
                     if let Some(selector) = self.ssa.selector_in(cur_node) {
                         // TODO
-                        radeco_trace!("CASTBuilder::replace_tmp_with_goto INDIRET JMP");
+                        radeco_trace!("CASTBuilder::insert_jumps INDIRET JMP");
                     } else {
                         self.handle_goto(cur_node, succ);
                     }
