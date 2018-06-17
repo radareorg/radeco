@@ -67,13 +67,10 @@ impl<'a> CASTBuilder<'a> {
         self.last_action
     }
 
+    // Register, immidiate values are already declared in
+    // prepare_regs, prepare_consts
     fn declare_vars(&mut self) {
-        for (ref name, _) in self.datamap.reg_map.iter() {
-            let _ = self.ast.var(&name, None);
-        }
-        for ref val in self.datamap.consts.iter() {
-            let _ = self.ast.var(&val, None);
-        }
+        // TODO declare local variables
     }
 
     fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {

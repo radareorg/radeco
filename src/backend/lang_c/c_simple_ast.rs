@@ -88,12 +88,12 @@ pub struct SimpleCAST {
     /// Unknown node
     pub unknown: NodeIndex,
     ast: Graph<SimpleCASTNode, SimpleCASTEdge>,
-    /// Variables declared in this function
-    vars: HashSet<NodeIndex>,
-    /// Constants declared in this function
-    consts: HashSet<NodeIndex>,
-    /// Expressions declared in this function
-    exprs: Vec<NodeIndex>,
+    /// Variables declared in this function, bool value is `is_implicit` flag
+    vars: HashSet<(bool, NodeIndex)>,
+    /// Constants declared in this function, bool value is `is_implicit` flag
+    consts: HashSet<(bool, NodeIndex)>,
+    /// Expressions declared in this function, bool value is `is_implicit` flag
+    exprs: Vec<(bool, NodeIndex)>,
     /// Hashmap from label node to string it represents
     label_map: HashMap<NodeIndex, String>,
 }
@@ -139,14 +139,14 @@ impl SimpleCAST {
     /// Add ValueNode of variable
     pub fn var(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Variable(ty, name.to_string())));
-        self.vars.insert(node);
+        self.vars.insert((false, node));
         node
     }
 
     /// Add ValueNode of constant value
     pub fn constant(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Constant(ty, name.to_string())));
-        self.consts.insert(node);
+        self.consts.insert((true, node));
         node
     }
 
@@ -156,7 +156,7 @@ impl SimpleCAST {
         for (i, operand) in operands.iter().enumerate() {
             let _ = self.ast.add_edge(node, *operand, SimpleCASTEdge::Value(ValueEdge::Operand(i as u8)));
         }
-        self.exprs.push(node);
+        self.exprs.push((true, node));
         node
     }
 
@@ -173,7 +173,7 @@ impl SimpleCAST {
         let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::DeRef));
         // Operand edge is needed so that CAST can evaluate a derefed node from this.
         let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::Operand(0)));
-        self.exprs.push(node);
+        self.exprs.push((true, node));
         node
     }
 
@@ -544,23 +544,23 @@ impl<'a> CASTConverter<'a> {
         let unknown_node = c_ast.declare_vars(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()], true)
             .first().cloned().expect("This can not be None");
         self.node_map.insert(self.ast.unknown, unknown_node);
-        for &con in self.ast.consts.iter() {
+        for &(is_implicit, con) in self.ast.consts.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
-                let n = c_ast.declare_vars(ty, &[value_name.to_string()], true);
+                let n = c_ast.declare_vars(ty, &[value_name.to_string()], is_implicit);
                 self.node_map.insert(con, n[0]);
             }
         }
-        for &var in self.ast.vars.iter() {
+        for &(is_implicit, var) in self.ast.vars.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
-                let n = c_ast.declare_vars(ty, &[var_name.to_string()], true);
+                let n = c_ast.declare_vars(ty, &[var_name.to_string()], is_implicit);
                 self.node_map.insert(var, n[0]);
             }
         }
-        for expr in self.ast.exprs.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Expression(ref op))) = self.ast.ast.node_weight(*expr) {
-                let operands = self.ast.operands_from_expr(*expr)
+        for &(is_implicit, expr) in self.ast.exprs.iter() {
+            if let Some(&SimpleCASTNode::Value(ValueNode::Expression(ref op))) = self.ast.ast.node_weight(expr) {
+                let operands = self.ast.operands_from_expr(expr)
                     .into_iter()
                     .map(|_n| {
                         if let Some(&n) = self.node_map.get(&_n) {
@@ -570,8 +570,8 @@ impl<'a> CASTConverter<'a> {
                             unknown_node
                         }
                     }).collect::<Vec<_>>();
-                let n = c_ast.expr(op.clone(), &operands, true);
-                self.node_map.insert(*expr, n);
+                let n = c_ast.expr(op.clone(), &operands, is_implicit);
+                self.node_map.insert(expr, n);
             }
         }
         let entry = self.ast.entry;
