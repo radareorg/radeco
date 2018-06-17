@@ -143,8 +143,7 @@ impl<'a> CASTBuilder<'a> {
         let succ_node = self.action_map.get(&succ)
             .cloned().expect("This should not be None");
         let label = self.gen_label(succ);
-        let goto_node = self.ast.replace_with_goto(ast_node, succ_node, &label);
-        self.action_map.insert(ssa_node, goto_node);
+        self.ast.insert_goto_before(ast_node, succ_node, &label);
     }
 
     // ssa_node: SSA NodeIndex for if statement
