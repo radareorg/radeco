@@ -330,12 +330,6 @@ impl SimpleCAST {
         node
     }
 
-    pub fn replace_action(&mut self, node: NodeIndex, action: ActionNode) {
-        if let Some(n) = self.ast.node_weight_mut(node) {
-            *n = SimpleCASTNode::Action(action);
-        }
-    }
-
     fn next_action(&self, idx: NodeIndex) -> Option<NodeIndex> {
         self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
