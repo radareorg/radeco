@@ -288,11 +288,29 @@ impl SimpleCAST {
         node
     }
 
-    pub fn replace_with_goto(&mut self, target: NodeIndex, dst: NodeIndex, label_str: &str) -> NodeIndex {
-        self.replace_action(target, ActionNode::Goto);
-        self.label_map.insert(dst, label_str.to_string());
-        self.add_edge(target, dst, SimpleCASTEdge::Value(ValueEdge::GotoDst));
-        target
+    pub fn insert_goto_before(&mut self, next: NodeIndex, dst: NodeIndex, label_str: &str) -> NodeIndex {
+        let es = self.ast.edges_directed(next, Direction::Incoming)
+            .into_iter()
+            .filter_map(|e| {
+                match e.weight() {
+                    SimpleCASTEdge::Action(ActionEdge::Normal) => Some((e.source(), e.id())),
+                    _ => None,
+                }
+            }).collect::<Vec<_>>();
+        if es.len() > 1 {
+            radeco_warn!("More than one Normal Edges found");
+        }
+        let goto_node = if let Some(&(prev, idx)) = es.first() {
+            self.ast.remove_edge(idx);
+            let goto_node = self.add_goto(dst, label_str, prev);
+            self.add_edge(prev, goto_node, SimpleCASTEdge::Action(ActionEdge::Normal));
+            goto_node
+        } else {
+            let entry = self.entry;
+            self.add_goto(dst, label_str, entry)
+        };
+        self.add_edge(goto_node, next, SimpleCASTEdge::Action(ActionEdge::Normal));
+        goto_node
     }
 
     pub fn add_goto(&mut self, dst: NodeIndex, label_str: &str, prev_action: NodeIndex) -> NodeIndex {
@@ -566,6 +584,9 @@ impl<'a> CASTConverter<'a> {
             return;
         };
         self.visited.insert(current_node);
+        if let Some(ref l) = self.ast.label_map.get(&current_node) {
+            c_ast.label(l);
+        };
         let idx = self.ast.ast.node_weight(current_node).cloned();
         match idx {
             Some(SimpleCASTNode::Action(ActionNode::Assignment)) => {
@@ -657,9 +678,6 @@ impl<'a> CASTConverter<'a> {
                 radeco_err!("Unreachable node {:?}", idx);
                 unreachable!()
             },
-        };
-        if let Some(ref l) = self.ast.label_map.get(&current_node) {
-            c_ast.label(l);
         };
         if let Some(n) = self.ast.next_action(current_node) {
             self.to_c_ast_body(c_ast, n);
