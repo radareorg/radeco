@@ -256,31 +256,25 @@ impl SimpleCAST {
         node
     }
 
-    pub fn conditional_replace(&mut self, condition: NodeIndex, if_then: NodeIndex,
-                   if_else: Option<NodeIndex>, replace_target: NodeIndex) -> NodeIndex {
-        let es = self.ast.edges_directed(replace_target, Direction::Incoming)
+    pub fn conditional_insert(&mut self, condition: NodeIndex, if_then: NodeIndex,
+                   if_else: Option<NodeIndex>, prev: NodeIndex) -> NodeIndex {
+        let es = self.ast.edges_directed(prev, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    SimpleCASTEdge::Action(ActionEdge::Normal) => Some((e.source(), e.id())),
+                    SimpleCASTEdge::Action(ActionEdge::Normal) => Some((e.target(), e.id())),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
-        let (prev, prev_next) = if let Some(&(prev, idx)) = es.first() {
-            self.ast.remove_edge(idx);
-            // XXX Also outgoing edge have to be removed?
-            (prev, self.next_action(replace_target))
-        } else {
-            (self.entry, self.next_action(self.entry))
-        };
+        if es.len() > 1 {
+            radeco_warn!("More than one Normal Edges found");
+        }
         let if_node = self.conditional(condition, if_then, if_else, prev);
         self.add_edge(prev, if_node, SimpleCASTEdge::Action(ActionEdge::Normal));
-        if let Some(n) = prev_next {
-            self.add_edge(if_node, n, SimpleCASTEdge::Action(ActionEdge::Normal));
-        }
-        if let Some(l) = self.label_map.get(&replace_target).cloned() {
-            self.label_map.insert(if_node, l);
-        }
+        if let Some(&(next, idx)) = es.first() {
+            self.ast.remove_edge(idx);
+            self.add_edge(if_node, next, SimpleCASTEdge::Action(ActionEdge::Normal));
+        };
         if_node
     }
 

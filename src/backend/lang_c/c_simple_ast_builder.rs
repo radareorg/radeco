@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 use frontend::radeco_containers::RadecoFunction;
-use middle::ir::MOpcode;
+use middle::ir::{MOpcode, MAddress};
 use middle::ssa::utils;
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
@@ -119,37 +119,53 @@ impl<'a> CASTBuilder<'a> {
         }
     }
 
-    // node: SSA NodeIndex for goto statement
-    // succ: SSA NodeIndex for destination node
-    fn handle_goto(&mut self, ssa_node: NodeIndex, succ: NodeIndex) {
-        let ast_node = self.action_map.get(&ssa_node).cloned().expect("The node should be added to action_map");
-        // TODO generate unique label
-        let succ_node = self.action_map.get(&succ)
-            .cloned().expect("This can not be None");
-        let goto_node = self.ast.replace_with_goto(ast_node, succ_node, "GOTO_DST");
-        self.action_map.insert(ssa_node, goto_node);
-        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
+    fn get_block_addr(&self, block: NodeIndex) -> Option<MAddress> {
+        match self.ssa.g[block] {
+                NodeData::BasicBlock(addr, _) => Some(addr),
+                _ => None,
+        }
     }
 
-    // node: SSA NodeIndex for if statement
+    fn gen_label(&self, block: NodeIndex) -> String {
+        if let Some(addr) = self.get_block_addr(block) {
+            format!("addr_{:}", addr).to_string()
+        } else {
+            "addr_unknown".to_string()
+        }
+    }
+
+    // ssa_node: SSA NodeIndex for goto statement
+    // succ: SSA NodeIndex for destination node
+    fn handle_goto(&mut self, ssa_node: NodeIndex, succ: NodeIndex) {
+        radeco_trace!("CASTBuilder::replace_tmp_with_goto JMP");
+        let ast_node = self.action_map.get(&ssa_node)
+            .cloned().expect("The node should be added to action_map");
+        let succ_node = self.action_map.get(&succ)
+            .cloned().expect("This should not be None");
+        let label = self.gen_label(succ);
+        let goto_node = self.ast.replace_with_goto(ast_node, succ_node, &label);
+        self.action_map.insert(ssa_node, goto_node);
+    }
+
+    // ssa_node: SSA NodeIndex for if statement
     // selector: SSA NodeIndex for condition expression
     // true_node: SSA NodeIndex for if-then block
     fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex) {
-        let ast_node = self.action_map.get(&ssa_node).cloned().expect("The node should be added to action_map");
         radeco_trace!("CASTBuilder::replace_tmp_with_goto IF");
+        let ast_node = self.action_map.get(&ssa_node)
+            .cloned().expect("The node should be added to action_map");
         // Add goto statement as `if then` node
         let goto_node = {
-            // TODO generate unique label
             let dst_node = self.action_map.get(&true_node)
-                .cloned().expect("This can not be None");
+                .cloned().expect("This should not be None");
             // Edge from `unknown` will be removed later.
             let unknown = self.ast.unknown;
-            self.ast.add_goto(dst_node, "L", unknown)
+            let label = self.gen_label(true_node);
+            self.ast.add_goto(dst_node, &label, unknown)
         };
         // Add condition node to if statement
         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
-        let if_node = self.ast.conditional_replace(cond, goto_node, None, ast_node);
-        self.action_map.insert(ssa_node, if_node);
+        self.ast.conditional_insert(cond, goto_node, None, ast_node);
     }
 
     fn replace_tmp_with_goto(&mut self) {
