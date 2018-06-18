@@ -326,6 +326,14 @@ impl<T> Analyzer<T>
         LatticeValue::Const(val)
     }
 
+    fn evaluate_ternary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
+        // Do not reason about stores.
+        match opcode {
+            MOpcode::OpStore => return LatticeValue::Bottom,
+            _ => unimplemented!(),
+        }
+    }
+
     fn visit_expression(&mut self, i: &T::ValueRef) -> LatticeValue {
         let expr = self.g.node_data(*i).unwrap_or_else(|x| {
             radeco_err!("RegisterState found, {:?}", x);
@@ -348,7 +356,7 @@ impl<T> Analyzer<T>
         let val = match opcode.arity() {
             MArity::Unary => self.evaluate_unary_op(i, opcode),
             MArity::Binary => self.evaluate_binary_op(i, opcode),
-            _ => unimplemented!(),
+            _ => self.evaluate_ternary_op(i, opcode),
         };
 
         // If expression is a `Selector` it means that it's value can affect the
