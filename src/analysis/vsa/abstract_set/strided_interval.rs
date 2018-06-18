@@ -362,7 +362,7 @@ impl StridedInterval {
             _s
         } else {
             radeco_warn!("Strided({:?}) should not be MIN in {:?} bits", 
-                        s, _bits);
+                        self.s, _bits);
             1
         };
         if (s != n_in_k_bits!(s, k)) {
