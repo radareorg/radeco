@@ -164,7 +164,7 @@ impl<'cd, T: fmt::Debug> fmt::Debug for BaseCondition<'cd, T> {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
