@@ -8,7 +8,7 @@ pub mod ast_context;
 mod condition;
 mod graph_utils;
 #[cfg(test)]
-mod tests;
+mod test;
 
 use self::ast_context::*;
 use self::condition::*;
