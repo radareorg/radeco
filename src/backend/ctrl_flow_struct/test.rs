@@ -1,4 +1,4 @@
-use super::condition::*;
+use super::condition;
 use super::*;
 
 #[derive(Default, Debug)]
@@ -32,8 +32,8 @@ impl AstContext for StringAst {
 
 #[test]
 fn nmg_example() {
-    let cstore = ConditionStorage::new();
-    let cctx = ConditionContext::new(&cstore);
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(cnode());
@@ -109,8 +109,8 @@ fn nmg_example() {
 
 #[test]
 fn abnormal_entries() {
-    let cstore = ConditionStorage::new();
-    let cctx = ConditionContext::new(&cstore);
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(cnode());
@@ -165,8 +165,8 @@ fn abnormal_entries() {
 
 #[test]
 fn abnormal_exits() {
-    let cstore = ConditionStorage::new();
-    let cctx = ConditionContext::new(&cstore);
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(cnode());
@@ -223,8 +223,8 @@ fn abnormal_exits() {
 
 #[test]
 fn infinite_loop() {
-    let cstore = ConditionStorage::new();
-    let cctx = ConditionContext::new(&cstore);
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(node("entry"));
@@ -244,12 +244,12 @@ fn infinite_loop() {
     println!("{:#?}", ast);
 }
 
-fn cond_s<'cd>(cctx: &ConditionContext<'cd, String>, c: &str) -> Condition<'cd, StringAst> {
-    cctx.mk_simple(c.to_owned())
+fn cond_s<'cd>(cctx: &condition::Context<'cd, String>, c: &str) -> Condition<'cd, StringAst> {
+    cctx.mk_var(c.to_owned())
 }
 
 fn neg_c<'cd>(
-    cctx: &ConditionContext<'cd, String>,
+    cctx: &condition::Context<'cd, String>,
     c: Condition<'cd, StringAst>,
 ) -> Option<Condition<'cd, StringAst>> {
     Some(cctx.mk_not(c))

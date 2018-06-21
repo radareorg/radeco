@@ -11,7 +11,6 @@ mod graph_utils;
 mod test;
 
 use self::ast_context::*;
-use self::condition::*;
 use self::graph_utils::ix_bit_set::IxBitSet;
 
 use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
@@ -26,7 +25,7 @@ use std::mem;
 struct ControlFlowGraph<'cd, A: AstContext> {
     graph: StableDiGraph<CfgNode<'cd, A>, Option<Condition<'cd, A>>>,
     entry: NodeIndex,
-    cctx: ConditionContext<'cd, A::Condition>,
+    cctx: condition::Context<'cd, A::Condition>,
     actx: A,
 }
 
@@ -66,7 +65,7 @@ enum LoopType<'cd, A: AstContext> {
 
 type ValueSet = (); // XXX
 
-type Condition<'cd, A> = condition::BaseCondition<'cd, <A as AstContext>::Condition>;
+type Condition<'cd, A> = condition::Condition<'cd, <A as AstContext>::Condition>;
 
 impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
     fn structure_whole(mut self) -> AstNode<'cd, A> {
@@ -298,7 +297,7 @@ impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
             for (entry_num, entry_target) in abnormal_entry_iter {
                 let prev_cond_eq = self
                     .cctx
-                    .mk_simple(self.actx.mk_cond_equals(&struct_var, prev_entry_num));
+                    .mk_var(self.actx.mk_cond_equals(&struct_var, prev_entry_num));
                 let cascade_node = self.graph.add_node(CfgNode::Condition);
                 self.graph
                     .add_edge(prev_cascade_node, cascade_node, prev_out_cond);
