@@ -57,6 +57,7 @@ extern crate vec_map;
 extern crate typed_arena;
 extern crate bit_set;
 extern crate num;
+extern crate linear_map;
 
 #[cfg(test)]
 extern crate quickcheck;
