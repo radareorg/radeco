@@ -304,9 +304,9 @@ impl<'a> CASTDataMap<'a> {
             return;
         }
         self.seen.insert(ret_node);
-        let regs = self.ssa.registers(ret_node);
-        if regs.len() > 0 {
-            let ast_node = ast.constant(&regs[0], None);
+        if let Some(bindings) = self.rfn.local_at(ret_node) {
+            // TODO add type
+            let ast_node = ast.var(bindings[0].name(), None);
             self.var_map.insert(ret_node, ast_node);
             return;
         }

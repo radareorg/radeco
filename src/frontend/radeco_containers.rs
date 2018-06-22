@@ -267,6 +267,13 @@ impl VarBinding {
         VarBinding::new(btype, local.vtype.unwrap(), local.name, NodeIndex::end(), None)
     }
 
+    fn is_matched_reg_local(binding: &VarBinding, reg_name: String, offset: i64) -> bool {
+        match binding.btype {
+            BindingType::RegisterLocal(ref reg, n) if reg.clone() == reg_name && n == offset => true,
+            _ => false,
+        }
+    }
+
     pub fn index(&self) -> NodeIndex {
         self.idx
     }
@@ -319,6 +326,9 @@ pub struct RadecoFunction {
     cgid: NodeIndex,
     /// Variable bindings
     bindings: VarBindings,
+    // XXX Should it be separated from RadecoFunction?
+    // NodeIndex is SSAStorage's NodeIndex
+    binding_map: HashMap<NodeIndex, VarBindings>,
     /// Calling convention of this function
     pub callconv: Option<LCCInfo>,
     /// Register usage of this function
@@ -852,6 +862,7 @@ impl<'a> ModuleLoader<'a> {
                             },
                         };
                         rfn.bindings_mut().append(&mut locals);
+                        rfn.mark_locals();
                     }
                 }
             }
@@ -1119,6 +1130,59 @@ impl RadecoFunction {
                 var.btype = BindingType::Return;
             }
         }
+    }
+
+    fn retrieve_binding(&self, node: NodeIndex) -> Vec<VarBinding> {
+        use middle::ir::MOpcode;
+        let sign = match self.ssa.opcode(node) {
+            Some(MOpcode::OpSub) => -1,
+            Some(MOpcode::OpAdd) => 1,
+            _ => 1,
+        };
+        let mut ret_bindings = Vec::new();
+        match self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid) {
+            MOpcode::OpSub | MOpcode::OpAdd => {
+                let ops = self.ssa.operands_of(node);
+                assert!(ops.len() == 2);
+                if let Some(val) = self.ssa.constant_value(ops[1]) {
+                    let left_regs = self.ssa.registers(ops[0]);
+                    for left_reg in left_regs {
+                        let mut bindings = self.bindings.iter().filter(|binding| {
+                            let offset = sign * (val as i64);
+                            VarBinding::is_matched_reg_local(binding, left_reg.clone(), offset)
+                        }).cloned().collect::<Vec<_>>();
+                        ret_bindings.append(&mut bindings);
+                    }
+                }
+                // TODO
+                // let right_regs = self.ssa.registers(ops[1]);
+                ret_bindings
+            },
+            _ => Vec::new(),
+        }
+    }
+
+    // XXX Move to other module
+    pub fn mark_locals(&mut self) {
+        use middle::ir::MOpcode;
+        use middle::ssa::ssa_traits::SSAWalk;
+        let ssa = &self.ssa;
+        for node in ssa.inorder_walk() {
+            match ssa.opcode(node) {
+                Some(MOpcode::OpStore) | Some(MOpcode::OpLoad) => {
+                    let dst = ssa.operands_of(node)[1];
+                    let bindings = self.retrieve_binding(dst);
+                    if bindings.len() > 0 {
+                        self.binding_map.insert(dst, bindings);
+                    }
+                },
+                _ => {},
+            }
+        }
+    }
+
+    pub fn local_at(&self, node: NodeIndex) -> Option<VarBindings> {
+        self.binding_map.get(&node).cloned()
     }
 }
 
