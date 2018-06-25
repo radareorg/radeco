@@ -27,6 +27,7 @@ enum CondVariants<'cd, T: 'cd> {
     Var(bool, VarRef<'cd, T>),
     /// a conjunction or disjunction of *two or more* conditions
     /// except for [`Storage::true_`]/[`Storage::false_`]
+    // can't use `HashSet` because `HashSet` itself isn't `Hash`
     Expr(Op, LinearSet<Condition<'cd, T>>),
 }
 
@@ -36,13 +37,13 @@ enum Op {
     Or,
 }
 
-/// Wrapper for comparing references and hashing by pointer
+/// Wrapper for comparing and hashing by pointer
 #[derive(Debug)]
 struct VarRef<'cd, T: 'cd>(&'cd T);
 
 /// Helper for creating new conditions.
 /// Use [`Storage::cctx`] to make one.
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
 pub struct Context<'cd, T: 'cd> {
     store: &'cd Storage<'cd, T>,
 }
@@ -69,27 +70,32 @@ impl<'cd, T> Context<'cd, T> {
         self.mk_expr(Op::Or, l, r)
     }
     fn mk_expr(&self, mk_op: Op, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
-        let set: LinearSet<_> = match (l.0, r.0) {
+        match (l.0, r.0) {
             // check for annihilators
-            (&Expr(op, ref op_v), _) | (_, &Expr(op, ref op_v))
-                if op.dual() == mk_op && op_v.is_empty() =>
-            {
-                return self.mk_empty_op(op);
+            (c, _) | (_, c) if Condition(&c).is_annihilator(mk_op) => {
+                self.mk_empty_op(mk_op.dual())
             }
             // inline expressions with the same op
-            (&Expr(lop, ref lop_v), &Expr(rop, ref rop_v)) if lop == mk_op && rop == mk_op => {
-                lop_v | rop_v
+            (&Expr(lop, ref lopn_v), &Expr(rop, ref ropn_v)) if lop == mk_op && rop == mk_op => {
+                let mut builder = self.expr_builder(mk_op, lopn_v.clone());
+                for &ropn in ropn_v {
+                    builder.insert(ropn);
+                }
+                builder.finish()
             }
-            (&Expr(op, ref op_v), c) | (c, &Expr(op, ref op_v)) if op == mk_op => {
-                let mut set = op_v.clone();
-                set.insert(Condition(&c));
-                set
+            (&Expr(op, ref opn_v), c) | (c, &Expr(op, ref opn_v)) if op == mk_op => {
+                let mut builder = self.expr_builder(mk_op, opn_v.clone());
+                builder.insert(Condition(&c));
+                builder.finish()
             }
             // nothing to simplify
-            (_, _) => [l, r].iter().cloned().collect(),
-        };
-
-        self.store_expr(mk_op, set)
+            (_, _) => {
+                let mut builder = self.expr_builder(mk_op, LinearSet::new());
+                builder.insert(l);
+                builder.insert(r);
+                builder.finish()
+            }
+        }
     }
 
     pub fn mk_or_from_iter<I>(&self, iter: I) -> Condition<'cd, T>
@@ -108,45 +114,74 @@ impl<'cd, T> Context<'cd, T> {
     where
         I: IntoIterator<Item = Condition<'cd, T>>,
     {
-        let mut set = LinearSet::new();
+        let mut builder = self.expr_builder(mk_op, LinearSet::new());
         for cond in iter {
             match cond.0 {
                 // check for annihilators
-                &Expr(op, ref op_v) if op.dual() == mk_op && op_v.is_empty() => {
-                    return self.mk_empty_op(op);
-                }
+                _ if cond.is_annihilator(mk_op) => return self.mk_empty_op(mk_op.dual()),
                 // inline expressions with the same op
-                &Expr(op, ref op_v) if op == mk_op => {
-                    set.extend(op_v);
+                &Expr(op, ref opn_v) if op == mk_op => {
+                    if builder.opn_v.is_empty() {
+                        builder.opn_v = opn_v.clone();
+                    } else {
+                        for &opn in opn_v {
+                            builder.insert(opn)
+                        }
+                    }
                 }
                 // nothing to simplify
-                _ => {
-                    set.insert(cond);
-                }
+                _ => builder.insert(cond),
             }
         }
-
-        self.store_expr(mk_op, set)
+        builder.finish()
     }
 
-    fn store_expr(&self, op: Op, set: LinearSet<Condition<'cd, T>>) -> Condition<'cd, T> {
-        match set.len() {
-            0 => self.mk_empty_op(op), // avoid duplicate "true"/"false"
+    fn remove_operand(
+        &self,
+        cond_op: Op,
+        cond: Condition<'cd, T>,
+        to_remove: Condition<'cd, T>,
+    ) -> Condition<'cd, T> {
+        match cond.0 {
+            &Var(_, _) => {
+                debug_assert!(cond == to_remove);
+                self.mk_empty_op(cond_op)
+            }
+            &Expr(_c_op, ref c_opn_v) => {
+                debug_assert!(_c_op == cond_op);
+                let mut new_c_opn_v = c_opn_v.clone();
+                let _removed = new_c_opn_v.remove(&to_remove);
+                debug_assert!(_removed);
+                self.store_expr(cond_op, new_c_opn_v)
+            }
+        }
+    }
+
+    fn expr_builder(&self, op: Op, opn_v: LinearSet<Condition<'cd, T>>) -> ExprBuilder<'cd, T> {
+        ExprBuilder {
+            cctx: *self,
+            op,
+            opn_v,
+        }
+    }
+
+    fn store_expr(&self, mk_op: Op, mk_opn_v: LinearSet<Condition<'cd, T>>) -> Condition<'cd, T> {
+        match mk_opn_v.len() {
+            0 => self.mk_empty_op(mk_op), // avoid duplicate "true"/"false"
             1 => {
-                let v: Vec<_> = set.into();
+                let v: Vec<_> = mk_opn_v.into();
                 v[0]
             }
-            _ => self.store.mk_cond(Expr(op, set)),
+            _ => self.store.mk_cond(Expr(mk_op, mk_opn_v)),
         }
     }
 
     pub fn mk_not(&self, cond: Condition<'cd, T>) -> Condition<'cd, T> {
         match cond.0 {
             &Var(inv, vr) => self.store.mk_cond(Var(!inv, vr)),
-            &Expr(op, ref op_v) => self.store_expr(
-                op.dual(),
-                op_v.iter().map(|&c| self.mk_not(c)).collect(),
-            ),
+            &Expr(op, ref op_v) => {
+                self.store_expr(op.dual(), op_v.iter().map(|&c| self.mk_not(c)).collect())
+            }
         }
     }
 
@@ -161,6 +196,89 @@ impl<'cd, T> Context<'cd, T> {
     }
     pub fn mk_false(&self) -> Condition<'cd, T> {
         Condition(&self.store.false_)
+    }
+}
+
+struct ExprBuilder<'cd, T: 'cd> {
+    cctx: Context<'cd, T>,
+    op: Op,
+    opn_v: LinearSet<Condition<'cd, T>>,
+}
+
+impl<'cd, T> ExprBuilder<'cd, T> {
+    fn insert(&mut self, cond: Condition<'cd, T>) {
+        match cond.0 {
+            &Var(_, _) => {
+                if !self.try_undistribute(cond, cond) {
+                    self.opn_v.insert(cond);
+                }
+            }
+            &Expr(_c_op, ref c_opn_v) => {
+                debug_assert!(_c_op.dual() == self.op);
+                let inserted = c_opn_v.iter().any(|&c_opn| {
+                    if let &Var(_, _) = c_opn.0 {
+                        self.try_undistribute(c_opn, cond)
+                    } else {
+                        false
+                    }
+                });
+                if !inserted {
+                    self.opn_v.insert(cond);
+                }
+            }
+        }
+    }
+
+    /// try to undistribute: (assuming self.op == Op::And)
+    /// inserting `Or{var, ..o1}` into `And{Or{var, ..o2}, ..a1}`
+    /// ==> `And{Or{var, ..o1}, Or{var, ..o2},  ..a1}`
+    /// ==> `And{Or{var, And{Or{..o1}, Or{..o2}}}, ..a1}`
+    ///
+    /// Returns true if `ins_cond` was inserted
+    fn try_undistribute(
+        &mut self,
+        ins_var: Condition<'cd, T>,
+        ins_cond: Condition<'cd, T>,
+    ) -> bool {
+        debug_assert!(ins_var.expr_op() == None);
+        // look for a `Or{var, ..o2}`
+        let opt_part_2 = self
+            .opn_v
+            .iter()
+            .find(|&&opn| match opn.0 {
+                &Var(_, _) => opn == ins_var,
+                &Expr(_opn_op, ref opn_opn_v) => {
+                    debug_assert!(_opn_op.dual() == self.op);
+                    opn_opn_v.iter().any(|&opn_opn| opn_opn == ins_var)
+                }
+            })
+            .cloned();
+
+        if let Some(part_2) = opt_part_2 {
+            let _removed = self.opn_v.remove(&part_2);
+            debug_assert!(_removed);
+
+            // make `Or{..o1}`, `Or{..o2}`
+            let part_1 = self.cctx.remove_operand(self.op.dual(), ins_cond, ins_var);
+            let new_part_2 = self.cctx.remove_operand(self.op.dual(), part_2, ins_var);
+
+            // make `Or{var, And{Or{..o1}, Or{..o2}}}`
+            let to_insert = self.cctx.mk_expr(
+                self.op.dual(),
+                ins_var,
+                self.cctx.mk_expr(self.op, part_1, new_part_2),
+            );
+
+            debug_assert!(to_insert.expr_op() != Some(self.op));
+            self.opn_v.insert(to_insert);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn finish(self) -> Condition<'cd, T> {
+        self.cctx.store_expr(self.op, self.opn_v)
     }
 }
 
@@ -197,9 +315,32 @@ impl Op {
     }
 }
 
+impl<'cd, T> Condition<'cd, T> {
+    fn expr_op(&self) -> Option<Op> {
+        match self.0 {
+            &Var(_, _) => None,
+            &Expr(op, _) => Some(op),
+        }
+    }
+
+    fn is_annihilator(&self, for_op: Op) -> bool {
+        match self.0 {
+            &Var(_, _) => false,
+            &Expr(op, ref opn_v) => op.dual() == for_op && opn_v.is_empty(),
+        }
+    }
+}
+
 impl<'cd, T> fmt::Debug for Storage<'cd, T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.write_str("<Storage>")
+    }
+}
+
+impl<'cd, T> Copy for Context<'cd, T> {}
+impl<'cd, T> Clone for Context<'cd, T> {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
@@ -213,10 +354,10 @@ impl<'cd, T> Clone for Condition<'cd, T> {
 impl<'cd, T: fmt::Debug> fmt::Debug for Condition<'cd, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            Var(false, t) => write!(f, "{:?}", t),
-            Var(true, t) => write!(f, "-{:?}", t),
-            Expr(Op::And, c) => write!(f, "And({:?})", c),
-            Expr(Op::Or, c) => write!(f, "Or({:?})", c),
+            Var(false, t) => write!(f, "{:?}", t.0),
+            Var(true, t) => write!(f, "-{:?}", t.0),
+            Expr(Op::And, c) => write!(f, "And{:?}", c),
+            Expr(Op::Or, c) => write!(f, "Or{:?}", c),
         }
     }
 }
