@@ -13,6 +13,7 @@ use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
 use middle::ssa::cfg_traits::CFG;
 use super::c_simple_ast::{ValueNode, SimpleCAST, SimpleCASTEdge, ValueEdge, ActionEdge, ActionNode};
 use super::c_simple;
+use super::c_simple::Ty;
 use petgraph::visit::EdgeRef;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::{EdgeDirection, Direction, Directed};
@@ -91,19 +92,19 @@ impl<'a> CASTBuilder<'a> {
             MOpcode::OpCall => {
                 // TODO Add proper argument, require prototype from RadecoFunction
                 self.call_action("func")
-            },
+            }
             MOpcode::OpStore => {
                 let ops = self.ssa.operands_of(node);
-                let dst = self.datamap
-                    .var_map.get(&ops[1])
-                    .and_then(|&x| self.ast.derefed_node(x));
+                let dst = self.datamap.var_map.get(&ops[1]).map(|&x| {
+                    self.ast.derefed_node(x).unwrap_or(x)
+                });
                 let src = self.datamap.var_map.get(&ops[2]).cloned();
                 if let (Some(d), Some(s)) = (dst, src) {
                     self.assign(d, s)
                 } else {
                     self.dummy_action(format!("{:?} @ {:?}", op, node))
                 }
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -228,7 +229,7 @@ struct CASTDataMap<'a> {
     pub var_map: HashMap<NodeIndex, NodeIndex>,
     // a map from node of data_graph to one of SimpleCAST's register
     pub reg_map: HashMap<String, NodeIndex>,
-    pub consts: HashSet<String>,
+    pub const_nodes: HashSet<NodeIndex>,
     seen: HashSet<NodeIndex>,
 }
 
@@ -239,7 +240,7 @@ impl<'a> CASTDataMap<'a> {
             rfn: rfn,
             var_map: HashMap::new(),
             reg_map: HashMap::new(),
-            consts: HashSet::new(),
+            const_nodes: HashSet::new(),
             seen: HashSet::new(),
         }
     }
@@ -280,10 +281,20 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
+    fn handle_cast(&mut self, ret_node: NodeIndex, op: NodeIndex,
+                    expr: c_simple::Expr, ast: &mut SimpleCAST) {
+        if self.const_nodes.contains(&op) {
+            let ast_node = self.var_map.get(&op).cloned().unwrap_or(ast.unknown);
+            self.var_map.insert(ret_node, ast_node);
+        } else {
+            self.handle_uniop(ret_node, op, expr, ast);
+        }
+    }
+
     fn deref(&self, node: NodeIndex, ast: &mut SimpleCAST) -> NodeIndex {
         radeco_trace!("DeRef {:?}", node);
-        let n = self.var_map.get(&node).expect("Cannot be None");
-        ast.deref(*n)
+        let n = self.var_map.get(&node).cloned().unwrap_or(ast.unknown);
+        ast.deref(n)
     }
 
     fn handle_phi(&mut self, node: NodeIndex) {
@@ -297,6 +308,14 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
+    fn type_from_str(type_str: &str) -> Option<Ty> {
+        // TODO More types
+        match type_str {
+            "int" => Some(Ty::new(c_simple::BTy::Int, true, 0)),
+            _ => None,
+        }
+    }
+
     fn update_values(&mut self, ret_node: NodeIndex, ast: &mut SimpleCAST) {
         assert!(self.ssa.is_expr(ret_node));
         radeco_trace!("CASTBuilder::update_values {:?}", ret_node);
@@ -306,7 +325,8 @@ impl<'a> CASTDataMap<'a> {
         self.seen.insert(ret_node);
         if let Some(bindings) = self.rfn.local_at(ret_node) {
             // TODO add type
-            let ast_node = ast.var(bindings[0].name(), None);
+            let type_info = Self::type_from_str(&bindings[0].type_str);
+            let ast_node = ast.var(bindings[0].name(), type_info);
             self.var_map.insert(ret_node, ast_node);
             return;
         }
@@ -316,13 +336,21 @@ impl<'a> CASTDataMap<'a> {
         match self.ssa.opcode(ret_node).unwrap_or(MOpcode::OpInvalid) {
             MOpcode::OpStore => {
                 assert!(ops.len() == 3);
-                let deref_node = self.deref(ops[1], ast);
+                // Variables do not need Deref
+                if self.rfn.local_at(ops[1]).is_none() {
+                    self.deref(ops[1], ast);
+                }
             }
             MOpcode::OpLoad => {
-                radeco_trace!("OpLoad: {:?}", ops);
-                let deref_node = self.deref(ops[1], ast);
-                self.var_map.insert(ret_node, deref_node);
-            },
+                // Variables do not need Deref
+                if self.rfn.local_at(ops[1]).is_none() {
+                    let deref_node = self.deref(ops[1], ast);
+                    self.var_map.insert(ret_node, deref_node);
+                } else {
+                    let ast_node = *self.var_map.get(&ops[1]).expect("This can not be `None`");
+                    self.var_map.insert(ret_node, ast_node);
+                }
+            }
             MOpcode::OpAdd => self.handle_binop(ret_node, ops, c_simple::Expr::Add, ast),
             MOpcode::OpAnd => self.handle_binop(ret_node, ops, c_simple::Expr::And, ast),
             MOpcode::OpDiv => self.handle_binop(ret_node, ops, c_simple::Expr::Div, ast),
@@ -336,19 +364,19 @@ impl<'a> CASTDataMap<'a> {
             MOpcode::OpMod => self.handle_binop(ret_node, ops, c_simple::Expr::Mod, ast),
             MOpcode::OpMul => self.handle_binop(ret_node, ops, c_simple::Expr::Mul, ast),
             // TODO Add `Narrow` info
-            MOpcode::OpNarrow(size) => self.handle_uniop(ret_node, ops[0],
+            MOpcode::OpNarrow(size) => self.handle_cast(ret_node, ops[0],
                                                          c_simple::Expr::Cast(size as usize), ast),
             MOpcode::OpNot => self.handle_uniop(ret_node, ops[0], c_simple::Expr::Not, ast),
             MOpcode::OpOr => self.handle_binop(ret_node, ops, c_simple::Expr::Or, ast),
             MOpcode::OpRol => unimplemented!(),
             MOpcode::OpRor => unimplemented!(),
             // TODO Add `SignExt`
-            MOpcode::OpSignExt(size) => self.handle_uniop(ret_node, ops[0],
+            MOpcode::OpSignExt(size) => self.handle_cast(ret_node, ops[0],
                                                           c_simple::Expr::Cast(size as usize), ast),
             MOpcode::OpSub => self.handle_binop(ret_node, ops, c_simple::Expr::Sub, ast),
             MOpcode::OpXor => self.handle_binop(ret_node, ops, c_simple::Expr::Xor, ast),
             // TODO Add `ZeroExt`
-            MOpcode::OpZeroExt(size) => self.handle_uniop(ret_node, ops[0],
+            MOpcode::OpZeroExt(size) => self.handle_cast(ret_node, ops[0],
                                                           c_simple::Expr::Cast(size as usize), ast),
             MOpcode::OpCall => {
                 self.update_data_graph_by_call(ret_node);
@@ -370,7 +398,7 @@ impl<'a> CASTDataMap<'a> {
             if let Ok(n) = self.ssa.node_data(node) {
                 // TODO add type
                 let ast_node = ast.constant(&val.to_string(), None);
-                self.consts.insert(val.to_string());
+                self.const_nodes.insert(node);
                 self.var_map.insert(node, ast_node);
             } else {
                 radeco_warn!("Invalid constant");

@@ -240,7 +240,7 @@ impl BindingType {
 pub struct VarBinding {
     pub btype: BindingType,
     name: Cow<'static, str>,
-    type_str: String,
+    pub type_str: String,
     // Index of the register in regfile that represents this varbinding
     pub ridx: Option<u64>,
     pub idx: NodeIndex, // Some arbitrary, serializable data can be added to these fields later.
