@@ -187,3 +187,52 @@ fn demorgans() {
         cctx.mk_and_from_iter(vec![a, b, c, d]),
     );
 }
+
+#[test]
+fn distributivity() {
+    let cstore = Storage::new();
+    let cctx = cstore.cctx();
+    let a = cctx.mk_var("a");
+    let b = cctx.mk_var("b");
+    let c = cctx.mk_var("c");
+    let d = cctx.mk_var("d");
+
+    assert_eq!(
+        cctx.mk_and(cctx.mk_or(a, b), cctx.mk_or(a, c)),
+        cctx.mk_or(a, cctx.mk_and(b, c))
+    );
+    assert_eq!(
+        cctx.mk_or(cctx.mk_and(a, b), cctx.mk_and(a, c)),
+        cctx.mk_and(a, cctx.mk_or(b, c))
+    );
+
+    assert_eq!(
+        cctx.mk_and_from_iter(vec![cctx.mk_or(a, b), d, cctx.mk_or(c, a)]),
+        cctx.mk_and(cctx.mk_or(a, cctx.mk_and(b, c)), d),
+    );
+    assert_eq!(
+        cctx.mk_or_from_iter(vec![cctx.mk_and(a, b), d, cctx.mk_and(c, a)]),
+        cctx.mk_or(cctx.mk_and(a, cctx.mk_or(b, c)), d),
+    );
+}
+
+#[test]
+fn absorption() {
+    let cstore = Storage::new();
+    let cctx = cstore.cctx();
+    let a = cctx.mk_var("a");
+    let b = cctx.mk_var("b");
+    let c = cctx.mk_var("c");
+
+    assert_eq!(cctx.mk_and(a, cctx.mk_or(a, b)), a,);
+    assert_eq!(cctx.mk_or(a, cctx.mk_and(a, b)), a,);
+
+    assert_eq!(
+        cctx.mk_and_from_iter(vec![cctx.mk_or(a, b), c, a]),
+        cctx.mk_and(a, c),
+    );
+    assert_eq!(
+        cctx.mk_or_from_iter(vec![cctx.mk_and(a, b), c, a]),
+        cctx.mk_or(a, c),
+    );
+}
