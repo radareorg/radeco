@@ -545,10 +545,16 @@ impl<'a> CASTConverter<'a> {
                 self.node_map.insert(con, n[0]);
             }
         }
+        // XXX It should report error if there are defferent types for same name variables.
+        let mut declared_vars = HashSet::new();
         for &(is_implicit, var) in self.ast.vars.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
-                let n = c_ast.declare_vars(ty, &[var_name.to_string()], is_implicit);
+                let is_declared = declared_vars.contains(var_name);
+                let n = c_ast.declare_vars(ty, &[var_name.to_string()], is_implicit || is_declared);
+                if !is_declared {
+                    declared_vars.insert(var_name.to_string());
+                }
                 self.node_map.insert(var, n[0]);
             }
         }
