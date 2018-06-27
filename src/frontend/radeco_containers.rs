@@ -862,7 +862,6 @@ impl<'a> ModuleLoader<'a> {
                             },
                         };
                         rfn.bindings_mut().append(&mut locals);
-                        rfn.mark_locals();
                     }
                 }
             }
@@ -880,6 +879,10 @@ impl<'a> ModuleLoader<'a> {
             llanalyzer::init_call_ctx(&mut rmod);
         }
 
+        for rfn in rmod.functions.values_mut() {
+            rfn.mark_locals();
+            rfn.mark_args();
+        }
         // Set source
         rmod.source = Some(Rc::clone(&source));
 
@@ -1162,7 +1165,10 @@ impl RadecoFunction {
         }
     }
 
-    // XXX Move to other module
+    pub fn mark_args(&mut self) {
+        // TODO
+    }
+
     pub fn mark_locals(&mut self) {
         use middle::ir::MOpcode;
         use middle::ssa::ssa_traits::SSAWalk;
