@@ -22,13 +22,14 @@ use middle::ir::{self, MAddress, MOpcode};
 use middle::phiplacement::PhiPlacer;
 use middle::regfile::SubRegisterFile;
 use middle::ssa::graph_traits::Graph;
-use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
+use middle::ssa::ssa_traits::{SSAMod, SSAExtra, SSAWalk, ValueInfo};
 
 use r2api::structs::{LOpInfo, LRegInfo};
 
 use regex::Regex;
 use std::{fmt, cmp, u64};
 use std::sync::Arc;
+use std::marker::PhantomData;
 
 pub type VarId = usize;
 
@@ -36,12 +37,14 @@ const FALSE_EDGE: u8 = 0;
 const TRUE_EDGE: u8 = 1;
 const UNCOND_EDGE: u8 = 2;
 
-pub struct SSAConstruct<'a, T>
-    where T: 'a + Clone + fmt::Debug + SSAExtra + SSAMod<BBInfo = MAddress,
+pub struct SSAConstruct<'a, I, T>
+    where I: Iterator<Item = T::ValueRef>,
+          T: 'a + Clone + fmt::Debug + SSAExtra + SSAWalk<I> + 
+                SSAMod<BBInfo = MAddress,
                     ActionRef = <T as Graph>::GraphNodeRef,
                     CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
-    phiplacer: PhiPlacer<'a, T>,
+    phiplacer: PhiPlacer<'a, I, T>,
     regfile: &'a SubRegisterFile,
     intermediates: Vec<T::ValueRef>,
     // Used to keep track of esil if-else. The reference to the ITE node and the address of this
@@ -53,14 +56,18 @@ pub struct SSAConstruct<'a, T>
     mem_id: u64,
     assume_cc: bool,
     replace_pc: bool,
+    foo: PhantomData<I>,
 }
 
-impl<'a, T> SSAConstruct<'a, T>
-    where T: 'a + Clone + fmt::Debug + SSAExtra + SSAMod<BBInfo = MAddress,
+impl<'a, I, T> SSAConstruct<'a, I, T>
+    where I: Iterator<Item = T::ValueRef>,
+          T: 'a + Clone + fmt::Debug + SSAExtra + SSAWalk<I> +
+                SSAMod<BBInfo = MAddress,
                     ActionRef = <T as Graph>::GraphNodeRef,
                     CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
-    pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) -> SSAConstruct<'a, T> {
+    pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) 
+        -> SSAConstruct<'a, I, T> {
         let mut sc = SSAConstruct {
             phiplacer: PhiPlacer::new(ssa, regfile),
             regfile: regfile,
@@ -71,6 +78,7 @@ impl<'a, T> SSAConstruct<'a, T>
             mem_id: 0,
             assume_cc: false,
             replace_pc: true,
+            foo: PhantomData,
         };
 
         // Add all the registers to the variable list.
@@ -760,7 +768,7 @@ impl<'a, T> SSAConstruct<'a, T>
 
 #[cfg(test)]
 mod test {
-    use analysis::sccp;
+    use analysis::sccp::sccp;
     use middle::{dot, dce};
     use middle::ir_writer;
     use middle::ssa::ssastorage::SSAStorage;

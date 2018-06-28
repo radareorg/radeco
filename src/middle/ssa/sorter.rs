@@ -8,14 +8,14 @@
 //! Module that implements operands' sort for SSA, which could help futher
 //! analysis.
 
-use middle::ssa::ssa_traits::{NodeType, NodeData};
-
-use middle::ssa::ssa_traits::{SSA, SSAMod, SSAWalk};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use middle::ir::{MOpcode, MAddress};
 
+use super::ssa_traits::{NodeType, NodeData};
+use super::ssa_traits::{SSA, SSAMod, SSAWalk};
+
+use middle::ir::{MOpcode, MAddress};
 
 // NOTE: I am not sure where to put this file, in analysis or in middle End.
 // If we add this into middle/ssa/ssastorage.rs, it seems there are too much

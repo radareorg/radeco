@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::process;
 
 use radeco_lib::analysis::cse::cse::CSE;
-use radeco_lib::analysis::sccp;
+use radeco_lib::analysis::sccp::sccp;
 //use radeco_lib::analysis::valueset::analyzer_wysinwyx::FnAnalyzer;
 //use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
