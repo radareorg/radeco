@@ -75,8 +75,7 @@ impl Inferer {
 
                     let rfn = &mut rmod.functions.get_mut(&fn_addr).unwrap();
                     dce::collect(rfn.ssa_mut());
-                    // TODO preserve NodeIndex for recovering local variables
-                    // inst_combine::run(rfn.ssa_mut());
+                    inst_combine::run(rfn.ssa_mut());
 
                     let ru = self.analyze_fn(rfn, reginfo).unwrap_or_else(|| {
                         radeco_err!("Failed to analyze fn: {:?} (@ {:#X})", rfn.name, fn_addr);
