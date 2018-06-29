@@ -5,6 +5,7 @@
 //! make the decompiled output easier to read and add more sugaring.
 
 use std::{default, iter, fmt};
+use std::collections::HashMap;
 
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use petgraph::visit::EdgeRef;
@@ -159,6 +160,9 @@ pub struct CAST {
     eidx: u64,
     /// Identifier for the function header.
     fn_head: NodeIndex,
+    /// Debug information for given NodeIndex of statement,
+    /// assignment, etc, but not of nested expressions.
+    comments: HashMap<NodeIndex, String>,
 }
 
 impl default::Default for CAST {
@@ -167,6 +171,7 @@ impl default::Default for CAST {
             ast: Graph::new(),
             eidx: 0,
             fn_head: NodeIndex::end(),
+            comments: HashMap::new(),
         };
         ast.fn_head = ast.ast.add_node(CASTNode::FunctionHeader("unknown".to_owned()));
         ast
@@ -191,6 +196,7 @@ impl CAST {
             ast: Graph::new(),
             eidx: 0,
             fn_head: NodeIndex::end(),
+            comments: HashMap::new(),
         };
         ast.fn_head = ast.ast.add_node(CASTNode::FunctionHeader(fn_name.to_owned()));
         ast
@@ -386,7 +392,8 @@ impl CAST {
     }
 
     fn emit_c(&self, node: &NodeIndex, indent: usize) -> String {
-        match self.ast[*node] {
+        let comment = self.comments.get(&node).cloned();
+        let result = match self.ast[*node] {
             CASTNode::FunctionHeader(_) => unimplemented!(),
             CASTNode::Conditional => {
                 // Get the arguments -> condition, body, else branch.
@@ -538,7 +545,19 @@ impl CAST {
                     .collect::<Vec<_>>()
                     .join("\n")
             }
+        };
+        if comment.is_some() {
+            format!("{}//{}\n{}",
+                    format_with_indent("", indent),
+                    &comment.unwrap(),
+                    result)
+        } else {
+            result
         }
+    }
+
+    pub fn comment_at(&mut self, node: NodeIndex, comment: &str) {
+        self.comments.insert(node, comment.to_string());
     }
 
     pub fn print(&self) -> String {
