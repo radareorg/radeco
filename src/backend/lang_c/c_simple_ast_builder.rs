@@ -19,8 +19,8 @@ use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::{EdgeDirection, Direction, Directed};
 
 /// This constructs SimpleCAST from an instance of RadecoFunction.
-pub fn recover_simple_ast(rfn: &RadecoFunction) -> SimpleCAST {
-    let mut builder = CASTBuilder::new(rfn);
+pub fn recover_simple_ast(rfn: &RadecoFunction, is_debug: bool) -> SimpleCAST {
+    let mut builder = CASTBuilder::new(rfn, is_debug);
     // Recover values
     let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
     builder.datamap = data_graph;
@@ -41,10 +41,11 @@ struct CASTBuilder<'a> {
     ssa: &'a SSAStorage,
     action_map: HashMap<NodeIndex, NodeIndex>,
     datamap: CASTDataMap<'a>,
+    is_debug: bool,
 }
 
 impl<'a> CASTBuilder<'a> {
-    fn new(rfn: &'a RadecoFunction) -> CASTBuilder {
+    fn new(rfn: &'a RadecoFunction, is_debug: bool) -> CASTBuilder {
         let ast = SimpleCAST::new(rfn.name.as_ref());
         CASTBuilder {
             last_action: ast.entry,
@@ -53,6 +54,7 @@ impl<'a> CASTBuilder<'a> {
             ssa: rfn.ssa(),
             action_map: HashMap::new(),
             datamap: CASTDataMap::new(rfn),
+            is_debug: is_debug,
         }
     }
 
@@ -84,6 +86,11 @@ impl<'a> CASTBuilder<'a> {
         self.last_action
     }
 
+    fn addr_str(&self, node: NodeIndex) -> String {
+        self.ssa.address(node)
+            .map(|a| format!("{}", a)).unwrap_or("unknown".to_string())
+    }
+
     fn recover_action(&mut self, node: NodeIndex) -> NodeIndex {
         assert!(self.is_recover_action(node));
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
@@ -91,7 +98,13 @@ impl<'a> CASTBuilder<'a> {
         match op {
             MOpcode::OpCall => {
                 // TODO Add proper argument, require prototype from RadecoFunction
-                self.call_action("func")
+                let ret = self.call_action("func");
+                if self.is_debug {
+                    let addr = self.addr_str(node);
+                    let ops_dbg = self.ssa.operands_of(node);
+                    self.ast.debug_info_at(ret, format!("Call {:?} @ {}", ops_dbg, addr));
+                }
+                ret
             }
             MOpcode::OpStore => {
                 let ops = self.ssa.operands_of(node);
@@ -99,11 +112,16 @@ impl<'a> CASTBuilder<'a> {
                     self.ast.derefed_node(x).unwrap_or(x)
                 });
                 let src = self.datamap.var_map.get(&ops[2]).cloned();
-                if let (Some(d), Some(s)) = (dst, src) {
+                let ret = if let (Some(d), Some(s)) = (dst, src) {
                     self.assign(d, s)
                 } else {
                     self.dummy_action(format!("{:?} @ {:?}", op, node))
+                };
+                if self.is_debug {
+                    let addr = self.addr_str(node);
+                    self.ast.debug_info_at(ret, format!("*({:?}) = {:?} @ {}", dst, src, addr));
                 }
+                ret
             }
             _ => unreachable!(),
         }
@@ -141,7 +159,11 @@ impl<'a> CASTBuilder<'a> {
         let succ_node = self.action_map.get(&succ)
             .cloned().expect("This should not be None");
         let label = self.gen_label(succ);
-        self.ast.insert_goto_before(ast_node, succ_node, &label);
+        let goto_node = self.ast.insert_goto_before(ast_node, succ_node, &label);
+        if self.is_debug {
+            let addr = self.addr_str(ssa_node);
+            self.ast.debug_info_at(goto_node, format!("JMP {:?} @ {}", succ_node, addr));
+        }
     }
 
     // ssa_node: SSA NodeIndex for if statement
@@ -162,7 +184,11 @@ impl<'a> CASTBuilder<'a> {
         };
         // Add condition node to if statement
         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
-        self.ast.conditional_insert(cond, goto_node, None, ast_node);
+        let if_node = self.ast.conditional_insert(cond, goto_node, None, ast_node);
+        if self.is_debug {
+            let addr = self.addr_str(ssa_node);
+            self.ast.debug_info_at(goto_node, format!("IF JMP {:?} @ {}", if_node, addr));
+        }
     }
 
     // Insert goto, if statements

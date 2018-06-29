@@ -96,6 +96,8 @@ pub struct SimpleCAST {
     exprs: Vec<(bool, NodeIndex)>,
     /// Hashmap from label node to string it represents
     label_map: HashMap<NodeIndex, String>,
+    /// Debug information retrieved from SSA
+    debug_info: HashMap<NodeIndex, String>,
 }
 
 
@@ -129,7 +131,18 @@ impl SimpleCAST {
             consts: HashSet::new(),
             exprs: Vec::new(),
             label_map: HashMap::new(),
+            debug_info: HashMap::new(),
         }
+    }
+
+    /// Append a string for given node
+    pub fn debug_info_at(&mut self, node: NodeIndex, comment: String) {
+        let s = if let Some(c) = self.debug_info.get(&node).cloned() {
+            c
+        } else {
+            "".to_string()
+        };
+        self.debug_info.insert(node, format!("{} {}", s, comment));
     }
 
     pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, edge: SimpleCASTEdge) -> EdgeIndex {
@@ -679,6 +692,13 @@ impl<'a> CASTConverter<'a> {
                 unreachable!()
             },
         };
+
+        if let Some(ref comment) = self.ast.debug_info.get(&current_node) {
+            if let Some(&node) = self.node_map.get(&current_node) {
+                c_ast.comment_at(node, comment);
+            }
+        }
+
         if let Some(n) = self.ast.next_action(current_node) {
             self.to_c_ast_body(c_ast, n);
         };

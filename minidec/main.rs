@@ -225,7 +225,7 @@ fn main() {
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 let mut df = File::create(format!("{}.c", fname.to_string_lossy())).expect("Unable to create .c file");
-                let ast = c_simple_ast_builder::recover_simple_ast(&rfn);
+                let ast = c_simple_ast_builder::recover_simple_ast(&rfn, true);
                 let code = ast.to_c_ast().print();
                 writeln!(df, "{}", code).expect("Error writing to file");
             }
