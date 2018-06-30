@@ -23,8 +23,8 @@ fn is_debug() -> bool {
 }
 
 /// This constructs SimpleCAST from an instance of RadecoFunction.
-pub fn recover_simple_ast(rfn: &RadecoFunction, fname_table: &HashMap<u64, String>) -> SimpleCAST {
-    let mut builder = CASTBuilder::new(rfn);
+pub fn recover_simple_ast(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>) -> SimpleCAST {
+    let mut builder = CASTBuilder::new(rfn, fname_map);
     // Recover values
     let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
     builder.datamap = data_graph;
@@ -43,18 +43,20 @@ struct CASTBuilder<'a> {
     rfn: &'a RadecoFunction,
     // SSA of RadecoFunction
     ssa: &'a SSAStorage,
+    fname_map: &'a HashMap<u64, String>,
     action_map: HashMap<NodeIndex, NodeIndex>,
     datamap: CASTDataMap<'a>,
 }
 
 impl<'a> CASTBuilder<'a> {
-    fn new(rfn: &'a RadecoFunction) -> CASTBuilder {
+    fn new(rfn: &'a RadecoFunction, fname_map: &'a HashMap<u64, String>) -> CASTBuilder<'a> {
         let ast = SimpleCAST::new(rfn.name.as_ref());
         CASTBuilder {
             last_action: ast.entry,
             ast: ast,
             rfn: rfn,
             ssa: rfn.ssa(),
+            fname_map: fname_map,
             action_map: HashMap::new(),
             datamap: CASTDataMap::new(rfn),
         }
@@ -83,8 +85,15 @@ impl<'a> CASTBuilder<'a> {
         self.last_action
     }
 
-    fn call_action(&mut self, func: &str) -> NodeIndex {
-        self.last_action = self.ast.call_func(func, &[], self.last_action, None);
+    fn call_action(&mut self, call_node: NodeIndex) -> NodeIndex {
+        let func_addr_node = self.ssa.operands_of(call_node)
+                .first().cloned().expect("This cannot be `None`");
+        let func_name = if self.datamap.const_nodes.contains(&func_addr_node) {
+            "known".to_string()
+        } else {
+            "unknown".to_string()
+        };
+        self.last_action = self.ast.call_func(&func_name, &[], self.last_action, None);
         self.last_action
     }
 
@@ -100,7 +109,7 @@ impl<'a> CASTBuilder<'a> {
         match op {
             MOpcode::OpCall => {
                 // TODO Add proper argument, require prototype from RadecoFunction
-                let ret = self.call_action("func");
+                let ret = self.call_action(node);
                 if is_debug() {
                     let addr = self.addr_str(node);
                     let ops_dbg = self.ssa.operands_of(node);
