@@ -40,6 +40,8 @@ enum CondVariants<'cd, T: 'cd> {
     Var(Negation, VarRef<'cd, T>),
     /// a conjunction or disjunction of *two or more* conditions
     /// except for [`Storage::true_`]/[`Storage::false_`]
+    ///
+    /// operands must not be expressions with the same operation type as this
     // can't use `HashSet` because `HashSet` itself isn't `Hash`
     Expr(Op, LinearSet<Condition<'cd, T>>),
 }
@@ -92,7 +94,16 @@ impl<'cd, T> Context<'cd, T> {
         self.mk_expr(Op::Or, l, r)
     }
     fn mk_expr(&self, mk_op: Op, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
-        match (
+        self.mk_expr0(mk_op, l, r)
+            .unwrap_or(self.mk_empty_op(mk_op.dual()))
+    }
+    fn mk_expr0(
+        &self,
+        mk_op: Op,
+        l: Condition<'cd, T>,
+        r: Condition<'cd, T>,
+    ) -> Result<Condition<'cd, T>, ()> {
+        Ok(match (
             ExprView::new(l, mk_op.dual()),
             ExprView::new(r, mk_op.dual()),
         ) {
@@ -103,8 +114,8 @@ impl<'cd, T> Context<'cd, T> {
                 } else {
                     // nothing to simplify
                     let mut builder = self.expr_builder(mk_op, LinearSet::new());
-                    builder.insert(lev);
-                    builder.insert(rev);
+                    builder.insert_one(lev)?;
+                    builder.insert_one(rev)?;
                     builder.finish()
                 }
             }
@@ -115,7 +126,7 @@ impl<'cd, T> Context<'cd, T> {
                 } else {
                     // inline
                     let mut builder = self.expr_builder(mk_op, opn_v.clone());
-                    builder.insert(ev);
+                    builder.insert_one(ev)?;
                     builder.finish()
                 }
             }
@@ -128,71 +139,36 @@ impl<'cd, T> Context<'cd, T> {
                 };
                 let mut builder = self.expr_builder(mk_op, aopn_v.clone());
                 for &bopn in bopn_v {
-                    builder.insert(ExprView::new_or_panic(bopn, mk_op.dual()));
+                    builder.insert_one(ExprView::new_or_panic(bopn, mk_op.dual()))?;
                 }
                 builder.finish()
             }
-        }
+        })
     }
 
-    pub fn mk_or_from_iter<I>(&self, iter: I) -> Condition<'cd, T>
-    where
-        I: IntoIterator<Item = Condition<'cd, T>>,
-    {
-        self.mk_expr_from_iter(Op::Or, iter)
-    }
     pub fn mk_and_from_iter<I>(&self, iter: I) -> Condition<'cd, T>
     where
         I: IntoIterator<Item = Condition<'cd, T>>,
     {
         self.mk_expr_from_iter(Op::And, iter)
+            .unwrap_or(self.mk_false())
     }
-    fn mk_expr_from_iter<I>(&self, mk_op: Op, iter: I) -> Condition<'cd, T>
+    pub fn mk_or_from_iter<I>(&self, iter: I) -> Condition<'cd, T>
+    where
+        I: IntoIterator<Item = Condition<'cd, T>>,
+    {
+        self.mk_expr_from_iter(Op::Or, iter)
+            .unwrap_or(self.mk_true())
+    }
+    fn mk_expr_from_iter<I>(&self, mk_op: Op, iter: I) -> Result<Condition<'cd, T>, ()>
     where
         I: IntoIterator<Item = Condition<'cd, T>>,
     {
         let mut builder = self.expr_builder(mk_op, LinearSet::new());
         for cond in iter {
-            match ExprView::new(cond, mk_op.dual()) {
-                Ok(ev) => {
-                    if ev.is_empty() {
-                        // annihilator
-                        return self.mk_empty_op(mk_op.dual());
-                    } else {
-                        // nothing to simplify
-                        builder.insert(ev);
-                    }
-                }
-                Err(opn_v) => {
-                    // inline
-                    for &opn in opn_v {
-                        builder.insert(ExprView::new_or_panic(opn, mk_op.dual()));
-                    }
-                }
-            }
+            builder.insert(cond)?;
         }
-        builder.finish()
-    }
-
-    fn remove_operand(
-        &self,
-        cond_op: Op,
-        cond: Condition<'cd, T>,
-        to_remove: Condition<'cd, T>,
-    ) -> Condition<'cd, T> {
-        match cond.0 {
-            &Var(_, _) => {
-                debug_assert!(cond == to_remove);
-                self.mk_empty_op(cond_op)
-            }
-            &Expr(_c_op, ref c_opn_v) => {
-                debug_assert!(_c_op == cond_op);
-                let mut new_c_opn_v = c_opn_v.clone();
-                let _removed = new_c_opn_v.remove(&to_remove);
-                debug_assert!(_removed);
-                self.store_expr(cond_op, new_c_opn_v)
-            }
-        }
+        Ok(builder.finish())
     }
 
     fn expr_builder(&self, op: Op, opn_v: LinearSet<Condition<'cd, T>>) -> ExprBuilder<'cd, T> {
@@ -210,7 +186,10 @@ impl<'cd, T> Context<'cd, T> {
                 let v: Vec<_> = mk_opn_v.into();
                 v[0]
             }
-            _ => self.store.mk_cond(Expr(mk_op, mk_opn_v)),
+            _ => {
+                debug_assert!(mk_opn_v.iter().all(|&c| c.expr_op() != Some(mk_op)));
+                self.store.mk_cond(Expr(mk_op, mk_opn_v))
+            },
         }
     }
 
@@ -260,22 +239,47 @@ struct ExprBuilder<'cd, T: 'cd> {
 }
 
 impl<'cd, T> ExprBuilder<'cd, T> {
-    fn insert(&mut self, ev: ExprView<'cd, T>) {
+    /// Returns `Err(())` if this expression was annihilated.
+    fn insert(&mut self, cond: Condition<'cd, T>) -> Result<(), ()> {
+        match ExprView::new(cond, self.op.dual()) {
+            Ok(ev) => {
+                if ev.is_empty() {
+                    // annihilator
+                    Err(())?;
+                } else {
+                    // nothing to simplify
+                    self.insert_one(ev)?;
+                }
+            }
+            Err(opn_v) => {
+                // inline
+                for &opn in opn_v {
+                    let o = self.op.dual();
+                    self.insert_one(ExprView::new_or_panic(opn, o))?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns `Err(())` if this expression was annihilated.
+    fn insert_one(&mut self, ev: ExprView<'cd, T>) -> Result<(), ()> {
         debug_assert!(ev.op.dual() == self.op);
         debug_assert!(!ev.is_empty());
+        let p1_opn = ev.cond;
 
         // (examples assume self.op == Op::And)
         // try to undistribute:
         // inserting `Or{var, ..o1}` into `And{Or{var, ..o2}, ..a1}`
-        // ==> `And{Or{var, ..o1}, Or{var, ..o2},  ..a1}`
+        // ==> `And{Or{var, ..o1}, Or{var, ..o2}, ..a1}`
         // ==> `And{Or{var, And{Or{..o1}, Or{..o2}}}, ..a1}`
         //
-        // XXX: not yet implemented
         // try to distribute and annihilate:
         // inserting `Or{var, ..o1}` into `And{Or{-var, ..o2}, ..a1}`
-        // ==> `And{Or{var, ..o1}, Or{-var, ..o2},  ..a1}`
-        // ==> `And{Or{And{var, -var}, And{var, Or{..o2}}, And{Or{..o1}, -var}, And{Or{..o1}, Or{..o2}}},  ..a1}`
-        // ==> `And{Or{And{var, Or{..o2}}, And{Or{..o1}, -var}},  ..a1}`
+        // ==> `And{Or{var, ..o1}, Or{-var, ..o2}, ..a1}`
+        // ==> `And{Or{And{var, -var}, And{var, Or{..o2}}, And{Or{..o1}, -var}, And{Or{..o1}, Or{..o2}}}, ..a1}`
+        // ==> `And{Or{And{var, Or{..o2}}, And{Or{..o1}, -var}}, ..a1}`
         // which simplifies if either `o1` or `o2` are empty
 
         let res = ev.try_for_each_var(|p1_var, p1_inv, p1_vr, p1_found| {
@@ -299,6 +303,7 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                     debug_assert!(_removed);
 
                     let to_insert = if p1_found.is_alone() || p2_found.is_alone() {
+                        // either `o1` or `o2` is empty:
                         // `Or{var, And{Or{..o1}, Or{..o2}}}`
                         // ==> `Or{var, False}`
                         // ==> `var`
@@ -319,19 +324,76 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                     debug_assert!(to_insert.expr_op() != Some(self.op));
                     self.opn_v.insert(to_insert);
 
-                    // break loop with `Err`
-                    Err(())
+                    // inserted, so break loop
+                    Err(Ok(()))
                 } else {
                     // found `Or{-var, ..o2}`
-                    // XXX: implement
-                    Ok(())
+                    match (p1_found.is_alone(), p2_found.is_alone()) {
+                        (true, true) => {
+                            // `And{Or{And{var, Or{..o2}}, And{Or{..o1}, -var}}, ..a1}`
+                            // ==> `And{Or{And{var, False}, And{False, -var}}, ..a1}`
+                            // ==> `And{Or{False, False}, ..a1}`
+                            // ==> `And{False, ..a1}`
+                            // ==> `False`
+
+                            // whole expr is annihilated, so break loop
+                            Err(Err(()))
+                        }
+                        (false, true) => {
+                            // `And{Or{And{var, Or{..o2}}, And{Or{..o1}, -var}}, ..a1}`
+                            // ==> `And{Or{And{var, False}, And{Or{..o1}, -var}}, ..a1}`
+                            // ==> `And{Or{False, And{Or{..o1}, -var}}, ..a1}`
+                            // ==> `And{Or{..o1}, -var, ..a1}`
+
+                            // `Or{-var, ..o2}` == `-var`
+                            debug_assert!(p2_opn.expr_op() == None);
+
+                            // technically, we did this:
+                            // self.opn_v.remove(&p2_opn);
+                            // self.opn_v.insert(p2_opn);
+
+                            // inserted, so break loop
+                            let cctx = self.cctx;
+                            Err(self.insert(p1_found.clone_remove(cctx)))
+                        }
+                        (true, false) => {
+                            // `And{Or{And{var, Or{..o2}}, And{Or{..o1}, -var}}, ..a1}`
+                            // ==> `And{Or{And{var, Or{..o2}}, And{False, -var}}, ..a1}`
+                            // ==> `And{Or{And{var, Or{..o2}}, False}, ..a1}`
+                            // ==> `And{var, Or{..o2}, ..a1}`
+
+                            // `Or{var, ..o1}` == `var`
+                            debug_assert!(p1_opn.expr_op() == None);
+
+                            // TODO: inefficient
+                            let _removed = self.opn_v.remove(&p2_opn);
+                            debug_assert!(_removed);
+
+                            self.opn_v.insert(p1_opn);
+
+                            // inserted, so break loop
+                            let cctx = self.cctx;
+                            Err(self.insert(p2_found.clone_remove(cctx)))
+                        }
+                        (false, false) => {
+                            // nothing to annihilate
+                            // continue
+                            Ok(())
+                        }
+                    }
                 }
             } else {
+                // continue
                 Ok(())
             }
         });
-        if res.is_ok() {
-            self.opn_v.insert(ev.cond);
+        match res {
+            Ok(()) => {
+                // could not simplify; just insert directly
+                self.opn_v.insert(p1_opn);
+                Ok(())
+            }
+            Err(x) => x,
         }
     }
 

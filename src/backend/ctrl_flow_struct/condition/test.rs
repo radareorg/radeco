@@ -83,28 +83,28 @@ fn assoc_commut() {
     assert_eq!(cctx.mk_or_from_iter(vec![a, b]), cctx.mk_or(b, a));
     assert_eq!(
         cctx.mk_and(a, cctx.mk_and(b, c)),
-        cctx.mk_and(cctx.mk_and(a, b), c)
+        cctx.mk_and(cctx.mk_and(a, b), c),
     );
     assert_eq!(
         cctx.mk_or(a, cctx.mk_or(b, c)),
-        cctx.mk_or(cctx.mk_or(a, b), c)
+        cctx.mk_or(cctx.mk_or(a, b), c),
     );
 
     assert_eq!(
         cctx.mk_and_from_iter(vec![a, b, c]),
-        cctx.mk_and_from_iter(vec![a, c, b])
+        cctx.mk_and_from_iter(vec![a, c, b]),
     );
     assert_eq!(
         cctx.mk_and_from_iter(vec![c, b, a]),
-        cctx.mk_and_from_iter(vec![b, c, a])
+        cctx.mk_and_from_iter(vec![b, c, a]),
     );
     assert_eq!(
         cctx.mk_or_from_iter(vec![a, b, c]),
-        cctx.mk_or_from_iter(vec![a, c, b])
+        cctx.mk_or_from_iter(vec![a, c, b]),
     );
     assert_eq!(
         cctx.mk_or_from_iter(vec![c, b, a]),
-        cctx.mk_or_from_iter(vec![b, c, a])
+        cctx.mk_or_from_iter(vec![b, c, a]),
     );
 
     assert_eq!(
@@ -112,22 +112,22 @@ fn assoc_commut() {
         cctx.mk_and(
             cctx.mk_and_from_iter(vec![a, c]),
             cctx.mk_and_from_iter(vec![b, d]),
-        )
+        ),
     );
     assert_eq!(
         cctx.mk_or_from_iter(vec![a, b, c, d]),
         cctx.mk_or(
             cctx.mk_or_from_iter(vec![a, c]),
             cctx.mk_or_from_iter(vec![b, d]),
-        )
+        ),
     );
     assert_eq!(
         cctx.mk_and_from_iter(vec![a, b, c, d]),
-        cctx.mk_and_from_iter(vec![b, c, cctx.mk_and(d, a)])
+        cctx.mk_and_from_iter(vec![b, c, cctx.mk_and(d, a)]),
     );
     assert_eq!(
         cctx.mk_or_from_iter(vec![a, b, c, d]),
-        cctx.mk_or_from_iter(vec![b, c, cctx.mk_or(d, a)])
+        cctx.mk_or_from_iter(vec![b, c, cctx.mk_or(d, a)]),
     );
 }
 
@@ -199,11 +199,11 @@ fn distributivity() {
 
     assert_eq!(
         cctx.mk_and(cctx.mk_or(a, b), cctx.mk_or(a, c)),
-        cctx.mk_or(a, cctx.mk_and(b, c))
+        cctx.mk_or(a, cctx.mk_and(b, c)),
     );
     assert_eq!(
         cctx.mk_or(cctx.mk_and(a, b), cctx.mk_and(a, c)),
-        cctx.mk_and(a, cctx.mk_or(b, c))
+        cctx.mk_and(a, cctx.mk_or(b, c)),
     );
 
     assert_eq!(
@@ -224,8 +224,8 @@ fn absorption() {
     let b = cctx.mk_var("b");
     let c = cctx.mk_var("c");
 
-    assert_eq!(cctx.mk_and(a, cctx.mk_or(a, b)), a,);
-    assert_eq!(cctx.mk_or(a, cctx.mk_and(a, b)), a,);
+    assert_eq!(cctx.mk_and(a, cctx.mk_or(a, b)), a);
+    assert_eq!(cctx.mk_or(a, cctx.mk_and(a, b)), a);
 
     assert_eq!(
         cctx.mk_and_from_iter(vec![cctx.mk_or(a, b), c, a]),
@@ -235,4 +235,51 @@ fn absorption() {
         cctx.mk_or_from_iter(vec![cctx.mk_and(a, b), c, a]),
         cctx.mk_or(a, c),
     );
+}
+
+#[test]
+fn complementation() {
+    let cstore = Storage::new();
+    let cctx = cstore.cctx();
+    let a = cctx.mk_var("a");
+    let na = cctx.mk_not(a);
+    let b = cctx.mk_var("b");
+
+    assert_eq!(cctx.mk_and(a, na), cctx.mk_false());
+    assert_eq!(cctx.mk_or(a, na), cctx.mk_true());
+    assert_eq!(cctx.mk_and(na, a), cctx.mk_false());
+    assert_eq!(cctx.mk_or(na, a), cctx.mk_true());
+
+    assert_eq!(cctx.mk_and_from_iter(vec![a, b, na]), cctx.mk_false());
+    assert_eq!(cctx.mk_or_from_iter(vec![a, b, na]), cctx.mk_true());
+    assert_eq!(cctx.mk_and_from_iter(vec![a, na, b]), cctx.mk_false());
+    assert_eq!(cctx.mk_or_from_iter(vec![a, na, b]), cctx.mk_true());
+}
+
+#[test]
+fn cover() {
+    let cstore = Storage::new();
+    let cctx = cstore.cctx();
+    let a = cctx.mk_var("a");
+    let na = cctx.mk_not(a);
+    let b = cctx.mk_var("b");
+
+    assert_eq!(cctx.mk_and(a, cctx.mk_or(na, b)), cctx.mk_and(a, b));
+    assert_eq!(cctx.mk_or(a, cctx.mk_and(na, b)), cctx.mk_or(a, b));
+}
+
+#[test]
+fn big_complementation() {
+    let cstore = Storage::new();
+    let cctx = cstore.cctx();
+    let a = cctx.mk_var("a");
+    let b = cctx.mk_var("b");
+    let c = cctx.mk_var("c");
+    let d = cctx.mk_var("d");
+    let e = cctx.mk_var("e");
+
+    let expr = cctx.mk_and(a, cctx.mk_or(b, cctx.mk_and(c, cctx.mk_or(d, e))));
+
+    assert_eq!(cctx.mk_and(expr, cctx.mk_not(expr)), cctx.mk_false());
+    assert_eq!(cctx.mk_or(expr, cctx.mk_not(expr)), cctx.mk_true());
 }
