@@ -46,7 +46,7 @@ fn main() {
     let regfile = rproj.regfile().clone();
     for mut xy in rproj.iter_mut() {
         let rmod = &mut xy.module;
-        let func_name_table = rmod.functions.iter()
+        let func_name_map = rmod.functions.iter()
             .map(|(&addr, f)| (addr, f.name.to_string()))
             .collect();
         let mut dir = PathBuf::from(".");
@@ -228,7 +228,7 @@ fn main() {
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 let mut df = File::create(format!("{}.c", fname.to_string_lossy())).expect("Unable to create .c file");
-                let ast = c_simple_ast_builder::recover_simple_ast(&rfn, &func_name_table);
+                let ast = c_simple_ast_builder::recover_simple_ast(&rfn, &func_name_map);
                 let code = ast.to_c_ast().print();
                 writeln!(df, "{}", code).expect("Error writing to file");
             }
