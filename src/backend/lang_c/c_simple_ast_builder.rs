@@ -18,9 +18,13 @@ use petgraph::visit::EdgeRef;
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
 use petgraph::{EdgeDirection, Direction, Directed};
 
+fn is_debug() -> bool {
+    cfg!(feature = "trace_log")
+}
+
 /// This constructs SimpleCAST from an instance of RadecoFunction.
-pub fn recover_simple_ast(rfn: &RadecoFunction, is_debug: bool) -> SimpleCAST {
-    let mut builder = CASTBuilder::new(rfn, is_debug);
+pub fn recover_simple_ast(rfn: &RadecoFunction) -> SimpleCAST {
+    let mut builder = CASTBuilder::new(rfn);
     // Recover values
     let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
     builder.datamap = data_graph;
@@ -41,11 +45,10 @@ struct CASTBuilder<'a> {
     ssa: &'a SSAStorage,
     action_map: HashMap<NodeIndex, NodeIndex>,
     datamap: CASTDataMap<'a>,
-    is_debug: bool,
 }
 
 impl<'a> CASTBuilder<'a> {
-    fn new(rfn: &'a RadecoFunction, is_debug: bool) -> CASTBuilder {
+    fn new(rfn: &'a RadecoFunction) -> CASTBuilder {
         let ast = SimpleCAST::new(rfn.name.as_ref());
         CASTBuilder {
             last_action: ast.entry,
@@ -54,7 +57,6 @@ impl<'a> CASTBuilder<'a> {
             ssa: rfn.ssa(),
             action_map: HashMap::new(),
             datamap: CASTDataMap::new(rfn),
-            is_debug: is_debug,
         }
     }
 
@@ -99,7 +101,7 @@ impl<'a> CASTBuilder<'a> {
             MOpcode::OpCall => {
                 // TODO Add proper argument, require prototype from RadecoFunction
                 let ret = self.call_action("func");
-                if self.is_debug {
+                if is_debug() {
                     let addr = self.addr_str(node);
                     let ops_dbg = self.ssa.operands_of(node);
                     self.ast.debug_info_at(ret, format!("Call {:?} @ {}", ops_dbg, addr));
@@ -117,7 +119,7 @@ impl<'a> CASTBuilder<'a> {
                 } else {
                     self.dummy_action(format!("{:?} @ {:?}", op, node))
                 };
-                if self.is_debug {
+                if is_debug() {
                     let addr = self.addr_str(node);
                     self.ast.debug_info_at(ret, format!("*({:?}) = {:?} @ {}", dst, src, addr));
                 }
@@ -160,7 +162,7 @@ impl<'a> CASTBuilder<'a> {
             .cloned().expect("This should not be None");
         let label = self.gen_label(succ);
         let goto_node = self.ast.insert_goto_before(ast_node, succ_node, &label);
-        if self.is_debug {
+        if is_debug() {
             let addr = self.addr_str(ssa_node);
             self.ast.debug_info_at(goto_node, format!("JMP {:?} @ {}", succ_node, addr));
         }
@@ -185,7 +187,7 @@ impl<'a> CASTBuilder<'a> {
         // Add condition node to if statement
         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(self.ast.unknown);
         let if_node = self.ast.conditional_insert(cond, goto_node, None, ast_node);
-        if self.is_debug {
+        if is_debug() {
             let addr = self.addr_str(ssa_node);
             self.ast.debug_info_at(goto_node, format!("IF JMP {:?} @ {}", if_node, addr));
         }
