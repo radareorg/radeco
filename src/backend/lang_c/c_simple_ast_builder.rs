@@ -23,7 +23,7 @@ fn is_debug() -> bool {
 }
 
 /// This constructs SimpleCAST from an instance of RadecoFunction.
-pub fn recover_simple_ast(rfn: &RadecoFunction) -> SimpleCAST {
+pub fn recover_simple_ast(rfn: &RadecoFunction, fname_table: &HashMap<u64, String>) -> SimpleCAST {
     let mut builder = CASTBuilder::new(rfn);
     // Recover values
     let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
