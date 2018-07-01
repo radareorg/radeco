@@ -35,6 +35,14 @@ pub fn recover_simple_ast(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>
     builder.ast
 }
 
+fn ret_value_string(rfn: &RadecoFunction) -> Option<String> {
+    let ret_reg_opt = rfn.callconv.clone();
+    if ret_reg_opt.is_none() {
+        return None;
+    }
+    ret_reg_opt.unwrap().ret
+}
+
 // CASTBuilder constructs SimpleCAST from RadecoFunction
 struct CASTBuilder<'a> {
     ast: SimpleCAST,
@@ -85,25 +93,64 @@ impl<'a> CASTBuilder<'a> {
         self.last_action
     }
 
+    // Retrieve SimpleCAST's return value node of function call
+    fn return_node(&self, call_node: NodeIndex) -> Option<NodeIndex> {
+        let ret_reg_name_opt = ret_value_string(self.rfn);
+        if ret_reg_name_opt.is_none() {
+            return None;
+        }
+        let ret_reg_name = ret_reg_name_opt.unwrap();
+        let reg_map = utils::call_rets(call_node, self.ssa);
+        for (idx, (node, _)) in reg_map.into_iter() {
+            if let Some(name) = self.ssa.regfile.get_name(idx) {
+                if name == ret_reg_name {
+                    return self.datamap.var_map.get(&node).cloned();
+                }
+            }
+        }
+        return None
+    }
+
+    fn args_inorder(&self, call_node: NodeIndex) -> Vec<NodeIndex> {
+        let call_info = utils::call_info(call_node, self.ssa).expect("This should not be `None`");
+        if self.rfn.callconv.is_none() {
+            return Vec::new();
+        }
+        let regs_order = self.rfn.callconv.clone().unwrap().args
+            .unwrap_or(Vec::new())
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| (s, i))
+            .collect::<HashMap<_, _>>();
+        let mut args = Vec::new();
+        let reg_map = call_info.register_args;
+        for (idx, node) in reg_map.into_iter() {
+            let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
+            if let Some(&i) = regs_order.get(&name) {
+                args.push((i, node));
+            }
+        }
+        args.sort_by_key(|k| k.0);
+        args.into_iter().map(|(_, n)| n).collect()
+    }
+
     fn call_action(&mut self, call_node: NodeIndex) -> NodeIndex {
+        let call_info = utils::call_info(call_node, self.ssa).expect("This should not be `None`");
+        let callee_node = call_info.target;
         let func_name = {
-            let func_addr_node = self.ssa.operands_of(call_node)
-                .first().cloned().expect("This cannot be `None`");
-            if self.datamap.const_nodes.contains(&func_addr_node) {
-                let addr = self.ssa.constant_value(func_addr_node).unwrap_or(0);
+            if self.datamap.const_nodes.contains(&callee_node) {
+                let addr = self.ssa.constant_value(callee_node).unwrap_or(0);
                 self.fname_map.get(&addr).cloned().unwrap_or("invalid".to_string())
             } else {
                 "unknown".to_string()
             }
         };
-        // TODO sort args by provided calling convention
-        let args = self.ssa.operands_of(call_node)
+        let args = self.args_inorder(call_node)
             .into_iter()
-            .skip(1)
             .map(|n| self.datamap.var_map.get(&n)
                  .cloned().unwrap_or(self.ast.unknown))
              .collect::<Vec<_>>();
-        let ret_val_node = self.datamap.var_map.get(&call_node).cloned();
+        let ret_val_node = self.return_node(call_node);
         self.last_action = self.ast.call_func(&func_name, args.as_slice(), self.last_action, ret_val_node);
         self.last_action
     }
@@ -427,17 +474,28 @@ impl<'a> CASTDataMap<'a> {
             MOpcode::OpZeroExt(size) => self.handle_cast(ret_node, ops[0],
                                                           c_simple::Expr::Cast(size as usize), ast),
             MOpcode::OpCall => {
-                self.update_data_graph_by_call(ret_node);
+                self.update_data_graph_by_call(ret_node, ast);
             },
             _ => {},
         }
     }
-    fn update_data_graph_by_call(&mut self, call_node: NodeIndex) {
+
+    fn update_data_graph_by_call(&mut self, call_node: NodeIndex, ast: &mut SimpleCAST) {
         radeco_trace!("CASTBuilder::update_data_graph_by_call {:?}", call_node);
+        let ret_reg_name_opt = ret_value_string(self.rfn);
+        if ret_reg_name_opt.is_none() {
+            return;
+        }
+        let ret_reg_name = ret_reg_name_opt.unwrap();
         let reg_map = utils::call_rets(call_node, self.ssa);
         for (idx, (node, vt)) in reg_map.into_iter() {
+            // TODO Add data dependencies for registers
             let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-            // TODO Add data dependencies for return values or registers
+            if name == ret_reg_name {
+                // TODO add type
+                let ast_node = ast.var("tmp", None);
+                self.var_map.insert(node, ast_node);
+            }
         }
     }
 
