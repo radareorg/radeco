@@ -86,14 +86,25 @@ impl<'a> CASTBuilder<'a> {
     }
 
     fn call_action(&mut self, call_node: NodeIndex) -> NodeIndex {
-        let func_addr_node = self.ssa.operands_of(call_node)
+        let func_name = {
+            let func_addr_node = self.ssa.operands_of(call_node)
                 .first().cloned().expect("This cannot be `None`");
-        let func_name = if self.datamap.const_nodes.contains(&func_addr_node) {
-            "known".to_string()
-        } else {
-            "unknown".to_string()
+            if self.datamap.const_nodes.contains(&func_addr_node) {
+                let addr = self.ssa.constant_value(func_addr_node).unwrap_or(0);
+                self.fname_map.get(&addr).cloned().unwrap_or("invalid".to_string())
+            } else {
+                "unknown".to_string()
+            }
         };
-        self.last_action = self.ast.call_func(&func_name, &[], self.last_action, None);
+        // TODO sort args by provided calling convention
+        let args = self.ssa.operands_of(call_node)
+            .into_iter()
+            .skip(1)
+            .map(|n| self.datamap.var_map.get(&n)
+                 .cloned().unwrap_or(self.ast.unknown))
+             .collect::<Vec<_>>();
+        let ret_val_node = self.datamap.var_map.get(&call_node).cloned();
+        self.last_action = self.ast.call_func(&func_name, args.as_slice(), self.last_action, ret_val_node);
         self.last_action
     }
 
