@@ -547,10 +547,7 @@ impl CAST {
             }
         };
         if comment.is_some() {
-            format!("{}//{}\n{}",
-                    format_with_indent("", indent),
-                    &comment.unwrap(),
-                    result)
+            format!("{}\t//{}", result, &comment.unwrap())
         } else {
             result
         }
