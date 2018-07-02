@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 
 pub mod ast_context;
-mod condition;
+pub mod condition;
 mod graph_utils;
 #[cfg(test)]
 mod test;

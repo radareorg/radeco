@@ -3,6 +3,23 @@
 //! Conditions are arena-allocated. Only freely-copyable references are exposed
 //! through this API. This allows them to be manipulated without worrying about
 //! ownership.
+//!
+//! # Example
+//! ```rust
+//! # use radeco_lib::backend::ctrl_flow_struct::condition::*;
+//! // setup
+//! let cstore = Storage::new();
+//! let cctx = cstore.cctx();
+//!
+//! // make some variables
+//! let a = cctx.mk_var("a");
+//! let b = cctx.mk_var("b");
+//!
+//! // make some expressions
+//! let cond1 = cctx.mk_not(cctx.mk_and(a, b));
+//! let cond2 = cctx.mk_or(cctx.mk_not(a), cctx.mk_not(b));
+//! assert_eq!(cond1, cond2);
+//! ```
 
 // TODO: Conditions should probably be interned, but I can't find a crate for
 //       that and I don't want to write one right now either.
@@ -63,7 +80,7 @@ enum Op {
 struct VarRef<'cd, T: 'cd>(&'cd T);
 impl_copy!{VarRef}
 
-/// Helper for creating new conditions.
+/// Helper for creating new conditions. This can be freely copied.
 /// Use [`Storage::cctx`] to make one.
 #[derive(Debug)]
 pub struct Context<'cd, T: 'cd> {
@@ -71,7 +88,7 @@ pub struct Context<'cd, T: 'cd> {
 }
 impl_copy!{Context}
 
-/// Backing storage for [`Condition`]s.
+/// Backing storage for [`Condition`]s and entry point to this module's API.
 pub struct Storage<'cd, T: 'cd> {
     vars: Arena<T>,
     conds: Arena<CondVariants<'cd, T>>,
@@ -82,23 +99,27 @@ pub struct Storage<'cd, T: 'cd> {
 use self::CondVariants::*;
 
 impl<'cd, T> Context<'cd, T> {
-    pub fn mk_var(&self, t: T) -> Condition<'cd, T> {
+    /// Creates a new boolean variable. This will not compare equal to any
+    /// previously created variable, regardless of the underlying values.
+    pub fn mk_var(self, t: T) -> Condition<'cd, T> {
         self.store
             .mk_cond(Var(Negation::Normal, self.store.mk_var(t)))
     }
 
-    pub fn mk_and(&self, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
+    /// Creates the logical conjunction (And) of two conditions.
+    pub fn mk_and(self, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
         self.mk_expr(Op::And, l, r)
     }
-    pub fn mk_or(&self, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
+    /// Creates the logical disjunction (Or) of two conditions.
+    pub fn mk_or(self, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
         self.mk_expr(Op::Or, l, r)
     }
-    fn mk_expr(&self, mk_op: Op, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
+    fn mk_expr(self, mk_op: Op, l: Condition<'cd, T>, r: Condition<'cd, T>) -> Condition<'cd, T> {
         self.mk_expr0(mk_op, l, r)
             .unwrap_or(self.mk_empty_op(mk_op.dual()))
     }
     fn mk_expr0(
-        &self,
+        self,
         mk_op: Op,
         l: Condition<'cd, T>,
         r: Condition<'cd, T>,
@@ -146,21 +167,25 @@ impl<'cd, T> Context<'cd, T> {
         })
     }
 
-    pub fn mk_and_from_iter<I>(&self, iter: I) -> Condition<'cd, T>
+    /// Creates the logical conjunction (And) of several conditions.
+    /// [`Context::mk_and`] may be more efficient for exactly two conditions.
+    pub fn mk_and_from_iter<I>(self, iter: I) -> Condition<'cd, T>
     where
         I: IntoIterator<Item = Condition<'cd, T>>,
     {
         self.mk_expr_from_iter(Op::And, iter)
             .unwrap_or(self.mk_false())
     }
-    pub fn mk_or_from_iter<I>(&self, iter: I) -> Condition<'cd, T>
+    /// Creates the logical disjunction (Or) of several conditions.
+    /// [`Context::mk_or`] may be more efficient for exactly two conditions.
+    pub fn mk_or_from_iter<I>(self, iter: I) -> Condition<'cd, T>
     where
         I: IntoIterator<Item = Condition<'cd, T>>,
     {
         self.mk_expr_from_iter(Op::Or, iter)
             .unwrap_or(self.mk_true())
     }
-    fn mk_expr_from_iter<I>(&self, mk_op: Op, iter: I) -> Result<Condition<'cd, T>, ()>
+    fn mk_expr_from_iter<I>(self, mk_op: Op, iter: I) -> Result<Condition<'cd, T>, ()>
     where
         I: IntoIterator<Item = Condition<'cd, T>>,
     {
@@ -171,15 +196,15 @@ impl<'cd, T> Context<'cd, T> {
         Ok(builder.finish())
     }
 
-    fn expr_builder(&self, op: Op, opn_v: LinearSet<Condition<'cd, T>>) -> ExprBuilder<'cd, T> {
+    fn expr_builder(self, op: Op, opn_v: LinearSet<Condition<'cd, T>>) -> ExprBuilder<'cd, T> {
         ExprBuilder {
-            cctx: *self,
+            cctx: self,
             op,
             opn_v,
         }
     }
 
-    fn store_expr(&self, mk_op: Op, mk_opn_v: LinearSet<Condition<'cd, T>>) -> Condition<'cd, T> {
+    fn store_expr(self, mk_op: Op, mk_opn_v: LinearSet<Condition<'cd, T>>) -> Condition<'cd, T> {
         match mk_opn_v.len() {
             0 => self.mk_empty_op(mk_op), // avoid duplicate "true"/"false"
             1 => {
@@ -189,11 +214,12 @@ impl<'cd, T> Context<'cd, T> {
             _ => {
                 debug_assert!(mk_opn_v.iter().all(|&c| c.expr_op() != Some(mk_op)));
                 self.store.mk_cond(Expr(mk_op, mk_opn_v))
-            },
+            }
         }
     }
 
-    pub fn mk_not(&self, cond: Condition<'cd, T>) -> Condition<'cd, T> {
+    /// Creates the logical negation (Not) of a condition.
+    pub fn mk_not(self, cond: Condition<'cd, T>) -> Condition<'cd, T> {
         match cond.0 {
             &Var(inv, vr) => self.store.mk_cond(Var(!inv, vr)),
             &Expr(op, ref op_v) => {
@@ -202,16 +228,18 @@ impl<'cd, T> Context<'cd, T> {
         }
     }
 
-    fn mk_empty_op(&self, mk_op: Op) -> Condition<'cd, T> {
+    fn mk_empty_op(self, mk_op: Op) -> Condition<'cd, T> {
         match mk_op {
             Op::And => self.mk_true(),
             Op::Or => self.mk_false(),
         }
     }
-    pub fn mk_true(&self) -> Condition<'cd, T> {
+    /// Creates a tautology (True).
+    pub fn mk_true(self) -> Condition<'cd, T> {
         Condition(&self.store.true_)
     }
-    pub fn mk_false(&self) -> Condition<'cd, T> {
+    /// Creates a contradiction (False).
+    pub fn mk_false(self) -> Condition<'cd, T> {
         Condition(&self.store.false_)
     }
 }
@@ -496,6 +524,7 @@ impl<'cd, T> Storage<'cd, T> {
         }
     }
 
+    /// Creates a [`Context`] to create conditions allocated in this [`Storage`].
     pub fn cctx(&'cd self) -> Context<'cd, T> {
         Context { store: self }
     }
@@ -510,8 +539,14 @@ impl<'cd, T> Storage<'cd, T> {
     }
 }
 
+impl<'cd, T> Default for Storage<'cd, T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Op {
-    fn dual(&self) -> Op {
+    fn dual(self) -> Op {
         match self {
             Op::And => Op::Or,
             Op::Or => Op::And,
