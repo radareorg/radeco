@@ -525,8 +525,121 @@ impl SimpleCAST {
         let mut converter = CASTConverter::new(&self);
         converter.to_c_ast()
     }
+
 }
 
+/// SimpleCAST should meet following conditions.
+/// 1. There are at most 1 ActionEdge::Normal from each node.
+/// 2. There are ActionEdge::IfThen, ValueEdge::Conditional from ActionNode::If
+/// 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
+/// 4. The destination node of GotoDst edge exists.
+/// 5. The arguments node of CAST exist
+pub struct SimpleCASTVerifier {
+}
+
+type Verifier = Fn(NodeIndex, &SimpleCAST) -> Result<(), String>;
+impl SimpleCASTVerifier {
+    /// Each action have at most one ActionEdge::Normal
+    pub fn verify(cast: &SimpleCAST) -> Result<(), String> {
+        Self::verify_each_node(cast, &Self::verify_normal_action, "Normal action")?;
+        Self::verify_each_node(cast, &Self::verify_if, "If")?;
+        Self::verify_each_node(cast, &Self::verify_edge_action, "Edge-Action")?;
+        Self::verify_each_node(cast, &Self::verify_goto, "Goto")?;
+        Self::verify_each_node(cast, &Self::verify_func_call, "Function Call")?;
+        Ok(())
+    }
+
+    fn verify_each_node(cast: &SimpleCAST, verifier: &Verifier, name: &str) -> Result<(), String> {
+        let mut is_valid = true;
+        let nodes = cast.ast.node_indices();
+        for node in nodes {
+            if let Err(msg) = verifier(node, cast) {
+                radeco_err!("{}", msg);
+                is_valid = false;
+            }
+        }
+        if is_valid {
+            Ok(())
+        } else {
+            Err(name.to_string())
+        }
+    }
+
+    fn verify_normal_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+        match cast.ast.node_weight(node) {
+            Some(&SimpleCASTNode::Action(_)) => {},
+            _ => return Ok(()),
+        };
+        let normal_actions = cast.ast.edges_directed(node, Direction::Outgoing)
+            .into_iter()
+            .filter(|e| {
+                match e.weight() {
+                    &SimpleCASTEdge::Action(ActionEdge::Normal) => true,
+                    _ => false,
+                }
+            }).collect::<Vec<_>>();
+        if normal_actions.len() <= 1 {
+            Ok(())
+        } else {
+            Err(format!("There are {} next normal actions @ {:?}",
+                        normal_actions.len(), node))
+        }
+    }
+
+    fn verify_if(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+        match cast.ast.node_weight(node) {
+            Some(&SimpleCASTNode::Action(ActionNode::If)) => {},
+            _ => return Ok(()),
+        };
+        // let c = *self.node_map.get(&cond).unwrap();
+        // let t = if_then.into_iter()
+        //     .map(|x| {
+        //         self.node_map.get(&x).cloned().unwrap_or(self.ast.unknown)
+        //     }).collect::<Vec<_>>();
+        // let e = if_else.map(|x| x.iter().map(|y| {
+        //     self.node_map.get(y).cloned().unwrap_or(self.ast.unknown)
+        // }).collect::<Vec<_>>());
+        // let node = c_ast.new_conditional(c, t, e);
+        // self.node_map.insert(current_node, node);
+        unimplemented!()
+    }
+
+    fn verify_edge_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn verify_goto(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+        match cast.ast.node_weight(node) {
+            Some(&SimpleCASTNode::Action(ActionNode::Goto)) => {},
+            _ => return Ok(()),
+        };
+        // let dst_opt = self.ast.goto(current_node)
+        //     .and_then(|d| self.ast.label_map.get(&d))
+        //     .map(|d| d.clone());
+        // if dst_opt.is_none() {
+        //     radeco_warn!("Error Goto");
+        // };
+        unimplemented!()
+    }
+
+    fn verify_func_call(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+        match cast.ast.node_weight(node) {
+            Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
+            _ => return Ok(()),
+        };
+        // let args = self.ast.args_call(current_node)
+        //     .unwrap_or(Vec::new())
+        //     .into_iter()
+        //     .map(|arg| {
+        //         let ret = self.node_map.get(&arg).map(|a| *a);
+        //         if ret.is_none() {
+        //             radeco_warn!("Error args_call");
+        //         }
+        //         ret
+        //     }).collect();
+        unimplemented!()
+    }
+}
 
 /// This is used for translating SimpleCAST to CAST
 struct CASTConverter<'a> {
