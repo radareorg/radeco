@@ -55,6 +55,8 @@ pub enum ActionEdge {
     IfThen,
     IfElse,
     Normal,
+    /// Destination of Goto statement
+    GotoDst,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,8 +78,6 @@ pub enum ValueEdge {
     Operand(u8),
     /// It points to condition of If action
     Conditional,
-    /// Destination of Goto statement
-    GotoDst,
 }
 
 pub struct SimpleCAST {
@@ -328,7 +328,7 @@ impl SimpleCAST {
 
     pub fn add_goto(&mut self, dst: NodeIndex, label_str: &str, prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Goto));
-        self.ast.add_edge(node, dst, SimpleCASTEdge::Value(ValueEdge::GotoDst));
+        self.ast.add_edge(node, dst, SimpleCASTEdge::Action(ActionEdge::GotoDst));
         self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
         self.label_map.insert(dst, label_str.to_string());
         node
@@ -337,7 +337,7 @@ impl SimpleCAST {
     pub fn insert_goto(&mut self, prev_action: NodeIndex, next_action: NodeIndex,
                    dst: NodeIndex, label_str: &str) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Goto));
-        let _ = self.ast.add_edge(node, dst, SimpleCASTEdge::Value(ValueEdge::GotoDst));
+        let _ = self.ast.add_edge(node, dst, SimpleCASTEdge::Action(ActionEdge::GotoDst));
         self.insert_node(prev_action, next_action, node);
         self.label_map.insert(dst, label_str.to_string());
         node
@@ -419,7 +419,7 @@ impl SimpleCAST {
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Value(ValueEdge::GotoDst) => Some(e.target()),
+                    &SimpleCASTEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -644,7 +644,7 @@ impl SimpleCASTVerifier {
             .edges_directed(node, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| match e.weight() {
-                SimpleCASTEdge::Value(ValueEdge::GotoDst) => Some(e.target()),
+                SimpleCASTEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                 _ => None,
             }).collect::<Vec<_>>();
         if gotos.len() != 1 {
