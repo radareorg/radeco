@@ -608,7 +608,26 @@ impl SimpleCASTVerifier {
     }
 
     fn verify_edge_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
-        unimplemented!()
+        let mut is_err = false;
+        let mut ret = String::new();
+        let edges = cast.ast
+            .edges_directed(node, Direction::Outgoing).collect::<Vec<_>>();
+        for edge in edges {
+            match (edge.weight(), cast.ast.node_weight(edge.target())) {
+                (SimpleCASTEdge::Action(_), Some(&SimpleCASTNode::Action(_))) => {},
+                (SimpleCASTEdge::Value(_), Some(&SimpleCASTNode::Value(_))) => {},
+                _ => {
+                    is_err = true;
+                    ret = format!("{}; {:?} {:?}", ret, edge.weight(),
+                            cast.ast.node_weight(edge.target()));
+                }
+            }
+        }
+        if is_err {
+            Err(ret)
+        } else {
+            Ok(())
+        }
     }
 
     fn verify_goto(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
