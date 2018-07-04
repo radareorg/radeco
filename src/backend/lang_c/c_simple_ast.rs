@@ -591,17 +591,20 @@ impl SimpleCASTVerifier {
             Some(&SimpleCASTNode::Action(ActionNode::If)) => {},
             _ => return Ok(()),
         };
-        // let c = *self.node_map.get(&cond).unwrap();
-        // let t = if_then.into_iter()
-        //     .map(|x| {
-        //         self.node_map.get(&x).cloned().unwrap_or(self.ast.unknown)
-        //     }).collect::<Vec<_>>();
-        // let e = if_else.map(|x| x.iter().map(|y| {
-        //     self.node_map.get(y).cloned().unwrap_or(self.ast.unknown)
-        // }).collect::<Vec<_>>());
-        // let node = c_ast.new_conditional(c, t, e);
-        // self.node_map.insert(current_node, node);
-        unimplemented!()
+        let mut ret = String::new();
+        let cond = cast.branch_condition(node);
+        if cond.is_none() {
+            ret = format!("{}; No condition node is found.", ret);
+        }
+        let branches = cast.branch(node).map(|x| x.clone());
+        if branches.is_none() {
+            ret = format!("{}; No branch is found.", ret);
+        }
+        if cond.is_none() || branches.is_none() {
+            Err(ret)
+        } else {
+            Ok(())
+        }
     }
 
     fn verify_edge_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
