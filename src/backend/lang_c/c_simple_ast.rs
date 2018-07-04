@@ -544,23 +544,23 @@ impl SimpleCASTVerifier {
         Self::verify_each_node(cast, &Self::verify_if, "If")?;
         Self::verify_each_node(cast, &Self::verify_edge_action, "Edge-Action")?;
         Self::verify_each_node(cast, &Self::verify_goto, "Goto")?;
-        Self::verify_each_node(cast, &Self::verify_func_call, "Function Call")?;
         Ok(())
     }
 
     fn verify_each_node(cast: &SimpleCAST, verifier: &Verifier, name: &str) -> Result<(), String> {
         let mut is_valid = true;
+        let mut ret = String::new();
         let nodes = cast.ast.node_indices();
         for node in nodes {
             if let Err(msg) = verifier(node, cast) {
-                radeco_err!("{}", msg);
+                ret = format!("{}; {}", ret, msg);
                 is_valid = false;
             }
         }
         if is_valid {
             Ok(())
         } else {
-            Err(name.to_string())
+            Err(format!("{} @ {}", ret, name.to_string()))
         }
     }
 
@@ -618,6 +618,7 @@ impl SimpleCASTVerifier {
             match (edge.weight(), cast.ast.node_weight(edge.target())) {
                 (SimpleCASTEdge::Action(_), Some(&SimpleCASTNode::Action(_))) => {},
                 (SimpleCASTEdge::Value(_), Some(&SimpleCASTNode::Value(_))) => {},
+                (SimpleCASTEdge::Action(ActionEdge::GotoDst), Some(&SimpleCASTNode::Entry)) => {},
                 _ => {
                     is_err = true;
                     ret = format!("{}; {:?} {:?}", ret, edge.weight(),
@@ -654,6 +655,7 @@ impl SimpleCASTVerifier {
         for goto in gotos {
             match cast.ast.node_weight(goto) {
                 Some(&SimpleCASTNode::Action(_)) => {},
+                Some(&SimpleCASTNode::Entry) => {},
                 n => {
                     is_err = true;
                     ret = format!("{}; Invalid node {:?} @ {:?}", ret, n, node);
