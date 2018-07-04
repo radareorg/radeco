@@ -538,7 +538,6 @@ pub struct SimpleCASTVerifier {
 
 type Verifier = Fn(NodeIndex, &SimpleCAST) -> Result<(), String>;
 impl SimpleCASTVerifier {
-    /// Each action have at most one ActionEdge::Normal
     pub fn verify(cast: &SimpleCAST) -> Result<(), String> {
         Self::verify_each_node(cast, &Self::verify_normal_action, "Normal action")?;
         Self::verify_each_node(cast, &Self::verify_if, "If")?;
