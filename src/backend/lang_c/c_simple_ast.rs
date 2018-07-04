@@ -639,13 +639,33 @@ impl SimpleCASTVerifier {
             Some(&SimpleCASTNode::Action(ActionNode::Goto)) => {},
             _ => return Ok(()),
         };
-        // let dst_opt = self.ast.goto(current_node)
-        //     .and_then(|d| self.ast.label_map.get(&d))
-        //     .map(|d| d.clone());
-        // if dst_opt.is_none() {
-        //     radeco_warn!("Error Goto");
-        // };
-        unimplemented!()
+        let mut is_err = false;
+        let mut ret = String::new();
+        let gotos = cast.ast
+            .edges_directed(node, Direction::Outgoing)
+            .into_iter()
+            .filter_map(|e| match e.weight() {
+                SimpleCASTEdge::Value(ValueEdge::GotoDst) => Some(e.target()),
+                _ => None,
+            }).collect::<Vec<_>>();
+        if gotos.len() != 1 {
+            is_err = true;
+            ret = "No or more than one ActionEdge::GotoDst found".to_string();
+        }
+        for goto in gotos {
+            match cast.ast.node_weight(goto) {
+                Some(&SimpleCASTNode::Action(_)) => {},
+                n => {
+                    is_err = true;
+                    ret = format!("{}; Invalid node {:?} @ {:?}", ret, n, node);
+                },
+            }
+        }
+        if is_err {
+            Err(ret)
+        } else {
+            Ok(())
+        }
     }
 
     // 5. The arguments node of CAST exist
