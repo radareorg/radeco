@@ -870,6 +870,7 @@ mod test {
         let entry = ast.entry;
         let assn = ast.assign(x, y, entry);
         let _ = ast.call_func("func", &[z, w], assn, None);
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -889,6 +890,7 @@ mod test {
         let entry = ast.entry;
         let expr = ast.expr(&[x, y], c_simple::Expr::Add);
         let assn = ast.assign(x, expr, entry);
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -905,6 +907,7 @@ mod test {
         let y = ast.var("y", None);
         let entry = ast.entry;
         let call_f = ast.call_func("func", &[x], entry, Some(y));
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -935,6 +938,7 @@ mod test {
         let call_f = ast.call_func("func", &[z, w], assn, None);
         let call_test2 = ast.call_func("test2", &[], call_f, None);
         let _ = ast.conditional(x, assn, Some(call_f), entry);
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -956,6 +960,7 @@ mod test {
         let assn = ast.assign(x, y, entry);
         let _ = ast.add_goto(entry, "L1", assn);
         let output = ast.to_c_ast().print();
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         println!("{}", output);
     }
 
@@ -969,6 +974,7 @@ mod test {
         let entry = ast.entry;
         let x = ast.var("x", None);
         let _ = ast.add_return(Some(x), entry);
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -990,6 +996,7 @@ mod test {
         let assn = ast.assign(x, y, entry);
         let ret = ast.add_return(Some(x), assn);
         let _ = ast.insert_goto(entry, assn, ret, "L1");
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1027,6 +1034,7 @@ mod test {
         let break_goto = ast.add_goto(assn2, "L1", f_call);
         let if_node = ast.conditional(cond, break_goto, None, f_call);
         let _ = ast.add_return(None, if_node);
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1065,6 +1073,7 @@ mod test {
         let break_goto = ast.add_goto(assn2, "L1", f_call1);
         let if_node = ast.conditional(cond, f_call1, None, f_call);
         let _ = ast.add_return(None, if_node);
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1088,6 +1097,7 @@ mod test {
         let c = ast.var("c", Some(Ty::new(BTy::Char, true, 0)));
         let v = ast.var("v", Some(Ty::new(BTy::Void, true, 0)));
         let f = ast.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
+        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
