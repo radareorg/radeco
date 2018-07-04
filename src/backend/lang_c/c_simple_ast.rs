@@ -532,7 +532,7 @@ impl SimpleCAST {
 /// 1. There are at most 1 ActionEdge::Normal from each node.
 /// 2. There are ActionEdge::IfThen, ValueEdge::Conditional from ActionNode::If
 /// 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
-/// 4. The destination node of GotoDst edge exists.
+/// 4. The destination node of GotoDst edge is ActionNode.
 /// 5. The arguments node of CAST exist
 pub struct SimpleCASTVerifier {
 }
@@ -565,6 +565,7 @@ impl SimpleCASTVerifier {
         }
     }
 
+    // 1. There are at most 1 ActionEdge::Normal from each node.
     fn verify_normal_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
         match cast.ast.node_weight(node) {
             Some(&SimpleCASTNode::Action(_)) => {},
@@ -586,6 +587,7 @@ impl SimpleCASTVerifier {
         }
     }
 
+    // 2. There are ActionEdge::IfThen, ValueEdge::Conditional from ActionNode::If
     fn verify_if(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
         match cast.ast.node_weight(node) {
             Some(&SimpleCASTNode::Action(ActionNode::If)) => {},
@@ -607,6 +609,7 @@ impl SimpleCASTVerifier {
         }
     }
 
+    // 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
     fn verify_edge_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
         let mut is_err = false;
         let mut ret = String::new();
@@ -630,6 +633,7 @@ impl SimpleCASTVerifier {
         }
     }
 
+    // 4. The destination node of GotoDst edge is ActionNode.
     fn verify_goto(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
         match cast.ast.node_weight(node) {
             Some(&SimpleCASTNode::Action(ActionNode::Goto)) => {},
@@ -644,6 +648,7 @@ impl SimpleCASTVerifier {
         unimplemented!()
     }
 
+    // 5. The arguments node of CAST exist
     fn verify_func_call(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
         match cast.ast.node_weight(node) {
             Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
