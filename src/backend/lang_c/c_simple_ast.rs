@@ -533,7 +533,6 @@ impl SimpleCAST {
 /// 2. There are ActionEdge::IfThen, ValueEdge::Conditional from ActionNode::If
 /// 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
 /// 4. The destination node of GotoDst edge is ActionNode.
-/// 5. The arguments node of CAST exist
 pub struct SimpleCASTVerifier {
 }
 
@@ -666,25 +665,6 @@ impl SimpleCASTVerifier {
         } else {
             Ok(())
         }
-    }
-
-    // 5. The arguments node of CAST exist
-    fn verify_func_call(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
-        match cast.ast.node_weight(node) {
-            Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
-            _ => return Ok(()),
-        };
-        // let args = self.ast.args_call(current_node)
-        //     .unwrap_or(Vec::new())
-        //     .into_iter()
-        //     .map(|arg| {
-        //         let ret = self.node_map.get(&arg).map(|a| *a);
-        //         if ret.is_none() {
-        //             radeco_warn!("Error args_call");
-        //         }
-        //         ret
-        //     }).collect();
-        unimplemented!()
     }
 }
 
