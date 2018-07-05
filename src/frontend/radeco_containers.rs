@@ -47,7 +47,7 @@ use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
 use r2api::structs::{LVarInfo, LOpInfo, LSymbolInfo, LRelocInfo, LExportInfo,
-                     LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
+                     LFlagInfo, LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
 
 use r2pipe::r2::R2;
 use rayon::prelude::*;
@@ -159,6 +159,7 @@ pub struct RadecoModule {
     name: Cow<'static, str>,
     // Information from the loader
     symbols: Vec<LSymbolInfo>,
+    strings: Vec<LStringInfo>,
     sections: Arc<Vec<LSectionInfo>>,
     // Map from PLT entry address to `ImportInfo` for an import
     pub imports: HashMap<u64, ImportInfo>,
@@ -758,6 +759,11 @@ impl<'a> ModuleLoader<'a> {
             Err(e) => radeco_warn!(e),
         }
 
+        match source.strings(true) {
+            Ok(strings) => rmod.strings = strings,
+            Err(e) => radeco_warn!(e),
+        }
+
         let mut flresult = floader.load(&rmod);
         flresult.functions = if self.filter.is_some() {
             let filter_fn = self.filter.as_ref().unwrap();
@@ -1046,6 +1052,10 @@ impl RadecoModule {
 
     pub fn sections(&self) -> &Arc<Vec<LSectionInfo>> {
         &self.sections
+    }
+
+    pub fn strings(&self) -> &Vec<LStringInfo> {
+        &self.strings
     }
 
     pub fn callees_of(&self, rfn: &RadecoFunction) -> Vec<(u64, NodeIndex)> {
