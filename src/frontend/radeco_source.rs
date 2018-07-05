@@ -53,6 +53,7 @@ pub trait Source {
     fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn locals_of(&self, _start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
     fn cc_info_of(&self, _start_addr: u64) -> Result<LCCInfo, SourceErr> { unimplemented!() }
+    fn strings(&self, data_only: bool) -> Result<Vec<LStringInfo>, SourceErr> { unimplemented!() }
     fn raw(&self, _cmd: String) -> Result<String, SourceErr> { unimplemented!() }
 
     fn send(&self, _: String) -> Result<(), SourceErr> { Ok(()) }
@@ -189,6 +190,10 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
 
     fn cc_info_of(&self, start_addr: u64) -> Result<LCCInfo, SourceErr> {
         Ok(self.try_borrow_mut()?.cc_info_of(start_addr)?)
+    }
+
+    fn strings(&self, data_only: bool) -> Result<Vec<LStringInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.strings(data_only)?)
     }
 
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {

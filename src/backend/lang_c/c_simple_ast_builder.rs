@@ -23,8 +23,9 @@ fn is_debug() -> bool {
 }
 
 /// This constructs SimpleCAST from an instance of RadecoFunction.
-pub fn recover_simple_ast(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>) -> SimpleCAST {
-    let mut builder = CASTBuilder::new(rfn, fname_map);
+pub fn recover_simple_ast(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>,
+                          strings: &HashMap<u64, String>) -> SimpleCAST {
+    let mut builder = CASTBuilder::new(rfn, fname_map, strings);
     // Recover values
     let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
     builder.datamap = data_graph;
@@ -52,12 +53,14 @@ struct CASTBuilder<'a> {
     // SSA of RadecoFunction
     ssa: &'a SSAStorage,
     fname_map: &'a HashMap<u64, String>,
+    strings: &'a HashMap<u64, String>,
     action_map: HashMap<NodeIndex, NodeIndex>,
     datamap: CASTDataMap<'a>,
 }
 
 impl<'a> CASTBuilder<'a> {
-    fn new(rfn: &'a RadecoFunction, fname_map: &'a HashMap<u64, String>) -> CASTBuilder<'a> {
+    fn new(rfn: &'a RadecoFunction, fname_map: &'a HashMap<u64, String>,
+           strings: &'a HashMap<u64, String>) -> CASTBuilder<'a> {
         let ast = SimpleCAST::new(rfn.name.as_ref());
         CASTBuilder {
             last_action: ast.entry,
@@ -341,9 +344,10 @@ impl<'a> CASTDataMap<'a> {
     }
 
     // Returns data map from SSAStorage's NodeIndex to SimpleCAST's NodeIndex
-    fn recover_data(rfn: &'a RadecoFunction, ast: &mut SimpleCAST) -> Self {
+    fn recover_data(rfn: &'a RadecoFunction, ast: &mut SimpleCAST,
+                    strings: &'a HashMap<u64, String>) -> Self {
         let mut s = Self::new(rfn);
-        s.prepare_consts(ast);
+        s.prepare_consts(ast, strings);
         s.prepare_regs(ast);
         for node in s.ssa.inorder_walk() {
             if s.ssa.is_phi(node) {
@@ -499,11 +503,15 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
-    fn prepare_consts(&mut self, ast: &mut SimpleCAST) {
+    fn prepare_consts(&mut self, ast: &mut SimpleCAST, strings: &HashMap<u64, String>) {
         for (&val, &node) in self.ssa.constants.iter() {
             if let Ok(n) = self.ssa.node_data(node) {
                 // TODO add type
-                let ast_node = ast.constant(&val.to_string(), None);
+                let ast_node = if let Some(s) = strings.get(&val) {
+                    ast.constant(&format!("\"{}\"", s), None)
+                } else {
+                    ast.constant(&val.to_string(), None)
+                };
                 self.const_nodes.insert(node);
                 self.var_map.insert(node, ast_node);
             } else {
