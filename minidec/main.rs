@@ -4,6 +4,7 @@ extern crate radeco_lib;
 extern crate r2pipe;
 extern crate r2api;
 extern crate petgraph;
+extern crate base64;
 
 mod cli;
 
@@ -12,6 +13,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process;
+use std::str;
 
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::sccp;
@@ -49,9 +51,18 @@ fn main() {
         let func_name_map = rmod.functions.iter()
             .map(|(&addr, f)| (addr, f.name.to_string()))
             .collect();
-        let strings = rmod.flags().iter().cloned()
-            .map(|flag| (flag.offset, flag.name))
-            .collect();
+        let strings = rmod.strings().iter()
+            .filter(|ref s| s.vaddr.is_some() && s.string.is_some())
+            .cloned()
+            .map(|s| {
+                let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());
+                let bytes = base64::decode(&_s).unwrap_or(Vec::new());
+                let ret_string = match str::from_utf8(bytes.as_slice()) {
+                    Ok(v) => v.to_string(),
+                    Err(e) => _s,
+                };
+                (addr, ret_string)
+            }).collect();
         let mut dir = PathBuf::from(".");
         dir.push(format!("{}_out", proj_name));
         fs::create_dir_all(&dir).expect("Failed to create directory");
