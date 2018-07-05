@@ -25,9 +25,9 @@ fn is_debug() -> bool {
 /// This constructs SimpleCAST from an instance of RadecoFunction.
 pub fn recover_simple_ast(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>,
                           strings: &HashMap<u64, String>) -> SimpleCAST {
-    let mut builder = CASTBuilder::new(rfn, fname_map, strings);
+    let mut builder = CASTBuilder::new(rfn, fname_map);
     // Recover values
-    let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast);
+    let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast, strings);
     builder.datamap = data_graph;
     builder.declare_vars();
     // Recover control flow graph
@@ -53,14 +53,12 @@ struct CASTBuilder<'a> {
     // SSA of RadecoFunction
     ssa: &'a SSAStorage,
     fname_map: &'a HashMap<u64, String>,
-    strings: &'a HashMap<u64, String>,
     action_map: HashMap<NodeIndex, NodeIndex>,
     datamap: CASTDataMap<'a>,
 }
 
 impl<'a> CASTBuilder<'a> {
-    fn new(rfn: &'a RadecoFunction, fname_map: &'a HashMap<u64, String>,
-           strings: &'a HashMap<u64, String>) -> CASTBuilder<'a> {
+    fn new(rfn: &'a RadecoFunction, fname_map: &'a HashMap<u64, String>) -> CASTBuilder<'a> {
         let ast = SimpleCAST::new(rfn.name.as_ref());
         CASTBuilder {
             last_action: ast.entry,

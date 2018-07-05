@@ -47,7 +47,7 @@ use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
 use r2api::structs::{LVarInfo, LOpInfo, LSymbolInfo, LRelocInfo, LExportInfo,
-                     LFlagInfo, LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
+                     LStringInfo, LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
 
 use r2pipe::r2::R2;
 use rayon::prelude::*;
