@@ -2,7 +2,9 @@ pub trait AstContext {
     type Block;
     type Variable;
     type Condition: 'static;
+}
 
+pub trait AstContextMut: AstContext {
     /// Returns a new unused `Variable`.
     fn mk_fresh_var(&mut self) -> Self::Variable;
 
