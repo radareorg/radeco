@@ -538,6 +538,7 @@ pub struct SimpleCASTVerifier {
 
 type Verifier = Fn(NodeIndex, &SimpleCAST) -> Result<(), String>;
 impl SimpleCASTVerifier {
+    const delim: &'static str = "; ";
     pub fn verify(cast: &SimpleCAST) -> Result<(), String> {
         Self::verify_each_node(cast, &Self::verify_normal_action, "Normal action")?;
         Self::verify_each_node(cast, &Self::verify_if, "If")?;
@@ -570,18 +571,17 @@ impl SimpleCASTVerifier {
             _ => return Ok(()),
         };
         let normal_actions = cast.ast.edges_directed(node, Direction::Outgoing)
-            .into_iter()
             .filter(|e| {
                 match e.weight() {
                     &SimpleCASTEdge::Action(ActionEdge::Normal) => true,
                     _ => false,
                 }
-            }).collect::<Vec<_>>();
-        if normal_actions.len() <= 1 {
+            });
+        let length = normal_actions.count();
+        if length <= 1 {
             Ok(())
         } else {
-            Err(format!("There are {} next normal actions @ {:?}",
-                        normal_actions.len(), node))
+            Err(format!("There are {} next normal actions @ {:?}", length, node))
         }
     }
 
@@ -591,17 +591,17 @@ impl SimpleCASTVerifier {
             Some(&SimpleCASTNode::Action(ActionNode::If)) => {},
             _ => return Ok(()),
         };
-        let mut ret = String::new();
+        let mut errors = Vec::new();
         let cond = cast.branch_condition(node);
         if cond.is_none() {
-            ret = format!("{}; No condition node is found.", ret);
+            errors.push("No condition node is found.");
         }
-        let branches = cast.branch(node).map(|x| x.clone());
+        let branches = cast.branch(node);
         if branches.is_none() {
-            ret = format!("{}; No branch is found.", ret);
+            errors.push("No branch is found.");
         }
         if cond.is_none() || branches.is_none() {
-            Err(ret)
+            Err(errors.join(Self::delim))
         } else {
             Ok(())
         }
@@ -610,23 +610,23 @@ impl SimpleCASTVerifier {
     // 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
     fn verify_edge_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
         let mut is_err = false;
-        let mut ret = String::new();
-        let edges = cast.ast
-            .edges_directed(node, Direction::Outgoing).collect::<Vec<_>>();
+        let mut errors = Vec::new();
+        let edges = cast.ast.edges_directed(node, Direction::Outgoing);
         for edge in edges {
             match (edge.weight(), cast.ast.node_weight(edge.target())) {
-                (SimpleCASTEdge::Action(_), Some(&SimpleCASTNode::Action(_))) => {},
-                (SimpleCASTEdge::Value(_), Some(&SimpleCASTNode::Value(_))) => {},
-                (SimpleCASTEdge::Action(ActionEdge::GotoDst), Some(&SimpleCASTNode::Entry)) => {},
+                (SimpleCASTEdge::Action(_), Some(&SimpleCASTNode::Action(_)))
+                | (SimpleCASTEdge::Value(_), Some(&SimpleCASTNode::Value(_)))
+                | (SimpleCASTEdge::Action(ActionEdge::GotoDst), Some(&SimpleCASTNode::Entry)) => {},
                 _ => {
                     is_err = true;
-                    ret = format!("{}; {:?} {:?}", ret, edge.weight(),
+                    let error = format!("{:?} {:?}", edge.weight(),
                             cast.ast.node_weight(edge.target()));
+                    errors.push(error);
                 }
             }
         }
         if is_err {
-            Err(ret)
+            Err(errors.join(Self::delim))
         } else {
             Ok(())
         }
@@ -639,30 +639,29 @@ impl SimpleCASTVerifier {
             _ => return Ok(()),
         };
         let mut is_err = false;
-        let mut ret = String::new();
+        let mut errors = Vec::new();
         let gotos = cast.ast
             .edges_directed(node, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 SimpleCASTEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                 _ => None,
             }).collect::<Vec<_>>();
         if gotos.len() != 1 {
             is_err = true;
-            ret = "No or more than one ActionEdge::GotoDst found".to_string();
+            errors.push("No or more than one ActionEdge::GotoDst found".to_string());
         }
         for goto in gotos {
             match cast.ast.node_weight(goto) {
-                Some(&SimpleCASTNode::Action(_)) => {},
-                Some(&SimpleCASTNode::Entry) => {},
+                Some(&SimpleCASTNode::Action(_))
+                | Some(&SimpleCASTNode::Entry) => {},
                 n => {
                     is_err = true;
-                    ret = format!("{}; Invalid node {:?} @ {:?}", ret, n, node);
+                    errors.push(format!("Invalid node {:?} @ {:?}", n, node));
                 },
             }
         }
         if is_err {
-            Err(ret)
+            Err(errors.join(Self::delim))
         } else {
             Ok(())
         }
@@ -869,7 +868,7 @@ mod test {
         let entry = ast.entry;
         let assn = ast.assign(x, y, entry);
         let _ = ast.call_func("func", &[z, w], assn, None);
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -889,7 +888,7 @@ mod test {
         let entry = ast.entry;
         let expr = ast.expr(&[x, y], c_simple::Expr::Add);
         let assn = ast.assign(x, expr, entry);
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -906,7 +905,7 @@ mod test {
         let y = ast.var("y", None);
         let entry = ast.entry;
         let call_f = ast.call_func("func", &[x], entry, Some(y));
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -937,7 +936,7 @@ mod test {
         let call_f = ast.call_func("func", &[z, w], assn, None);
         let call_test2 = ast.call_func("test2", &[], call_f, None);
         let _ = ast.conditional(x, assn, Some(call_f), entry);
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -959,7 +958,7 @@ mod test {
         let assn = ast.assign(x, y, entry);
         let _ = ast.add_goto(entry, "L1", assn);
         let output = ast.to_c_ast().print();
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         println!("{}", output);
     }
 
@@ -973,7 +972,7 @@ mod test {
         let entry = ast.entry;
         let x = ast.var("x", None);
         let _ = ast.add_return(Some(x), entry);
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -995,7 +994,7 @@ mod test {
         let assn = ast.assign(x, y, entry);
         let ret = ast.add_return(Some(x), assn);
         let _ = ast.insert_goto(entry, assn, ret, "L1");
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1033,7 +1032,7 @@ mod test {
         let break_goto = ast.add_goto(assn2, "L1", f_call);
         let if_node = ast.conditional(cond, break_goto, None, f_call);
         let _ = ast.add_return(None, if_node);
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1072,7 +1071,7 @@ mod test {
         let break_goto = ast.add_goto(assn2, "L1", f_call1);
         let if_node = ast.conditional(cond, f_call1, None, f_call);
         let _ = ast.add_return(None, if_node);
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1096,7 +1095,7 @@ mod test {
         let c = ast.var("c", Some(Ty::new(BTy::Char, true, 0)));
         let v = ast.var("v", Some(Ty::new(BTy::Void, true, 0)));
         let f = ast.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
-        SimpleCASTVerifier::verify(&ast).expect("This should be Ok");
+        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
