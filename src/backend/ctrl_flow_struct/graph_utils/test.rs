@@ -1,12 +1,12 @@
 use super::*;
 use petgraph::algo;
 use petgraph::prelude::{Outgoing, StableDiGraph};
-use petgraph::visit::IntoEdgeReferences;
+use petgraph::visit::{DfsPostOrder, IntoEdgeReferences};
 
 use quickcheck::TestResult;
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::iter::{self, FromIterator};
+use std::iter::FromIterator;
 
 /// Tests that `slice` returns an acyclic graph and a topological ordering.
 #[quickcheck]
@@ -22,23 +22,23 @@ fn qc_slice(mut graph: StableDiGraph<(), ()>, start_i: usize, end_is: Vec<usize>
         .collect();
     println!("start: {:?}", start);
     println!("ends: {:?}", ends);
-    let (slice_nodes, slice_edges, slice_topo_order) = slice(&graph, start, &ends);
-    let trace_nodes = IxBitSet::from_iter(&slice_topo_order);
-    if trace_nodes != slice_nodes {
+    let slice = slice(&graph, start, &ends);
+    let trace_nodes = IxBitSet::from_iter(&slice.topo_order);
+    if trace_nodes != slice.nodes {
         println!("wrong nodes in topo_order:");
-        println!("  real: {:?}", slice_nodes);
-        println!("  order: {:?}", slice_topo_order);
+        println!("  real: {:?}", slice.nodes);
+        println!("  order: {:?}", slice.topo_order);
         return TestResult::failed();
     }
-    graph.retain_nodes(|_, n| slice_nodes.contains(n));
-    graph.retain_edges(|_, e| slice_edges.contains(e));
+    graph.retain_nodes(|_, n| slice.nodes.contains(n));
+    graph.retain_edges(|_, e| slice.edges.contains(e));
     if algo::is_cyclic_directed(&graph) {
         println!("cyclic slice:");
         println!("  slice: {:?}", graph);
         return TestResult::failed();
     }
-    if !is_topological_ordering(&graph, &slice_topo_order) {
-        println!("bad topological ordering: {:?}", slice_topo_order);
+    if !is_topological_ordering(&graph, &slice.topo_order) {
+        println!("bad topological ordering: {:?}", slice.topo_order);
         println!("  slice: {:?}", graph);
         return TestResult::failed();
     }
@@ -48,7 +48,7 @@ fn qc_slice(mut graph: StableDiGraph<(), ()>, start_i: usize, end_is: Vec<usize>
 /// Tests that `slice`ing a connected rooted acyclic graph is a no-op.
 #[quickcheck]
 fn qc_slice_acyclic(mut graph: StableDiGraph<(), ()>, root_i: usize) -> TestResult {
-    let root = if let Some(root) = mk_rooted_graph(&mut graph, root_i, true) {
+    let root = if let Some(root) = mk_rooted_stable_graph(&mut graph, root_i, true) {
         root
     } else {
         return TestResult::discard();
@@ -60,18 +60,19 @@ fn qc_slice_acyclic(mut graph: StableDiGraph<(), ()>, root_i: usize) -> TestResu
         .node_indices()
         .filter(|&n| graph.edges_directed(n, Outgoing).next().is_none())
         .collect();
-    let (slice_nodes, slice_edges, _) = slice(&graph, root, &sinks);
-    println!("slice_nodes: {:?}", slice_nodes);
+    let slice = slice(&graph, root, &sinks);
+    println!("slice_nodes: {:?}", slice.nodes);
     println!(
         "slice_edges: {:?}",
-        slice_edges
+        slice
+            .edges
             .iter()
             .map(|e| graph.edge_endpoints(e).unwrap())
             .collect::<Vec<_>>()
     );
     TestResult::from_bool(
-        graph.node_indices().all(|n| slice_nodes.contains(n))
-            && graph.edge_indices().all(|e| slice_edges.contains(e)),
+        graph.node_indices().all(|n| slice.nodes.contains(n))
+            && graph.edge_indices().all(|e| slice.edges.contains(e)),
     )
 }
 
@@ -85,7 +86,7 @@ fn qc_nearest_common_dominator(
     if in_node_is.is_empty() {
         return TestResult::discard();
     }
-    let root = if let Some(root) = mk_rooted_graph(&mut graph, root_i, false) {
+    let root = if let Some(root) = mk_rooted_stable_graph(&mut graph, root_i, false) {
         root
     } else {
         return TestResult::discard();
@@ -128,7 +129,7 @@ fn qc_nearest_common_dominator(
 
 #[quickcheck]
 fn qc_dominated_by(mut graph: StableDiGraph<(), ()>, root_i: usize, h_i: usize) -> TestResult {
-    let root = if let Some(root) = mk_rooted_graph(&mut graph, root_i, false) {
+    let root = if let Some(root) = mk_rooted_stable_graph(&mut graph, root_i, false) {
         root
     } else {
         return TestResult::discard();
@@ -147,39 +148,70 @@ fn qc_dominated_by(mut graph: StableDiGraph<(), ()>, root_i: usize, h_i: usize) 
     TestResult::from_bool(dom_set == true_dom_set)
 }
 
-fn mk_rooted_graph(
-    graph: &mut StableDiGraph<(), ()>,
-    root_i: usize,
-    prune_cycles: bool,
-) -> Option<NodeIndex> {
-    let nodes: Vec<_> = graph.node_indices().collect();
-    if nodes.is_empty() {
-        return None;
+#[quickcheck]
+fn qc_dag_transitive_closure(mut graph: DiGraph<(), ()>, root_i: usize) -> TestResult {
+    let root = if let Some(root) = mk_rooted_graph(&mut graph, root_i, true) {
+        root
+    } else {
+        return TestResult::discard();
+    };
+    let graph = DiGraph::from(graph);
+    let rev_topo_order: Vec<_> = DfsPostOrder::new(&graph, root).iter(&graph).collect();
+
+    let reachable_vec = dag_transitive_closure(&graph, rev_topo_order);
+
+    if reachable_vec.len() != graph.node_count() {
+        return TestResult::failed();
     }
-    let root = nodes[root_i % nodes.len()];
-    let mut reachable = IxBitSet::new();
-    let mut back_edges = IxBitSet::new();
-    depth_first_search(&*graph, root, |ev| {
-        use super::DfsEvent::*;
-        match ev {
-            Discover(n) => {
-                reachable.insert(n);
-            }
-            BackEdge(e) => back_edges.extend(iter::once(e.id())),
-            _ => (),
-        }
-    });
-    if graph.node_indices().any(|n| !reachable.contains(n)) {
-        return None;
-    }
-    // graph.retain_nodes(|_, n| reachable.contains(n));
-    if prune_cycles {
-        // discarding cyclic graphs make tests take too long
-        // instead we just remove cycles
-        graph.retain_edges(|_, e| !back_edges.contains(e));
-    }
-    Some(root)
+    TestResult::from_bool(graph.node_indices().all(|n| {
+        let tc_reachable = &reachable_vec[n.index()];
+        let dfs_reachable: IxBitSet<_> = Dfs::new(&graph, n).iter(&graph).collect();
+        tc_reachable.iter().eq(&dfs_reachable)
+    }))
 }
+
+macro_rules! gen_mk_rooted_graph {
+    ($fn_name:ident, $graph_type_name:ident) => {
+        fn $fn_name(
+            graph: &mut $graph_type_name<(), ()>,
+            root_i: usize,
+            prune_cycles: bool,
+        ) -> Option<NodeIndex> {
+            let nodes: Vec<_> = graph.node_indices().collect();
+            if nodes.is_empty() {
+                return None;
+            }
+            let root = nodes[root_i % nodes.len()];
+            let mut reachable = IxBitSet::new();
+            let mut back_edges = IxBitSet::new();
+            depth_first_search(&*graph, root, |ev| {
+                use super::DfsEvent::*;
+                match ev {
+                    Discover(n) => {
+                        reachable.insert(n);
+                    }
+                    BackEdge(e) => {
+                        back_edges.insert(e.id());
+                    }
+                    _ => (),
+                }
+            });
+            if graph.node_indices().any(|n| !reachable.contains(n)) {
+                return None;
+            }
+            // graph.retain_nodes(|_, n| reachable.contains(n));
+            if prune_cycles {
+                // discarding cyclic graphs make tests take too long
+                // instead we just remove cycles
+                graph.retain_edges(|_, e| !back_edges.contains(e));
+            }
+            Some(root)
+        }
+    };
+}
+
+gen_mk_rooted_graph!(mk_rooted_graph, DiGraph);
+gen_mk_rooted_graph!(mk_rooted_stable_graph, StableDiGraph);
 
 fn is_topological_ordering<G>(graph: G, topo_order: &[G::NodeId]) -> bool
 where

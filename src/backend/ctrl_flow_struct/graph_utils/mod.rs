@@ -12,13 +12,15 @@ pub use self::ncd::nearest_common_dominator;
 
 use self::ix_bit_set::{IndexLike, IxBitSet};
 
-use petgraph::graph::IndexType;
+use petgraph::graph::{DiGraph, IndexType};
 use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
 use petgraph::visit::{
-    Dfs, EdgeRef, IntoEdges, IntoNeighbors, IntoNodeIdentifiers, VisitMap, Visitable, Walker,
+    Dfs, EdgeRef, IntoEdges, IntoNeighbors, IntoNodeIdentifiers, NodeCompactIndexable, VisitMap,
+    Visitable, Walker,
 };
 
 use std::iter;
+use std::mem;
 
 pub enum DfsEvent<G>
 where
@@ -85,6 +87,13 @@ where
     }.go_rec(start);
 }
 
+/// see [`slice`]
+pub struct GraphSlice<N: IndexLike, E: IndexLike> {
+    pub nodes: IxBitSet<N>,
+    pub edges: IxBitSet<E>,
+    pub topo_order: Vec<N>,
+}
+
 /// Returns the union of all simple paths from `start` to a node in `end_set`,
 /// including the nodes in `end_set`.
 /// Also returns a topological ordering of this subgraph.
@@ -92,18 +101,20 @@ pub fn slice<G>(
     graph: G,
     start: G::NodeId,
     end_set: &IxBitSet<G::NodeId>,
-) -> (IxBitSet<G::NodeId>, IxBitSet<G::EdgeId>, Vec<G::NodeId>)
+) -> GraphSlice<G::NodeId, G::EdgeId>
 where
     G: IntoEdges + Visitable,
     G::NodeId: IndexLike,
     G::EdgeId: IndexLike,
 {
-    let mut ret_nodes = IxBitSet::new();
-    let mut ret_edges = IxBitSet::new();
-    // we push nodes into this in post-order, then reverse at the end
-    let mut ret_topo_order = Vec::new();
+    // we push nodes into `topo_order` in post-order, then reverse at the end
+    let mut ret = GraphSlice {
+        nodes: IxBitSet::new(),
+        edges: IxBitSet::new(),
+        topo_order: Vec::new(),
+    };
 
-    ret_nodes.insert(start);
+    ret.nodes.insert(start);
 
     let mut cur_stack = NonEmptyPath::new(start);
     depth_first_search(graph, start, |ev| {
@@ -113,27 +124,27 @@ where
                 cur_stack.segments.push((te.id(), te.target()));
                 if end_set.contains(te.target()) {
                     // found a simple path from `start` to `end`
-                    ret_nodes.extend(cur_stack.nodes());
-                    ret_edges.extend(cur_stack.edges());
+                    ret.nodes.extend(cur_stack.nodes());
+                    ret.edges.extend(cur_stack.edges());
                 }
             }
             CrossForwardEdge(cfe) => {
                 debug_assert!(cur_stack.nodes().all(|n| n != cfe.target()));
                 debug_assert!(cur_stack.edges().all(|e| e != cfe.id()));
-                if ret_nodes.contains(cfe.target()) {
+                if ret.nodes.contains(cfe.target()) {
                     // found a simple path from `start` to a node already in the
                     // slice, which is on a simple path to `end`
-                    ret_nodes.extend(cur_stack.nodes());
-                    ret_edges.extend(cur_stack.edges());
-                    ret_edges.insert(cfe.id());
+                    ret.nodes.extend(cur_stack.nodes());
+                    ret.edges.extend(cur_stack.edges());
+                    ret.edges.insert(cfe.id());
                 }
             }
             Finish(f) => {
                 if f != start {
                     let _popped = cur_stack.segments.pop();
                     debug_assert!(_popped.unwrap().1 == f);
-                    if ret_nodes.contains(f) {
-                        ret_topo_order.push(f);
+                    if ret.nodes.contains(f) {
+                        ret.topo_order.push(f);
                     }
                 } else {
                     debug_assert!(cur_stack.segments.is_empty());
@@ -143,10 +154,10 @@ where
         }
     });
 
-    ret_topo_order.push(start);
+    ret.topo_order.push(start);
 
-    ret_topo_order.reverse();
-    (ret_nodes, ret_edges, ret_topo_order)
+    ret.topo_order.reverse();
+    ret
 }
 
 pub fn retarget_edge<N, E>(
@@ -189,6 +200,42 @@ where
             .filter(|&n| !inv_dom_set.contains(n))
             .collect()
     }
+}
+
+/// Computes the transitive closure of the given directed acyclic graph, given
+/// a reverse topological ordering of the graph.
+/// Returns, for each node, the set of nodes reachable from that node.
+pub fn dag_transitive_closure<G, I>(graph: G, rev_topo_order: I) -> Vec<IxBitSet<G::NodeId>>
+where
+    G: IntoNeighbors + NodeCompactIndexable,
+    G::NodeId: IndexLike,
+    I: IntoIterator<Item = G::NodeId>,
+{
+    // https://algowiki-project.org/en/Purdom%27s_algorithm#Implementation_scheme_of_the_serial_algorithm
+    // Stage 3: transitive closure of directed acyclic graph
+
+    let n = graph.node_bound();
+    let mut ret = Vec::with_capacity(n);
+    for _ in 0..n {
+        ret.push(IxBitSet::with_capacity(n));
+    }
+    debug_assert!(ret.len() == n);
+
+    for v in rev_topo_order {
+        let v_i = graph.to_index(v);
+        ret[v_i].insert(v);
+        for w in graph.neighbors(v) {
+            let w_i = graph.to_index(w);
+            // v == w would mean graph has self loops, which is not allowed
+            debug_assert!(v != w);
+            // ret[v_i].union_with(&ret[w_i]);
+            let mut ret_v_i = mem::replace(&mut ret[v_i], IxBitSet::new());
+            ret_v_i.union_with(&ret[w_i]);
+            ret[v_i] = ret_v_i;
+        }
+    }
+
+    ret
 }
 
 // ideally this would be <G: IntoEdges> so we can enforce that this is actually

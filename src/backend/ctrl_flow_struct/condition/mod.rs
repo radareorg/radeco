@@ -242,6 +242,43 @@ impl<'cd, T> Context<'cd, T> {
     pub fn mk_false(self) -> Condition<'cd, T> {
         Condition(&self.store.false_)
     }
+
+    /// If `haystack` is of the form `needle AND other`, returns `other`.
+    pub fn remove_and(
+        self,
+        needle: Condition<'cd, T>,
+        haystack: Condition<'cd, T>,
+    ) -> Option<Condition<'cd, T>> {
+        match haystack.0 {
+            &Expr(Op::And, ref hopn_v) => {
+                match needle.0 {
+                    &Expr(Op::And, ref nopn_v) => {
+                        if nopn_v.is_subset(hopn_v) {
+                            Some(self.store_expr(Op::And, hopn_v.difference(nopn_v).cloned().collect()))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => {
+                        if hopn_v.contains(&needle) {
+                            let mut new_opn_v = hopn_v.clone();
+                            new_opn_v.remove(&needle);
+                            Some(self.store_expr(Op::And, new_opn_v))
+                        } else {
+                            None
+                        }
+                    }
+                }
+            }
+            _ => {
+                if needle == haystack {
+                    Some(self.mk_true())
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 impl<'cd, T> Condition<'cd, T> {
@@ -252,6 +289,12 @@ impl<'cd, T> Condition<'cd, T> {
         }
     }
 
+    pub fn is_true(self) -> bool {
+        self.is_annihilator(Op::Or)
+    }
+    pub fn is_false(self) -> bool {
+        self.is_annihilator(Op::And)
+    }
     fn is_annihilator(self, for_op: Op) -> bool {
         match self.0 {
             &Var(_, _) => false,

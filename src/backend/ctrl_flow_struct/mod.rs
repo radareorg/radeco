@@ -7,15 +7,14 @@
 pub mod ast_context;
 pub mod condition;
 mod graph_utils;
+mod refinement;
 #[cfg(test)]
 mod test;
 
 use self::ast_context::*;
 use self::graph_utils::ix_bit_set::IxBitSet;
 
-use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
-use petgraph::visit::EdgeRef;
-use petgraph::Incoming;
+use petgraph::prelude::*;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -25,7 +24,7 @@ use std::mem;
 struct ControlFlowGraph<'cd, A: AstContext> {
     graph: StableDiGraph<CfgNode<'cd, A>, Option<Condition<'cd, A>>>,
     entry: NodeIndex,
-    cctx: condition::Context<'cd, A::Condition>,
+    cctx: CondContext<'cd, A>,
     actx: A,
 }
 
@@ -66,8 +65,9 @@ enum LoopType<'cd, A: AstContext> {
 type ValueSet = (); // XXX
 
 type Condition<'cd, A> = condition::Condition<'cd, <A as AstContext>::Condition>;
+type CondContext<'cd, A> = condition::Context<'cd, <A as AstContext>::Condition>;
 
-impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
+impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
     fn structure_whole(mut self) -> AstNode<'cd, A> {
         let mut backedge_map = HashMap::new();
         let mut podfs_trace = Vec::new();
@@ -96,7 +96,7 @@ impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
                     graph_utils::retarget_edge(&mut self.graph, backedge, loop_continue);
                 }
 
-                let (initial_loop_nodes, _, _) = graph_utils::slice(&self.graph, n, latch_nodes);
+                let initial_loop_nodes = graph_utils::slice(&self.graph, n, latch_nodes).nodes;
 
                 let loop_header = self.funnel_abnormal_entries(n, &initial_loop_nodes);
 
@@ -179,63 +179,96 @@ impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
         header: NodeIndex,
         successor: NodeIndex,
     ) -> AstNode<'cd, A> {
-        let (reaching_conds, mut region_topo_order) =
-            self.reaching_conditions(header, &NodeSet::from_iter(&[successor]));
+        let mut slice = graph_utils::slice(&self.graph, header, &NodeSet::from_iter(&[successor]));
+        let reaching_conds = self.reaching_conditions(&slice);
         // slice includes `successor`, but its not actually part of the region.
-        let _popped = region_topo_order.pop();
+        let _popped = slice.topo_order.pop();
         debug_assert!(_popped == Some(successor));
+        for er in self.graph.edges_directed(successor, Incoming) {
+            slice.edges.remove(er.id());
+        }
 
-        // remove all region nodes from the cfg and add them to an AstNode::Seq
-        AstNode::Seq(
-            region_topo_order
-                .iter()
-                .filter_map(|&n| {
-                    let cfg_node = if n == header {
-                        // we don't want to remove `header` since that will also remove
-                        // incoming edges, which we need to keep
-                        // instead we replace it with a dummy value that will be
-                        // later replaced with the actual value
-                        mem::replace(&mut self.graph[header], CfgNode::Dummy("replaced header"))
-                    } else {
-                        self.graph.remove_node(n).unwrap()
-                    };
-                    if let CfgNode::Code(ast) = cfg_node {
-                        Some(AstNode::Cond(reaching_conds[&n], Box::new(ast), None))
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-        )
+        let mut new_graph =
+            DiGraph::<(), ()>::with_capacity(slice.topo_order.len(), slice.edges.len());
+        let mut old_new_map = HashMap::with_capacity(slice.topo_order.len());
+
+        // move all region nodes from the cfg into a vec and associate them with
+        // their node in `new_graph` while keep the old graph's structure
+        let ast_nodes: Vec<_> = slice
+            .topo_order
+            .iter()
+            .filter_map(|&old_n| {
+                let new_n = new_graph.add_node(());
+                old_new_map.insert(old_n, new_n);
+                let cfg_node =
+                    mem::replace(&mut self.graph[old_n], CfgNode::Dummy("sasr replaced"));
+                if let CfgNode::Code(ast) = cfg_node {
+                    let ast_cond = refinement::mk_cond(reaching_conds[&old_n], Box::new(ast), None);
+                    let new_ast = refinement::RAC::import_ast_node(ast_cond, new_n);
+                    Some(new_ast)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let old_new_map = old_new_map;
+
+        // copy over edges
+        for e in &slice.edges {
+            let (src, dst) = self.graph.edge_endpoints(e).unwrap();
+            new_graph.add_edge(old_new_map[&src], old_new_map[&dst], ());
+        }
+
+        // remove region nodes from the cfg
+        for &n in &slice.topo_order {
+            if n == header {
+                // we don't want to remove `header` since that will also remove
+                // incoming edges, which we need to keep
+                // instead we replace it with a dummy value that will be
+                // later replaced with the actual value
+                self.graph[header] = CfgNode::Dummy("replaced header");
+            } else {
+                let _removed = self.graph.remove_node(n);
+                debug_assert!(_removed.is_some());
+            }
+        }
+
+        let new_graph_rev_topo_order = slice.topo_order.iter().rev().map(|n| old_new_map[n]);
+        let trans_clos = graph_utils::dag_transitive_closure(&new_graph, new_graph_rev_topo_order);
+
+        let rc_vec = slice.topo_order.iter().map(|n| reaching_conds[n]).collect();
+
+        let refiner = refinement::Refiner {
+            cctx: self.cctx,
+            reaching_conds: rc_vec,
+            reachability: trans_clos,
+        };
+
+        let refined = refiner.refine_ast_seq(ast_nodes);
+        refinement::RAC::export_ast_node(refined)
     }
 
-    /// Computes the reaching condition for every node in the graph slice from
-    /// `start` to `end_set`. Also returns a topological ordering of that slice.
+    /// Computes the reaching condition for every node in the given graph slice.
     fn reaching_conditions(
         &self,
-        start: NodeIndex,
-        end_set: &NodeSet,
-    ) -> (HashMap<NodeIndex, Condition<'cd, A>>, Vec<NodeIndex>) {
-        let (_, slice_edges, slice_topo_order) = graph_utils::slice(&self.graph, start, end_set);
+        slice: &graph_utils::GraphSlice<NodeIndex, EdgeIndex>,
+    ) -> HashMap<NodeIndex, Condition<'cd, A>> {
         // {Node, Edge}Filtered don't implement IntoNeighborsDirected :(
         // https://github.com/bluss/petgraph/pull/219
         // Also EdgeFiltered<Reversed<_>, _> isn't Into{Neighbors, Edges}
         // because Reversed<_> isn't IntoEdges
 
-        let mut ret = HashMap::with_capacity(slice_topo_order.len());
+        let mut ret = HashMap::with_capacity(slice.topo_order.len());
 
-        {
-            let mut iter = slice_topo_order.iter();
-            let _first = iter.next();
-            debug_assert!(_first == Some(&start));
+        let mut iter = slice.topo_order.iter();
+        if let Some(&start) = iter.next() {
             ret.insert(start, self.cctx.mk_true());
-
             for &n in iter {
                 let reach_cond = self.cctx.mk_or_from_iter(
                     // manually restrict to slice
                     self.graph
                         .edges_directed(n, Incoming)
-                        .filter(|e| slice_edges.contains(e.id()))
+                        .filter(|e| slice.edges.contains(e.id()))
                         .map(|e| {
                             if let &Some(ec) = e.weight() {
                                 self.cctx.mk_and(ret[&e.source()], ec)
@@ -249,7 +282,7 @@ impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
             }
         }
 
-        (ret, slice_topo_order)
+        ret
     }
 
     /// Transforms the loop into a single-entry loop.
@@ -392,7 +425,7 @@ impl<'cd, A: AstContext> ControlFlowGraph<'cd, A> {
                     self.entry,
                     &abn_exit_sources,
                 );
-                self.reaching_conditions(ncd, abn_succ_nodes).0
+                self.reaching_conditions(&graph_utils::slice(&self.graph, ncd, abn_succ_nodes))
             };
 
             // make condition cascade

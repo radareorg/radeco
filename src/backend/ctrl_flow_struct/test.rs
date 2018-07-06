@@ -10,7 +10,9 @@ impl AstContext for StringAst {
     type Block = String;
     type Variable = String;
     type Condition = String;
+}
 
+impl AstContextMut for StringAst {
     fn mk_fresh_var(&mut self) -> String {
         let ret = format!("i_{}", self.var_count);
         self.var_count += 1;
