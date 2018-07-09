@@ -4,7 +4,7 @@ use super::{AstNode, CondContext, Condition, NodeSet};
 
 use petgraph::algo;
 use petgraph::prelude::*;
-use petgraph::visit::IntoNodeReferences;
+use petgraph::visit::{IntoNodeReferences, Topo};
 
 use std::collections::HashMap;
 
@@ -39,27 +39,39 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             }
 
             if let Some((cond, not_cond)) = if_else_cond {
-                self.try_group_by_cond(cond, not_cond, &mut graph);
+                let _changed = self.try_group_by_cond(cond, not_cond, &mut graph);
+                debug_assert!(_changed);
             } else {
                 break;
+            }
+        }
+
+        // iterate through every node in topological order and try to group by
+        // that condition
+        'm: loop {
+            let mut topo = Topo::new(&graph);
+            loop {
+                if let Some(n) = topo.next(&graph) {
+                    let cond = graph[n].0;
+                    let changed = self.try_group_by_cond(cond, self.cctx.mk_not(cond), &mut graph);
+                    if changed {
+                        // restart traversal
+                        break;
+                    }
+                } else {
+                    // no more groupings
+                    break 'm;
+                }
             }
         }
 
         let mut ast_seq = Vec::new();
 
         // remove all nodes in topological order
-        let mut sources: NodeSet = graph
-            .node_indices()
-            .filter(|&n| graph_utils::is_source(&graph, n))
-            .collect();
-        let mut next = NodeSet::new();
-        while let Some(node) = sources.iter().next() {
-            sources.remove(node);
-            next.extend(graph.neighbors_directed(node, Outgoing));
+        let mut topo = Topo::new(&graph);
+        while let Some(node) = topo.next(&graph) {
             let (cond, ast) = graph.remove_node(node).unwrap();
             ast_seq.push(mk_cond(cond, Box::new(ast), None));
-            sources.extend(next.iter().filter(|&n| graph_utils::is_source(&graph, n)));
-            next.clear();
         }
 
         if ast_seq.len() == 1 {
@@ -74,9 +86,9 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
         cond: Condition<'cd, A>,
         not_cond: Condition<'cd, A>,
         graph: &mut StableDiGraph<RefinementAstNode<'cd, A>, ()>,
-    ) {
+    ) -> bool {
         if cond.is_true() {
-            return;
+            return false;
         }
         let mut then_cands = HashMap::new();
         let mut else_cands = HashMap::new();
@@ -144,6 +156,9 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                 }
             }
             debug_assert!(!algo::is_cyclic_directed(&*graph));
+            true
+        } else {
+            false
         }
     }
 }
