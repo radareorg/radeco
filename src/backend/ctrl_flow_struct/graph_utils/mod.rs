@@ -12,13 +12,14 @@ pub use self::ncd::nearest_common_dominator;
 
 use self::ix_bit_set::{IndexLike, IxBitSet};
 
-use petgraph::graph::{DiGraph, IndexType};
-use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
+use petgraph::graph::IndexType;
+use petgraph::prelude::*;
 use petgraph::visit::{
-    Dfs, EdgeRef, IntoEdges, IntoNeighbors, IntoNodeIdentifiers, NodeCompactIndexable, VisitMap,
-    Visitable, Walker,
+    IntoEdges, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers, NodeCompactIndexable,
+    VisitMap, Visitable, Walker,
 };
 
+use std::collections::HashMap;
 use std::iter;
 use std::mem;
 
@@ -236,6 +237,83 @@ where
     }
 
     ret
+}
+
+pub fn contract_nodes_and_map<N, N2, E, E2, FN, FE, FC>(
+    graph: &mut StableDiGraph<N, E>,
+    nodes: IxBitSet<NodeIndex>,
+    mut node_map: FN,
+    mut edge_map: FE,
+    contract: FC,
+) -> NodeIndex
+where
+    FN: FnMut(NodeIndex, N) -> N2,
+    FE: FnMut(EdgeIndex, E) -> E2,
+    FC: FnOnce(StableDiGraph<N2, E2>) -> N,
+{
+    let mut preds = Vec::new();
+    let mut succs = Vec::new();
+    let mut internal_edges = Vec::new();
+
+    for n in &nodes {
+        {
+            let mut neighbors = graph.neighbors_directed(n, Outgoing).detach();
+            while let Some((edge, succ)) = neighbors.next(graph) {
+                let weight = graph.remove_edge(edge).unwrap();
+                if nodes.contains(succ) {
+                    internal_edges.push((n, succ, edge_map(edge, weight)));
+                } else {
+                    succs.push((succ, weight));
+                }
+            }
+        }
+        {
+            let mut neighbors = graph.neighbors_directed(n, Incoming).detach();
+            while let Some((edge, pred)) = neighbors.next(graph) {
+                let weight = graph.remove_edge(edge).unwrap();
+                if nodes.contains(pred) {
+                    internal_edges.push((pred, n, edge_map(edge, weight)));
+                } else {
+                    preds.push((pred, weight));
+                }
+            }
+        }
+    }
+
+    let mut old_new_map = HashMap::with_capacity(nodes.len());
+    let mut subgraph = StableDiGraph::with_capacity(nodes.len(), internal_edges.len());
+
+    for old_node in &nodes {
+        debug_assert!(graph.neighbors_undirected(old_node).next().is_none());
+        let weight = graph.remove_node(old_node).unwrap();
+        let new_node = subgraph.add_node(node_map(old_node, weight));
+        old_new_map.insert(old_node, new_node);
+    }
+
+    for (src, dst, weight) in internal_edges {
+        subgraph.add_edge(old_new_map[&src], old_new_map[&dst], weight);
+    }
+
+    let contracted = graph.add_node(contract(subgraph));
+
+    for (pred, weight) in preds {
+        graph.add_edge(pred, contracted, weight);
+    }
+    for (succ, weight) in succs {
+        graph.add_edge(contracted, succ, weight);
+    }
+
+    contracted
+}
+
+/// Returns if `node` has no incoming edges.
+pub fn is_source<G: IntoNeighborsDirected>(g: G, node: G::NodeId) -> bool {
+    g.neighbors_directed(node, Incoming).next().is_none()
+}
+
+/// Returns if `node` has no outgoing edges.
+pub fn is_sink<G: IntoNeighborsDirected>(g: G, node: G::NodeId) -> bool {
+    g.neighbors_directed(node, Outgoing).next().is_none()
 }
 
 // ideally this would be <G: IntoEdges> so we can enforce that this is actually

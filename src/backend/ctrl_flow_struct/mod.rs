@@ -188,64 +188,44 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             slice.edges.remove(er.id());
         }
 
-        let mut new_graph =
-            DiGraph::<(), ()>::with_capacity(slice.topo_order.len(), slice.edges.len());
+        let mut region_graph =
+            StableDiGraph::<(Condition<'cd, A>, AstNode<'cd, A>), ()>::with_capacity(
+                slice.topo_order.len(),
+                slice.edges.len(),
+            );
         let mut old_new_map = HashMap::with_capacity(slice.topo_order.len());
 
-        // move all region nodes from the cfg into a vec and associate them with
-        // their node in `new_graph` while keep the old graph's structure
-        let ast_nodes: Vec<_> = slice
-            .topo_order
-            .iter()
-            .filter_map(|&old_n| {
-                let new_n = new_graph.add_node(());
-                old_new_map.insert(old_n, new_n);
-                let cfg_node =
-                    mem::replace(&mut self.graph[old_n], CfgNode::Dummy("sasr replaced"));
-                if let CfgNode::Code(ast) = cfg_node {
-                    let ast_cond = refinement::mk_cond(reaching_conds[&old_n], Box::new(ast), None);
-                    let new_ast = refinement::RAC::import_ast_node(ast_cond, new_n);
-                    Some(new_ast)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // move all region nodes into `region_graph`.
+        for &old_n in &slice.topo_order {
+            let cfg_node = mem::replace(&mut self.graph[old_n], CfgNode::Dummy("sasr replaced"));
+            let new_node = if let CfgNode::Code(ast) = cfg_node {
+                (reaching_conds[&old_n], ast)
+            } else {
+                (self.cctx.mk_true(), AstNode::Seq(Vec::new()))
+            };
+            let new_n = region_graph.add_node(new_node);
+            old_new_map.insert(old_n, new_n);
+        }
         let old_new_map = old_new_map;
 
         // copy over edges
         for e in &slice.edges {
             let (src, dst) = self.graph.edge_endpoints(e).unwrap();
-            new_graph.add_edge(old_new_map[&src], old_new_map[&dst], ());
+            region_graph.add_edge(old_new_map[&src], old_new_map[&dst], ());
         }
 
         // remove region nodes from the cfg
         for &n in &slice.topo_order {
-            if n == header {
-                // we don't want to remove `header` since that will also remove
-                // incoming edges, which we need to keep
-                // instead we replace it with a dummy value that will be
-                // later replaced with the actual value
-                self.graph[header] = CfgNode::Dummy("replaced header");
-            } else {
+            // we don't want to remove `header` since that will also remove
+            // incoming edges, which we need to keep
+            if n != header {
                 let _removed = self.graph.remove_node(n);
                 debug_assert!(_removed.is_some());
             }
         }
 
-        let new_graph_rev_topo_order = slice.topo_order.iter().rev().map(|n| old_new_map[n]);
-        let trans_clos = graph_utils::dag_transitive_closure(&new_graph, new_graph_rev_topo_order);
-
-        let rc_vec = slice.topo_order.iter().map(|n| reaching_conds[n]).collect();
-
-        let refiner = refinement::Refiner {
-            cctx: self.cctx,
-            reaching_conds: rc_vec,
-            reachability: trans_clos,
-        };
-
-        let refined = refiner.refine_ast_seq(ast_nodes);
-        refinement::RAC::export_ast_node(refined)
+        let refiner = refinement::Refiner { cctx: self.cctx };
+        refiner.refine_ast_seq(region_graph)
     }
 
     /// Computes the reaching condition for every node in the given graph slice.
