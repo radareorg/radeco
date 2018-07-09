@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::iter::{self, FromIterator};
 use std::mem;
+use std::default::Default;
 
 struct ControlFlowGraph<'cd, A: AstContext> {
     graph: StableDiGraph<CfgNode<'cd, A>, Option<Condition<'cd, A>>>,
@@ -156,7 +157,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         let sinks: Vec<_> = self
             .graph
             .node_indices()
-            .filter(|&n| self.graph.edges(n).next().is_none())
+            .filter(|&n| graph_utils::is_sink(&self.graph, n))
             .collect();
         for n in sinks {
             self.graph.add_edge(n, dummy_exit, None);
@@ -198,12 +199,12 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         // move all region nodes into `region_graph`.
         for &old_n in &slice.topo_order {
             let cfg_node = mem::replace(&mut self.graph[old_n], CfgNode::Dummy("sasr replaced"));
-            let new_node = if let CfgNode::Code(ast) = cfg_node {
-                (reaching_conds[&old_n], ast)
+            let ast = if let CfgNode::Code(ast) = cfg_node {
+                ast
             } else {
-                (self.cctx.mk_true(), AstNode::Seq(Vec::new()))
+                AstNode::default()
             };
-            let new_n = region_graph.add_node(new_node);
+            let new_n = region_graph.add_node((reaching_conds[&old_n], ast));
             old_new_map.insert(old_n, new_n);
         }
         let old_new_map = old_new_map;
@@ -458,6 +459,13 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         }
 
         new_successor
+    }
+}
+
+impl<'cd, A: AstContext> Default for AstNode<'cd, A> {
+    /// Creates a no-op node.
+    fn default() -> Self {
+        AstNode::Seq(Vec::new())
     }
 }
 
