@@ -74,11 +74,8 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             ast_seq.push(mk_cond(cond, Box::new(ast), None));
         }
 
-        if ast_seq.len() == 1 {
-            ast_seq.pop().unwrap()
-        } else {
-            AstNode::Seq(ast_seq)
-        }
+        self.simplify_ast_node(AstNode::Seq(ast_seq))
+            .unwrap_or_default()
     }
 
     fn try_group_by_cond(
@@ -159,6 +156,70 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             true
         } else {
             false
+        }
+    }
+
+    /// Performs trivial simplifications.
+    fn simplify_ast_node(self, ast: AstNode<'cd, A>) -> Option<AstNode<'cd, A>> {
+        use super::AstNode::*;
+        match ast {
+            BasicBlock(b) => Some(BasicBlock(b)),
+            Seq(seq) => {
+                let mut new_seq: Vec<_> = seq
+                    .into_iter()
+                    .flat_map(|a| {
+                        if let Some(a) = self.simplify_ast_node(a) {
+                            if let Seq(s) = a {
+                                s
+                            } else {
+                                vec![a]
+                            }
+                        } else {
+                            Vec::new()
+                        }
+                    })
+                    .collect();
+                match new_seq.len() {
+                    0 => None,
+                    1 => Some(new_seq.pop().unwrap()),
+                    _ => Some(Seq(new_seq)),
+                }
+            }
+            Cond(c, t, oe) => {
+                let ot = self.simplify_ast_node(*t);
+                let oe = oe.and_then(|e| self.simplify_ast_node(*e));
+                if c.is_true() {
+                    ot
+                } else if c.is_false() {
+                    oe
+                } else {
+                    if let Some(t) = ot {
+                        Some(Cond(c, Box::new(t), oe.map(Box::new)))
+                    } else {
+                        if let Some(e) = oe {
+                            Some(Cond(self.cctx.mk_not(c), Box::new(e), None))
+                        } else {
+                            None
+                        }
+                    }
+                }
+            }
+            Loop(t, b) => {
+                let b = self.simplify_ast_node(*b).unwrap_or_default();
+                Some(Loop(t, Box::new(b)))
+            }
+            Switch(v, cases, default) => {
+                let cases: Vec<_> = cases
+                    .into_iter()
+                    .filter_map(|(vs, a)| self.simplify_ast_node(a).map(|a| (vs, a)))
+                    .collect();
+                let default = self.simplify_ast_node(*default);
+                if cases.is_empty() {
+                    default
+                } else {
+                    Some(Switch(v, cases, Box::new(default.unwrap_or_default())))
+                }
+            }
         }
     }
 }
