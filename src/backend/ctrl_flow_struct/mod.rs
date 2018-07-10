@@ -190,7 +190,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         }
 
         let mut region_graph =
-            StableDiGraph::<(Condition<'cd, A>, AstNode<'cd, A>), ()>::with_capacity(
+            StableDiGraph::<refinement::RefinementAstNode<'cd, A>, ()>::with_capacity(
                 slice.topo_order.len(),
                 slice.edges.len(),
             );
@@ -199,12 +199,12 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         // move all region nodes into `region_graph`.
         for &old_n in &slice.topo_order {
             let cfg_node = mem::replace(&mut self.graph[old_n], CfgNode::Dummy("sasr replaced"));
-            let ast = if let CfgNode::Code(ast) = cfg_node {
-                ast
+            let new_node = if let CfgNode::Code(ast) = cfg_node {
+                Some(ast)
             } else {
-                AstNode::default()
+                None
             };
-            let new_n = region_graph.add_node((reaching_conds[&old_n], ast));
+            let new_n = region_graph.add_node((reaching_conds[&old_n], new_node));
             old_new_map.insert(old_n, new_n);
         }
         let old_new_map = old_new_map;
