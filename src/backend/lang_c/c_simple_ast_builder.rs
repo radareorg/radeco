@@ -538,3 +538,87 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+    use frontend::radeco_containers::{RadecoModule, RadecoFunction, ProjectLoader, RadecoProject};
+    use analysis;
+    use analysis::interproc::fixcall::CallFixer;
+    use analysis::cse::cse::CSE;
+    use analysis::sccp;
+    use middle::dce;
+    use middle::ssa::verifier;
+    use middle::regfile::{SubRegisterFile, RegisterUsage};
+    use backend::lang_c::{c_simple_ast, c_simple_ast_builder};
+
+    fn analyze_mod(rmod: &mut RadecoModule, regfile: &SubRegisterFile) {
+        {
+            let bp_name = regfile.get_name_by_alias(&"BP".to_string());
+            let bp_name = bp_name.map(|s| s.to_owned());
+            let sp_name = regfile.get_name_by_alias(&"SP".to_string());
+            let sp_name = sp_name.map(|s| s.to_owned());
+            let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
+            callfixer.rounded_analysis();
+        }
+        analysis::functions::fix_ssa_opcalls::go(rmod);
+        analysis::functions::infer_regusage::run(rmod, &*regfile);
+    }
+
+    fn analyze_func(rfn: &mut RadecoFunction) {
+            {
+                dce::collect(rfn.ssa_mut());
+            }
+            let mut ssa = {
+                // Constant Propagation (sccp)
+                println!("  [*] Propagating Constants");
+                let mut analyzer = sccp::Analyzer::new(rfn.ssa_mut());
+                analyzer.analyze();
+                analyzer.emit_ssa()
+            };
+            {
+                dce::collect(&mut ssa);
+            }
+            *rfn.ssa_mut() = ssa;
+            {
+                let mut cse = CSE::new(rfn.ssa_mut());
+                cse.run();
+            }
+            match verifier::verify(rfn.ssa()) {
+                Err(e) => {
+                    panic!("  [*] Found Error: {}", e);
+                }
+                Ok(_) => {  }
+            }
+
+    }
+
+    fn load_rfns(proj_name: &str) -> (Vec<RadecoFunction>, HashMap<u64, String>) {
+        let mut rproj = ProjectLoader::new().path(proj_name).load();
+        let regfile = rproj.regfile().clone();
+        for mut xy in rproj.iter_mut() {
+            let rmod = &mut xy.module;
+            let func_name_map = rmod.functions.iter()
+                .map(|(&addr, f)| (addr, f.name.to_string()))
+                .collect();
+
+            analyze_mod(rmod, &regfile);
+
+            let rfns = rmod.functions.clone().into_iter().map(|(_, rfn)| rfn).collect();
+            return (rfns, func_name_map);
+        }
+        (Vec::new(), HashMap::new())
+    }
+
+    fn do_tests() {
+        let (rfns, func_name_map) = load_rfns("./fact");
+        for ref mut rfn in rfns {
+            analyze_func(rfn);
+            {
+                println!("  [*] Generating psuedo code");
+                let ast = c_simple_ast_builder::recover_simple_ast(rfn, &func_name_map);
+                let _ = ast.to_c_ast().print();
+            }
+        }
+    }
+}
