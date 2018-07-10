@@ -18,7 +18,7 @@ impl<'cd, A: AstContext> Clone for Refiner<'cd, A> {
     }
 }
 
-type RefinementAstNode<'cd, A> = (Condition<'cd, A>, AstNode<'cd, A>);
+pub(super) type RefinementAstNode<'cd, A> = (Condition<'cd, A>, Option<AstNode<'cd, A>>);
 
 impl<'cd, A: AstContext> Refiner<'cd, A> {
     pub(super) fn refine_ast_seq(
@@ -28,12 +28,16 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
         // look for pairs of nodes whose reaching conditions are opposites
         loop {
             let mut if_else_cond = None;
-            'l: for (_, &(ca, _)) in graph.node_references() {
-                for (_, &(cb, _)) in graph.node_references() {
-                    let not_cb = self.cctx.mk_not(cb);
-                    if ca == not_cb {
-                        if_else_cond = Some((ca, cb));
-                        break 'l;
+            'l: for (_, &(ca, ref wa)) in graph.node_references() {
+                if wa.is_some() {
+                    for (_, &(cb, ref wb)) in graph.node_references() {
+                        if wb.is_some() {
+                            let not_cb = self.cctx.mk_not(cb);
+                            if ca == not_cb {
+                                if_else_cond = Some((ca, cb));
+                                break 'l;
+                            }
+                        }
                     }
                 }
             }
@@ -71,7 +75,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
         let mut topo = Topo::new(&graph);
         while let Some(node) = topo.next(&graph) {
             let (cond, ast) = graph.remove_node(node).unwrap();
-            ast_seq.push(mk_cond(cond, Box::new(ast), None));
+            ast_seq.push(mk_cond(cond, Box::new(ast.unwrap_or_default()), None));
         }
 
         self.simplify_ast_node(AstNode::Seq(ast_seq))
@@ -108,7 +112,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                     else_cands.keys().collect(),
                     |node, (_, ast)| (else_cands[&node], ast),
                     |_, _| (),
-                    |else_graph| (not_cond, self.refine_ast_seq(else_graph)),
+                    |else_graph| (not_cond, Some(self.refine_ast_seq(else_graph))),
                 );
             } else {
                 let then_node = graph_utils::contract_nodes_and_map(
@@ -116,7 +120,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                     then_cands.keys().collect(),
                     |node, (_, ast)| (then_cands[&node], ast),
                     |_, _| (),
-                    |then_graph| (cond, self.refine_ast_seq(then_graph)),
+                    |then_graph| (cond, Some(self.refine_ast_seq(then_graph))),
                 );
                 if !else_cands.is_empty() {
                     let else_node = graph_utils::contract_nodes_and_map(
@@ -124,7 +128,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                         else_cands.keys().collect(),
                         |node, (_, ast)| (else_cands[&node], ast),
                         |_, _| (),
-                        |else_graph| (not_cond, self.refine_ast_seq(else_graph)),
+                        |else_graph| (not_cond, Some(self.refine_ast_seq(else_graph))),
                     );
 
                     debug_assert!(graph.find_edge_undirected(then_node, else_node).is_none());
@@ -141,7 +145,11 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                     let (_, else_ast) = graph.remove_node(else_node).unwrap();
                     let if_node = graph.add_node((
                         self.cctx.mk_true(),
-                        AstNode::Cond(cond, Box::new(then_ast), Some(Box::new(else_ast))),
+                        Some(AstNode::Cond(
+                            cond,
+                            Box::new(then_ast.unwrap_or_default()),
+                            Some(Box::new(else_ast.unwrap_or_default())),
+                        )),
                     ));
 
                     for p in &preds {
