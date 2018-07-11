@@ -13,9 +13,9 @@ mod refinement;
 #[cfg(test)]
 mod test;
 
+use self::ast::AstNode as AstNodeC;
 use self::ast_context::*;
 use self::graph_utils::ix_bit_set::IxBitSet;
-use self::ast::AstNode as AstNodeC;
 
 use petgraph::prelude::*;
 
@@ -122,7 +122,9 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                     // is `region` single-exit?
                     let mut succs_iter = succs.iter();
                     if let Some(succ) = succs_iter.next() {
-                        if succs_iter.next().is_none() {
+                        if succs_iter.next().is_none()
+                            && region.iter().all(|r| !graph_utils::is_sink(&self.graph, r))
+                        {
                             // sese region
                             let repl_ast = self.structure_acyclic_sese_region(n, succ);
                             self.graph[n] = CfgNode::Code(repl_ast);
