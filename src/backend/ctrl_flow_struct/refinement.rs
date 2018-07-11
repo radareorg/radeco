@@ -1,6 +1,6 @@
 use super::ast_context::AstContext;
 use super::graph_utils;
-use super::{AstNode, CondContext, Condition, NodeSet};
+use super::{AstNode, AstNodeC, CondContext, Condition, NodeSet};
 
 use petgraph::algo;
 use petgraph::prelude::*;
@@ -75,10 +75,10 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
         let mut topo = Topo::new(&graph);
         while let Some(node) = topo.next(&graph) {
             let (cond, ast) = graph.remove_node(node).unwrap();
-            ast_seq.push(mk_cond(cond, Box::new(ast.unwrap_or_default()), None));
+            ast_seq.push(mk_cond::<A>(cond, Box::new(ast.unwrap_or_default()), None));
         }
 
-        self.simplify_ast_node(AstNode::Seq(ast_seq))
+        self.simplify_ast_node(AstNodeC::Seq(ast_seq))
             .unwrap_or_default()
     }
 
@@ -145,7 +145,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                     let (_, else_ast) = graph.remove_node(else_node).unwrap();
                     let if_node = graph.add_node((
                         self.cctx.mk_true(),
-                        Some(AstNode::Cond(
+                        Some(AstNodeC::Cond(
                             cond,
                             Box::new(then_ast.unwrap_or_default()),
                             Some(Box::new(else_ast.unwrap_or_default())),
@@ -169,7 +169,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
 
     /// Performs trivial simplifications.
     fn simplify_ast_node(self, ast: AstNode<'cd, A>) -> Option<AstNode<'cd, A>> {
-        use super::AstNode::*;
+        use super::AstNodeC::*;
         match ast {
             BasicBlock(b) => Some(BasicBlock(b)),
             Seq(seq) => {
@@ -240,6 +240,6 @@ fn mk_cond<'cd, A: AstContext>(
     if cond.is_true() {
         *then_node
     } else {
-        AstNode::Cond(cond, then_node, else_node_opt)
+        AstNodeC::Cond(cond, then_node, else_node_opt)
     }
 }

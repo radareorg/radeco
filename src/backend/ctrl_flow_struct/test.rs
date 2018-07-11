@@ -110,6 +110,62 @@ fn nmg_example() {
 }
 
 #[test]
+fn nmg_r2_ast() {
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(node("entry"));
+    let b1 = graph.add_node(cnode());
+    let b2 = graph.add_node(cnode());
+    let n4 = graph.add_node(node("n4"));
+    let n5 = graph.add_node(node("n5"));
+    let n6 = graph.add_node(node("n6"));
+    let n7 = graph.add_node(node("n7"));
+
+    let c_b1 = cond_s(&cctx, "b1");
+    let c_b2 = cond_s(&cctx, "b2");
+
+    graph.add_edge(entry, b1, None);
+    graph.add_edge(b1, b2, Some(c_b1));
+    graph.add_edge(b2, n6, Some(c_b2));
+    graph.add_edge(n6, n7, None);
+    graph.add_edge(b2, n5, neg_c(&cctx, c_b2));
+    graph.add_edge(n5, n7, None);
+    graph.add_edge(b1, n4, neg_c(&cctx, c_b1));
+    graph.add_edge(n4, n5, None);
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Seq(vec![
+            BasicBlock("entry".to_owned()),
+            Cond(
+                cctx.mk_not(c_b1),
+                Box::new(BasicBlock("n4".to_owned())),
+                None,
+            ),
+            Cond(
+                cctx.mk_and(c_b1, c_b2),
+                Box::new(BasicBlock("n6".to_owned())),
+                Some(Box::new(BasicBlock("n5".to_owned()))),
+            ),
+            BasicBlock("n7".to_owned()),
+        ]),
+        ast
+    );
+}
+
+#[test]
 fn abnormal_entries() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
@@ -258,7 +314,7 @@ fn neg_c<'cd>(
 }
 
 fn node(n: &str) -> CfgNode<'static, StringAst> {
-    CfgNode::Code(AstNode::BasicBlock(n.to_owned()))
+    CfgNode::Code(AstNodeC::BasicBlock(n.to_owned()))
 }
 
 fn cnode() -> CfgNode<'static, StringAst> {
