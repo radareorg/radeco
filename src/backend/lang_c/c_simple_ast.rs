@@ -616,7 +616,6 @@ impl SimpleCASTVerifier {
 
     // 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
     fn verify_edge_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
-        let mut is_err = false;
         let mut errors = Vec::new();
         let edges = cast.ast.edges_directed(node, Direction::Outgoing);
         for edge in edges {
@@ -625,14 +624,13 @@ impl SimpleCASTVerifier {
                 | (SimpleCASTEdge::Value(_), Some(&SimpleCASTNode::Value(_)))
                 | (SimpleCASTEdge::Action(ActionEdge::GotoDst), Some(&SimpleCASTNode::Entry)) => {},
                 _ => {
-                    is_err = true;
                     let error = format!("{:?} {:?}", edge.weight(),
                             cast.ast.node_weight(edge.target()));
                     errors.push(error);
                 }
             }
         }
-        if is_err {
+        if errors.len() > 0 {
             Err(errors.join(Self::delim))
         } else {
             Ok(())
@@ -645,7 +643,6 @@ impl SimpleCASTVerifier {
             Some(&SimpleCASTNode::Action(ActionNode::Goto)) => {},
             _ => return Ok(()),
         };
-        let mut is_err = false;
         let mut errors = Vec::new();
         let gotos = cast.ast
             .edges_directed(node, Direction::Outgoing)
@@ -654,7 +651,6 @@ impl SimpleCASTVerifier {
                 _ => None,
             }).collect::<Vec<_>>();
         if gotos.len() != 1 {
-            is_err = true;
             errors.push("No or more than one ActionEdge::GotoDst found".to_string());
         }
         for goto in gotos {
@@ -662,12 +658,11 @@ impl SimpleCASTVerifier {
                 Some(&SimpleCASTNode::Action(_))
                 | Some(&SimpleCASTNode::Entry) => {},
                 n => {
-                    is_err = true;
                     errors.push(format!("Invalid node {:?} @ {:?}", n, node));
                 },
             }
         }
-        if is_err {
+        if errors.len() > 0 {
             Err(errors.join(Self::delim))
         } else {
             Ok(())

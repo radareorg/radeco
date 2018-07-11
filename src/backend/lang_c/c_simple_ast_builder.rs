@@ -541,8 +541,8 @@ impl<'a> CASTDataMap<'a> {
 struct CASTDataMapVerifier {
 }
 
-const delim: &'static str = "; ";
 impl CASTDataMapVerifier {
+    const delim: &'static str = "; ";
 
     fn verify_datamap() -> Result<(), String> {
         //verify_prepare
@@ -600,9 +600,10 @@ impl CASTDataMapVerifier {
         }
 
         if errors.len() > 0 {
-            return Err(errors.join(delim));
+            Err(errors.join(Self::delim))
+        } else {
+            Ok((()))
         }
-        Ok((()))
     }
 
     //node: NodeIndex of SSAStorage
@@ -623,9 +624,10 @@ impl CASTDataMapVerifier {
             errors.push(err);
         }
         if errors.len() > 0 {
-            return Err(errors.join(delim));
+            Err(errors.join(Self::delim))
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn verify_prepare_regs(ast: &SimpleCAST, datamap: &CASTDataMap) -> Result<(), String> {
@@ -645,9 +647,10 @@ impl CASTDataMapVerifier {
             }
         }
         if errors.len() > 0 {
-            return Err(errors.join(delim));
+            Err(errors.join(Self::delim))
+        } else {
+            Ok(())
         }
-        Ok((()))
     }
 
     fn verify_handle_uniop(datamap: &CASTDataMap) -> Result<(), String> {
