@@ -165,6 +165,93 @@ fn nmg_r2_ast() {
     );
 }
 
+// #[test]
+fn switchy_ast() {
+    /*
+     * switch (n) {
+     * case 1:
+     * case 4:
+     * case 7:
+     * case 94:
+     *   puts("1");
+     *   break;
+     * case 34:
+     * case 88:
+     *   puts("2");
+     *   break;
+     * default:
+     *   puts("3");
+     *   break;
+     * }
+     */
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(node("entry"));
+    let c1 = graph.add_node(cnode());
+    let c2 = graph.add_node(cnode());
+    let c3 = graph.add_node(cnode());
+    let c4 = graph.add_node(cnode());
+    let c5 = graph.add_node(cnode());
+    let c6 = graph.add_node(cnode());
+    let c7 = graph.add_node(cnode());
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+
+    let c_c1 = cond_s(&cctx, "n == 7");
+    let c_c2 = cond_s(&cctx, "n <= 7");
+    let c_c3 = cond_s(&cctx, "n == 88");
+    let c_c4 = cond_s(&cctx, "n == 1");
+    let c_c5 = cond_s(&cctx, "n == 98");
+    let c_c6 = cond_s(&cctx, "n != 4");
+    let c_c7 = cond_s(&cctx, "n == 34");
+
+    graph.add_edge(entry, c1, None);
+    graph.add_edge(c1, n1, Some(c_c1));
+    graph.add_edge(c1, c2, Some(cctx.mk_not(c_c1)));
+    graph.add_edge(c2, c4, Some(c_c2));
+    graph.add_edge(c2, c3, Some(cctx.mk_not(c_c2)));
+    graph.add_edge(c3, n2, Some(c_c3));
+    graph.add_edge(c3, c5, Some(cctx.mk_not(c_c3)));
+    graph.add_edge(c4, n1, Some(c_c4));
+    graph.add_edge(c4, c6, Some(cctx.mk_not(c_c4)));
+    graph.add_edge(c5, n1, Some(c_c5));
+    graph.add_edge(c5, c7, Some(cctx.mk_not(c_c5)));
+    graph.add_edge(c6, n3, Some(c_c6));
+    graph.add_edge(c6, n1, Some(cctx.mk_not(c_c6)));
+    graph.add_edge(c7, n2, Some(c_c7));
+    graph.add_edge(c7, n3, Some(cctx.mk_not(c_c7)));
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    // XXX: need actual value set impl
+    assert_eq!(
+        Seq(vec![
+            BasicBlock("entry".to_owned()),
+            Switch(
+                "n".to_owned(),
+                vec![
+                    ((), BasicBlock("n1".to_owned())),
+                    ((), BasicBlock("n2".to_owned())),
+                ],
+                Box::new(BasicBlock("n3".to_owned())),
+            ),
+        ]),
+        ast
+    );
+}
+
 #[test]
 fn abnormal_entries() {
     let cstore = condition::Storage::new();
