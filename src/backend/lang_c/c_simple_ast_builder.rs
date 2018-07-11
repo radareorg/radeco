@@ -520,7 +520,6 @@ impl<'a> CASTDataMap<'a> {
 
     fn prepare_regs(&mut self, ast: &mut SimpleCAST) {
         for walk_node in self.ssa.inorder_walk() {
-            // TODO avoid unwrap
             let reg_state = self.ssa.registers_in(walk_node);
             if reg_state.is_none() {
                 continue;
@@ -536,6 +535,131 @@ impl<'a> CASTDataMap<'a> {
                 self.reg_map.insert(name, ast_node);
             }
         }
+    }
+}
+
+struct CASTDataMapVerifier {
+}
+
+const delim: &'static str = "; ";
+impl CASTDataMapVerifier {
+
+    fn verify_datamap() -> Result<(), String> {
+        //verify_prepare
+        //verify_ops
+        unimplemented!()
+    }
+
+    fn verify_prepare(datamap: &mut CASTDataMap,
+              ast: &mut SimpleCAST,
+              strings: &HashMap<u64, String>) -> Result<(), String> {
+        datamap.prepare_consts(ast, strings);
+        Self::verify_prepare_consts(ast, datamap)?;
+        datamap.prepare_regs(ast);
+        Self::verify_prepare_regs(ast, datamap)?;
+        Ok(())
+    }
+
+    fn verify_ops(datamap: &mut CASTDataMap, ssa: &SSAStorage) -> Result<(), String> {
+        Self::verify_handle_uniop(datamap)?;
+        Self::verify_handle_binop(datamap)?;
+        Self::verify_handle_cast(datamap)?;
+        Ok(())
+    }
+
+    fn verify_prepare_consts(ast: &SimpleCAST, datamap: &CASTDataMap) -> Result<(), String> {
+        let mut errors = Vec::new();
+        for &const_node in &datamap.const_nodes {
+            if !datamap.ssa.is_constant(const_node) {
+                errors.push(format!("Invalid constant node: {:?}",
+                                    const_node));
+            }
+        }
+
+        for (&node, &ast_node) in &datamap.var_map {
+            let val = datamap.ssa.constant_value(node);
+            if val.is_none() {
+                let err = format!("Invalid constant node: {:?}", node);
+                errors.push(err);
+            }
+            let const_opt = ast.constant_of(ast_node);
+            if const_opt.is_none() {
+                let err = format!("No ValueNode::Constant({:?}) is found", ast_node);
+                errors.push(err);
+            }
+            // TODO replace some values with strings
+            if val.is_none() || const_opt.is_none() {
+                continue;
+            }
+            let v = val.unwrap().to_string();
+            let c = const_opt.unwrap();
+            if v != c {
+                let err = format!("Mismatched values `{:?}` and `{:?}`", v, c);
+                errors.push(err);
+            }
+        }
+
+        if errors.len() > 0 {
+            return Err(errors.join(delim));
+        }
+        Ok((()))
+    }
+
+    //node: NodeIndex of SSAStorage
+    fn verify_prepare_regs_of(ast: &SimpleCAST, datamap: &CASTDataMap,
+                              node: NodeIndex, name: String) -> Result<(), String> {
+        let mut errors = Vec::new();
+        if let Some(&ast_node) = datamap.var_map.get(&node) {
+            // TODO
+        } else {
+            let err = format!("Invalid register node: {:?}", node);
+            errors.push(err);
+        }
+        // Checking if name is a key of reg_map.
+        // reg_map.get(&name) is not needed to be same to 
+        // ast_node of var_map.get(&node)
+        if !datamap.reg_map.contains_key(&name) {
+            let err = format!("Invalid register name: {:?}", name);
+            errors.push(err);
+        }
+        if errors.len() > 0 {
+            return Err(errors.join(delim));
+        }
+        Ok(())
+    }
+
+    fn verify_prepare_regs(ast: &SimpleCAST, datamap: &CASTDataMap) -> Result<(), String> {
+        let mut errors = Vec::new();
+        for walk_node in datamap.ssa.inorder_walk() {
+            let reg_state = datamap.ssa.registers_in(walk_node);
+            if reg_state.is_none() {
+                continue;
+            }
+            let reg_map = utils::register_state_info(reg_state.unwrap(), datamap.ssa);
+            for (idx, (node, vt)) in reg_map.into_iter() {
+                let name = datamap.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
+                let res = Self::verify_prepare_regs_of(ast, datamap, node, name);
+                if let Err(e) = res {
+                    errors.push(e);
+                }
+            }
+        }
+        if errors.len() > 0 {
+            return Err(errors.join(delim));
+        }
+        Ok((()))
+    }
+
+    fn verify_handle_uniop(datamap: &CASTDataMap) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn verify_handle_binop(datamap: &CASTDataMap) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn verify_handle_cast(datamap: &CASTDataMap) -> Result<(), String> {
+        unimplemented!()
     }
 }
 
