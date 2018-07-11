@@ -6,6 +6,8 @@
 
 pub mod ast_context;
 pub mod condition;
+
+mod ast;
 mod graph_utils;
 mod refinement;
 #[cfg(test)]
@@ -13,6 +15,7 @@ mod test;
 
 use self::ast_context::*;
 use self::graph_utils::ix_bit_set::IxBitSet;
+use self::ast::AstNode as AstNodeC;
 
 use petgraph::prelude::*;
 
@@ -20,7 +23,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::iter::{self, FromIterator};
 use std::mem;
-use std::default::Default;
 
 struct ControlFlowGraph<'cd, A: AstContext> {
     graph: StableDiGraph<CfgNode<'cd, A>, Option<Condition<'cd, A>>>,
@@ -41,32 +43,11 @@ enum CfgNode<'cd, A: AstContext> {
     Dummy(&'static str),
 }
 
-enum AstNode<'cd, A: AstContext> {
-    BasicBlock(A::Block),
-    Seq(Vec<AstNode<'cd, A>>),
-    Cond(
-        Condition<'cd, A>,
-        Box<AstNode<'cd, A>>,
-        Option<Box<AstNode<'cd, A>>>,
-    ),
-    Loop(LoopType<'cd, A>, Box<AstNode<'cd, A>>),
-    Switch(
-        A::Variable,
-        Vec<(ValueSet, AstNode<'cd, A>)>,
-        Box<AstNode<'cd, A>>,
-    ),
-}
-
-enum LoopType<'cd, A: AstContext> {
-    PreChecked(Condition<'cd, A>),
-    PostChecked(Condition<'cd, A>),
-    Endless,
-}
-
-type ValueSet = (); // XXX
-
 type Condition<'cd, A> = condition::Condition<'cd, <A as AstContext>::Condition>;
 type CondContext<'cd, A> = condition::Context<'cd, <A as AstContext>::Condition>;
+// hoping https://github.com/rust-lang/rust/issues/49683 lands soon
+type AstNode<'cd, A> =
+    ast::AstNode<<A as AstContext>::Block, Condition<'cd, A>, <A as AstContext>::Variable>;
 
 impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
     fn structure_whole(mut self) -> AstNode<'cd, A> {
@@ -127,7 +108,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
 
                 let loop_body = self.structure_acyclic_sese_region(loop_header, loop_continue);
                 self.graph.remove_node(loop_continue);
-                let repl_ast = AstNode::Loop(LoopType::Endless, Box::new(loop_body));
+                let repl_ast = AstNodeC::Loop(ast::LoopType::Endless, Box::new(loop_body));
                 self.graph[loop_header] = CfgNode::Code(repl_ast);
                 if let Some(loop_succ) = loop_succ_opt {
                     self.graph.add_edge(loop_header, loop_succ, None);
@@ -225,7 +206,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             }
         }
 
-        let refiner = refinement::Refiner { cctx: self.cctx };
+        let refiner = refinement::Refiner::<A> { cctx: self.cctx };
         refiner.refine_ast_seq(region_graph)
     }
 
@@ -318,7 +299,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                 self.graph
                     .add_edge(cascade_node, prev_entry_target, Some(prev_cond_eq));
 
-                let struct_reset = self.graph.add_node(CfgNode::Code(AstNode::BasicBlock(
+                let struct_reset = self.graph.add_node(CfgNode::Code(AstNodeC::BasicBlock(
                     self.actx.mk_var_assign(&struct_var, 0),
                 )));
                 self.graph.add_edge(struct_reset, entry_target, None);
@@ -342,7 +323,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         for (entry_num, entry_edges) in
             iter::once((0, &header_entries)).chain(abnormal_entry_iter.map(|(n, (_, e))| (n, e)))
         {
-            let struct_assign = self.graph.add_node(CfgNode::Code(AstNode::BasicBlock(
+            let struct_assign = self.graph.add_node(CfgNode::Code(AstNodeC::BasicBlock(
                 self.actx.mk_var_assign(&struct_var, entry_num),
             )));
             self.graph.add_edge(struct_assign, new_header, None);
@@ -450,7 +431,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         for exit_edge in &exit_edges {
             let break_node = self
                 .graph
-                .add_node(CfgNode::Code(AstNode::BasicBlock(self.actx.mk_break())));
+                .add_node(CfgNode::Code(AstNodeC::BasicBlock(self.actx.mk_break())));
             graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
             // connect to `loop_continue` so that the graph slice from the loop
             // header to `loop_continue` contains these "break" nodes
@@ -459,13 +440,6 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         }
 
         new_successor
-    }
-}
-
-impl<'cd, A: AstContext> Default for AstNode<'cd, A> {
-    /// Creates a no-op node.
-    fn default() -> Self {
-        AstNode::Seq(Vec::new())
     }
 }
 
@@ -498,43 +472,6 @@ where
             CfgNode::Code(c) => fmt.debug_tuple("Code").field(c).finish(),
             CfgNode::Condition => fmt.write_str("Condition"),
             CfgNode::Dummy(s) => fmt.debug_tuple("Dummy").field(s).finish(),
-        }
-    }
-}
-
-impl<'cd, A> fmt::Debug for AstNode<'cd, A>
-where
-    A: AstContext,
-    A::Block: fmt::Debug,
-    A::Variable: fmt::Debug,
-    A::Condition: fmt::Debug,
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            AstNode::BasicBlock(b) => fmt.debug_tuple("BasicBlock").field(b).finish(),
-            AstNode::Seq(s) => fmt.debug_tuple("Seq").field(s).finish(),
-            AstNode::Cond(c, t, e) => fmt.debug_tuple("Cond").field(c).field(t).field(e).finish(),
-            AstNode::Loop(t, b) => fmt.debug_tuple("Loop").field(t).field(b).finish(),
-            AstNode::Switch(v, c, d) => fmt
-                .debug_tuple("Switch")
-                .field(v)
-                .field(c)
-                .field(d)
-                .finish(),
-        }
-    }
-}
-
-impl<'cd, A> fmt::Debug for LoopType<'cd, A>
-where
-    A: AstContext,
-    A::Condition: fmt::Debug,
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            LoopType::PreChecked(c) => fmt.debug_tuple("PreChecked").field(c).finish(),
-            LoopType::PostChecked(c) => fmt.debug_tuple("PostChecked").field(c).finish(),
-            LoopType::Endless => fmt.write_str("Endless"),
         }
     }
 }
