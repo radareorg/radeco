@@ -526,6 +526,13 @@ impl SimpleCAST {
         converter.to_c_ast()
     }
 
+    /// Returns constant value which is either register or immidiate value
+    pub fn constant_of(&self, node: NodeIndex) -> Option<String> {
+        match self.ast.node_weight(node) {
+            Some(&SimpleCASTNode::Value(ValueNode::Constant(_, ref s))) => Some(s.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// SimpleCAST should meet following conditions.
