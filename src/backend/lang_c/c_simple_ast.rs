@@ -556,18 +556,18 @@ impl SimpleCASTVerifier {
 
     fn verify_each_node(cast: &SimpleCAST, verifier: &Verifier, name: &str) -> Result<(), String> {
         let mut is_valid = true;
-        let mut ret = String::new();
+        let mut errors = Vec::new();
         let nodes = cast.ast.node_indices();
         for node in nodes {
             if let Err(msg) = verifier(node, cast) {
-                ret = format!("{}; {}", ret, msg);
+                errors.push(msg);
                 is_valid = false;
             }
         }
-        if is_valid {
-            Ok(())
+        if errors.len() > 0 {
+            Err(format!("{} @ {}", errors.join(Self::delim), name.to_string()))
         } else {
-            Err(format!("{} @ {}", ret, name.to_string()))
+            Ok(())
         }
     }
 
