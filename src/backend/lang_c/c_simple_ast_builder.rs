@@ -560,10 +560,10 @@ impl CASTDataMapVerifier {
         Ok(())
     }
 
-    fn verify_ops(datamap: &mut CASTDataMap, ssa: &SSAStorage) -> Result<(), String> {
-        Self::verify_handle_uniop(datamap)?;
-        Self::verify_handle_binop(datamap)?;
-        Self::verify_handle_cast(datamap)?;
+    fn verify_ops(ast: &mut SimpleCAST, datamap: &mut CASTDataMap, ssa: &SSAStorage) -> Result<(), String> {
+        Self::verify_handle_uniop(ast, datamap)?;
+        Self::verify_handle_binop(ast, datamap)?;
+        Self::verify_handle_cast(ast, datamap)?;
         Ok(())
     }
 
@@ -653,16 +653,71 @@ impl CASTDataMapVerifier {
         }
     }
 
-    fn verify_handle_uniop(datamap: &CASTDataMap) -> Result<(), String> {
-        unimplemented!()
+    fn verify_handle_uniop(ast: &mut SimpleCAST, datamap: &mut CASTDataMap) -> Result<(), String> {
+        // Ensure `handle_uniop` insert node as key into var_map.
+        let mut errors = Vec::new();
+        for node in datamap.ssa.inorder_walk() {
+            let expr = c_simple::Expr::Not;
+            let operand_node = datamap.var_map.iter().next().unwrap().0.clone();
+            // Erase the key so as to ensure whether the key will be correctly inserted
+            // by handle_uniop
+            datamap.var_map.remove(&node);
+            datamap.handle_uniop(node, operand_node, expr, ast);
+            if datamap.var_map.get(&node).is_none() {
+                let err = format!("Failed to handle unary operator: {:?}", node);
+                errors.push(err);
+            }
+        }
+        if errors.len() > 0 {
+            Err(errors.join(Self::delim))
+        } else {
+            Ok(())
+        }
     }
 
-    fn verify_handle_binop(datamap: &CASTDataMap) -> Result<(), String> {
-        unimplemented!()
+    fn verify_handle_binop(ast: &mut SimpleCAST, datamap: &mut CASTDataMap) -> Result<(), String> {
+        // Ensure `handle_binop` insert node as key into var_map.
+        let mut errors = Vec::new();
+        for node in datamap.ssa.inorder_walk() {
+            let expr = c_simple::Expr::Add;
+            let operand_nodes = datamap.var_map
+                .iter().take(2).map(|x| x.0.clone()).collect::<Vec<_>>();
+            // Erase the key so as to ensure whether the key will be correctly inserted
+            // by handle_binop
+            datamap.var_map.remove(&node);
+            datamap.handle_binop(node, operand_nodes, expr, ast);
+            if datamap.var_map.get(&node).is_none() {
+                let err = format!("Failed to handle binary operator: {:?}", node);
+                errors.push(err);
+            }
+        }
+        if errors.len() > 0 {
+            Err(errors.join(Self::delim))
+        } else {
+            Ok(())
+        }
     }
 
-    fn verify_handle_cast(datamap: &CASTDataMap) -> Result<(), String> {
-        unimplemented!()
+    fn verify_handle_cast(ast: &mut SimpleCAST, datamap: &mut CASTDataMap) -> Result<(), String> {
+        // Ensure `handle_cast` insert node as key into var_map.
+        let mut errors = Vec::new();
+        for node in datamap.ssa.inorder_walk() {
+            let expr = c_simple::Expr::Cast(8);
+            let operand_node = datamap.var_map.iter().next().unwrap().0.clone();
+            // Erase the key so as to ensure whether the key will be correctly inserted
+            // by handle_uniop
+            datamap.var_map.remove(&node);
+            datamap.handle_uniop(node, operand_node, expr, ast);
+            if datamap.var_map.get(&node).is_none() {
+                let err = format!("Failed to handle cast operator: {:?}", node);
+                errors.push(err);
+            }
+        }
+        if errors.len() > 0 {
+            Err(errors.join(Self::delim))
+        } else {
+            Ok(())
+        }
     }
 }
 
