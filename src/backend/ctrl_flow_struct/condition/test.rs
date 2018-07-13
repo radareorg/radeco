@@ -283,3 +283,18 @@ fn big_complementation() {
     assert_eq!(cctx.mk_and(expr, cctx.mk_not(expr)), cctx.mk_false());
     assert_eq!(cctx.mk_or(expr, cctx.mk_not(expr)), cctx.mk_true());
 }
+
+#[test]
+fn nested_complementation() {
+    let cstore = Storage::new();
+    let cctx = cstore.cctx();
+    let a = cctx.mk_var("a");
+    let b = cctx.mk_var("b");
+    let c = cctx.mk_var("c");
+    let nc = cctx.mk_not(c);
+
+    let a_or_b = cctx.mk_or(a, b);
+    assert_eq!(cctx.mk_or(cctx.mk_and(a_or_b, c), cctx.mk_and(a_or_b, nc)), a_or_b);
+    let a_and_b = cctx.mk_and(a, b);
+    assert_eq!(cctx.mk_and(cctx.mk_or(a_and_b, c), cctx.mk_or(a_and_b, nc)), a_and_b);
+}
