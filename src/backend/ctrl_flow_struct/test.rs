@@ -110,7 +110,7 @@ fn nmg_example() {
 }
 
 #[test]
-fn nmg_r2_ast() {
+fn ast_nmg_r2() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
@@ -165,8 +165,9 @@ fn nmg_r2_ast() {
     );
 }
 
-// #[test]
-fn switchy_ast() {
+#[test]
+#[ignore] // TODO
+fn ast_switchy() {
     /*
      * switch (n) {
      * case 1:
@@ -246,6 +247,73 @@ fn switchy_ast() {
                     ((), BasicBlock("n2".to_owned())),
                 ],
                 Box::new(BasicBlock("n3".to_owned())),
+            ),
+        ]),
+        ast
+    );
+}
+
+#[test]
+fn ast_ifelse_cascade() {
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(node("entry"));
+    let c1 = graph.add_node(cnode());
+    let c2 = graph.add_node(cnode());
+    let c3 = graph.add_node(cnode());
+    let c4 = graph.add_node(cnode());
+    let c5 = graph.add_node(cnode());
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+
+    let c_c1 = cond_s(&cctx, "c1");
+    let c_c2 = cond_s(&cctx, "c2");
+    let c_c3 = cond_s(&cctx, "c3");
+    let c_c4 = cond_s(&cctx, "c4");
+    let c_c5 = cond_s(&cctx, "c5");
+    let nc_c1 = cctx.mk_not(c_c1);
+    let nc_c2 = cctx.mk_not(c_c2);
+    let nc_c3 = cctx.mk_not(c_c3);
+    let nc_c4 = cctx.mk_not(c_c4);
+    let nc_c5 = cctx.mk_not(c_c5);
+
+    graph.add_edge(entry, c1, None);
+    graph.add_edge(c1, c4, Some(c_c1));
+    graph.add_edge(c1, c2, Some(nc_c1));
+    graph.add_edge(c2, n3, Some(c_c2));
+    graph.add_edge(c2, c3, Some(nc_c2));
+    graph.add_edge(c3, c5, Some(c_c3));
+    graph.add_edge(c3, c4, Some(nc_c3));
+    graph.add_edge(c4, n2, Some(c_c4));
+    graph.add_edge(c4, n1, Some(nc_c4));
+    graph.add_edge(c5, n3, Some(c_c5));
+    graph.add_edge(c5, n2, Some(nc_c5));
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Seq(vec![
+            BasicBlock("entry".to_owned()),
+            Cond(
+                cctx.mk_and(cctx.mk_not(c_c1), cctx.mk_or(c_c2, cctx.mk_and(c_c3, c_c5))),
+                Box::new(BasicBlock("n3".to_owned())),
+                Some(Box::new(Cond(
+                    cctx.mk_and(cctx.mk_or(c_c1, cctx.mk_and(nc_c2, nc_c3)), nc_c4),
+                    Box::new(BasicBlock("n1".to_owned())),
+                    Some(Box::new(BasicBlock("n2".to_owned()))),
+                ))),
             ),
         ]),
         ast
