@@ -4,7 +4,7 @@ use super::{AstNode, AstNodeC, CondContext, Condition, NodeSet};
 
 use petgraph::algo;
 use petgraph::prelude::*;
-use petgraph::visit::{IntoNodeReferences, Topo};
+use petgraph::visit::{IntoNodeReferences, Topo, Walker};
 
 use std::collections::HashMap;
 
@@ -69,6 +69,8 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             }
         }
 
+        self.try_find_if_else_cascade(&mut graph);
+
         let mut ast_seq = Vec::new();
 
         // remove all nodes in topological order
@@ -105,7 +107,9 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             }
         }
 
-        if then_cands.len() + else_cands.len() >= 2 {
+        if then_cands.keys().filter(|&&n| graph[n].1.is_some()).count()
+            + else_cands.keys().filter(|&&n| graph[n].1.is_some()).count() >= 2
+        {
             if then_cands.is_empty() {
                 graph_utils::contract_nodes_and_map(
                     graph,
@@ -164,6 +168,76 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             true
         } else {
             false
+        }
+    }
+
+    fn try_find_if_else_cascade(self, graph: &mut StableDiGraph<RefinementAstNode<'cd, A>, ()>) {
+        let mut order = Vec::new();
+        for n in Topo::new(&*graph).iter(&*graph) {
+            if graph[n].1.is_some() {
+                order.push(n);
+            }
+        }
+        let order = order;
+
+        if order.len() < 2 {
+            return;
+        }
+
+        let mut opt_cands = None;
+        // find a set of nodes to structure as an if-else cascade
+        let mut dfs = algo::DfsSpace::new(&*graph);
+        'n: for i in 0..order.len() {
+            if graph[order[i]].0.is_true() {
+                continue;
+            }
+            let init = &order[0..=i];
+            let mut cands = NodeSet::new();
+            let mut or_cand_conds = self.cctx.mk_false();
+            for j in (0..init.len()).rev() {
+                let n = init[j];
+                if cands
+                    .iter()
+                    .all(|c| !algo::has_path_connecting(&*graph, n, c, Some(&mut dfs)))
+                {
+                    cands.insert(n);
+                    or_cand_conds = self.cctx.mk_or(or_cand_conds, graph[n].0);
+                    if or_cand_conds.is_true() {
+                        opt_cands = Some(cands);
+                        break 'n;
+                    }
+                }
+            }
+        }
+
+        if let Some(cands) = opt_cands {
+            graph_utils::contract_nodes_and_map(
+                graph,
+                cands,
+                |_, n| n,
+                |_, _| (),
+                |mut casc_graph| {
+                    debug_assert!(casc_graph.edge_count() == 0);
+                    debug_assert!(casc_graph.node_count() >= 2);
+                    debug_assert!(casc_graph.node_references().all(|(_, (_, x))| x.is_some()));
+
+                    // `StableGraph` doesn't have `into_nodes_edges` :(
+                    let mut nodes = Vec::new();
+                    while let Some(n) = casc_graph.node_indices().next() {
+                        let (cond, ast) = casc_graph.remove_node(n).unwrap();
+                        nodes.push((cond, ast.unwrap()));
+                    }
+                    nodes.sort_unstable_by_key(|&(c, _)| c.complexity());
+
+                    // build if-else cascade starting from last else block
+                    let mut casc_ast = nodes.pop().unwrap().1;
+                    for (cond, ast) in nodes.into_iter().rev() {
+                        casc_ast = AstNodeC::Cond(cond, Box::new(ast), Some(Box::new(casc_ast)));
+                    }
+
+                    (self.cctx.mk_true(), Some(casc_ast))
+                },
+            );
         }
     }
 
