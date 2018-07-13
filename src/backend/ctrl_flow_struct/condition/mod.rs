@@ -47,7 +47,7 @@ macro_rules! impl_copy {
 
 /// A condition. This can be freely copied.
 /// Use [`Context`] to make one.
-pub struct Condition<'cd, T: 'cd>(&'cd CondVariants<'cd, T>);
+pub struct Condition<'cd, T: 'cd>(&'cd CondVariants<'cd, T>, &'cd CondVariants<'cd, T>);
 impl_copy!{Condition}
 
 /// *Really* a condition. These are the referents of [`Condition`]s and are
@@ -102,8 +102,11 @@ impl<'cd, T> Context<'cd, T> {
     /// Creates a new boolean variable. This will not compare equal to any
     /// previously created variable, regardless of the underlying values.
     pub fn mk_var(self, t: T) -> Condition<'cd, T> {
-        self.store
-            .mk_cond(Var(Negation::Normal, self.store.mk_var(t)))
+        let vr = self.store.mk_var(t);
+        Condition(
+            self.store.mk_cond(Var(Negation::Normal, vr)),
+            self.store.mk_cond(Var(Negation::Negated, vr)),
+        )
     }
 
     /// Creates the logical conjunction (And) of two conditions.
@@ -213,19 +216,18 @@ impl<'cd, T> Context<'cd, T> {
             }
             _ => {
                 debug_assert!(mk_opn_v.iter().all(|&c| c.expr_op() != Some(mk_op)));
-                self.store.mk_cond(Expr(mk_op, mk_opn_v))
+                let neg_mk_opn_v = mk_opn_v.iter().map(|&c| c.not()).collect();
+                Condition(
+                    self.store.mk_cond(Expr(mk_op, mk_opn_v)),
+                    self.store.mk_cond(Expr(mk_op.dual(), neg_mk_opn_v)),
+                )
             }
         }
     }
 
     /// Creates the logical negation (Not) of a condition.
     pub fn mk_not(self, cond: Condition<'cd, T>) -> Condition<'cd, T> {
-        match cond.0 {
-            &Var(inv, vr) => self.store.mk_cond(Var(!inv, vr)),
-            &Expr(op, ref op_v) => {
-                self.store_expr(op.dual(), op_v.iter().map(|&c| self.mk_not(c)).collect())
-            }
-        }
+        cond.not()
     }
 
     fn mk_empty_op(self, mk_op: Op) -> Condition<'cd, T> {
@@ -236,11 +238,11 @@ impl<'cd, T> Context<'cd, T> {
     }
     /// Creates a tautology (True).
     pub fn mk_true(self) -> Condition<'cd, T> {
-        Condition(&self.store.true_)
+        Condition(&self.store.true_, &self.store.false_)
     }
     /// Creates a contradiction (False).
     pub fn mk_false(self) -> Condition<'cd, T> {
-        Condition(&self.store.false_)
+        Condition(&self.store.false_, &self.store.true_)
     }
 
     /// If `haystack` is of the form `needle AND other`, returns `other`.
@@ -250,26 +252,24 @@ impl<'cd, T> Context<'cd, T> {
         haystack: Condition<'cd, T>,
     ) -> Option<Condition<'cd, T>> {
         match haystack.0 {
-            &Expr(Op::And, ref hopn_v) => {
-                match needle.0 {
-                    &Expr(Op::And, ref nopn_v) => {
-                        if nopn_v.is_subset(hopn_v) {
-                            Some(self.store_expr(Op::And, hopn_v.difference(nopn_v).cloned().collect()))
-                        } else {
-                            None
-                        }
-                    }
-                    _ => {
-                        if hopn_v.contains(&needle) {
-                            let mut new_opn_v = hopn_v.clone();
-                            new_opn_v.remove(&needle);
-                            Some(self.store_expr(Op::And, new_opn_v))
-                        } else {
-                            None
-                        }
+            &Expr(Op::And, ref hopn_v) => match needle.0 {
+                &Expr(Op::And, ref nopn_v) => {
+                    if nopn_v.is_subset(hopn_v) {
+                        Some(self.store_expr(Op::And, hopn_v.difference(nopn_v).cloned().collect()))
+                    } else {
+                        None
                     }
                 }
-            }
+                _ => {
+                    if hopn_v.contains(&needle) {
+                        let mut new_opn_v = hopn_v.clone();
+                        new_opn_v.remove(&needle);
+                        Some(self.store_expr(Op::And, new_opn_v))
+                    } else {
+                        None
+                    }
+                }
+            },
             _ => {
                 if needle == haystack {
                     Some(self.mk_true())
@@ -287,6 +287,10 @@ impl<'cd, T> Condition<'cd, T> {
             &Var(_, _) => None,
             &Expr(op, _) => Some(op),
         }
+    }
+
+    fn not(self) -> Self {
+        Condition(self.1, self.0)
     }
 
     pub fn is_true(self) -> bool {
@@ -360,20 +364,20 @@ impl<'cd, T> ExprBuilder<'cd, T> {
         // ==> `And{Or{And{var, Or{..o2}}, And{Or{..o1}, -var}}, ..a1}`
         // which simplifies if either `o1` or `o2` are empty
 
-        let res = ev.try_for_each_var(|p1_var, p1_inv, p1_vr, p1_found| {
+        let res = ev.try_for_each_opn(|p1_opn, p1_found| {
             // look for a `Or{+/- var, ..o2}`
             let opt_part_2 = self
                 .opn_v
                 .iter()
                 .filter_map(|&opn| {
                     ExprView::new_or_panic(opn, self.op.dual())
-                        .find_var(p1_vr)
+                        .find_opn(p1_opn)
                         .map(|x| (opn, x))
                 })
                 .next();
 
-            if let Some((p2_opn, (p2_inv, p2_found))) = opt_part_2 {
-                if p1_inv == p2_inv {
+            if let Some((p2_opn, (inv, p2_found))) = opt_part_2 {
+                if inv == Negation::Normal {
                     // found `Or{var, ..o2}`
 
                     // TODO: inefficient
@@ -385,7 +389,7 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                         // `Or{var, And{Or{..o1}, Or{..o2}}}`
                         // ==> `Or{var, False}`
                         // ==> `var`
-                        p1_var
+                        p1_opn
                     } else {
                         // make `Or{..o1}`, `Or{..o2}`
                         let new_part_1 = p1_found.clone_remove(self.cctx);
@@ -394,16 +398,13 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                         // make `Or{var, And{Or{..o1}, Or{..o2}}}`
                         self.cctx.mk_expr(
                             self.op.dual(),
-                            p1_var,
+                            p1_opn,
                             self.cctx.mk_expr(self.op, new_part_1, new_part_2),
                         )
                     };
 
-                    debug_assert!(to_insert.expr_op() != Some(self.op));
-                    self.opn_v.insert(to_insert);
-
                     // inserted, so break loop
-                    Err(Ok(()))
+                    Err(self.insert(to_insert))
                 } else {
                     // found `Or{-var, ..o2}`
                     match (p1_found.is_alone(), p2_found.is_alone()) {
@@ -512,27 +513,27 @@ impl<'cd, T> ExprView<'cd, T> {
         }
     }
 
-    fn try_for_each_var<E, F>(self, mut func: F) -> Result<(), E>
+    fn try_for_each_opn<E, F>(self, mut func: F) -> Result<(), E>
     where
-        F: FnMut(Condition<'cd, T>, Negation, VarRef<'cd, T>, FoundVar<'cd, T>) -> Result<(), E>,
+        F: FnMut(Condition<'cd, T>, FoundOpn<'cd, T>) -> Result<(), E>,
     {
         match self.cond.0 {
-            &Var(inv, vr) => func(self.cond, inv, vr, FoundVar(self.op, None))?,
+            &Var(_, _) => func(self.cond, FoundOpn(self.op, None))?,
             &Expr(_, ref opn_v) => {
                 for &opn in opn_v {
-                    if let &Var(opn_inv, opn_vr) = opn.0 {
-                        func(opn, opn_inv, opn_vr, FoundVar(self.op, Some((opn_v, opn))))?
-                    }
+                    func(opn, FoundOpn(self.op, Some((opn_v, opn))))?
                 }
             }
         }
         Ok(())
     }
 
-    fn find_var(self, find_vr: VarRef<'cd, T>) -> Option<(Negation, FoundVar<'cd, T>)> {
-        self.try_for_each_var(|_, inv, vr, found| {
-            if vr == find_vr {
-                Err((inv, found))
+    fn find_opn(self, find_opn: Condition<'cd, T>) -> Option<(Negation, FoundOpn<'cd, T>)> {
+        self.try_for_each_opn(|opn, found| {
+            if opn == find_opn {
+                Err((Negation::Normal, found))
+            } else if opn.not() == find_opn {
+                Err((Negation::Negated, found))
             } else {
                 Ok(())
             }
@@ -540,12 +541,12 @@ impl<'cd, T> ExprView<'cd, T> {
     }
 }
 
-struct FoundVar<'cd, T: 'cd>(
+struct FoundOpn<'cd, T: 'cd>(
     Op,
     Option<(&'cd LinearSet<Condition<'cd, T>>, Condition<'cd, T>)>,
 );
 
-impl<'cd, T> FoundVar<'cd, T> {
+impl<'cd, T> FoundOpn<'cd, T> {
     fn is_alone(&self) -> bool {
         self.1.is_none()
     }
@@ -579,9 +580,9 @@ impl<'cd, T> Storage<'cd, T> {
         Context { store: self }
     }
 
-    fn mk_cond(&'cd self, c: CondVariants<'cd, T>) -> Condition<'cd, T> {
+    fn mk_cond(&'cd self, c: CondVariants<'cd, T>) -> &'cd CondVariants<'cd, T> {
         // NOTE: if/when interning gets implemented, it should happen here
-        Condition(self.conds.alloc(c))
+        self.conds.alloc(c)
     }
 
     fn mk_var(&'cd self, t: T) -> VarRef<'cd, T> {
