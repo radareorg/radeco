@@ -538,6 +538,15 @@ impl<'a> CASTDataMap<'a> {
     }
 }
 
+struct CASTBuilderVerifier {
+}
+
+// type Verifier = Fn(NodeIndex, &mut SimpleCAST, &mut CASTDataMap) -> Result<(), String>;
+impl CASTBuilderVerifier {
+    const delim: &'static str = "; ";
+
+}
+
 struct CASTDataMapVerifier {
 }
 
@@ -734,7 +743,7 @@ mod test {
     use std::sync::Arc;
     use std::io::prelude::*;
     use std::fs::File;
-    use std::collections::HashMap;
+    use std::collections::{HashSet, HashMap};
     use frontend::radeco_containers::{RadecoModule, RadecoFunction, ProjectLoader, RadecoProject};
     use analysis;
     use analysis::interproc::fixcall::CallFixer;
@@ -742,13 +751,13 @@ mod test {
     use analysis::sccp;
     use middle::dce;
     use middle::ssa::verifier;
+    use middle::ssa::cfg_traits::CFG;
     use middle::ir_reader::parse_il;
     use middle::regfile::{SubRegisterFile, RegisterUsage};
     use backend::lang_c::{c_simple_ast, c_simple_ast_builder};
-    use backend::lang_c::c_simple_ast_builder::{CASTDataMap, CASTDataMapVerifier};
+    use backend::lang_c::c_simple_ast_builder::{CASTBuilder, CASTDataMap, CASTDataMapVerifier};
 
-    #[test]
-    fn c_ast_data_map_test() {
+    fn load() -> RadecoFunction {
         let ssa = {
             // XXX Enough to load only regfile
             // TODO Set appropriate file name
@@ -764,8 +773,27 @@ mod test {
         };
         let mut rfn = RadecoFunction::default();
         *rfn.ssa_mut() = ssa;
+        rfn
+    }
+
+    #[test]
+    fn c_ast_data_map_test() {
+        let mut rfn = load();
         let mut datamap = CASTDataMap::new(&rfn);
         let mut cast = c_simple_ast::SimpleCAST::new(rfn.name.as_ref());
         CASTDataMapVerifier::verify_datamap(&mut datamap, &mut cast, &HashMap::new());
+    }
+
+    #[test]
+    fn c_ast_builder_test() {
+        let mut rfn = load();
+        let dummy_map = HashMap::new();
+        let mut builder = CASTBuilder::new(&rfn, &dummy_map);
+        let data_graph = CASTDataMap::recover_data(&rfn, &mut builder.ast, &dummy_map);
+        builder.datamap = data_graph;
+        builder.declare_vars();
+        // Recover control flow graph
+        builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
+        builder.insert_jumps();
     }
 }
