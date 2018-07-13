@@ -545,6 +545,25 @@ struct CASTBuilderVerifier {
 impl CASTBuilderVerifier {
     const delim: &'static str = "; ";
 
+    fn verify_is_action() -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn verify_recover_action() -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn verify_args_inorder() -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn verify_assign() -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn verify_call_action() -> Result<(), String> {
+        unimplemented!()
+    }
 }
 
 struct CASTDataMapVerifier {
