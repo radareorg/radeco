@@ -301,6 +301,13 @@ impl<'cd, T> Condition<'cd, T> {
             &Expr(op, ref opn_v) => op.dual() == for_op && opn_v.is_empty(),
         }
     }
+
+    pub fn complexity(self) -> usize {
+        match self.0 {
+            &Var(_, _) => 1,
+            &Expr(_, ref opn_v) => opn_v.iter().map(|opn| opn.complexity()).sum(),
+        }
+    }
 }
 
 struct ExprBuilder<'cd, T: 'cd> {
