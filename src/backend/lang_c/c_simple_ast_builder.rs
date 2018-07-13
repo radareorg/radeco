@@ -725,6 +725,9 @@ impl CASTDataMapVerifier {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+    use std::io::prelude::*;
+    use std::fs::File;
     use std::collections::HashMap;
     use frontend::radeco_containers::{RadecoModule, RadecoFunction, ProjectLoader, RadecoProject};
     use analysis;
@@ -733,76 +736,29 @@ mod test {
     use analysis::sccp;
     use middle::dce;
     use middle::ssa::verifier;
+    use middle::ir_reader::parse_il;
     use middle::regfile::{SubRegisterFile, RegisterUsage};
     use backend::lang_c::{c_simple_ast, c_simple_ast_builder};
+    use backend::lang_c::c_simple_ast_builder::{CASTDataMap, CASTDataMapVerifier};
 
-    fn analyze_mod(rmod: &mut RadecoModule, regfile: &SubRegisterFile) {
-        {
-            let bp_name = regfile.get_name_by_alias(&"BP".to_string());
-            let bp_name = bp_name.map(|s| s.to_owned());
-            let sp_name = regfile.get_name_by_alias(&"SP".to_string());
-            let sp_name = sp_name.map(|s| s.to_owned());
-            let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
-            callfixer.rounded_analysis();
-        }
-        analysis::functions::fix_ssa_opcalls::go(rmod);
-        analysis::functions::infer_regusage::run(rmod, &*regfile);
-    }
-
-    fn analyze_func(rfn: &mut RadecoFunction) {
-            {
-                dce::collect(rfn.ssa_mut());
-            }
-            let mut ssa = {
-                // Constant Propagation (sccp)
-                println!("  [*] Propagating Constants");
-                let mut analyzer = sccp::Analyzer::new(rfn.ssa_mut());
-                analyzer.analyze();
-                analyzer.emit_ssa()
-            };
-            {
-                dce::collect(&mut ssa);
-            }
-            *rfn.ssa_mut() = ssa;
-            {
-                let mut cse = CSE::new(rfn.ssa_mut());
-                cse.run();
-            }
-            match verifier::verify(rfn.ssa()) {
-                Err(e) => {
-                    panic!("  [*] Found Error: {}", e);
-                }
-                Ok(_) => {  }
-            }
-
-    }
-
-    fn load_rfns(proj_name: &str) -> (Vec<RadecoFunction>, HashMap<u64, String>) {
-        let mut rproj = ProjectLoader::new().path(proj_name).load();
-        let regfile = rproj.regfile().clone();
-        for mut xy in rproj.iter_mut() {
-            let rmod = &mut xy.module;
-            let func_name_map = rmod.functions.iter()
-                .map(|(&addr, f)| (addr, f.name.to_string()))
-                .collect();
-
-            analyze_mod(rmod, &regfile);
-
-            let rfns = rmod.functions.clone().into_iter().map(|(_, rfn)| rfn).collect();
-            return (rfns, func_name_map);
-        }
-        (Vec::new(), HashMap::new())
-    }
-
-    fn do_tests() {
-        let (rfns, func_name_map) = load_rfns("./fact");
-        for ref mut rfn in rfns {
-            analyze_func(rfn);
-            {
-                println!("  [*] Generating psuedo code");
-                let ast = c_simple_ast_builder::recover_simple_ast(rfn, &func_name_map);
-                let _ = ast.to_c_ast().print();
-            }
-        }
+    #[test]
+    fn c_ast_data_map_test() {
+        let ssa = {
+            // XXX Enough to load only regfile
+            let mut rproj = ProjectLoader::new().path("./fact").load();
+            // let regfile = Arc::new(SubRegisterFile::default());
+            let regfile = rproj.regfile().clone();
+            // XXX
+            let mut f = File::open("./fact_out/main").expect("file not found");
+            let mut ir_str = String::new();
+            f.read_to_string(&mut ir_str)
+                .expect("something went wrong reading the file");
+            parse_il(&ir_str, regfile.clone())
+        };
+        let mut rfn = RadecoFunction::default();
+        *rfn.ssa_mut() = ssa;
+        let mut datamap = CASTDataMap::new(&rfn);
+        let mut cast = c_simple_ast::SimpleCAST::new(rfn.name.as_ref());
+        CASTDataMapVerifier::verify_datamap(&mut datamap, &mut cast, &HashMap::new());
     }
 }
