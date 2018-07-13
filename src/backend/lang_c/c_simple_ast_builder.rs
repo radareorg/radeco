@@ -557,7 +557,7 @@ impl CASTDataMapVerifier {
                       datamap: &mut CASTDataMap,
                       strings: &HashMap<u64, String>) -> Result<(), String> {
         datamap.prepare_consts(ast, strings);
-        Self::verify_prepare_consts(ast, datamap)?;
+        Self::verify_prepare_consts(ast, datamap, strings)?;
         datamap.prepare_regs(ast);
         Self::verify_prepare_regs(ast, datamap)?;
         Ok(())
@@ -573,8 +573,9 @@ impl CASTDataMapVerifier {
         Ok(())
     }
 
-    fn verify_prepare_consts(ast: &SimpleCAST, datamap: &CASTDataMap) -> Result<(), String> {
+    fn verify_prepare_consts(ast: &SimpleCAST, datamap: &CASTDataMap, strings: &HashMap<u64, String>) -> Result<(), String> {
         let mut errors = Vec::new();
+        // All nodes of datamap.const_nodes should be constant node of SSAStorage
         for &const_node in &datamap.const_nodes {
             if !datamap.ssa.is_constant(const_node) {
                 errors.push(format!("Invalid constant node: {:?}",
@@ -582,18 +583,25 @@ impl CASTDataMapVerifier {
             }
         }
 
+        // All values of constant nodes between SSAStorage and SimpleCAST should be same.
         for (&node, &ast_node) in &datamap.var_map {
-            let val = datamap.ssa.constant_value(node);
-            if val.is_none() {
+            let val = if let Some(tmp_val) = datamap.ssa.constant_value(node) {
+                let ret = if let Some(s) = strings.get(&tmp_val) {
+                    format!("\"{}\"", s)
+                } else {
+                    tmp_val.to_string()
+                };
+                Some(ret)
+            } else {
                 let err = format!("Invalid constant node: {:?}", node);
                 errors.push(err);
-            }
+                None
+            };
             let const_opt = ast.constant_of(ast_node);
             if const_opt.is_none() {
                 let err = format!("No ValueNode::Constant({:?}) is found", ast_node);
                 errors.push(err);
             }
-            // TODO replace some values with strings
             if val.is_none() || const_opt.is_none() {
                 continue;
             }
@@ -612,13 +620,11 @@ impl CASTDataMapVerifier {
         }
     }
 
-    //node: NodeIndex of SSAStorage
+    // node: NodeIndex of SSAStorage
     fn verify_prepare_regs_of(ast: &SimpleCAST, datamap: &CASTDataMap,
                               node: NodeIndex, name: String) -> Result<(), String> {
         let mut errors = Vec::new();
-        if let Some(&ast_node) = datamap.var_map.get(&node) {
-            // TODO
-        } else {
+        if  datamap.var_map.get(&node).is_none() {
             let err = format!("Invalid register node: {:?}", node);
             errors.push(err);
         }
@@ -745,10 +751,11 @@ mod test {
     fn c_ast_data_map_test() {
         let ssa = {
             // XXX Enough to load only regfile
+            // TODO Set appropriate file name
             let mut rproj = ProjectLoader::new().path("./fact").load();
             // let regfile = Arc::new(SubRegisterFile::default());
             let regfile = rproj.regfile().clone();
-            // XXX
+            // TODO Set appropriate file name
             let mut f = File::open("./fact_out/main").expect("file not found");
             let mut ir_str = String::new();
             f.read_to_string(&mut ir_str)
