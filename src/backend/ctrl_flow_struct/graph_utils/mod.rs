@@ -239,9 +239,12 @@ where
     ret
 }
 
+/// Contracts the nodes in `nodes` into a single node, maintaining all internal
+/// and external edges. Node and edge weights can be changed by `node_map` and
+/// `edge_map` before they are inserted into the graph given to `contract`.
 pub fn contract_nodes_and_map<N, N2, E, E2, FN, FE, FC>(
     graph: &mut StableDiGraph<N, E>,
-    nodes: IxBitSet<NodeIndex>,
+    nodes: &IxBitSet<NodeIndex>,
     mut node_map: FN,
     mut edge_map: FE,
     contract: FC,
@@ -251,11 +254,14 @@ where
     FE: FnMut(EdgeIndex, E) -> E2,
     FC: FnOnce(StableDiGraph<N2, E2>) -> N,
 {
+    debug_assert!(!nodes.is_empty());
+
     let mut preds = Vec::new();
     let mut succs = Vec::new();
     let mut internal_edges = Vec::new();
 
-    for n in &nodes {
+    // remove and store every edge incident to every node
+    for n in nodes {
         {
             let mut neighbors = graph.neighbors_directed(n, Outgoing).detach();
             while let Some((edge, succ)) = neighbors.next(graph) {
@@ -283,19 +289,22 @@ where
     let mut old_new_map = HashMap::with_capacity(nodes.len());
     let mut subgraph = StableDiGraph::with_capacity(nodes.len(), internal_edges.len());
 
-    for old_node in &nodes {
+    // move nodes
+    for old_node in nodes {
         debug_assert!(graph.neighbors_undirected(old_node).next().is_none());
         let weight = graph.remove_node(old_node).unwrap();
         let new_node = subgraph.add_node(node_map(old_node, weight));
         old_new_map.insert(old_node, new_node);
     }
 
+    // restore internal edges
     for (src, dst, weight) in internal_edges {
         subgraph.add_edge(old_new_map[&src], old_new_map[&dst], weight);
     }
 
     let contracted = graph.add_node(contract(subgraph));
 
+    // restore external edges
     for (pred, weight) in preds {
         graph.add_edge(pred, contracted, weight);
     }
