@@ -307,13 +307,13 @@ where
 }
 
 /// Returns if `node` has no incoming edges.
-pub fn is_source<G: IntoNeighborsDirected>(g: G, node: G::NodeId) -> bool {
-    g.neighbors_directed(node, Incoming).next().is_none()
+pub fn is_source<G: IntoNeighborsDirected>(graph: G, node: G::NodeId) -> bool {
+    graph.neighbors_directed(node, Incoming).next().is_none()
 }
 
 /// Returns if `node` has no outgoing edges.
-pub fn is_sink<G: IntoNeighborsDirected>(g: G, node: G::NodeId) -> bool {
-    g.neighbors_directed(node, Outgoing).next().is_none()
+pub fn is_sink<G: IntoNeighborsDirected>(graph: G, node: G::NodeId) -> bool {
+    graph.neighbors_directed(node, Outgoing).next().is_none()
 }
 
 // ideally this would be <G: IntoEdges> so we can enforce that this is actually
