@@ -337,14 +337,10 @@ fn simplify_ast_node<'cd, A: AstContext>(
             } else if c.is_false() {
                 oe
             } else {
-                if let Some(t) = ot {
-                    Some(Cond(c, Box::new(t), oe.map(Box::new)))
-                } else {
-                    if let Some(e) = oe {
-                        Some(Cond(cctx.mk_not(c), Box::new(e), None))
-                    } else {
-                        None
-                    }
+                match (ot, oe) {
+                    (Some(t), oe) => Some(Cond(c, Box::new(t), oe.map(Box::new))),
+                    (None, Some(e)) => Some(Cond(cctx.mk_not(c), Box::new(e), None)),
+                    (None, None) => None,
                 }
             }
         }

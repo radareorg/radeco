@@ -1,3 +1,6 @@
+// B: basic block
+// C: condition
+// V: variable
 #[derive(Debug, Eq, PartialEq)]
 pub enum AstNode<B, C, V> {
     BasicBlock(B),
