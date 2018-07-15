@@ -533,6 +533,20 @@ impl SimpleCAST {
             _ => None,
         }
     }
+
+    pub fn is_assign_node(&self, node: NodeIndex) -> bool {
+        match self.ast.node_weight(node) {
+            Some(&SimpleCASTNode::Action(ActionNode::Assignment)) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_call_node(&self, node: NodeIndex) -> bool {
+        match self.ast.node_weight(node) {
+            Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => true,
+            _ => false
+        }
+    }
 }
 
 /// SimpleCAST should meet following conditions.

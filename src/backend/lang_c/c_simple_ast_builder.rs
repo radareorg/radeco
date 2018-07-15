@@ -545,24 +545,73 @@ struct CASTBuilderVerifier {
 impl CASTBuilderVerifier {
     const delim: &'static str = "; ";
 
-    fn verify_is_action() -> Result<(), String> {
-        unimplemented!()
+    fn verify_actions(builder: &mut CASTBuilder) -> Result<(), String> {
+        let ssa = builder.ssa.clone();
+        let mut errors = Vec::new();
+        for node in ssa.inorder_walk() {
+            match ssa.opcode(node) {
+                Some(MOpcode::OpCall) => {
+                    if let Err(err) =
+                        Self::verify_args_inorder_at(builder, node) {
+                        errors.push(err);
+                    }
+                    if let Err(err) =
+                        Self::verify_call_action_at(builder, node) {
+                        errors.push(err);
+                    }
+                },
+                Some(MOpcode::OpStore) => {
+                    // fn verify_assign(builder: &mut CASTBuilder) -> Result<(), String> {
+                    unimplemented!()
+                },
+                _ => {},
+            }
+        }
+        if errors.len() > 0 {
+            Err(errors.join(Self::delim))
+        } else {
+            Ok(())
+        }
     }
 
-    fn verify_recover_action() -> Result<(), String> {
-        unimplemented!()
+    // All argument node exist in SSAStorage
+    fn verify_args_inorder_at(builder: &CASTBuilder, call_node: NodeIndex) -> Result<(), String> {
+        let mut errors = Vec::new();
+        let args = builder.args_inorder(call_node);
+        for arg in args {
+            if let Err(debug) = builder.ssa.node_data(arg) {
+                let err = format!("{:?}", debug);
+                errors.push(err);
+            }
+        }
+        if errors.len() > 0 {
+            Err(errors.join(Self::delim))
+        } else {
+            Ok(())
+        }
     }
 
-    fn verify_args_inorder() -> Result<(), String> {
-        unimplemented!()
+    fn verify_assign(builder: &mut CASTBuilder) -> Result<(), String> {
+        let (dst, src) = unimplemented!();
+        let assign_node = builder.assign(dst, src);
+        let is_err = builder.last_action != assign_node 
+            || builder.ast.is_assign_node(assign_node);
+        if is_err {
+            Err("Failed to append assign action".to_string())
+        } else {
+            Ok(())
+        }
     }
 
-    fn verify_assign() -> Result<(), String> {
-        unimplemented!()
-    }
-
-    fn verify_call_action() -> Result<(), String> {
-        unimplemented!()
+    fn verify_call_action_at(builder: &mut CASTBuilder, call_node: NodeIndex) -> Result<(), String> {
+        let call_node = builder.call_action(call_node);
+        let is_err = builder.last_action != call_node 
+            || builder.ast.is_call_node(call_node);
+        if is_err {
+            Err("Failed to append assign action".to_string())
+        } else {
+            Ok(())
+        }
     }
 }
 
