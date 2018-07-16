@@ -15,13 +15,13 @@ use self::ix_bit_set::{IndexLike, IxBitSet};
 use petgraph::graph::IndexType;
 use petgraph::prelude::*;
 use petgraph::visit::{
-    IntoEdges, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers, NodeCompactIndexable,
-    VisitMap, Visitable, Walker,
+    IntoEdges, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers, VisitMap, Visitable,
+    Walker,
 };
 
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::iter;
-use std::mem;
 
 pub enum DfsEvent<G>
 where
@@ -203,36 +203,30 @@ where
     }
 }
 
-/// Computes the transitive closure of the given directed acyclic graph, given
-/// a reverse topological ordering of the graph.
+/// Computes the transitive closure of the given directed acyclic graph.
 /// Returns, for each node, the set of nodes reachable from that node.
-pub fn dag_transitive_closure<G, I>(graph: G, rev_topo_order: I) -> Vec<IxBitSet<G::NodeId>>
+pub fn dag_transitive_closure<G>(graph: G) -> HashMap<G::NodeId, IxBitSet<G::NodeId>>
 where
-    G: IntoNeighbors + NodeCompactIndexable,
-    G::NodeId: IndexLike,
-    I: IntoIterator<Item = G::NodeId>,
+    G: IntoNeighbors + IntoNodeIdentifiers + Visitable,
+    G::NodeId: IndexLike + Hash + Eq,
 {
     // https://algowiki-project.org/en/Purdom%27s_algorithm#Implementation_scheme_of_the_serial_algorithm
     // Stage 3: transitive closure of directed acyclic graph
 
-    let n = graph.node_bound();
-    let mut ret = Vec::with_capacity(n);
-    for _ in 0..n {
-        ret.push(IxBitSet::with_capacity(n));
-    }
-    debug_assert!(ret.len() == n);
+    let mut ret = HashMap::new();
 
-    for v in rev_topo_order {
-        let v_i = graph.to_index(v);
-        ret[v_i].insert(v);
-        for w in graph.neighbors(v) {
-            let w_i = graph.to_index(w);
-            // v == w would mean graph has self loops, which is not allowed
-            debug_assert!(v != w);
-            // ret[v_i].union_with(&ret[w_i]);
-            let mut ret_v_i = mem::replace(&mut ret[v_i], IxBitSet::new());
-            ret_v_i.union_with(&ret[w_i]);
-            ret[v_i] = ret_v_i;
+    let mut dfspo = DfsPostOrder::empty(graph).iter(graph);
+    for n in graph.node_identifiers() {
+        if !dfspo.inner_ref().discovered.is_visited(&n) {
+            dfspo.inner_mut().move_to(n);
+            for v in &mut dfspo {
+                let mut ret_v = IxBitSet::new();
+                ret_v.insert(v);
+                for w in graph.neighbors(v) {
+                    ret_v.union_with(&ret[&w]);
+                }
+                ret.insert(v, ret_v);
+            }
         }
     }
 

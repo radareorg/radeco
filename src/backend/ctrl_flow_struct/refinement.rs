@@ -236,24 +236,22 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             return;
         }
 
+        let trans_clos = graph_utils::dag_transitive_closure(&self.graph);
+
         let mut opt_cands = None;
         // for each prefix of `order` ...
-        let mut dfs = algo::DfsSpace::new(&self.graph);
         'n: for i in 0..order.len() {
             if self.graph[order[i]].0.is_true() {
                 continue;
             }
             let init = &order[0..=i];
+            // ... iterate backwards and try to add candidates
             let mut cands = NodeSet::new();
             let mut or_cand_conds = cctx.mk_false();
             for j in (0..init.len()).rev() {
-                // ... iterate backwards and try to add candidates
                 let n = init[j];
-                // TODO: pre-compute transitive closure?
-                if cands
-                    .iter()
-                    .all(|c| !algo::has_path_connecting(&self.graph, n, c, Some(&mut dfs)))
-                {
+                let n_reaches = &trans_clos[&n];
+                if cands.iter().all(|c| !n_reaches.contains(c)) {
                     // `n` is unreachable to/from `cands`
                     cands.insert(n);
                     or_cand_conds = cctx.mk_or(or_cand_conds, self.graph[n].0);

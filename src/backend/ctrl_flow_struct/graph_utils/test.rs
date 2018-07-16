@@ -1,7 +1,7 @@
 use super::*;
 use petgraph::algo;
 use petgraph::prelude::{Outgoing, StableDiGraph};
-use petgraph::visit::{DfsPostOrder, IntoEdgeReferences};
+use petgraph::visit::IntoEdgeReferences;
 
 use quickcheck::TestResult;
 use std::collections::HashMap;
@@ -149,69 +149,57 @@ fn qc_dominated_by(mut graph: StableDiGraph<(), ()>, root_i: usize, h_i: usize) 
 }
 
 #[quickcheck]
-fn qc_dag_transitive_closure(mut graph: DiGraph<(), ()>, root_i: usize) -> TestResult {
-    let root = if let Some(root) = mk_rooted_graph(&mut graph, root_i, true) {
-        root
-    } else {
+fn qc_dag_transitive_closure(graph: StableDiGraph<(), ()>) -> TestResult {
+    if algo::is_cyclic_directed(&graph) {
         return TestResult::discard();
-    };
-    let graph = DiGraph::from(graph);
-    let rev_topo_order: Vec<_> = DfsPostOrder::new(&graph, root).iter(&graph).collect();
+    }
 
-    let reachable_vec = dag_transitive_closure(&graph, rev_topo_order);
+    let reachable_map = dag_transitive_closure(&graph);
 
-    if reachable_vec.len() != graph.node_count() {
+    if reachable_map.len() != graph.node_count() {
         return TestResult::failed();
     }
     TestResult::from_bool(graph.node_indices().all(|n| {
-        let tc_reachable = &reachable_vec[n.index()];
         let dfs_reachable: IxBitSet<_> = Dfs::new(&graph, n).iter(&graph).collect();
-        tc_reachable.iter().eq(&dfs_reachable)
+        dfs_reachable == reachable_map[&n]
     }))
 }
 
-macro_rules! gen_mk_rooted_graph {
-    ($fn_name:ident, $graph_type_name:ident) => {
-        fn $fn_name(
-            graph: &mut $graph_type_name<(), ()>,
-            root_i: usize,
-            prune_cycles: bool,
-        ) -> Option<NodeIndex> {
-            let nodes: Vec<_> = graph.node_indices().collect();
-            if nodes.is_empty() {
-                return None;
+fn mk_rooted_stable_graph(
+    graph: &mut StableDiGraph<(), ()>,
+    root_i: usize,
+    prune_cycles: bool,
+) -> Option<NodeIndex> {
+    let nodes: Vec<_> = graph.node_indices().collect();
+    if nodes.is_empty() {
+        return None;
+    }
+    let root = nodes[root_i % nodes.len()];
+    let mut reachable = IxBitSet::new();
+    let mut back_edges = IxBitSet::new();
+    depth_first_search(&*graph, root, |ev| {
+        use super::DfsEvent::*;
+        match ev {
+            Discover(n) => {
+                reachable.insert(n);
             }
-            let root = nodes[root_i % nodes.len()];
-            let mut reachable = IxBitSet::new();
-            let mut back_edges = IxBitSet::new();
-            depth_first_search(&*graph, root, |ev| {
-                use super::DfsEvent::*;
-                match ev {
-                    Discover(n) => {
-                        reachable.insert(n);
-                    }
-                    BackEdge(e) => {
-                        back_edges.insert(e.id());
-                    }
-                    _ => (),
-                }
-            });
-            if graph.node_indices().any(|n| !reachable.contains(n)) {
-                return None;
+            BackEdge(e) => {
+                back_edges.insert(e.id());
             }
-            // graph.retain_nodes(|_, n| reachable.contains(n));
-            if prune_cycles {
-                // discarding cyclic graphs make tests take too long
-                // instead we just remove cycles
-                graph.retain_edges(|_, e| !back_edges.contains(e));
-            }
-            Some(root)
+            _ => (),
         }
-    };
+    });
+    if graph.node_indices().any(|n| !reachable.contains(n)) {
+        return None;
+    }
+    // graph.retain_nodes(|_, n| reachable.contains(n));
+    if prune_cycles {
+        // discarding cyclic graphs make tests take too long
+        // instead we just remove cycles
+        graph.retain_edges(|_, e| !back_edges.contains(e));
+    }
+    Some(root)
 }
-
-gen_mk_rooted_graph!(mk_rooted_graph, DiGraph);
-gen_mk_rooted_graph!(mk_rooted_stable_graph, StableDiGraph);
 
 fn is_topological_ordering<G>(graph: G, topo_order: &[G::NodeId]) -> bool
 where
