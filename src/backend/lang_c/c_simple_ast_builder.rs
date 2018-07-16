@@ -543,7 +543,7 @@ struct CASTBuilderVerifier {
 
 // type Verifier = Fn(NodeIndex, &mut SimpleCAST, &mut CASTDataMap) -> Result<(), String>;
 impl CASTBuilderVerifier {
-    const delim: &'static str = "; ";
+    const DELIM: &'static str = "; ";
 
     fn verify(builder: &mut CASTBuilder) -> Result<(), String> {
         let ssa = builder.ssa.clone();
@@ -569,7 +569,7 @@ impl CASTBuilderVerifier {
             }
         }
         if errors.len() > 0 {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
             Ok(())
         }
@@ -586,7 +586,7 @@ impl CASTBuilderVerifier {
             }
         }
         if errors.len() > 0 {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
             Ok(())
         }
@@ -633,7 +633,7 @@ struct CASTDataMapVerifier {
 
 type Verifier = Fn(NodeIndex, &mut SimpleCAST, &mut CASTDataMap) -> Result<(), String>;
 impl CASTDataMapVerifier {
-    const delim: &'static str = "; ";
+    const DELIM: &'static str = "; ";
 
     fn verify_datamap(datamap: &mut CASTDataMap,
                       ast: &mut SimpleCAST,
@@ -649,17 +649,18 @@ impl CASTDataMapVerifier {
         datamap.prepare_consts(ast, strings);
         Self::verify_prepare_consts(ast, datamap, strings)?;
         datamap.prepare_regs(ast);
-        Self::verify_prepare_regs(ast, datamap)?;
+        Self::verify_prepare_regs(datamap)?;
         Ok(())
     }
 
     fn verify_ops(ast: &mut SimpleCAST, datamap: &mut CASTDataMap) -> Result<(), String> {
         Self::verify_handler_each_node(ast, datamap,
-                                       &Self::verify_handle_uniop, "Handle unary operator");
+                                       &Self::verify_handle_uniop, "Handle unary operator")?;
+
         Self::verify_handler_each_node(ast, datamap,
-                                       &Self::verify_handle_binop, "Handle binary operator");
+                                       &Self::verify_handle_binop, "Handle binary operator")?;
         Self::verify_handler_each_node(ast, datamap,
-                                       &Self::verify_handle_cast, "Handle casting operator");
+                                       &Self::verify_handle_cast, "Handle casting operator")?;
         Ok(())
     }
 
@@ -704,14 +705,14 @@ impl CASTDataMapVerifier {
         }
 
         if errors.len() > 0 {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
-            Ok((()))
+            Ok(())
         }
     }
 
     // node: NodeIndex of SSAStorage
-    fn verify_prepare_regs_of(ast: &SimpleCAST, datamap: &CASTDataMap,
+    fn verify_prepare_regs_of(datamap: &CASTDataMap,
                               node: NodeIndex, name: String) -> Result<(), String> {
         let mut errors = Vec::new();
         if  datamap.var_map.get(&node).is_none() {
@@ -726,13 +727,13 @@ impl CASTDataMapVerifier {
             errors.push(err);
         }
         if errors.len() > 0 {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
             Ok(())
         }
     }
 
-    fn verify_prepare_regs(ast: &SimpleCAST, datamap: &CASTDataMap) -> Result<(), String> {
+    fn verify_prepare_regs(datamap: &CASTDataMap) -> Result<(), String> {
         let mut errors = Vec::new();
         for walk_node in datamap.ssa.inorder_walk() {
             let reg_state = datamap.ssa.registers_in(walk_node);
@@ -742,14 +743,14 @@ impl CASTDataMapVerifier {
             let reg_map = utils::register_state_info(reg_state.unwrap(), datamap.ssa);
             for (idx, (node, vt)) in reg_map.into_iter() {
                 let name = datamap.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-                let res = Self::verify_prepare_regs_of(ast, datamap, node, name);
+                let res = Self::verify_prepare_regs_of(datamap, node, name);
                 if let Err(e) = res {
                     errors.push(e);
                 }
             }
         }
         if errors.len() > 0 {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
             Ok(())
         }
@@ -764,7 +765,7 @@ impl CASTDataMapVerifier {
             }
         }
         if errors.len() > 0 {
-            Err(format!("{} @ {}", errors.join(Self::delim), name.to_string()))
+            Err(format!("{} @ {}", errors.join(Self::DELIM), name.to_string()))
         } else {
             Ok(())
         }
@@ -806,11 +807,15 @@ impl CASTDataMapVerifier {
     fn verify_handle_cast(node: NodeIndex, ast: &mut SimpleCAST, datamap: &mut CASTDataMap) -> Result<(), String> {
         // Ensure `handle_cast` insert node as key into var_map.
         let expr = c_simple::Expr::Cast(8);
-        let operand_node = datamap.var_map.iter().next().unwrap().0.clone();
+        let operand_node = datamap.var_map
+            .iter()
+            .map(|(n, _)| *n)
+            .filter(|n| *n != node)
+            .next().unwrap().clone();
         // Erase the key so as to ensure whether the key will be correctly inserted
         // by handle_uniop
         datamap.var_map.remove(&node);
-        datamap.handle_uniop(node, operand_node, expr, ast);
+        datamap.handle_cast(node, operand_node, expr, ast);
         if datamap.var_map.get(&node).is_none() {
             Err(format!("Failed to handle cast operator: {:?}", node))
         } else {

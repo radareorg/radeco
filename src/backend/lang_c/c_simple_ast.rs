@@ -559,7 +559,7 @@ pub struct SimpleCASTVerifier {
 
 type Verifier = Fn(NodeIndex, &SimpleCAST) -> Result<(), String>;
 impl SimpleCASTVerifier {
-    const delim: &'static str = "; ";
+    const DELIM: &'static str = "; ";
     pub fn verify(cast: &SimpleCAST) -> Result<(), String> {
         Self::verify_each_node(cast, &Self::verify_normal_action, "Normal action")?;
         Self::verify_each_node(cast, &Self::verify_if, "If")?;
@@ -569,17 +569,15 @@ impl SimpleCASTVerifier {
     }
 
     fn verify_each_node(cast: &SimpleCAST, verifier: &Verifier, name: &str) -> Result<(), String> {
-        let mut is_valid = true;
         let mut errors = Vec::new();
         let nodes = cast.ast.node_indices();
         for node in nodes {
             if let Err(msg) = verifier(node, cast) {
                 errors.push(msg);
-                is_valid = false;
             }
         }
         if errors.len() > 0 {
-            Err(format!("{} @ {}", errors.join(Self::delim), name.to_string()))
+            Err(format!("{} @ {}", errors.join(Self::DELIM), name.to_string()))
         } else {
             Ok(())
         }
@@ -622,7 +620,7 @@ impl SimpleCASTVerifier {
             errors.push("No branch is found.");
         }
         if cond.is_none() || branches.is_none() {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
             Ok(())
         }
@@ -645,7 +643,7 @@ impl SimpleCASTVerifier {
             }
         }
         if errors.len() > 0 {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
             Ok(())
         }
@@ -677,7 +675,7 @@ impl SimpleCASTVerifier {
             }
         }
         if errors.len() > 0 {
-            Err(errors.join(Self::delim))
+            Err(errors.join(Self::DELIM))
         } else {
             Ok(())
         }
