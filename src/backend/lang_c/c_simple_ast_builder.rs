@@ -561,8 +561,9 @@ impl CASTBuilderVerifier {
                     }
                 },
                 Some(MOpcode::OpStore) => {
-                    // fn verify_assign(builder: &mut CASTBuilder) -> Result<(), String> {
-                    unimplemented!()
+                    if let Err(err) = Self::verify_assign_at(builder, node) {
+                        errors.push(err);
+                    }
                 },
                 _ => {},
             }
@@ -592,11 +593,21 @@ impl CASTBuilderVerifier {
     }
 
     // Verify `assign` made `SimpleCAST::Action(ActionNode::Assignment)` node.
-    fn verify_assign(builder: &mut CASTBuilder) -> Result<(), String> {
-        let (dst, src) = unimplemented!();
-        let assign_node = builder.assign(dst, src);
+    fn verify_assign_at(builder: &mut CASTBuilder, node: NodeIndex) -> Result<(), String> {
+        let ops = builder.ssa.operands_of(node);
+        let dst = builder.datamap.var_map.get(&ops[1]).map(|&x| {
+            builder.ast.derefed_node(x).unwrap_or(x)
+        });
+        let src = builder.datamap.var_map.get(&ops[2]).cloned();
+        if src.is_none() {
+            return Err("Failed to get src operand node from SimpleCAST".to_string());
+        }
+        if dst.is_none() {
+            return Err("Failed to get dst operand node from SimpleCAST".to_string());
+        }
+        let assign_node = builder.assign(dst.unwrap(), src.unwrap());
         let is_err = builder.last_action != assign_node 
-            || builder.ast.is_assign_node(assign_node);
+            || !builder.ast.is_assign_node(assign_node);
         if is_err {
             Err("Failed to append assign action".to_string())
         } else {
@@ -608,7 +619,7 @@ impl CASTBuilderVerifier {
     fn verify_call_action_at(builder: &mut CASTBuilder, call_node: NodeIndex) -> Result<(), String> {
         let call_node = builder.call_action(call_node);
         let is_err = builder.last_action != call_node 
-            || builder.ast.is_call_node(call_node);
+            || !builder.ast.is_call_node(call_node);
         if is_err {
             Err("`CASTBuilder::call_action` is failed.".to_string())
         } else {
@@ -810,61 +821,68 @@ impl CASTDataMapVerifier {
 
 #[cfg(test)]
 mod test {
+    use serde_json;
+    use r2api::structs::LRegInfo;
     use std::sync::Arc;
     use std::io::prelude::*;
     use std::fs::File;
-    use std::collections::{HashSet, HashMap};
-    use frontend::radeco_containers::{RadecoModule, RadecoFunction, ProjectLoader, RadecoProject};
-    use analysis;
-    use analysis::interproc::fixcall::CallFixer;
-    use analysis::cse::cse::CSE;
-    use analysis::sccp;
-    use middle::dce;
+    use std::path::PathBuf;
+    use std::collections::HashMap;
+    use frontend::radeco_containers::RadecoFunction;
+    use frontend::radeco_source::SourceErr;
     use middle::ssa::verifier;
-    use middle::ssa::cfg_traits::CFG;
-    use middle::ir_reader::parse_il;
-    use middle::regfile::{SubRegisterFile, RegisterUsage};
+    use middle::regfile::SubRegisterFile;
+    use middle::ir_reader;
     use backend::lang_c::{c_simple_ast, c_simple_ast_builder};
     use backend::lang_c::c_simple_ast_builder::{CASTBuilder, CASTDataMap, CASTBuilderVerifier, CASTDataMapVerifier};
 
-    fn load() -> RadecoFunction {
+    fn register_profile() -> Result<LRegInfo, SourceErr> {
+        let regfile_path = "./test_files/x86_register_profile.json";
+        let path = PathBuf::from(regfile_path);
+        let mut f = File::open(path).expect("Failed to open file");
+        let mut json_str = String::new();
+        let _ = f.read_to_string(&mut json_str).expect("Failed to read file");
+        Ok(serde_json::from_str(&json_str)?)
+    }
+
+    fn load(name: &str) -> RadecoFunction {
         let ssa = {
-            // XXX Enough to load only regfile
-            // TODO Set appropriate file name
-            let mut rproj = ProjectLoader::new().path("./fact").load();
-            // let regfile = Arc::new(SubRegisterFile::default());
-            let regfile = rproj.regfile().clone();
-            // TODO Set appropriate file name
-            let mut f = File::open("./fact_out/main").expect("file not found");
+            let regfile = Arc::new(SubRegisterFile::new(&register_profile()
+                    .expect("Unable to load register profile")));
+            let mut f = File::open(name).expect("file not found");
             let mut ir_str = String::new();
             f.read_to_string(&mut ir_str)
                 .expect("something went wrong reading the file");
-            parse_il(&ir_str, regfile.clone())
+            ir_reader::parse_il(&ir_str, regfile)
         };
         let mut rfn = RadecoFunction::default();
         *rfn.ssa_mut() = ssa;
         rfn
     }
 
+    const files: [&'static str; 2] = ["./test_files/bin1_main_ssa", "./test_files/loopy_main_ssa"];
+
     #[test]
     fn c_ast_data_map_test() {
-        let mut rfn = load();
-        let mut datamap = CASTDataMap::new(&rfn);
-        let mut cast = c_simple_ast::SimpleCAST::new(rfn.name.as_ref());
-        CASTDataMapVerifier::verify_datamap(&mut datamap, &mut cast, &HashMap::new());
+        for file in files.iter() {
+            let mut rfn = load("./test_files/bin1_main_ssa");
+            let mut datamap = CASTDataMap::new(&rfn);
+            let mut cast = c_simple_ast::SimpleCAST::new(rfn.name.as_ref());
+            CASTDataMapVerifier::verify_datamap(&mut datamap, &mut cast, &HashMap::new())
+                .expect(&format!("CASTBDataMap verification failed {}", file));
+        }
     }
 
     #[test]
     fn c_ast_builder_test() {
-        let mut rfn = load();
-        let dummy_map = HashMap::new();
-        let mut builder = CASTBuilder::new(&rfn, &dummy_map);
-        let data_graph = CASTDataMap::recover_data(&rfn, &mut builder.ast, &dummy_map);
-        builder.datamap = data_graph;
-        builder.declare_vars();
-        // Recover control flow graph
-        builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
-        builder.insert_jumps();
-        CASTBuilderVerifier::verify(&mut builder).expect("CASTBuilder verification failed");
+        for file in files.iter() {
+            let mut rfn = load("./test_files/bin1_main_ssa");
+            let dummy_map = HashMap::new();
+            let mut builder = CASTBuilder::new(&rfn, &dummy_map);
+            let data_graph = CASTDataMap::recover_data(&rfn, &mut builder.ast, &dummy_map);
+            builder.datamap = data_graph;
+            CASTBuilderVerifier::verify(&mut builder)
+                .expect(&format!("CASTBuilder verification failed {}", file));
+        }
     }
 }
