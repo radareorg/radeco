@@ -775,7 +775,11 @@ impl CASTDataMapVerifier {
                            datamap: &mut CASTDataMap) -> Result<(), String> {
         // Ensure `handle_uniop` insert node as key into var_map.
         let expr = c_simple::Expr::Not;
-        let operand_node = datamap.var_map.iter().next().unwrap().0.clone();
+        let operand_node = datamap.var_map
+            .iter()
+            .map(|(n, _)| *n)
+            .filter(|n| *n != node)
+            .next().unwrap();
         // Erase the key so as to ensure whether the key will be correctly inserted
         // by handle_uniop
         datamap.var_map.remove(&node);
@@ -792,7 +796,10 @@ impl CASTDataMapVerifier {
         // Ensure `handle_binop` insert node as key into var_map.
         let expr = c_simple::Expr::Add;
         let operand_nodes = datamap.var_map
-            .iter().take(2).map(|x| x.0.clone()).collect::<Vec<_>>();
+            .iter()
+            .map(|(n, _)| *n)
+            .filter(|n| *n != node)
+            .take(2).collect();
         // Erase the key so as to ensure whether the key will be correctly inserted
         // by handle_binop
         datamap.var_map.remove(&node);
