@@ -545,7 +545,7 @@ struct CASTBuilderVerifier {
 impl CASTBuilderVerifier {
     const delim: &'static str = "; ";
 
-    fn verify_actions(builder: &mut CASTBuilder) -> Result<(), String> {
+    fn verify(builder: &mut CASTBuilder) -> Result<(), String> {
         let ssa = builder.ssa.clone();
         let mut errors = Vec::new();
         for node in ssa.inorder_walk() {
@@ -591,6 +591,7 @@ impl CASTBuilderVerifier {
         }
     }
 
+    // Verify `assign` made `SimpleCAST::Action(ActionNode::Assignment)` node.
     fn verify_assign(builder: &mut CASTBuilder) -> Result<(), String> {
         let (dst, src) = unimplemented!();
         let assign_node = builder.assign(dst, src);
@@ -603,12 +604,13 @@ impl CASTBuilderVerifier {
         }
     }
 
+    // Verify `call_action` made `SimpleCAST::Action(ActionNode::Call(_))` node.
     fn verify_call_action_at(builder: &mut CASTBuilder, call_node: NodeIndex) -> Result<(), String> {
         let call_node = builder.call_action(call_node);
         let is_err = builder.last_action != call_node 
             || builder.ast.is_call_node(call_node);
         if is_err {
-            Err("Failed to append assign action".to_string())
+            Err("`CASTBuilder::call_action` is failed.".to_string())
         } else {
             Ok(())
         }
@@ -823,7 +825,7 @@ mod test {
     use middle::ir_reader::parse_il;
     use middle::regfile::{SubRegisterFile, RegisterUsage};
     use backend::lang_c::{c_simple_ast, c_simple_ast_builder};
-    use backend::lang_c::c_simple_ast_builder::{CASTBuilder, CASTDataMap, CASTDataMapVerifier};
+    use backend::lang_c::c_simple_ast_builder::{CASTBuilder, CASTDataMap, CASTBuilderVerifier, CASTDataMapVerifier};
 
     fn load() -> RadecoFunction {
         let ssa = {
@@ -863,5 +865,6 @@ mod test {
         // Recover control flow graph
         builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
         builder.insert_jumps();
+        CASTBuilderVerifier::verify(&mut builder).expect("CASTBuilder verification failed");
     }
 }
