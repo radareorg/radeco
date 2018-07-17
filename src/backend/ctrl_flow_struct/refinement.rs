@@ -2,6 +2,7 @@
 //!
 //! Everything in this module does not impact correctness, only readability.
 
+use super::ast::LoopType;
 use super::ast_context::AstContext;
 use super::graph_utils;
 use super::{AstNode, AstNodeC, CondContext, Condition, NodeSet};
@@ -336,7 +337,16 @@ fn simplify_ast_node<'cd, A: AstContext>(
                 oe
             } else {
                 match (ot, oe) {
-                    (Some(t), oe) => Some(Cond(c, Box::new(t), oe.map(Box::new))),
+                    (Some(t), Some(e)) => {
+                        if always_breaks(&t) {
+                            Some(Seq(vec![Cond(c, Box::new(t), None), e]))
+                        } else if always_breaks(&e) {
+                            Some(Seq(vec![Cond(cctx.mk_not(c), Box::new(e), None), t]))
+                        } else {
+                            Some(Cond(c, Box::new(t), Some(Box::new(e))))
+                        }
+                    }
+                    (Some(t), None) => Some(Cond(c, Box::new(t), None)),
                     (None, Some(e)) => Some(Cond(cctx.mk_not(c), Box::new(e), None)),
                     (None, None) => None,
                 }
@@ -360,4 +370,229 @@ fn simplify_ast_node<'cd, A: AstContext>(
             }
         }
     }
+}
+
+struct LoopRefiner<'cd, A: AstContext> {
+    cctx: CondContext<'cd, A>,
+}
+impl<'cd, A: AstContext> Copy for LoopRefiner<'cd, A> {}
+impl<'cd, A: AstContext> Clone for LoopRefiner<'cd, A> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+pub(super) fn refine_loop<'cd, A: AstContext>(
+    cctx: CondContext<'cd, A>,
+    body: AstNode<'cd, A>,
+) -> AstNode<'cd, A> {
+    LoopRefiner::<A> { cctx }.refine_loop(body)
+}
+
+macro_rules! gen_rule {
+    ($name:ident, |$self:ident, $body:ident| $rule_body:expr) => (
+        #[allow(non_snake_case)]
+        fn $name($self, $body: AstNode<'cd, A>) -> Result<AstNode<'cd, A>, AstNode<'cd, A>> {
+            use self::AstNodeC::*;
+            #[allow(unused_imports)]
+            use self::LoopType::*;
+            $rule_body
+        }
+    );
+}
+
+impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
+    fn refine_loop(self, mut body: AstNode<'cd, A>) -> AstNode<'cd, A> {
+        macro_rules! run_rules {
+            ($($name:ident),+) => ($(
+                match self.$name(body) {
+                    Ok(ast) => return ast,
+                    Err(e) => body = e,
+                }
+            )+);
+        }
+        run_rules!(
+            rule_While,
+            rule_DoWhile,
+            rule_NestedDoWhile,
+            rule_LoopToSeq,
+            rule_CondToSeq,
+            rule_CondToSeqNeg
+        );
+        AstNodeC::Loop(LoopType::Endless, Box::new(body))
+    }
+
+    gen_rule!{rule_While, |self, body| {
+        if let Seq(mut seq) = body {
+            if let Some(&Cond(c, box Break, None)) = seq.first() {
+                seq.remove(0);
+                Ok(Loop(PreChecked(self.cctx.mk_not(c)), Box::new(Seq(seq))))
+            } else {
+                Err(Seq(seq))
+            }
+        } else {
+            Err(body)
+        }
+    }}
+
+    gen_rule!{rule_DoWhile, |self, body| {
+        if let Seq(mut seq) = body {
+            if let Some(&Cond(c, box Break, None)) = seq.last() {
+                seq.pop();
+                Ok(Loop(PostChecked(self.cctx.mk_not(c)), Box::new(Seq(seq))))
+            } else {
+                Err(Seq(seq))
+            }
+        } else {
+            Err(body)
+        }
+    }}
+
+    gen_rule!{rule_NestedDoWhile, |self, body| {
+        if let Seq(mut seq) = body {
+            if let Some(last) = seq.pop() {
+                if let Cond(c, t, None) = last {
+                    if seq.iter().all(|a| !contains_break(a)) {
+                        let new_body = Seq(vec![
+                            Loop(PostChecked(self.cctx.mk_not(c)), Box::new(Seq(seq))),
+                            *t
+                        ]);
+                        Ok(self.refine_loop(new_body))
+                    } else {
+                        seq.push(Cond(c, t, None));
+                        Err(Seq(seq))
+                    }
+                } else {
+                    seq.push(last);
+                    Err(Seq(seq))
+                }
+            } else {
+                Ok(empty_loop())
+            }
+        } else {
+            Err(body)
+        }
+    }}
+
+    gen_rule!{rule_LoopToSeq, |self, body| {
+        if let Seq(mut seq) = body {
+            if let Some(last) = seq.pop() {
+                if always_breaks(&last) {
+                    if let Some(new_last) = remove_breaks(last) {
+                        seq.push(new_last);
+                    }
+                    Ok(Seq(seq))
+                } else {
+                    seq.push(last);
+                    Err(Seq(seq))
+                }
+            } else {
+                Ok(empty_loop())
+            }
+        } else {
+            Err(body)
+        }
+    }}
+
+    gen_rule!{rule_CondToSeq, |self, body| {
+        if let Cond(c, t, Some(e)) = body {
+            if !contains_break(&*t) && contains_break(&*e) {
+                let inner_loop = Loop(PreChecked(c), t);
+                let new_body_seq = if let Seq(mut else_seq) = *e {
+                    else_seq.insert(0, inner_loop);
+                    else_seq
+                } else {
+                    vec![inner_loop, *e]
+                };
+                Ok(self.refine_loop(Seq(new_body_seq)))
+            } else {
+                Err(Cond(c, t, Some(e)))
+            }
+        } else {
+            Err(body)
+        }
+    }}
+
+    gen_rule!{rule_CondToSeqNeg, |self, body| {
+        if let Cond(c, t, Some(e)) = body {
+            if contains_break(&*t) && !contains_break(&*e) {
+                let inner_loop = Loop(PreChecked(self.cctx.mk_not(c)), t);
+                let new_body_seq = if let Seq(mut else_seq) = *e {
+                    else_seq.insert(0, inner_loop);
+                    else_seq
+                } else {
+                    vec![inner_loop, *e]
+                };
+                Ok(self.refine_loop(Seq(new_body_seq)))
+            } else {
+                Err(Cond(c, t, Some(e)))
+            }
+        } else {
+            Err(body)
+        }
+    }}
+}
+
+fn contains_break<B, C, V>(ast: &AstNodeC<B, C, V>) -> bool {
+    use self::AstNodeC::*;
+    match ast {
+        BasicBlock(_) => false,
+        Seq(seq) => !seq.iter().all(|a| !contains_break(a)),
+        Cond(_, t, oe) => contains_break(t) || oe.as_ref().map_or(false, |e| contains_break(e)),
+        Loop(_, _) => false, // `break` only breaks the nearest loop
+        Break => true,
+        Switch(_, cases, default) => {
+            contains_break(default) || !cases.iter().all(|(_, a)| !contains_break(a))
+        }
+    }
+}
+
+fn always_breaks<B, C, V>(ast: &AstNodeC<B, C, V>) -> bool {
+    use self::AstNodeC::*;
+    match ast {
+        BasicBlock(_) => false,
+        Seq(seq) => seq.last().map_or(false, |a| always_breaks(a)),
+        Cond(_, t, oe) => always_breaks(t) && oe.as_ref().map_or(false, |e| always_breaks(e)),
+        Loop(_, _) => false, // `break` only breaks the nearest loop
+        Break => true,
+        Switch(_, cases, default) => {
+            always_breaks(default) && cases.iter().all(|(_, a)| always_breaks(a))
+        }
+    }
+}
+
+fn remove_breaks<B, C, V>(ast: AstNodeC<B, C, V>) -> Option<AstNodeC<B, C, V>> {
+    use self::AstNodeC::*;
+    match ast {
+        BasicBlock(b) => Some(BasicBlock(b)),
+        Seq(mut seq) => {
+            if let Some(last) = seq.pop() {
+                if let Some(new_last) = remove_breaks(last) {
+                    seq.push(new_last);
+                }
+                Some(Seq(seq))
+            } else {
+                None
+            }
+        }
+        Cond(c, t, oe) => Some(Cond(
+            c,
+            Box::new(remove_breaks(*t).unwrap_or_default()),
+            oe.and_then(|e| remove_breaks(*e).map(Box::new)),
+        )),
+        Loop(t, b) => Some(Loop(t, b)),
+        Break => None,
+        Switch(v, cases, default) => Some(Switch(
+            v,
+            cases
+                .into_iter()
+                .map(|(vs, a)| (vs, remove_breaks(a).unwrap_or_default()))
+                .collect(),
+            Box::new(remove_breaks(*default).unwrap_or_default()),
+        )),
+    }
+}
+
+fn empty_loop<B, C, V>() -> AstNodeC<B, C, V> {
+    AstNodeC::Loop(LoopType::Endless, Box::new(AstNodeC::Seq(Vec::new())))
 }

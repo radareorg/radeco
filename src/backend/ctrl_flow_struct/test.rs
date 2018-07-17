@@ -110,6 +110,71 @@ fn nmg_example() {
 }
 
 #[test]
+fn ast_nmg_r1() {
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let c1 = graph.add_node(cnode());
+    let c2 = graph.add_node(cnode());
+    let c3 = graph.add_node(cnode());
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+    let exit = graph.add_node(empty_node());
+
+    let c_c1 = cond_s(&cctx, "c1");
+    let c_c2 = cond_s(&cctx, "c2");
+    let c_c3 = cond_s(&cctx, "c3");
+    let nc_c1 = cctx.mk_not(c_c1);
+    let nc_c2 = cctx.mk_not(c_c2);
+    let nc_c3 = cctx.mk_not(c_c3);
+
+    graph.add_edge(entry, c1, None);
+    graph.add_edge(c1, n1, Some(c_c1));
+    graph.add_edge(n1, c1, None);
+    graph.add_edge(c1, c2, Some(nc_c1));
+    graph.add_edge(c2, n2, Some(c_c2));
+    graph.add_edge(n2, exit, None);
+    graph.add_edge(c2, n3, Some(nc_c2));
+    graph.add_edge(n3, c3, None);
+    graph.add_edge(c3, c1, Some(c_c3));
+    graph.add_edge(c3, exit, Some(nc_c3));
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        exit,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Loop(
+            LoopType::PostChecked(c_c3),
+            Box::new(Seq(vec![
+                Loop(
+                    LoopType::PreChecked(c_c1),
+                    Box::new(BasicBlock("n1".to_owned())),
+                ),
+                Cond(
+                    c_c2,
+                    Box::new(Seq(vec![BasicBlock("n2".to_owned()), Break])),
+                    None,
+                ),
+                BasicBlock("n3".to_owned()),
+            ]))
+        ),
+        ast
+    );
+}
+
+#[test]
 fn ast_nmg_r2() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
@@ -321,7 +386,102 @@ fn ast_ifelse_cascade() {
 }
 
 #[test]
+fn ast_while() {
+    /*
+     * while (c) {
+     *   puts("n");
+     * }
+     */
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let c = graph.add_node(cnode());
+    let n = graph.add_node(node("n"));
+    let exit = graph.add_node(empty_node());
+
+    let c_c = cond_s(&cctx, "c");
+    let nc_c = cctx.mk_not(c_c);
+
+    graph.add_edge(entry, c, None);
+    graph.add_edge(c, n, Some(c_c));
+    graph.add_edge(c, exit, Some(nc_c));
+    graph.add_edge(n, c, None);
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        exit,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Loop(
+            LoopType::PreChecked(c_c),
+            Box::new(BasicBlock("n".to_owned()))
+        ),
+        ast
+    );
+}
+
+#[test]
+fn ast_do_while() {
+    /*
+     * do {
+     *   puts("n");
+     * } while (c);
+     */
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let c = graph.add_node(cnode());
+    let n = graph.add_node(node("n"));
+    let exit = graph.add_node(empty_node());
+
+    let c_c = cond_s(&cctx, "c");
+    let nc_c = cctx.mk_not(c_c);
+
+    graph.add_edge(entry, n, None);
+    graph.add_edge(n, c, None);
+    graph.add_edge(c, n, Some(c_c));
+    graph.add_edge(c, exit, Some(nc_c));
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        exit,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Loop(
+            LoopType::PostChecked(c_c),
+            Box::new(BasicBlock("n".to_owned()))
+        ),
+        ast
+    );
+}
+
+#[test]
 fn ast_infinite_loop() {
+    /*
+     * while (1) {
+     *   puts("1");
+     * }
+     */
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
