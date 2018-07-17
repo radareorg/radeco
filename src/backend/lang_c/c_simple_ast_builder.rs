@@ -6,17 +6,15 @@
 
 use super::c_ast;
 use super::c_ast::Ty;
-use super::c_simple_ast::{ValueNode, SimpleCAST, SimpleCASTEdge, ValueEdge, ActionEdge, ActionNode};
+use super::c_simple_ast::SimpleCAST;
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MOpcode, MAddress};
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
+use middle::ssa::ssa_traits::{SSA, SSAWalk};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::utils;
-use petgraph::{EdgeDirection, Direction, Directed};
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
-use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
+use petgraph::graph::NodeIndex;
 
 fn is_debug() -> bool {
     cfg!(feature = "trace_log")
@@ -295,7 +293,7 @@ impl<'a> CASTBuilder<'a> {
             }
             if last.is_some() && self.ssa.is_block(cur_node) {
                 if let Some(succ) = self.ssa.unconditional_block(cur_node) {
-                    if let Some(selector) = self.ssa.selector_in(cur_node) {
+                    if let Some(_) = self.ssa.selector_in(cur_node) {
                         // TODO
                         radeco_trace!("CASTBuilder::insert_jumps INDIRET JMP");
                     } else {
@@ -545,7 +543,7 @@ impl<'a> CASTDataMap<'a> {
         }
         let ret_reg_name = ret_reg_name_opt.unwrap();
         let reg_map = utils::call_rets(call_node, self.ssa);
-        for (idx, (node, vt)) in reg_map.into_iter() {
+        for (idx, (node, _)) in reg_map.into_iter() {
             // TODO Add data dependencies for registers
             let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
             if name == ret_reg_name {
@@ -558,7 +556,7 @@ impl<'a> CASTDataMap<'a> {
 
     fn prepare_consts(&mut self, ast: &mut SimpleCAST, strings: &HashMap<u64, String>) {
         for (&val, &node) in self.ssa.constants.iter() {
-            if let Ok(n) = self.ssa.node_data(node) {
+            if self.ssa.node_data(node).is_ok() {
                 // TODO add type
                 let ast_node = if let Some(s) = strings.get(&val) {
                     ast.constant(&format!("\"{}\"", s), None)
@@ -580,7 +578,7 @@ impl<'a> CASTDataMap<'a> {
                 continue;
             }
             let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
-            for (idx, (node, vt)) in reg_map.into_iter() {
+            for (idx, (node, _)) in reg_map.into_iter() {
                 let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
                 // XXX SimpleCAST::constant may not be proper method for registering regs.
                 let ast_node = ast.constant(&name, None);
@@ -815,7 +813,7 @@ impl CASTDataMapVerifier {
                 continue;
             }
             let reg_map = utils::register_state_info(reg_state.unwrap(), datamap.ssa);
-            for (idx, (node, vt)) in reg_map.into_iter() {
+            for (idx, (node, _)) in reg_map.into_iter() {
                 let name = datamap
                     .ssa
                     .regfile

@@ -2,18 +2,12 @@
 //!
 //! `SimpleCAST` is CFG-like Graph so that we can do control flow structuring easily.
 
-use std::{default, iter, fmt};
 use std::collections::{HashMap, HashSet};
-
 use super::c_ast;
-use super::c_ast::{Ty, CAST, CASTNode};
-use middle::ssa::ssastorage::{NodeData, SSAStorage};
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
-use frontend::radeco_containers::RadecoFunction;
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges, EdgeReference};
+use super::c_ast::{Ty, CAST};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex, EdgeReference};
 use petgraph::visit::EdgeRef;
-use petgraph::{EdgeDirection, Direction, Directed};
+use petgraph::Direction;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SimpleCASTNode {
