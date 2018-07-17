@@ -117,7 +117,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
 
                 let loop_body = self.structure_acyclic_sese_region(loop_header, loop_continue);
                 self.graph.remove_node(loop_continue);
-                let repl_ast = AstNodeC::Loop(ast::LoopType::Endless, Box::new(loop_body));
+                let repl_ast = refinement::refine_loop::<A>(self.cctx, loop_body);
                 self.graph[loop_header] = CfgNode::Code(repl_ast);
                 if let Some(loop_succ) = loop_succ_opt {
                     self.graph.add_edge(loop_header, loop_succ, None);
