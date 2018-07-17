@@ -5,7 +5,6 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod c_simple;
+pub mod c_ast;
 pub mod c_simple_ast;
 pub mod c_simple_ast_builder;
-pub mod c_ast_constructor;

@@ -5,8 +5,8 @@
 use std::{default, iter, fmt};
 use std::collections::{HashMap, HashSet};
 
-use super::c_simple;
-use super::c_simple::{Ty, CAST, CASTNode};
+use super::c_ast;
+use super::c_ast::{Ty, CAST, CASTNode};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAExtra, SSAMod, SSAWalk, ValueInfo};
@@ -41,7 +41,7 @@ pub enum ValueNode {
     Variable(Option<Ty>, String),
     /// Constant or immidiate value
     Constant(Option<Ty>, String),
-    Expression(c_simple::Expr),
+    Expression(c_ast::Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,7 +164,7 @@ impl SimpleCAST {
     }
 
     /// Add ValueNode of expression
-    pub fn expr(&mut self, operands: &[NodeIndex], op: c_simple::Expr) -> NodeIndex {
+    pub fn expr(&mut self, operands: &[NodeIndex], op: c_ast::Expr) -> NodeIndex {
         let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(op)));
         for (i, operand) in operands.iter().enumerate() {
             let _ = self.ast.add_edge(node, *operand, SimpleCASTEdge::Value(ValueEdge::Operand(i as u8)));
@@ -182,7 +182,7 @@ impl SimpleCAST {
     }
 
     pub fn deref(&mut self, operand: NodeIndex) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(c_simple::Expr::DeRef)));
+        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(c_ast::Expr::DeRef)));
         let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::DeRef));
         // Operand edge is needed so that CAST can evaluate a derefed node from this.
         let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::Operand(0)));
@@ -696,12 +696,12 @@ impl<'a> CASTConverter<'a> {
     /// Entry point of Simple-C-AST to C-AST conversion.
     pub fn to_c_ast(&mut self) -> CAST {
         let mut c_ast = CAST::new(&self.ast.fname);
-        let unknown_node = c_ast.declare_vars(Ty::new(c_simple::BTy::Int, false, 0), &["unknown".to_string()], true)
+        let unknown_node = c_ast.declare_vars(Ty::new(c_ast::BTy::Int, false, 0), &["unknown".to_string()], true)
             .first().cloned().expect("This can not be None");
         self.node_map.insert(self.ast.unknown, unknown_node);
         for &(is_implicit, con) in self.ast.consts.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
-                let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
+                let ty = ty_opt.clone().unwrap_or(Ty::new(c_ast::BTy::Int, false, 0));
                 let n = c_ast.declare_vars(ty, &[value_name.to_string()], is_implicit);
                 self.node_map.insert(con, n[0]);
             }
@@ -710,7 +710,7 @@ impl<'a> CASTConverter<'a> {
         let mut declared_vars = HashSet::new();
         for &(is_implicit, var) in self.ast.vars.iter() {
             if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
-                let ty = ty_opt.clone().unwrap_or(Ty::new(c_simple::BTy::Int, false, 0));
+                let ty = ty_opt.clone().unwrap_or(Ty::new(c_ast::BTy::Int, false, 0));
                 let is_declared = declared_vars.contains(var_name);
                 let n = c_ast.declare_vars(ty, &[var_name.to_string()], is_implicit || is_declared);
                 if !is_declared {
@@ -759,7 +759,7 @@ impl<'a> CASTConverter<'a> {
                         }
                     });
                 if let Some((dst, src)) = tmp {
-                    let node = c_ast.expr(c_simple::Expr::Assign, &[dst, src], false);
+                    let node = c_ast.expr(c_ast::Expr::Assign, &[dst, src], false);
                     self.node_map.insert(current_node, node);
                 } else {
                     radeco_err!("Something wrong");
@@ -780,7 +780,7 @@ impl<'a> CASTConverter<'a> {
                     .and_then(|x| self.node_map.get(&x).map(|a| *a));
                 let node = c_ast.call_func(name, args);
                 if let Some(ret_node) = ret_node_opt {
-                    c_ast.expr(c_simple::Expr::Assign, &[ret_node, node], false);
+                    c_ast.expr(c_ast::Expr::Assign, &[ret_node, node], false);
                 }
                 self.node_map.insert(current_node, node);
             },
@@ -853,7 +853,7 @@ impl<'a> CASTConverter<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use self::c_simple::{BTy, Ty};
+    use self::c_ast::{BTy, Ty};
 
     // fn main () {
     //     unsigned int x;
@@ -891,7 +891,7 @@ mod test {
         let y = ast.var("y", None);
         let z = ast.var("z", None);
         let entry = ast.entry;
-        let expr = ast.expr(&[x, y], c_simple::Expr::Add);
+        let expr = ast.expr(&[x, y], c_ast::Expr::Add);
         let assn = ast.assign(x, expr, entry);
         SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
         let output = ast.to_c_ast().print();
@@ -1031,7 +1031,7 @@ mod test {
         let v = ast.var("v", None);
         let cond = ast.var("cond", None);
         let assn1 = ast.assign(x, y, entry);
-        let add = ast.expr(&[x, w], c_simple::Expr::Add);
+        let add = ast.expr(&[x, w], c_ast::Expr::Add);
         let assn2 = ast.assign(x, add, assn1);
         let f_call = ast.call_func("func", &[x], assn2, Some(cond));
         let break_goto = ast.add_goto(assn2, "L1", f_call);
@@ -1069,7 +1069,7 @@ mod test {
         let v = ast.var("v", None);
         let cond = ast.var("cond", None);
         let assn1 = ast.assign(x, y, entry);
-        let add = ast.expr(&[x, w], c_simple::Expr::Add);
+        let add = ast.expr(&[x, w], c_ast::Expr::Add);
         let assn2 = ast.assign(x, add, assn1);
         let f_call = ast.call_func("func", &[x], assn2, Some(cond));
         let f_call1 = ast.call_func("go", &[x], f_call, None);
