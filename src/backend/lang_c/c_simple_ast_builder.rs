@@ -934,14 +934,13 @@ impl CASTDataMapVerifier {
 
 #[cfg(test)]
 mod test {
-    use backend::lang_c::{c_ast, c_simple_ast, c_simple_ast_builder};
+    use backend::lang_c::c_simple_ast;
     use backend::lang_c::c_simple_ast_builder::{CASTBuilder, CASTDataMap, CASTBuilderVerifier,
                                                 CASTDataMapVerifier};
     use frontend::radeco_containers::RadecoFunction;
     use frontend::radeco_source::SourceErr;
     use middle::ir_reader;
     use middle::regfile::SubRegisterFile;
-    use middle::ssa::verifier;
     use r2api::structs::LRegInfo;
     use serde_json;
     use std::collections::HashMap;
@@ -979,11 +978,11 @@ mod test {
         rfn
     }
 
-    const files: [&'static str; 2] = ["./test_files/bin1_main_ssa", "./test_files/loopy_main_ssa"];
+    const FILES: [&'static str; 2] = ["./test_files/bin1_main_ssa", "./test_files/loopy_main_ssa"];
 
     #[test]
     fn c_ast_data_map_test() {
-        for file in files.iter() {
+        for file in FILES.iter() {
             let mut rfn = load("./test_files/bin1_main_ssa");
             let mut datamap = CASTDataMap::new(&rfn);
             let mut cast = c_simple_ast::SimpleCAST::new(rfn.name.as_ref());
@@ -994,7 +993,7 @@ mod test {
 
     #[test]
     fn c_ast_builder_test() {
-        for file in files.iter() {
+        for file in FILES.iter() {
             let mut rfn = load("./test_files/bin1_main_ssa");
             let dummy_map = HashMap::new();
             let mut builder = CASTBuilder::new(&rfn, &dummy_map);
