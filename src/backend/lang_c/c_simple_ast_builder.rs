@@ -29,7 +29,6 @@ pub fn recover_simple_ast(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>
     // Recover values
     let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast, strings);
     builder.datamap = data_graph;
-    builder.declare_vars();
     // Recover control flow graph
     builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
     builder.insert_jumps();
@@ -71,22 +70,9 @@ impl<'a> CASTBuilder<'a> {
         }
     }
 
-    // XXX For debugging
     fn dummy_goto(&mut self) -> NodeIndex {
         self.last_action = self.ast.dummy_goto(self.last_action);
         self.last_action
-    }
-
-    // XXX For debugging
-    fn dummy_action(&mut self, s: String) -> NodeIndex {
-        self.last_action = self.ast.dummy(self.last_action, s);
-        self.last_action
-    }
-
-    // Register, immidiate values are already declared in
-    // prepare_regs, prepare_consts
-    fn declare_vars(&mut self) {
-        // TODO declare local variables
     }
 
     fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {
@@ -180,13 +166,10 @@ impl<'a> CASTBuilder<'a> {
                 let ops = self.ssa.operands_of(node);
                 let dst = self.datamap.var_map.get(&ops[1]).map(|&x| {
                     self.ast.derefed_node(x).unwrap_or(x)
-                });
-                let src = self.datamap.var_map.get(&ops[2]).cloned();
-                let ret = if let (Some(d), Some(s)) = (dst, src) {
-                    self.assign(d, s)
-                } else {
-                    self.dummy_action(format!("{:?} @ {:?}", op, node))
-                };
+                }).unwrap_or(self.ast.unknown);
+                let src = self.datamap.var_map.get(&ops[2])
+                    .cloned().unwrap_or(self.ast.unknown);
+                let ret = self.assign(dst, src);
                 if is_debug() {
                     let addr = self.addr_str(node);
                     self.ast.debug_info_at(ret, format!("*({:?}) = {:?} @ {}", dst, src, addr));
