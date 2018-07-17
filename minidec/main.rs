@@ -25,7 +25,7 @@ use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::ir_reader::parse_il;
 use radeco_lib::middle::ssa::verifier;
-use radeco_lib::backend::lang_c::{c_simple_ast, c_simple_ast_builder};
+use radeco_lib::backend::lang_c::c_ast::CAST;
 
 //use radeco_lib::analysis::mark_refs;
 
@@ -242,8 +242,7 @@ fn main() {
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 let mut df = File::create(format!("{}.c", fname.to_string_lossy())).expect("Unable to create .c file");
-                let ast = c_simple_ast_builder::recover_simple_ast(&rfn, &func_name_map, &strings);
-                let code = ast.to_c_ast().print();
+                let code = CAST::construct(&rfn, &func_name_map, &strings).print();
                 writeln!(df, "{}", code).expect("Error writing to file");
             }
         }

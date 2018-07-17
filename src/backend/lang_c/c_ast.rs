@@ -11,6 +11,9 @@ use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{Direction, EdgeDirection};
 
+use frontend::radeco_containers::RadecoFunction;
+use super::c_simple_ast_builder;
+
 //////////////////////////////////////////////////////////////////////////////
 //// Declaration and implementation for basic C data types.
 //////////////////////////////////////////////////////////////////////////////
@@ -189,6 +192,7 @@ fn format_with_indent(string: &str, depth: usize) -> String {
 //////////////////////////////////////////////////////////////////////////////
 //// Implementation to manipulate the C AST effectively.
 //////////////////////////////////////////////////////////////////////////////
+
 impl CAST {
     // TODO: Add return types and arguments to function header.
     pub fn new(fn_name: &str) -> CAST {
@@ -200,6 +204,12 @@ impl CAST {
         };
         ast.fn_head = ast.ast.add_node(CASTNode::FunctionHeader(fn_name.to_owned()));
         ast
+    }
+
+    pub fn construct(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>,
+                strings: &HashMap<u64, String>) -> CAST {
+        let ast = c_simple_ast_builder::recover_simple_ast(&rfn, &fname_map, &strings);
+        ast.to_c_ast()
     }
 
     fn next_edge_idx(&mut self) -> u64 {
