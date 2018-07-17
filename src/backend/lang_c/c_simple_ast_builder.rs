@@ -164,7 +164,7 @@ impl<'a> CASTBuilder<'a> {
     }
 
     fn recover_action(&mut self, node: NodeIndex) -> NodeIndex {
-        assert!(self.is_recover_action(node));
+        debug_assert!(self.is_recover_action(node));
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         radeco_trace!("CASTBuilder::recover {:?} @ {:?}", op, node);
         match op {
@@ -392,7 +392,7 @@ impl<'a> CASTDataMap<'a> {
         expr: c_ast::Expr,
         ast: &mut SimpleCAST,
     ) {
-        assert!(ops.len() == 2);
+        debug_assert!(ops.len() == 2);
         let ops_mapped = ops.iter()
             .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(ast.unknown))
             .collect::<Vec<_>>();
@@ -443,7 +443,7 @@ impl<'a> CASTDataMap<'a> {
     }
 
     fn handle_phi(&mut self, node: NodeIndex) {
-        assert!(self.ssa.is_phi(node));
+        debug_assert!(self.ssa.is_phi(node));
         radeco_trace!("CASTBuilder::handle_phi {:?}", node);
         let ops = self.ssa.operands_of(node);
         // Take first available/mappable node of SimpleCAST's node from phi node
@@ -461,7 +461,7 @@ impl<'a> CASTDataMap<'a> {
     }
 
     fn update_values(&mut self, ret_node: NodeIndex, ast: &mut SimpleCAST) {
-        assert!(self.ssa.is_expr(ret_node));
+        debug_assert!(self.ssa.is_expr(ret_node));
         radeco_trace!("CASTBuilder::update_values {:?}", ret_node);
         if self.seen.contains(&ret_node) {
             return;
@@ -482,7 +482,7 @@ impl<'a> CASTDataMap<'a> {
         );
         match self.ssa.opcode(ret_node).unwrap_or(MOpcode::OpInvalid) {
             MOpcode::OpStore => {
-                assert!(ops.len() == 3);
+                debug_assert!(ops.len() == 3);
                 // Variables do not need Deref
                 if self.rfn.local_at(ops[1]).is_none() {
                     self.deref(ops[1], ast);
