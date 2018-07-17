@@ -1,3 +1,4 @@
+use super::ast::LoopType;
 use super::condition;
 use super::*;
 
@@ -26,10 +27,6 @@ impl AstContextMut for StringAst {
     fn mk_var_assign(&mut self, var: &String, val: u64) -> String {
         format!("{} = {}", var, val)
     }
-
-    fn mk_break(&mut self) -> String {
-        "break".to_owned()
-    }
 }
 
 #[test]
@@ -56,6 +53,7 @@ fn nmg_example() {
     let n7 = graph.add_node(node("n7"));
     let n8 = graph.add_node(node("n8"));
     let n9 = graph.add_node(node("n9"));
+    let exit = graph.add_node(empty_node());
 
     #[allow(non_snake_case)]
     let c_A = cond_s(&cctx, "A");
@@ -70,6 +68,7 @@ fn nmg_example() {
 
     graph.add_edge(entry, c1, Some(c_A));
     graph.add_edge(entry, b1, neg_c(&cctx, c_A));
+    graph.add_edge(n9, exit, None);
     // R1
     graph.add_edge(c1, n1, Some(c_c1));
     graph.add_edge(n1, c1, None);
@@ -102,6 +101,7 @@ fn nmg_example() {
     let cfg = ControlFlowGraph {
         graph,
         entry,
+        exit,
         cctx,
         actx,
     };
@@ -115,18 +115,17 @@ fn ast_nmg_r2() {
     let cctx = cstore.cctx();
 
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(node("entry"));
     let b1 = graph.add_node(cnode());
     let b2 = graph.add_node(cnode());
     let n4 = graph.add_node(node("n4"));
     let n5 = graph.add_node(node("n5"));
     let n6 = graph.add_node(node("n6"));
     let n7 = graph.add_node(node("n7"));
+    let exit = graph.add_node(empty_node());
 
     let c_b1 = cond_s(&cctx, "b1");
     let c_b2 = cond_s(&cctx, "b2");
 
-    graph.add_edge(entry, b1, None);
     graph.add_edge(b1, b2, Some(c_b1));
     graph.add_edge(b2, n6, Some(c_b2));
     graph.add_edge(n6, n7, None);
@@ -134,11 +133,13 @@ fn ast_nmg_r2() {
     graph.add_edge(n5, n7, None);
     graph.add_edge(b1, n4, neg_c(&cctx, c_b1));
     graph.add_edge(n4, n5, None);
+    graph.add_edge(n7, exit, None);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
         graph,
-        entry,
+        entry: b1,
+        exit,
         cctx,
         actx,
     };
@@ -148,7 +149,6 @@ fn ast_nmg_r2() {
     use self::AstNodeC::*;
     assert_eq!(
         Seq(vec![
-            BasicBlock("entry".to_owned()),
             Cond(
                 cctx.mk_not(c_b1),
                 Box::new(BasicBlock("n4".to_owned())),
@@ -189,7 +189,6 @@ fn ast_switchy() {
     let cctx = cstore.cctx();
 
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(node("entry"));
     let c1 = graph.add_node(cnode());
     let c2 = graph.add_node(cnode());
     let c3 = graph.add_node(cnode());
@@ -200,6 +199,7 @@ fn ast_switchy() {
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
+    let exit = graph.add_node(empty_node());
 
     let c_c1 = cond_s(&cctx, "n == 7");
     let c_c2 = cond_s(&cctx, "n <= 7");
@@ -209,7 +209,6 @@ fn ast_switchy() {
     let c_c6 = cond_s(&cctx, "n != 4");
     let c_c7 = cond_s(&cctx, "n == 34");
 
-    graph.add_edge(entry, c1, None);
     graph.add_edge(c1, n1, Some(c_c1));
     graph.add_edge(c1, c2, Some(cctx.mk_not(c_c1)));
     graph.add_edge(c2, c4, Some(c_c2));
@@ -224,11 +223,15 @@ fn ast_switchy() {
     graph.add_edge(c6, n1, Some(cctx.mk_not(c_c6)));
     graph.add_edge(c7, n2, Some(c_c7));
     graph.add_edge(c7, n3, Some(cctx.mk_not(c_c7)));
+    graph.add_edge(n1, exit, None);
+    graph.add_edge(n2, exit, None);
+    graph.add_edge(n3, exit, None);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
         graph,
-        entry,
+        entry: c1,
+        exit,
         cctx,
         actx,
     };
@@ -238,17 +241,14 @@ fn ast_switchy() {
     use self::AstNodeC::*;
     // XXX: need actual value set impl
     assert_eq!(
-        Seq(vec![
-            BasicBlock("entry".to_owned()),
-            Switch(
-                "n".to_owned(),
-                vec![
-                    ((), BasicBlock("n1".to_owned())),
-                    ((), BasicBlock("n2".to_owned())),
-                ],
-                Box::new(BasicBlock("n3".to_owned())),
-            ),
-        ]),
+        Switch(
+            "n".to_owned(),
+            vec![
+                ((), BasicBlock("n1".to_owned())),
+                ((), BasicBlock("n2".to_owned())),
+            ],
+            Box::new(BasicBlock("n3".to_owned())),
+        ),
         ast
     );
 }
@@ -259,7 +259,6 @@ fn ast_ifelse_cascade() {
     let cctx = cstore.cctx();
 
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(node("entry"));
     let c1 = graph.add_node(cnode());
     let c2 = graph.add_node(cnode());
     let c3 = graph.add_node(cnode());
@@ -268,6 +267,7 @@ fn ast_ifelse_cascade() {
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
+    let exit = graph.add_node(empty_node());
 
     let c_c1 = cond_s(&cctx, "c1");
     let c_c2 = cond_s(&cctx, "c2");
@@ -280,7 +280,6 @@ fn ast_ifelse_cascade() {
     let nc_c4 = cctx.mk_not(c_c4);
     let nc_c5 = cctx.mk_not(c_c5);
 
-    graph.add_edge(entry, c1, None);
     graph.add_edge(c1, c4, Some(c_c1));
     graph.add_edge(c1, c2, Some(nc_c1));
     graph.add_edge(c2, n3, Some(c_c2));
@@ -291,11 +290,15 @@ fn ast_ifelse_cascade() {
     graph.add_edge(c4, n1, Some(nc_c4));
     graph.add_edge(c5, n3, Some(c_c5));
     graph.add_edge(c5, n2, Some(nc_c5));
+    graph.add_edge(n1, exit, None);
+    graph.add_edge(n2, exit, None);
+    graph.add_edge(n3, exit, None);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
         graph,
-        entry,
+        entry: c1,
+        exit,
         cctx,
         actx,
     };
@@ -304,18 +307,46 @@ fn ast_ifelse_cascade() {
 
     use self::AstNodeC::*;
     assert_eq!(
-        Seq(vec![
-            BasicBlock("entry".to_owned()),
-            Cond(
-                cctx.mk_and(cctx.mk_not(c_c1), cctx.mk_or(c_c2, cctx.mk_and(c_c3, c_c5))),
-                Box::new(BasicBlock("n3".to_owned())),
-                Some(Box::new(Cond(
-                    cctx.mk_and(cctx.mk_or(c_c1, cctx.mk_and(nc_c2, nc_c3)), nc_c4),
-                    Box::new(BasicBlock("n1".to_owned())),
-                    Some(Box::new(BasicBlock("n2".to_owned()))),
-                ))),
-            ),
-        ]),
+        Cond(
+            cctx.mk_and(nc_c1, cctx.mk_or(c_c2, cctx.mk_and(c_c3, c_c5))),
+            Box::new(BasicBlock("n3".to_owned())),
+            Some(Box::new(Cond(
+                cctx.mk_and(cctx.mk_or(c_c1, cctx.mk_and(nc_c2, nc_c3)), nc_c4),
+                Box::new(BasicBlock("n1".to_owned())),
+                Some(Box::new(BasicBlock("n2".to_owned()))),
+            ))),
+        ),
+        ast
+    );
+}
+
+#[test]
+fn ast_infinite_loop() {
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let n1 = graph.add_node(node("n1"));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(entry, n1, None);
+    graph.add_edge(n1, n1, None);
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        exit,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Loop(LoopType::Endless, Box::new(BasicBlock("n1".to_owned()))),
         ast
     );
 }
@@ -369,6 +400,7 @@ fn abnormal_entries() {
     let cfg = ControlFlowGraph {
         graph,
         entry,
+        exit: f,
         cctx,
         actx,
     };
@@ -427,29 +459,7 @@ fn abnormal_exits() {
     let cfg = ControlFlowGraph {
         graph,
         entry,
-        cctx,
-        actx,
-    };
-    let ast = cfg.structure_whole();
-    println!("{:#?}", ast);
-}
-
-#[test]
-fn infinite_loop() {
-    let cstore = condition::Storage::new();
-    let cctx = cstore.cctx();
-
-    let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(node("entry"));
-    let n1 = graph.add_node(node("n1"));
-
-    graph.add_edge(entry, n1, None);
-    graph.add_edge(n1, entry, None);
-
-    let actx = StringAst::default();
-    let cfg = ControlFlowGraph {
-        graph,
-        entry,
+        exit: f,
         cctx,
         actx,
     };
@@ -470,6 +480,10 @@ fn neg_c<'cd>(
 
 fn node(n: &str) -> CfgNode<'static, StringAst> {
     CfgNode::Code(AstNodeC::BasicBlock(n.to_owned()))
+}
+
+fn empty_node() -> CfgNode<'static, StringAst> {
+    CfgNode::Code(AstNodeC::default())
 }
 
 fn cnode() -> CfgNode<'static, StringAst> {
