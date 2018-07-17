@@ -267,7 +267,7 @@ impl<'a> CASTBuilder<'a> {
                         radeco_warn!("block with conditional successors has no selector {:?}", cur_node);
                     }
                 } else {
-                    unreachable!();
+                    radeco_err!("Unreachable node {:?}", cur_node);
                 }
             } else if self.ssa.is_block(cur_node) {
                 last = Some(cur_node);
