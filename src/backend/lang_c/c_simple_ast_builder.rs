@@ -27,10 +27,8 @@ pub fn recover_simple_ast(
     strings: &HashMap<u64, String>,
 ) -> SimpleCAST {
     let mut builder = CASTBuilder::new(rfn, fname_map);
-    // Recover values
     let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast, strings);
     builder.datamap = data_graph;
-    // Recover control flow graph
     builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
     builder.insert_jumps();
     builder.ast
@@ -467,6 +465,7 @@ impl<'a> CASTDataMap<'a> {
             return;
         }
         self.seen.insert(ret_node);
+        // Checking whether `ret_node` is a local variable.
         if let Some(bindings) = self.rfn.local_at(ret_node) {
             // TODO add type
             let type_info = Self::type_from_str(&bindings[0].type_str);
