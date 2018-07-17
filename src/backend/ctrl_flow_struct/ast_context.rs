@@ -13,7 +13,4 @@ pub trait AstContextMut: AstContext {
 
     /// Returns a new `Block` whose only effect is to assign `val` to `var`.
     fn mk_var_assign(&mut self, var: &Self::Variable, val: u64) -> Self::Block;
-
-    /// Returns a new `Block` whose only effect is "break".
-    fn mk_break(&mut self) -> Self::Block;
 }

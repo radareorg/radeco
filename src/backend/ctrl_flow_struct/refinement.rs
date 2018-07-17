@@ -346,6 +346,7 @@ fn simplify_ast_node<'cd, A: AstContext>(
             let b = simplify_ast_node::<A>(cctx, *b).unwrap_or_default();
             Some(Loop(t, Box::new(b)))
         }
+        Break => Some(Break),
         Switch(v, cases, default) => {
             let cases: Vec<_> = cases
                 .into_iter()

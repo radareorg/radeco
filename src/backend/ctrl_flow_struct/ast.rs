@@ -11,6 +11,7 @@ pub enum AstNode<B, C, V> {
         Option<Box<AstNode<B, C, V>>>,
     ),
     Loop(LoopType<C>, Box<AstNode<B, C, V>>),
+    Break,
     Switch(
         V,
         Vec<(ValueSet, AstNode<B, C, V>)>,
