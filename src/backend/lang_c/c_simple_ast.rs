@@ -205,12 +205,6 @@ impl SimpleCAST {
         node
     }
 
-    pub fn dummy(&mut self, prev_action: NodeIndex, s: String) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Dummy(s)));
-        let _ = self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
-        node
-    }
-
     /// Add ActionNode of function call
     pub fn call_func(&mut self, fname: &str, args: &[NodeIndex], prev_action: NodeIndex,
                  ret_val: Option<NodeIndex>) -> NodeIndex {
@@ -835,9 +829,6 @@ impl<'a> CASTConverter<'a> {
                 self.node_map.insert(current_node, node);
             },
             Some(SimpleCASTNode::Entry) => {},
-            Some(SimpleCASTNode::Action(ActionNode::Dummy(_))) => {
-                // TODO
-            },
             Some(SimpleCASTNode::Action(ActionNode::DummyGoto)) => {
                 // fallthrough
             },
