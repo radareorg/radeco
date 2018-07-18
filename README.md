@@ -59,6 +59,24 @@ PROFILER.lock().unwrap().start("./my-prof.profile").unwrap();
 PROFILER.lock().unwrap().stop().unwrap();
 ```
 
+## Project layout
+
+```
+minidec/
+├── cli.rs                  Command line utility
+└── main.rs                 Minidec
+
+src/
+├── analysis/               Analyzers on SSA form Radeco-IR
+├── backend/                Analyzers on C-pseudo code
+│   ├── ctrl_flow_struct/   Implementation of `No More Gotos`
+│   └── lang_c/             Coverter of C-pseudo code from RadecoFunction
+├── frontend/               Loaders of RadecoFunction, RadecoProject
+├── middle/                 Constructer, writer, parser of Radeco-IR
+│   ├── regfile/            Profile of registers
+│   └── ssa/                SSA form of Radeco-IR
+└── utils/                  Logger, etc
+```
 
 ## License
 Licensed under The BSD 3-Clause License. Please check [COPYING](https://github.com/radare/radeco-lib/blob/master/COPYING) file for
