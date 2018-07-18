@@ -217,7 +217,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             }
         }
 
-        refinement::refine::<A>(self.cctx, region_graph)
+        refinement::refine::<A>(self.cctx, region_graph, old_new_map[&header])
     }
 
     /// Computes the reaching condition for every node in the given graph slice.

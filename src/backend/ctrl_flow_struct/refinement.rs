@@ -12,6 +12,7 @@ use petgraph::prelude::*;
 use petgraph::visit::{IntoNodeReferences, Topo, Walker};
 
 use std::collections::HashMap;
+use std::iter::FromIterator;
 
 pub(super) struct Refiner<'cd, A: AstContext> {
     pub cctx: CondContext<'cd, A>,
@@ -24,8 +25,11 @@ pub(super) type RefinementAstNode<'cd, A> = (Condition<'cd, A>, Option<AstNode<'
 pub(super) fn refine<'cd, A: AstContext>(
     cctx: CondContext<'cd, A>,
     graph: StableDiGraph<RefinementAstNode<'cd, A>, ()>,
+    entry: NodeIndex,
 ) -> AstNode<'cd, A> {
-    Refiner::<A> { cctx, graph }.refine()
+    let mut refiner = Refiner::<A> { cctx, graph };
+    refiner.combine_breaks(entry);
+    refiner.refine()
 }
 
 impl<'cd, A: AstContext> Refiner<'cd, A> {
@@ -53,6 +57,51 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
         }
 
         simplify_ast_node::<A>(cctx, AstNodeC::Seq(ast_seq)).unwrap_or_default()
+    }
+
+    /// Repeatedly look for and try to combine pairs of `break` nodes.
+    fn combine_breaks(&mut self, entry: NodeIndex) {
+        let cctx = self.cctx;
+
+        loop {
+            let mut combine = None;
+            'l: for (na, &(_, ref wa)) in self.graph.node_references() {
+                if let &Some(AstNodeC::Break) = wa {
+                    for (nb, &(_, ref wb)) in self.graph.node_references() {
+                        if na != nb {
+                            if let &Some(AstNodeC::Break) = wb {
+                                // check for code nodes between the two `break`s
+                                let nodes = NodeSet::from_iter(&[na, nb]);
+                                let ncd = graph_utils::nearest_common_dominator(
+                                    &self.graph,
+                                    entry,
+                                    &nodes,
+                                );
+                                let mut common_preds =
+                                    graph_utils::slice(&self.graph, ncd, &nodes).nodes;
+                                common_preds.remove(na);
+                                common_preds.remove(nb);
+                                if common_preds.iter().all(|n| self.graph[n].1.is_none()) {
+                                    combine = Some((ncd, na, nb));
+                                    break 'l;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some((ncd, na, nb)) = combine {
+                let (ca, _) = self.graph.remove_node(na).unwrap();
+                let (cb, _) = self.graph.remove_node(nb).unwrap();
+                let new_break = self
+                    .graph
+                    .add_node((cctx.mk_or(ca, cb), Some(AstNodeC::Break)));
+                self.graph.add_edge(ncd, new_break, ());
+            } else {
+                return;
+            }
+        }
     }
 
     /// Repeatedly look for pairs of code nodes whose reaching conditions are
@@ -156,7 +205,17 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                 &else_cands.keys().collect(),
                 |node, (_, ast)| (else_cands[&node], ast),
                 |_, _| (),
-                |else_graph| (not_cond, Some(refine::<A>(cctx, else_graph))),
+                |else_graph| {
+                    (
+                        not_cond,
+                        Some(
+                            Refiner::<A> {
+                                cctx,
+                                graph: else_graph,
+                            }.refine(),
+                        ),
+                    )
+                },
             );
         } else {
             // make then-branch
@@ -165,7 +224,17 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                 &then_cands.keys().collect(),
                 |node, (_, ast)| (then_cands[&node], ast),
                 |_, _| (),
-                |then_graph| (cond, Some(refine::<A>(cctx, then_graph))),
+                |then_graph| {
+                    (
+                        cond,
+                        Some(
+                            Refiner::<A> {
+                                cctx,
+                                graph: then_graph,
+                            }.refine(),
+                        ),
+                    )
+                },
             );
             if else_len != 0 {
                 // make else-branch
@@ -174,7 +243,17 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
                     &else_cands.keys().collect(),
                     |node, (_, ast)| (else_cands[&node], ast),
                     |_, _| (),
-                    |else_graph| (not_cond, Some(refine::<A>(cctx, else_graph))),
+                    |else_graph| {
+                        (
+                            not_cond,
+                            Some(
+                                Refiner::<A> {
+                                    cctx,
+                                    graph: else_graph,
+                                }.refine(),
+                            ),
+                        )
+                    },
                 );
 
                 // can't use `contract_nodes_and_map` b/c we need to know
