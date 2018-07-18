@@ -30,7 +30,7 @@ impl AstContextMut for StringAst {
 }
 
 #[test]
-fn nmg_example() {
+fn ast_nmg_example() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
@@ -107,6 +107,51 @@ fn nmg_example() {
     };
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Seq(vec![
+            Cond(
+                c_A,
+                Box::new(Loop(
+                    LoopType::PostChecked(c_c3),
+                    Box::new(Seq(vec![
+                        Loop(
+                            LoopType::PreChecked(c_c1),
+                            Box::new(BasicBlock("n1".to_owned())),
+                        ),
+                        Cond(
+                            c_c2,
+                            Box::new(Seq(vec![BasicBlock("n2".to_owned()), Break])),
+                            None,
+                        ),
+                        BasicBlock("n3".to_owned()),
+                    ])),
+                )),
+                Some(Box::new(Seq(vec![
+                    Cond(
+                        cctx.mk_not(c_b1),
+                        Box::new(BasicBlock("n4".to_owned())),
+                        None,
+                    ),
+                    Cond(
+                        cctx.mk_and(c_b1, c_b2),
+                        Box::new(BasicBlock("n6".to_owned())),
+                        Some(Box::new(BasicBlock("n5".to_owned()))),
+                    ),
+                    BasicBlock("n7".to_owned()),
+                    Loop(
+                        LoopType::PreChecked(
+                            cctx.mk_or(cctx.mk_and(c_d1, c_d3), cctx.mk_and(cctx.mk_not(c_d1), c_d2)),
+                        ),
+                        Box::new(BasicBlock("n8".to_owned())),
+                    ),
+                ]))),
+            ),
+            BasicBlock("n9".to_owned()),
+        ]),
+        ast
+    );
 }
 
 #[test]
@@ -226,6 +271,56 @@ fn ast_nmg_r2() {
             ),
             BasicBlock("n7".to_owned()),
         ]),
+        ast
+    );
+}
+
+#[test]
+fn ast_nmg_r3() {
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let d1 = graph.add_node(cnode());
+    let d2 = graph.add_node(cnode());
+    let d3 = graph.add_node(cnode());
+    let n8 = graph.add_node(node("n8"));
+    let exit = graph.add_node(empty_node());
+
+    let c_d1 = cond_s(&cctx, "d1");
+    let c_d2 = cond_s(&cctx, "d2");
+    let c_d3 = cond_s(&cctx, "d3");
+    let nc_d1 = cctx.mk_not(c_d1);
+    let nc_d2 = cctx.mk_not(c_d2);
+    let nc_d3 = cctx.mk_not(c_d3);
+
+    graph.add_edge(entry, d1, None);
+    graph.add_edge(d1, d3, Some(c_d1));
+    graph.add_edge(d1, d2, Some(nc_d1));
+    graph.add_edge(d2, n8, Some(c_d2));
+    graph.add_edge(d2, exit, Some(nc_d2));
+    graph.add_edge(d3, n8, Some(c_d3));
+    graph.add_edge(d3, exit, Some(nc_d3));
+    graph.add_edge(n8, d1, None);
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        exit,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Loop(
+            LoopType::PreChecked(cctx.mk_or(cctx.mk_and(c_d1, c_d3), cctx.mk_and(nc_d1, c_d2))),
+            Box::new(BasicBlock("n8".to_owned())),
+        ),
         ast
     );
 }
@@ -507,6 +602,126 @@ fn ast_infinite_loop() {
     use self::AstNodeC::*;
     assert_eq!(
         Loop(LoopType::Endless, Box::new(BasicBlock("n1".to_owned()))),
+        ast
+    );
+}
+
+#[test]
+fn ast_complex_while_and() {
+    /*
+     * while (c1 && c2 && c3 && c4) {
+     *   puts("1");
+     * }
+     */
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let c1 = graph.add_node(cnode());
+    let c2 = graph.add_node(cnode());
+    let c3 = graph.add_node(cnode());
+    let c4 = graph.add_node(cnode());
+    let n1 = graph.add_node(node("n1"));
+    let exit = graph.add_node(empty_node());
+
+    let c_c1 = cond_s(&cctx, "c1");
+    let c_c2 = cond_s(&cctx, "c2");
+    let c_c3 = cond_s(&cctx, "c3");
+    let c_c4 = cond_s(&cctx, "c4");
+    let nc_c1 = cctx.mk_not(c_c1);
+    let nc_c2 = cctx.mk_not(c_c2);
+    let nc_c3 = cctx.mk_not(c_c3);
+    let nc_c4 = cctx.mk_not(c_c4);
+
+    graph.add_edge(entry, c1, None);
+    graph.add_edge(c1, c2, Some(c_c1));
+    graph.add_edge(c1, exit, Some(nc_c1));
+    graph.add_edge(c2, c3, Some(c_c2));
+    graph.add_edge(c2, exit, Some(nc_c2));
+    graph.add_edge(c3, c4, Some(c_c3));
+    graph.add_edge(c3, exit, Some(nc_c3));
+    graph.add_edge(c4, n1, Some(c_c4));
+    graph.add_edge(c4, exit, Some(nc_c4));
+    graph.add_edge(n1, c1, None);
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        exit,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Loop(
+            LoopType::PreChecked(cctx.mk_and_from_iter(vec![c_c1, c_c2, c_c3, c_c4])),
+            Box::new(BasicBlock("n1".to_owned()))
+        ),
+        ast
+    );
+}
+
+#[test]
+fn ast_complex_while_or() {
+    /*
+     * while (c1 || c2 || c3 || c4) {
+     *   puts("1");
+     * }
+     */
+    let cstore = condition::Storage::new();
+    let cctx = cstore.cctx();
+
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let c1 = graph.add_node(cnode());
+    let c2 = graph.add_node(cnode());
+    let c3 = graph.add_node(cnode());
+    let c4 = graph.add_node(cnode());
+    let n1 = graph.add_node(node("n1"));
+    let exit = graph.add_node(empty_node());
+
+    let c_c1 = cond_s(&cctx, "c1");
+    let c_c2 = cond_s(&cctx, "c2");
+    let c_c3 = cond_s(&cctx, "c3");
+    let c_c4 = cond_s(&cctx, "c4");
+    let nc_c1 = cctx.mk_not(c_c1);
+    let nc_c2 = cctx.mk_not(c_c2);
+    let nc_c3 = cctx.mk_not(c_c3);
+    let nc_c4 = cctx.mk_not(c_c4);
+
+    graph.add_edge(entry, c1, None);
+    graph.add_edge(c1, n1, Some(c_c1));
+    graph.add_edge(c1, c2, Some(nc_c1));
+    graph.add_edge(c2, n1, Some(c_c2));
+    graph.add_edge(c2, c3, Some(nc_c2));
+    graph.add_edge(c3, n1, Some(c_c3));
+    graph.add_edge(c3, c4, Some(nc_c3));
+    graph.add_edge(c4, n1, Some(c_c4));
+    graph.add_edge(c4, exit, Some(nc_c4));
+    graph.add_edge(n1, c1, None);
+
+    let actx = StringAst::default();
+    let cfg = ControlFlowGraph {
+        graph,
+        entry,
+        exit,
+        cctx,
+        actx,
+    };
+    let ast = cfg.structure_whole();
+    println!("{:#?}", ast);
+
+    use self::AstNodeC::*;
+    assert_eq!(
+        Loop(
+            LoopType::PreChecked(cctx.mk_or_from_iter(vec![c_c1, c_c2, c_c3, c_c4])),
+            Box::new(BasicBlock("n1".to_owned()))
+        ),
         ast
     );
 }
