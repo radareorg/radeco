@@ -14,6 +14,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process;
 use std::str;
+use std::rc::Rc;
 
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::sccp;
@@ -21,6 +22,7 @@ use radeco_lib::analysis::sccp;
 //use radeco_lib::analysis::valueset::mem_structs::{A_Loc,AbstractAddress};
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::frontend::radeco_containers::ProjectLoader;
+use radeco_lib::frontend::radeco_source::FileSource;
 use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::ir_reader::parse_il;
@@ -45,7 +47,9 @@ fn main() {
 
     let proj_name = env::args().nth(env::args().len() - 1).unwrap();
     let mut rproj = {
-        ProjectLoader::new().path(&proj_name).load()
+        let source = FileSource::open("./fact/fact");
+        ProjectLoader::new().source(Rc::new(source)).load()
+        // ProjectLoader::new().path(&proj_name).load()
     };
     let regfile = rproj.regfile().clone();
     for mut xy in rproj.iter_mut() {
