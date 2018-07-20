@@ -222,13 +222,13 @@ pub struct FileSource {
 }
 
 impl FileSource {
-    fn read_file(&self, suffix: &str) -> String {
+    fn read_file(&self, suffix: &str) -> Result<String, SourceErr> {
         let mut path = PathBuf::from(&self.dir);
         path.push(&format!("{}_{}.json", self.base_name, suffix));
-        let mut f = File::open(path).expect("Failed to open file");
+        let mut f = File::open(path)?;
         let mut json_str = String::new();
-        let _ = f.read_to_string(&mut json_str).expect("Failed to read file");
-        json_str
+        let _ = f.read_to_string(&mut json_str)?;
+        Ok(json_str)
     }
 
     fn write_file(&mut self, suffix: &str, data: &str) {
@@ -247,11 +247,18 @@ mod suffix {
     pub const FLAG: &'static str = "flags";
     pub const SECTION: &'static str = "sections";
     pub const STRING: &'static str = "strings";
+    pub const SYMBOL: &'static str = "symbols";
+    pub const IMPORT: &'static str = "imports";
+    pub const EXPORT: &'static str = "exports";
+    pub const RELOC: &'static str = "relocs";
+    pub const LIBRALY: &'static str = "libraries";
+    pub const LOCAL: &'static str = "locals";
+    pub const CCINFO: &'static str = "ccinfo";
 }
 
 impl FileSource {
-    pub fn open(f: Option<&str>) -> FileSource {
-        let path = Path::new(f.unwrap());
+    pub fn open(f: &str) -> FileSource {
+        let path = Path::new(f);
         let dir = path.parent().unwrap().to_str().unwrap();
         let base_name = path.file_name().unwrap().to_str().unwrap();
         FileSource {
@@ -260,31 +267,78 @@ impl FileSource {
         }
     }
 
-    pub fn strings(&mut self) -> Vec<LStringInfo> {
-        serde_json::from_str(&self.read_file(suffix::STRING)).expect("Failed to decode json")
-    }
 }
 
 impl Source for FileSource {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr> {
-        Ok(serde_json::from_str(&self.read_file(suffix::FUNCTION_INFO))?)
+        Ok(serde_json::from_str(&self.read_file(suffix::FUNCTION_INFO)?)?)
     }
 
     fn instructions_at(&self, address: u64) -> Result<Vec<LOpInfo>, SourceErr> {
         let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, address);
-        Ok(serde_json::from_str(&self.read_file(&suffix))?)
+        Ok(serde_json::from_str(&self.read_file(&suffix)?)?)
     }
 
     fn register_profile(&self) -> Result<LRegInfo, SourceErr> {
-        Ok(serde_json::from_str(&self.read_file(suffix::REGISTER))?)
+        Ok(serde_json::from_str(&self.read_file(suffix::REGISTER)?)?)
     }
 
     fn flags(&self) -> Result<Vec<LFlagInfo>, SourceErr> {
-        Ok(serde_json::from_str(&self.read_file(suffix::FLAG))?)
+        Ok(serde_json::from_str(&self.read_file(suffix::FLAG)?)?)
     }
 
     fn sections(&self) -> Result<Vec<LSectionInfo>, SourceErr> {
-        Ok(serde_json::from_str(&self.read_file(suffix::SECTION))?)
+        Ok(serde_json::from_str(&self.read_file(suffix::SECTION)?)?)
+    }
+
+    fn symbols(&self) -> Result<Vec<LSymbolInfo>, SourceErr> {
+        Ok(serde_json::from_str(&self.read_file(suffix::SYMBOL)?)?)
+    }
+
+    fn imports(&self) -> Result<Vec<LImportInfo>, SourceErr> {
+        Ok(serde_json::from_str(&self.read_file(suffix::IMPORT)?)?)
+    }
+
+    fn exports(&self) -> Result<Vec<LExportInfo>, SourceErr> {
+        Ok(serde_json::from_str(&self.read_file(suffix::EXPORT)?)?)
+    }
+
+    fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> {
+        Ok(serde_json::from_str(&self.read_file(suffix::RELOC)?)?)
+    }
+
+    fn libraries(&self) -> Result<Vec<String>, SourceErr> {
+        Ok(serde_json::from_str(&self.read_file(suffix::LIBRALY)?)?)
+    }
+
+    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
+        Err(SourceErr::SrcErr("Not implemented"))
+    }
+
+    fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
+        Err(SourceErr::SrcErr("Not implemented"))
+    }
+
+    fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
+        Err(SourceErr::SrcErr("Not implemented"))
+    }
+
+    fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
+        let suffix = format!("{}_{}", suffix::LOCAL, start_addr);
+        Ok(serde_json::from_str(&self.read_file(&suffix)?)?)
+    }
+
+    fn cc_info_of(&self, start_addr: u64) -> Result<LCCInfo, SourceErr> {
+        let suffix = format!("{}_{}", suffix::CCINFO, start_addr);
+        Ok(serde_json::from_str(&self.read_file(&suffix)?)?)
+    }
+
+    fn strings(&self, _data_only: bool) -> Result<Vec<LStringInfo>, SourceErr> {
+        Ok(serde_json::from_str(&self.read_file(suffix::STRING)?)?)
+    }
+
+    fn raw(&self, _cmd: String) -> Result<String, SourceErr> {
+        Err(SourceErr::SrcErr("Not implemented"))
     }
 }
 
