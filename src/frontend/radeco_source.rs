@@ -260,6 +260,7 @@ mod suffix {
     pub const LIBRALY: &'static str = "libraries";
     pub const LOCAL: &'static str = "locals";
     pub const CCINFO: &'static str = "ccinfo";
+    pub const ENTRY: &'static str = "entrypoint";
 }
 
 impl FileSource {
@@ -318,15 +319,15 @@ impl Source for FileSource {
     }
 
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
-        Err(SourceErr::SrcErr("Not implemented"))
+        Ok(serde_json::from_str(&self.read_file(suffix::ENTRY)?)?)
     }
 
     fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
-        Err(SourceErr::SrcErr("Not implemented"))
+        Err(SourceErr::SrcErr("`Source::disassemble_n_bytes` is not implemented"))
     }
 
     fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
-        Err(SourceErr::SrcErr("Not implemented"))
+        Err(SourceErr::SrcErr("`Source::disassemble_n_insts` is not implemented"))
     }
 
     fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
@@ -350,7 +351,7 @@ impl Source for FileSource {
     }
 
     fn raw(&self, _cmd: String) -> Result<String, SourceErr> {
-        Err(SourceErr::SrcErr("Not implemented"))
+        Err(SourceErr::SrcErr("`Source::raw` is not implemented"))
     }
 }
 
