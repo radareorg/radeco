@@ -776,7 +776,7 @@ impl<'a> ModuleLoader<'a> {
 
         // Load instructions into functions
         for rfn in rmod.functions.values_mut() {
-            rfn.instructions = source.disassemble_n_bytes(rfn.size, rfn.offset)
+            rfn.instructions = source.disassemble_function(&rfn.name)
                 .unwrap_or(Vec::new());
         }
 

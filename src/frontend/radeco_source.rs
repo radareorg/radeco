@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt;
 
 use r2api::api_trait::R2Api;
-use r2api::structs::{FunctionInfo, LCCInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
+use r2api::structs::{LFunctionInfo, FunctionInfo, LCCInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
 LImportInfo, LExportInfo, LRelocInfo, LEntryInfo, LVarInfo};
 
 #[derive(Debug)]
@@ -49,6 +49,7 @@ pub trait Source {
     fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> { unimplemented!() }
     fn libraries(&self) -> Result<Vec<String>, SourceErr> { unimplemented!() }
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> { unimplemented!() }
+    fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
     fn locals_of(&self, _start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
@@ -184,6 +185,10 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
         Ok(self.try_borrow_mut()?.disassemble_n_insts(n, Some(at))?)
     }
 
+    fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
+        Ok(self.try_borrow_mut()?.function(name)?.ops.unwrap_or(Vec::new()))
+    }
+
     fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.locals_of(start_addr)?)
     }
@@ -241,6 +246,7 @@ impl FileSource {
 }
 
 mod suffix {
+    pub const FUNCTION: &'static str = "function";
     pub const FUNCTION_INFO: &'static str = "fn_info";
     pub const INSTRUCTIONS: &'static str = "insts";
     pub const REGISTER: &'static str = "register_profile";
@@ -321,6 +327,12 @@ impl Source for FileSource {
 
     fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
         Err(SourceErr::SrcErr("Not implemented"))
+    }
+
+    fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
+        let suffix = format!("{}_{}", suffix::FUNCTION, name);
+        let function_info: LFunctionInfo = serde_json::from_str(&self.read_file(&suffix)?)?;
+        function_info.ops.ok_or(SourceErr::SrcErr("LFunctionInfo::ops is `None`"))
     }
 
     fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
