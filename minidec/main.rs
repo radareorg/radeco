@@ -45,7 +45,7 @@ fn main() {
 
     let proj_name = env::args().nth(env::args().len() - 1).unwrap();
     let mut rproj = {
-        let source = FileSource::open("./fact/fact");
+        let source = FileSource::open("./fact_filesource/fact");
         ProjectLoader::new().source(Rc::new(source)).load()
         // ProjectLoader::new().path(&proj_name).load()
     };
