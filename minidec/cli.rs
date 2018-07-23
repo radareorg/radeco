@@ -1,18 +1,27 @@
 extern crate docopt;
 
 use std::collections::HashSet;
+use std::process;
+use self::docopt::{Docopt, Error};
 
 // Create Docopt parser and fetches the CLI arguments as appropriate
 // Returns an empty vector if no args were found
-pub fn init_for_args(usage: &str) -> Vec<String> {
+pub fn init_for_args(usage: &str) -> (Vec<String>, bool) {
 
-    let args = docopt::Docopt::new(usage).and_then(|d| d.parse());
+    let args = Docopt::new(usage).and_then(|d| d.help(true).parse());
+
+    if let Err(Error::WithProgramUsage(_, ref msg)) = args {
+        println!("{}", msg);
+        process::exit(0);
+    }
 
     let mut arg_vect: Vec<String> = Vec::new();
+    let mut is_filesource = false;
     if let Ok(ref arg_map) = args {
-        arg_vect = arg_map.get_vec("<names>").iter().map(|&slice| String::from(slice)).collect()
+        arg_vect = arg_map.get_vec("<names>").iter().map(|&slice| String::from(slice)).collect();
+        is_filesource = arg_map.get_bool("--filesource");
     }
-    arg_vect
+    (arg_vect, is_filesource)
 }
 
 // Prints summary of the matching if any command line arguments were
