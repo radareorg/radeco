@@ -32,22 +32,29 @@ use radeco_lib::backend::lang_c::c_ast::CAST;
 //use radeco_lib::analysis::mark_refs;
 
 const USAGE: &'static str = "
-Usage: minidec [-f <names>...] <target>
+Usage:
+  minidec [-f <names>...] [--filesource] <target>
+  minidec (-h | --help)
 
 Options:
-    -f, --functions  Analayze only some functions
+    -h, --help          Show this screen.
+    -f, --functions     Analayze only some functions.
+    --filesource        Use json files as input instead of an executable.
 ";
 
 fn main() {
     #[cfg(feature="trace_log")] env_logger::init();
 
-    let requested_functions = cli::init_for_args(USAGE);
+    let (requested_functions, is_filesource) = cli::init_for_args(USAGE);
 
     let proj_name = env::args().nth(env::args().len() - 1).unwrap();
     let mut rproj = {
-        let source = FileSource::open("./fact_filesource/fact");
-        ProjectLoader::new().source(Rc::new(source)).load()
-        // ProjectLoader::new().path(&proj_name).load()
+        if is_filesource {
+        let source = FileSource::open(&proj_name);
+            ProjectLoader::new().source(Rc::new(source)).load()
+        } else {
+            ProjectLoader::new().path(&proj_name).load()
+        }
     };
     let regfile = rproj.regfile().clone();
     for mut xy in rproj.iter_mut() {
