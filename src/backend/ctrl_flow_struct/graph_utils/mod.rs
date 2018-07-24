@@ -15,8 +15,8 @@ use self::ix_bit_set::{IndexLike, IxBitSet};
 use petgraph::graph::IndexType;
 use petgraph::prelude::*;
 use petgraph::visit::{
-    IntoEdges, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers, VisitMap, Visitable,
-    Walker,
+    IntoEdges, IntoEdgesDirected, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers,
+    VisitMap, Visitable, Walker,
 };
 
 use std::collections::HashMap;
@@ -317,6 +317,22 @@ pub fn is_source<G: IntoNeighborsDirected>(graph: G, node: G::NodeId) -> bool {
 /// Returns if `node` has no outgoing edges.
 pub fn is_sink<G: IntoNeighborsDirected>(graph: G, node: G::NodeId) -> bool {
     graph.neighbors_directed(node, Outgoing).next().is_none()
+}
+
+pub fn edges_from_region_to_node<'a, G>(
+    graph: G,
+    src_region: &'a IxBitSet<G::NodeId>,
+    tgt_node: G::NodeId,
+) -> impl Iterator<Item = G::EdgeId> + 'a
+where
+    G: IntoEdgesDirected + 'a,
+    G::NodeId: IndexLike,
+{
+    // `move` required b/c https://github.com/rust-lang/rust/issues/36569
+    graph
+        .edges_directed(tgt_node, Incoming)
+        .filter(move |e| src_region.contains(e.source()))
+        .map(|e| e.id())
 }
 
 // ideally this would be <G: IntoEdges> so we can enforce that this is actually

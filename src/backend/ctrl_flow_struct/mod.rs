@@ -379,71 +379,63 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         final_succ: NodeIndex,
         abn_succ_nodes: &NodeSet,
     ) -> NodeIndex {
-        let new_successor = if !abn_succ_nodes.is_empty() {
-            let reaching_conds = {
-                let abn_exit_sources: NodeSet = abn_succ_nodes
-                    .iter()
-                    .flat_map(|n| self.graph.edges_directed(n, Incoming))
-                    .map(|e| e.source())
-                    .filter(|&n| loop_nodes.contains(n))
+        // replace "normal" exit edges with "break"
+        {
+            let exit_edges: Vec<_> =
+                graph_utils::edges_from_region_to_node(&self.graph, &loop_nodes, final_succ)
                     .collect();
-
-                let ncd = graph_utils::nearest_common_dominator(
-                    &self.graph,
-                    self.entry,
-                    &abn_exit_sources,
-                );
-                self.reaching_conditions(&graph_utils::slice(&self.graph, ncd, abn_succ_nodes))
-            };
-
-            // make condition cascade
-            {
-                let dummy_presuccessor =
-                    self.graph.add_node(CfgNode::Dummy("loop \"presuccessor\""));
-
-                let mut prev_cascade_node = dummy_presuccessor;
-                let mut prev_out_cond = None;
-
-                for exit_target in abn_succ_nodes {
-                    let reaching_cond = reaching_conds[&exit_target];
-                    let cascade_node = self.graph.add_node(CfgNode::Condition);
-                    self.graph
-                        .add_edge(prev_cascade_node, cascade_node, prev_out_cond);
-                    self.graph
-                        .add_edge(cascade_node, exit_target, Some(reaching_cond));
-                    prev_cascade_node = cascade_node;
-                    prev_out_cond = Some(self.cctx.mk_not(reaching_cond));
-                }
-
+            for exit_edge in exit_edges {
+                let break_node = self.graph.add_node(CfgNode::Code(AstNodeC::Break));
+                graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
+                // connect to `loop_continue` so that the graph slice from the loop
+                // header to `loop_continue` contains these "break" nodes
                 self.graph
-                    .add_edge(prev_cascade_node, final_succ, prev_out_cond);
-
-                // we always add an edge from dummy_presuccessor
-                let new_successor = self.graph.neighbors(dummy_presuccessor).next().unwrap();
-                self.graph.remove_node(dummy_presuccessor);
-                new_successor
+                    .add_edge(break_node, loop_continue, Some(self.cctx.mk_false()));
             }
-        } else {
-            final_succ
-        };
-
-        // replace exit edges with "break"
-        let exit_edges: EdgeSet = loop_nodes
-            .iter()
-            .flat_map(|n| self.graph.edges(n))
-            .filter(|e| !loop_nodes.contains(e.target()))
-            .map(|e| e.id())
-            .collect();
-        for exit_edge in &exit_edges {
-            let break_node = self.graph.add_node(CfgNode::Code(AstNodeC::Break));
-            graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
-            // connect to `loop_continue` so that the graph slice from the loop
-            // header to `loop_continue` contains these "break" nodes
-            self.graph
-                .add_edge(break_node, loop_continue, Some(self.cctx.mk_false()));
         }
 
-        new_successor
+        if abn_succ_nodes.is_empty() {
+            // no abnormal exits
+            return final_succ;
+        }
+
+        let abn_succ_iter = (1..).zip(abn_succ_nodes);
+        let struct_var = self.actx.mk_fresh_var_with_val(0);
+
+        // replace abnormal exit edges with "break"
+        for (exit_num, exit_target) in abn_succ_iter.clone() {
+            let exit_edges: Vec<_> =
+                graph_utils::edges_from_region_to_node(&self.graph, &loop_nodes, exit_target)
+                    .collect();
+            for exit_edge in exit_edges {
+                let break_node = self.graph.add_node(CfgNode::Code(AstNodeC::Seq(vec![
+                    AstNodeC::BasicBlock(self.actx.mk_var_assign(&struct_var, exit_num)),
+                    AstNodeC::Break,
+                ])));
+                graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
+                // connect to `loop_continue` so that the graph slice from the loop
+                // header to `loop_continue` contains these "break" nodes
+                self.graph
+                    .add_edge(break_node, loop_continue, Some(self.cctx.mk_false()));
+            }
+        }
+
+        let mut cur_succ = final_succ;
+
+        // make condition cascade
+        for (exit_num, exit_target) in abn_succ_iter.clone() {
+            let cond = self
+                .cctx
+                .mk_var(self.actx.mk_cond_equals(&struct_var, exit_num));
+            let cascade_node = self.graph.add_node(CfgNode::Condition);
+            self.graph.add_edge(cascade_node, exit_target, Some(cond));
+            self.graph
+                .add_edge(cascade_node, cur_succ, Some(self.cctx.mk_not(cond)));
+
+            cur_succ = cascade_node;
+        }
+
+        cur_succ
     }
 }
 
