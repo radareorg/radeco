@@ -6,5 +6,5 @@
 // except according to those terms.
 
 pub mod c_ast;
-pub mod c_simple_ast;
-pub mod c_simple_ast_builder;
+pub mod c_cfg;
+pub mod c_cfg_builder;

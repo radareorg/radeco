@@ -12,7 +12,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::{Direction, EdgeDirection};
 
 use frontend::radeco_containers::RadecoFunction;
-use super::c_simple_ast_builder;
+use super::c_cfg_builder;
 
 //////////////////////////////////////////////////////////////////////////////
 //// Declaration and implementation for basic C data types.
@@ -208,7 +208,7 @@ impl CAST {
 
     pub fn construct(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>,
                 strings: &HashMap<u64, String>) -> CAST {
-        let ast = c_simple_ast_builder::recover_simple_ast(&rfn, &fname_map, &strings);
+        let ast = c_cfg_builder::recover_simple_ast(&rfn, &fname_map, &strings);
         ast.to_c_ast()
     }
 
