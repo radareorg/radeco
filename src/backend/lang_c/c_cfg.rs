@@ -1,6 +1,6 @@
-//! This module is for coverting `CAST` from `SimpleCAST`.
+//! This module is for coverting `CAST` from `CCFG`.
 //!
-//! `SimpleCAST` is CFG-like Graph so that we can do control flow structuring easily.
+//! `CCFG` is CFG-like Graph so that we can do control flow structuring easily.
 
 use std::collections::{HashMap, HashSet};
 use super::c_ast;
@@ -10,7 +10,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum SimpleCASTNode {
+pub enum CCFGNode {
     /// Entry node of target function
     Entry,
     Action(ActionNode),
@@ -39,7 +39,7 @@ pub enum ValueNode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum SimpleCASTEdge {
+pub enum CCFGEdge {
     Action(ActionEdge),
     Value(ValueEdge),
 }
@@ -74,14 +74,14 @@ pub enum ValueEdge {
     Conditional,
 }
 
-pub struct SimpleCAST {
+pub struct CCFG {
     /// Name of function of this AST
     fname: String,
     /// Entry node of this function
     pub entry: NodeIndex,
     /// Unknown node
     pub unknown: NodeIndex,
-    ast: Graph<SimpleCASTNode, SimpleCASTEdge>,
+    ast: Graph<CCFGNode, CCFGEdge>,
     /// Variables declared in this function, bool value is `is_implicit` flag
     vars: HashSet<(bool, NodeIndex)>,
     /// Constants declared in this function, bool value is `is_implicit` flag
@@ -95,28 +95,28 @@ pub struct SimpleCAST {
 }
 
 
-impl SimpleCASTNode {
+impl CCFGNode {
     fn is_exit(&self) -> bool {
         match self {
-            &SimpleCASTNode::Action(ActionNode::Return) => true,
+            &CCFGNode::Action(ActionNode::Return) => true,
             _ => false,
         }
     }
 }
 
 /// Returns nodes which is connected with given type of edge
-fn neighbors_by_edge(edges: &Vec<EdgeReference<SimpleCASTEdge>>, ty: &SimpleCASTEdge) -> Vec<NodeIndex> {
+fn neighbors_by_edge(edges: &Vec<EdgeReference<CCFGEdge>>, ty: &CCFGEdge) -> Vec<NodeIndex> {
     edges.iter().filter(|e| (*e).weight() == ty)
         .map(|e| e.target())
         .collect()
 }
 
-impl SimpleCAST {
-    pub fn new(fn_name: &str) -> SimpleCAST {
+impl CCFG {
+    pub fn new(fn_name: &str) -> CCFG {
         let mut ast = Graph::new();
-        let entry = ast.add_node(SimpleCASTNode::Entry);
-        let unknown = ast.add_node(SimpleCASTNode::Unknown);
-        SimpleCAST {
+        let entry = ast.add_node(CCFGNode::Entry);
+        let unknown = ast.add_node(CCFGNode::Unknown);
+        CCFG {
             fname: fn_name.to_string(),
             entry: entry,
             unknown: unknown,
@@ -139,29 +139,29 @@ impl SimpleCAST {
         self.debug_info.insert(node, format!("{} {}", s, comment));
     }
 
-    pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, edge: SimpleCASTEdge) -> EdgeIndex {
+    pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, edge: CCFGEdge) -> EdgeIndex {
         self.ast.add_edge(source, target, edge)
     }
 
     /// Add ValueNode of variable
     pub fn var(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Variable(ty, name.to_string())));
+        let node = self.ast.add_node(CCFGNode::Value(ValueNode::Variable(ty, name.to_string())));
         self.vars.insert((false, node));
         node
     }
 
     /// Add ValueNode of constant value
     pub fn constant(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Constant(ty, name.to_string())));
+        let node = self.ast.add_node(CCFGNode::Value(ValueNode::Constant(ty, name.to_string())));
         self.consts.insert((true, node));
         node
     }
 
     /// Add ValueNode of expression
     pub fn expr(&mut self, operands: &[NodeIndex], op: c_ast::Expr) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(op)));
+        let node = self.ast.add_node(CCFGNode::Value(ValueNode::Expression(op)));
         for (i, operand) in operands.iter().enumerate() {
-            let _ = self.ast.add_edge(node, *operand, SimpleCASTEdge::Value(ValueEdge::Operand(i as u8)));
+            let _ = self.ast.add_edge(node, *operand, CCFGEdge::Value(ValueEdge::Operand(i as u8)));
         }
         self.exprs.push((true, node));
         node
@@ -170,45 +170,45 @@ impl SimpleCAST {
     pub fn derefed_node(&self, node: NodeIndex) -> Option<NodeIndex> {
         // TODO check whether there are more than two derefed nodes
         self.ast.edges_directed(node, Direction::Incoming)
-            .filter(|e| *e.weight() == SimpleCASTEdge::Value(ValueEdge::DeRef))
+            .filter(|e| *e.weight() == CCFGEdge::Value(ValueEdge::DeRef))
             .next()
             .map(|e| e.source())
     }
 
     pub fn deref(&mut self, operand: NodeIndex) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Value(ValueNode::Expression(c_ast::Expr::DeRef)));
-        let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::DeRef));
+        let node = self.ast.add_node(CCFGNode::Value(ValueNode::Expression(c_ast::Expr::DeRef)));
+        let _ = self.ast.add_edge(node, operand, CCFGEdge::Value(ValueEdge::DeRef));
         // Operand edge is needed so that CAST can evaluate a derefed node from this.
-        let _ = self.ast.add_edge(node, operand, SimpleCASTEdge::Value(ValueEdge::Operand(0)));
+        let _ = self.ast.add_edge(node, operand, CCFGEdge::Value(ValueEdge::Operand(0)));
         self.exprs.push((true, node));
         node
     }
 
     /// Add ActionNode of assignment
     pub fn assign(&mut self, dst: NodeIndex, src: NodeIndex, prev_action: NodeIndex) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Assignment));
-        let _ = self.ast.add_edge(node, dst, SimpleCASTEdge::Value(ValueEdge::AssignDst));
-        let _ = self.ast.add_edge(node, src, SimpleCASTEdge::Value(ValueEdge::AssignSrc));
-        let _ = self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::Assignment));
+        let _ = self.ast.add_edge(node, dst, CCFGEdge::Value(ValueEdge::AssignDst));
+        let _ = self.ast.add_edge(node, src, CCFGEdge::Value(ValueEdge::AssignSrc));
+        let _ = self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
     }
 
     pub fn dummy_goto(&mut self, prev_action: NodeIndex) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::DummyGoto));
-        let _ = self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::DummyGoto));
+        let _ = self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
     }
 
     /// Add ActionNode of function call
     pub fn call_func(&mut self, fname: &str, args: &[NodeIndex], prev_action: NodeIndex,
                  ret_val: Option<NodeIndex>) -> NodeIndex {
-        let call_node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Call(fname.to_string())));
+        let call_node = self.ast.add_node(CCFGNode::Action(ActionNode::Call(fname.to_string())));
         for (i, arg) in args.iter().enumerate() {
-            self.ast.add_edge(call_node, *arg, SimpleCASTEdge::Value(ValueEdge::Arg(i as u8)));
+            self.ast.add_edge(call_node, *arg, CCFGEdge::Value(ValueEdge::Arg(i as u8)));
         }
-        self.ast.add_edge(prev_action, call_node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        self.ast.add_edge(prev_action, call_node, CCFGEdge::Action(ActionEdge::Normal));
         if ret_val.is_some() {
-            self.ast.add_edge(call_node, ret_val.unwrap(), SimpleCASTEdge::Value(ValueEdge::FuncVal));
+            self.ast.add_edge(call_node, ret_val.unwrap(), CCFGEdge::Value(ValueEdge::FuncVal));
         }
         call_node
     }
@@ -217,10 +217,10 @@ impl SimpleCAST {
         let e = self.ast.find_edge(prev_action, next_action)
             .map(|x| (x, self.ast.edge_weight(x).map(|a| a.clone())));
         match e {
-            Some((idx, Some(SimpleCASTEdge::Action(_)))) => {
+            Some((idx, Some(CCFGEdge::Action(_)))) => {
                 self.ast.remove_edge(idx);
-                self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
-                self.ast.add_edge(node, next_action, SimpleCASTEdge::Action(ActionEdge::Normal));
+                self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
+                self.ast.add_edge(node, next_action, CCFGEdge::Action(ActionEdge::Normal));
             },
             _ => {
                 radeco_warn!("Invalid nodes {:?}, {:?}", prev_action, next_action);
@@ -233,7 +233,7 @@ impl SimpleCAST {
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    SimpleCASTEdge::Action(_) => Some(e.id()),
+                    CCFGEdge::Action(_) => Some(e.id()),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -245,15 +245,15 @@ impl SimpleCAST {
     /// Add ActionNode of if statement
     pub fn conditional(&mut self, condition: NodeIndex, if_then: NodeIndex,
                    if_else: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::If));
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::If));
         self.remove_incoming_actions(if_then);
         if if_else.is_some() {
             self.remove_incoming_actions(if_else.unwrap());
-            self.ast.add_edge(node, if_else.unwrap(), SimpleCASTEdge::Action(ActionEdge::IfElse));
+            self.ast.add_edge(node, if_else.unwrap(), CCFGEdge::Action(ActionEdge::IfElse));
         }
-        self.ast.add_edge(node, if_then, SimpleCASTEdge::Action(ActionEdge::IfThen));
-        self.ast.add_edge(node, condition, SimpleCASTEdge::Value(ValueEdge::Conditional));
-        self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        self.ast.add_edge(node, if_then, CCFGEdge::Action(ActionEdge::IfThen));
+        self.ast.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
+        self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
     }
 
@@ -263,7 +263,7 @@ impl SimpleCAST {
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    SimpleCASTEdge::Action(ActionEdge::Normal) => Some((e.target(), e.id())),
+                    CCFGEdge::Action(ActionEdge::Normal) => Some((e.target(), e.id())),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -271,21 +271,21 @@ impl SimpleCAST {
             radeco_warn!("More than one Normal Edges found");
         }
         let if_node = self.conditional(condition, if_then, if_else, prev);
-        self.add_edge(prev, if_node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        self.add_edge(prev, if_node, CCFGEdge::Action(ActionEdge::Normal));
         if let Some(&(next, idx)) = es.first() {
             self.ast.remove_edge(idx);
-            self.add_edge(if_node, next, SimpleCASTEdge::Action(ActionEdge::Normal));
+            self.add_edge(if_node, next, CCFGEdge::Action(ActionEdge::Normal));
         };
         if_node
     }
 
     /// Add ActionNode of return statement
     pub fn add_return(&mut self, ret_val: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Return));
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::Return));
         if ret_val.is_some() {
-            self.ast.add_edge(node, ret_val.unwrap(), SimpleCASTEdge::Value(ValueEdge::RetVal));
+            self.ast.add_edge(node, ret_val.unwrap(), CCFGEdge::Value(ValueEdge::RetVal));
         }
-        self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
     }
 
@@ -294,7 +294,7 @@ impl SimpleCAST {
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    SimpleCASTEdge::Action(ActionEdge::Normal) => Some((e.source(), e.id())),
+                    CCFGEdge::Action(ActionEdge::Normal) => Some((e.source(), e.id())),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -304,28 +304,28 @@ impl SimpleCAST {
         let goto_node = if let Some(&(prev, idx)) = es.first() {
             self.ast.remove_edge(idx);
             let goto_node = self.add_goto(dst, label_str, prev);
-            self.add_edge(prev, goto_node, SimpleCASTEdge::Action(ActionEdge::Normal));
+            self.add_edge(prev, goto_node, CCFGEdge::Action(ActionEdge::Normal));
             goto_node
         } else {
             let entry = self.entry;
             self.add_goto(dst, label_str, entry)
         };
-        self.add_edge(goto_node, next, SimpleCASTEdge::Action(ActionEdge::Normal));
+        self.add_edge(goto_node, next, CCFGEdge::Action(ActionEdge::Normal));
         goto_node
     }
 
     pub fn add_goto(&mut self, dst: NodeIndex, label_str: &str, prev_action: NodeIndex) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Goto));
-        self.ast.add_edge(node, dst, SimpleCASTEdge::Action(ActionEdge::GotoDst));
-        self.ast.add_edge(prev_action, node, SimpleCASTEdge::Action(ActionEdge::Normal));
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::Goto));
+        self.ast.add_edge(node, dst, CCFGEdge::Action(ActionEdge::GotoDst));
+        self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         self.label_map.insert(dst, label_str.to_string());
         node
     }
 
     pub fn insert_goto(&mut self, prev_action: NodeIndex, next_action: NodeIndex,
                    dst: NodeIndex, label_str: &str) -> NodeIndex {
-        let node = self.ast.add_node(SimpleCASTNode::Action(ActionNode::Goto));
-        let _ = self.ast.add_edge(node, dst, SimpleCASTEdge::Action(ActionEdge::GotoDst));
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::Goto));
+        let _ = self.ast.add_edge(node, dst, CCFGEdge::Action(ActionEdge::GotoDst));
         self.insert_node(prev_action, next_action, node);
         self.label_map.insert(dst, label_str.to_string());
         node
@@ -336,7 +336,7 @@ impl SimpleCAST {
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Action(ActionEdge::Normal) => Some(e.target()),
+                    &CCFGEdge::Action(ActionEdge::Normal) => Some(e.target()),
                     _ => None,
                 }
             }).next()
@@ -344,7 +344,7 @@ impl SimpleCAST {
 
     // Returns a pair (IfThen, IfElse)
     fn branch(&self, idx: NodeIndex) -> Option<(Vec<NodeIndex>, Option<Vec<NodeIndex>>)> {
-        if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::If)) {
+        if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::If)) {
             return None;
         }
         let gather_actions = |index, action_type| {
@@ -357,7 +357,7 @@ impl SimpleCAST {
                     .first().map(|e| e.clone())
             };
             let next_normal = move |node| {
-                next_node(node, &SimpleCASTEdge::Action(ActionEdge::Normal))
+                next_node(node, &CCFGEdge::Action(ActionEdge::Normal))
             };
             move || {
                 let mut first = next_node(index, action_type);
@@ -373,8 +373,8 @@ impl SimpleCAST {
                 }
             }
         };
-        let if_then = gather_actions(idx, &SimpleCASTEdge::Action(ActionEdge::IfThen))();
-        let if_else = gather_actions(idx, &SimpleCASTEdge::Action(ActionEdge::IfElse))();
+        let if_then = gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfThen))();
+        let if_else = gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfElse))();
         if if_then.is_some() {
             Some((if_then.unwrap(), if_else))
         } else {
@@ -384,12 +384,12 @@ impl SimpleCAST {
 
     // Returns value node which represents condition used by If statement
     fn branch_condition(&self, idx: NodeIndex) -> Option<NodeIndex> {
-        if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::If)) {
+        if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::If)) {
             return None;
         }
         let ns = self.ast.edges_directed(idx, Direction::Outgoing).into_iter().collect();
         let expr = {
-            let tmp = neighbors_by_edge(&ns, &SimpleCASTEdge::Value(ValueEdge::Conditional));
+            let tmp = neighbors_by_edge(&ns, &CCFGEdge::Value(ValueEdge::Conditional));
             if tmp.len() > 1 {
                 radeco_warn!("More than one expressions found: If");
             }
@@ -400,14 +400,14 @@ impl SimpleCAST {
 
     // Returns destination of goto statement
     fn goto(&self, idx: NodeIndex) -> Option<NodeIndex> {
-        if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::Goto))  {
+        if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::Goto))  {
             return None;
         };
         let goto_dsts = self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
+                    &CCFGEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -420,13 +420,13 @@ impl SimpleCAST {
 
     // Returns a pair (Dst, Src) which represents Dst = Src
     fn assignment(&self, idx: NodeIndex) -> Option<(NodeIndex, NodeIndex)> {
-        if self.ast.node_weight(idx) != Some(&SimpleCASTNode::Action(ActionNode::Assignment)) {
+        if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::Assignment)) {
             return None;
         }
         let ns = self.ast.edges_directed(idx, Direction::Outgoing).into_iter().collect();
-        let src = neighbors_by_edge(&ns, &SimpleCASTEdge::Value(ValueEdge::AssignSrc))
+        let src = neighbors_by_edge(&ns, &CCFGEdge::Value(ValueEdge::AssignSrc))
             .first().map(|e| e.clone());
-        let dst = neighbors_by_edge(&ns, &SimpleCASTEdge::Value(ValueEdge::AssignDst))
+        let dst = neighbors_by_edge(&ns, &CCFGEdge::Value(ValueEdge::AssignDst))
             .first().map(|e| e.clone());
         if src.is_some() && dst.is_some() {
             return Some((dst.unwrap(), src.unwrap()))
@@ -437,14 +437,14 @@ impl SimpleCAST {
     // Returns arguments of function call
     fn args_call(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
         match self.ast.node_weight(idx) {
-            Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
+            Some(&CCFGNode::Action(ActionNode::Call(_))) => {},
             _ => {return None;},
         };
         let mut args = self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Value(ValueEdge::Arg(o)) => Some((o, e.target())),
+                    &CCFGEdge::Value(ValueEdge::Arg(o)) => Some((o, e.target())),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -458,14 +458,14 @@ impl SimpleCAST {
     // Returns value node which is assigned by a given function call
     fn func_val(&self, idx: NodeIndex) -> Option<NodeIndex> {
         match self.ast.node_weight(idx) {
-            Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => {},
+            Some(&CCFGNode::Action(ActionNode::Call(_))) => {},
             _ => {return None;},
         };
         let ret = self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Value(ValueEdge::FuncVal) => Some(e.target()),
+                    &CCFGEdge::Value(ValueEdge::FuncVal) => Some(e.target()),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -478,14 +478,14 @@ impl SimpleCAST {
     // Returns value node of the return value of a return statement
     fn ret_val(&self, idx: NodeIndex) -> Option<NodeIndex> {
         match self.ast.node_weight(idx) {
-            Some(&SimpleCASTNode::Action(ActionNode::Return)) => {},
+            Some(&CCFGNode::Action(ActionNode::Return)) => {},
             _ => {return None;}
         };
         let ret_val = self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Value(ValueEdge::RetVal) => Some(e.target()),
+                    &CCFGEdge::Value(ValueEdge::RetVal) => Some(e.target()),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -501,7 +501,7 @@ impl SimpleCAST {
             .into_iter()
             .filter_map(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Value(ValueEdge::Operand(i)) => Some((i, e.target())),
+                    &CCFGEdge::Value(ValueEdge::Operand(i)) => Some((i, e.target())),
                     _ => None,
                 }
             }).collect::<Vec<_>>();
@@ -517,38 +517,38 @@ impl SimpleCAST {
     /// Returns constant value which is either register or immidiate value
     pub fn constant_of(&self, node: NodeIndex) -> Option<String> {
         match self.ast.node_weight(node) {
-            Some(&SimpleCASTNode::Value(ValueNode::Constant(_, ref s))) => Some(s.clone()),
+            Some(&CCFGNode::Value(ValueNode::Constant(_, ref s))) => Some(s.clone()),
             _ => None,
         }
     }
 
     pub fn is_assign_node(&self, node: NodeIndex) -> bool {
         match self.ast.node_weight(node) {
-            Some(&SimpleCASTNode::Action(ActionNode::Assignment)) => true,
+            Some(&CCFGNode::Action(ActionNode::Assignment)) => true,
             _ => false
         }
     }
 
     pub fn is_call_node(&self, node: NodeIndex) -> bool {
         match self.ast.node_weight(node) {
-            Some(&SimpleCASTNode::Action(ActionNode::Call(_))) => true,
+            Some(&CCFGNode::Action(ActionNode::Call(_))) => true,
             _ => false
         }
     }
 }
 
-/// SimpleCAST should meet following conditions.
+/// CCFG should meet following conditions.
 /// 1. There are at most 1 ActionEdge::Normal from each node.
 /// 2. There are ActionEdge::IfThen, ValueEdge::Conditional from ActionNode::If
 /// 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
 /// 4. The destination node of GotoDst edge is ActionNode.
-pub struct SimpleCASTVerifier {
+pub struct CCFGVerifier {
 }
 
-type Verifier = Fn(NodeIndex, &SimpleCAST) -> Result<(), String>;
-impl SimpleCASTVerifier {
+type Verifier = Fn(NodeIndex, &CCFG) -> Result<(), String>;
+impl CCFGVerifier {
     const DELIM: &'static str = "; ";
-    pub fn verify(cast: &SimpleCAST) -> Result<(), String> {
+    pub fn verify(cast: &CCFG) -> Result<(), String> {
         Self::verify_each_node(cast, &Self::verify_normal_action, "Normal action")?;
         Self::verify_each_node(cast, &Self::verify_if, "If")?;
         Self::verify_each_node(cast, &Self::verify_edge_action, "Edge-Action")?;
@@ -556,7 +556,7 @@ impl SimpleCASTVerifier {
         Ok(())
     }
 
-    fn verify_each_node(cast: &SimpleCAST, verifier: &Verifier, name: &str) -> Result<(), String> {
+    fn verify_each_node(cast: &CCFG, verifier: &Verifier, name: &str) -> Result<(), String> {
         let mut errors = Vec::new();
         let nodes = cast.ast.node_indices();
         for node in nodes {
@@ -572,15 +572,15 @@ impl SimpleCASTVerifier {
     }
 
     // 1. There are at most 1 ActionEdge::Normal from each node.
-    fn verify_normal_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+    fn verify_normal_action(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
         match cast.ast.node_weight(node) {
-            Some(&SimpleCASTNode::Action(_)) => {},
+            Some(&CCFGNode::Action(_)) => {},
             _ => return Ok(()),
         };
         let normal_actions = cast.ast.edges_directed(node, Direction::Outgoing)
             .filter(|e| {
                 match e.weight() {
-                    &SimpleCASTEdge::Action(ActionEdge::Normal) => true,
+                    &CCFGEdge::Action(ActionEdge::Normal) => true,
                     _ => false,
                 }
             });
@@ -593,9 +593,9 @@ impl SimpleCASTVerifier {
     }
 
     // 2. There are ActionEdge::IfThen, ValueEdge::Conditional from ActionNode::If
-    fn verify_if(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+    fn verify_if(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
         match cast.ast.node_weight(node) {
-            Some(&SimpleCASTNode::Action(ActionNode::If)) => {},
+            Some(&CCFGNode::Action(ActionNode::If)) => {},
             _ => return Ok(()),
         };
         let mut errors = Vec::new();
@@ -615,14 +615,14 @@ impl SimpleCASTVerifier {
     }
 
     // 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
-    fn verify_edge_action(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+    fn verify_edge_action(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
         let mut errors = Vec::new();
         let edges = cast.ast.edges_directed(node, Direction::Outgoing);
         for edge in edges {
             match (edge.weight(), cast.ast.node_weight(edge.target())) {
-                (SimpleCASTEdge::Action(_), Some(&SimpleCASTNode::Action(_)))
-                | (SimpleCASTEdge::Value(_), Some(&SimpleCASTNode::Value(_)))
-                | (SimpleCASTEdge::Action(ActionEdge::GotoDst), Some(&SimpleCASTNode::Entry)) => {},
+                (CCFGEdge::Action(_), Some(&CCFGNode::Action(_)))
+                | (CCFGEdge::Value(_), Some(&CCFGNode::Value(_)))
+                | (CCFGEdge::Action(ActionEdge::GotoDst), Some(&CCFGNode::Entry)) => {},
                 _ => {
                     let error = format!("{:?} {:?}", edge.weight(),
                             cast.ast.node_weight(edge.target()));
@@ -638,16 +638,16 @@ impl SimpleCASTVerifier {
     }
 
     // 4. The destination node of GotoDst edge is ActionNode.
-    fn verify_goto(node: NodeIndex, cast: &SimpleCAST) -> Result<(), String> {
+    fn verify_goto(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
         match cast.ast.node_weight(node) {
-            Some(&SimpleCASTNode::Action(ActionNode::Goto)) => {},
+            Some(&CCFGNode::Action(ActionNode::Goto)) => {},
             _ => return Ok(()),
         };
         let mut errors = Vec::new();
         let gotos = cast.ast
             .edges_directed(node, Direction::Outgoing)
             .filter_map(|e| match e.weight() {
-                SimpleCASTEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
+                CCFGEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                 _ => None,
             }).collect::<Vec<_>>();
         if gotos.len() != 1 {
@@ -655,8 +655,8 @@ impl SimpleCASTVerifier {
         }
         for goto in gotos {
             match cast.ast.node_weight(goto) {
-                Some(&SimpleCASTNode::Action(_))
-                | Some(&SimpleCASTNode::Entry) => {},
+                Some(&CCFGNode::Action(_))
+                | Some(&CCFGNode::Entry) => {},
                 n => {
                     errors.push(format!("Invalid node {:?} @ {:?}", n, node));
                 },
@@ -670,16 +670,16 @@ impl SimpleCASTVerifier {
     }
 }
 
-/// This is used for translating SimpleCAST to CAST
+/// This is used for translating CCFG to CAST
 struct CASTConverter<'a> {
-    ast: &'a SimpleCAST,
-    /// HashMap from SimpleCAST's node to CAST's node
+    ast: &'a CCFG,
+    /// HashMap from CCFG's node to CAST's node
     node_map: HashMap<NodeIndex, NodeIndex>,
     visited: HashSet<NodeIndex>,
 }
 
 impl<'a> CASTConverter<'a> {
-    fn new(ast: &SimpleCAST) -> CASTConverter {
+    fn new(ast: &CCFG) -> CASTConverter {
         CASTConverter {
             ast: ast,
             node_map: HashMap::new(),
@@ -694,7 +694,7 @@ impl<'a> CASTConverter<'a> {
             .first().cloned().expect("This can not be None");
         self.node_map.insert(self.ast.unknown, unknown_node);
         for &(is_implicit, con) in self.ast.consts.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
+            if let Some(&CCFGNode::Value(ValueNode::Constant(ref ty_opt, ref value_name))) = self.ast.ast.node_weight(con) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_ast::BTy::Int, false, 0));
                 let n = c_ast.declare_vars(ty, &[value_name.to_string()], is_implicit);
                 self.node_map.insert(con, n[0]);
@@ -703,7 +703,7 @@ impl<'a> CASTConverter<'a> {
         // XXX It should report error if there are defferent types for same name variables.
         let mut declared_vars = HashSet::new();
         for &(is_implicit, var) in self.ast.vars.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
+            if let Some(&CCFGNode::Value(ValueNode::Variable(ref ty_opt, ref var_name))) = self.ast.ast.node_weight(var) {
                 let ty = ty_opt.clone().unwrap_or(Ty::new(c_ast::BTy::Int, false, 0));
                 let is_declared = declared_vars.contains(var_name);
                 let n = c_ast.declare_vars(ty, &[var_name.to_string()], is_implicit || is_declared);
@@ -714,7 +714,7 @@ impl<'a> CASTConverter<'a> {
             }
         }
         for &(is_implicit, expr) in self.ast.exprs.iter() {
-            if let Some(&SimpleCASTNode::Value(ValueNode::Expression(ref op))) = self.ast.ast.node_weight(expr) {
+            if let Some(&CCFGNode::Value(ValueNode::Expression(ref op))) = self.ast.ast.node_weight(expr) {
                 let operands = self.ast.operands_from_expr(expr)
                     .into_iter()
                     .map(|_n| {
@@ -744,7 +744,7 @@ impl<'a> CASTConverter<'a> {
         };
         let idx = self.ast.ast.node_weight(current_node).cloned();
         match idx {
-            Some(SimpleCASTNode::Action(ActionNode::Assignment)) => {
+            Some(CCFGNode::Action(ActionNode::Assignment)) => {
                 let tmp = self.ast.assignment(current_node)
                     .and_then(|(d, s)| {
                         match (self.node_map.get(&d), self.node_map.get(&s)) {
@@ -759,7 +759,7 @@ impl<'a> CASTConverter<'a> {
                     radeco_err!("Something wrong");
                 }
             },
-            Some(SimpleCASTNode::Action(ActionNode::Call(ref name))) => {
+            Some(CCFGNode::Action(ActionNode::Call(ref name))) => {
                 let args = self.ast.args_call(current_node)
                     .unwrap_or(Vec::new())
                     .into_iter()
@@ -778,14 +778,14 @@ impl<'a> CASTConverter<'a> {
                 }
                 self.node_map.insert(current_node, node);
             },
-            Some(SimpleCASTNode::Action(ActionNode::Return)) => {
+            Some(CCFGNode::Action(ActionNode::Return)) => {
                 let opt = self.ast.ret_val(current_node)
                     .and_then(|n| self.node_map.get(&n))
                     .map(|n| *n);
                 let node = c_ast.ret(opt);
                 self.node_map.insert(current_node, node);
             },
-            Some(SimpleCASTNode::Action(ActionNode::If)) => {
+            Some(CCFGNode::Action(ActionNode::If)) => {
                 let cond = self.ast.branch_condition(current_node)
                     .unwrap_or(self.ast.unknown);
                 let branches = self.ast.branch(current_node).map(|x| x.clone());
@@ -811,7 +811,7 @@ impl<'a> CASTConverter<'a> {
                     self.node_map.insert(current_node, node);
                 }
             },
-            Some(SimpleCASTNode::Action(ActionNode::Goto)) => {
+            Some(CCFGNode::Action(ActionNode::Goto)) => {
                 let dst_opt = self.ast.goto(current_node)
                     .and_then(|d| self.ast.label_map.get(&d))
                     .map(|d| d.clone());
@@ -822,8 +822,8 @@ impl<'a> CASTConverter<'a> {
                 let node = c_ast.goto(&dst);
                 self.node_map.insert(current_node, node);
             },
-            Some(SimpleCASTNode::Entry) => {},
-            Some(SimpleCASTNode::Action(ActionNode::DummyGoto)) => {
+            Some(CCFGNode::Entry) => {},
+            Some(CCFGNode::Action(ActionNode::DummyGoto)) => {
                 // fallthrough
             },
             _ => {
@@ -859,7 +859,7 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_basic_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let x = ast.var("x", None);
         let y = ast.var("y", None);
         let z = ast.var("z", None);
@@ -867,7 +867,7 @@ mod test {
         let entry = ast.entry;
         let assn = ast.assign(x, y, entry);
         let _ = ast.call_func("func", &[z, w], assn, None);
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -880,14 +880,14 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_expr_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let x = ast.var("x", None);
         let y = ast.var("y", None);
         let z = ast.var("z", None);
         let entry = ast.entry;
         let expr = ast.expr(&[x, y], c_ast::Expr::Add);
         let assn = ast.assign(x, expr, entry);
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -899,12 +899,12 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_func_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let x = ast.var("x", None);
         let y = ast.var("y", None);
         let entry = ast.entry;
         let call_f = ast.call_func("func", &[x], entry, Some(y));
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -924,7 +924,7 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_conditional_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let x = ast.var("x", None);
         let y = ast.var("y", None);
         let z = ast.var("z", None);
@@ -935,7 +935,7 @@ mod test {
         let call_f = ast.call_func("func", &[z, w], assn, None);
         let call_test2 = ast.call_func("test2", &[], call_f, None);
         let _ = ast.conditional(x, assn, Some(call_f), entry);
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -950,14 +950,14 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_goto_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let entry = ast.entry;
         let x = ast.var("x", None);
         let y = ast.var("y", None);
         let assn = ast.assign(x, y, entry);
         let _ = ast.add_goto(entry, "L1", assn);
         let output = ast.to_c_ast().print();
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         println!("{}", output);
     }
 
@@ -967,11 +967,11 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_return_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let entry = ast.entry;
         let x = ast.var("x", None);
         let _ = ast.add_return(Some(x), entry);
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -986,14 +986,14 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_insert_goto_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let entry = ast.entry;
         let x = ast.var("x", None);
         let y = ast.var("y", None);
         let assn = ast.assign(x, y, entry);
         let ret = ast.add_return(Some(x), assn);
         let _ = ast.insert_goto(entry, assn, ret, "L1");
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1016,7 +1016,7 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_complex_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let entry = ast.entry;
         let x = ast.var("x", None);
         let y = ast.var("y", None);
@@ -1031,7 +1031,7 @@ mod test {
         let break_goto = ast.add_goto(assn2, "L1", f_call);
         let if_node = ast.conditional(cond, break_goto, None, f_call);
         let _ = ast.add_return(None, if_node);
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1054,7 +1054,7 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_complex1_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let entry = ast.entry;
         let x = ast.var("x", None);
         let y = ast.var("y", None);
@@ -1070,7 +1070,7 @@ mod test {
         let break_goto = ast.add_goto(assn2, "L1", f_call1);
         let if_node = ast.conditional(cond, f_call1, None, f_call);
         let _ = ast.add_return(None, if_node);
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }
@@ -1086,7 +1086,7 @@ mod test {
     // }
     #[test]
     fn simple_c_ast_type_test() {
-        let mut ast = SimpleCAST::new("main");
+        let mut ast = CCFG::new("main");
         let entry = ast.entry;
         let i = ast.var("i", Some(Ty::new(BTy::Int, true, 0)));
         let u = ast.var("u", Some(Ty::new(BTy::Int, false, 1)));
@@ -1094,7 +1094,7 @@ mod test {
         let c = ast.var("c", Some(Ty::new(BTy::Char, true, 0)));
         let v = ast.var("v", Some(Ty::new(BTy::Void, true, 0)));
         let f = ast.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
-        SimpleCASTVerifier::verify(&ast).expect("SimpleCAST verification failed");
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
     }

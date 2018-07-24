@@ -1,12 +1,12 @@
-//! This module is for recovering SimpleCAST from RadecoFunction.
+//! This module is for recovering CCFG from RadecoFunction.
 //!
-//! Usage of this module is to call `c_simple_ast_builder::recover_simple_ast(rfn)`
+//! Usage of this module is to call `c_cfg_builder::recover_simple_ast(rfn)`
 //! where `rfn` is an instance of `RadecoFunction`, the function returns an instance of
-//! SimpleCAST and we can obtain higher level representation than Radeco IR.
+//! CCFG and we can obtain higher level representation than Radeco IR.
 
 use super::c_ast;
 use super::c_ast::Ty;
-use super::c_simple_ast::SimpleCAST;
+use super::c_cfg::CCFG;
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MOpcode, MAddress};
 use middle::ssa::cfg_traits::CFG;
@@ -20,14 +20,14 @@ fn is_debug() -> bool {
     cfg!(feature = "trace_log")
 }
 
-/// This constructs SimpleCAST from an instance of RadecoFunction.
+/// This constructs CCFG from an instance of RadecoFunction.
 pub fn recover_simple_ast(
     rfn: &RadecoFunction,
     fname_map: &HashMap<u64, String>,
     strings: &HashMap<u64, String>,
-) -> SimpleCAST {
-    let mut builder = CASTBuilder::new(rfn, fname_map);
-    let data_graph = CASTDataMap::recover_data(rfn, &mut builder.ast, strings);
+) -> CCFG {
+    let mut builder = CCFGBuilder::new(rfn, fname_map);
+    let data_graph = CCFGDataMap::recover_data(rfn, &mut builder.ast, strings);
     builder.datamap = data_graph;
     builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
     builder.insert_jumps();
@@ -42,30 +42,30 @@ fn ret_value_string(rfn: &RadecoFunction) -> Option<String> {
     ret_reg_opt.unwrap().ret
 }
 
-// CASTBuilder constructs SimpleCAST from RadecoFunction
-struct CASTBuilder<'a> {
-    ast: SimpleCAST,
-    // NodeIndex of SimpleCAST
+// CCFGBuilder constructs CCFG from RadecoFunction
+struct CCFGBuilder<'a> {
+    ast: CCFG,
+    // NodeIndex of CCFG
     last_action: NodeIndex,
     rfn: &'a RadecoFunction,
     // SSA of RadecoFunction
     ssa: &'a SSAStorage,
     fname_map: &'a HashMap<u64, String>,
     action_map: HashMap<NodeIndex, NodeIndex>,
-    datamap: CASTDataMap<'a>,
+    datamap: CCFGDataMap<'a>,
 }
 
-impl<'a> CASTBuilder<'a> {
-    fn new(rfn: &'a RadecoFunction, fname_map: &'a HashMap<u64, String>) -> CASTBuilder<'a> {
-        let ast = SimpleCAST::new(rfn.name.as_ref());
-        CASTBuilder {
+impl<'a> CCFGBuilder<'a> {
+    fn new(rfn: &'a RadecoFunction, fname_map: &'a HashMap<u64, String>) -> CCFGBuilder<'a> {
+        let ast = CCFG::new(rfn.name.as_ref());
+        CCFGBuilder {
             last_action: ast.entry,
             ast: ast,
             rfn: rfn,
             ssa: rfn.ssa(),
             fname_map: fname_map,
             action_map: HashMap::new(),
-            datamap: CASTDataMap::new(rfn),
+            datamap: CCFGDataMap::new(rfn),
         }
     }
 
@@ -79,7 +79,7 @@ impl<'a> CASTBuilder<'a> {
         self.last_action
     }
 
-    // Retrieve SimpleCAST's return value node of function call
+    // Retrieve CCFG's return value node of function call
     fn return_node(&self, call_node: NodeIndex) -> Option<NodeIndex> {
         let ret_reg_name_opt = ret_value_string(self.rfn);
         if ret_reg_name_opt.is_none() {
@@ -164,7 +164,7 @@ impl<'a> CASTBuilder<'a> {
     fn recover_action(&mut self, node: NodeIndex) -> NodeIndex {
         debug_assert!(self.is_recover_action(node));
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
-        radeco_trace!("CASTBuilder::recover {:?} @ {:?}", op, node);
+        radeco_trace!("CCFGBuilder::recover {:?} @ {:?}", op, node);
         match op {
             MOpcode::OpCall => {
                 let ret = self.call_action(node);
@@ -228,7 +228,7 @@ impl<'a> CASTBuilder<'a> {
     // ssa_node: SSA NodeIndex for goto statement
     // succ: SSA NodeIndex for destination node
     fn handle_goto(&mut self, ssa_node: NodeIndex, succ: NodeIndex) {
-        radeco_trace!("CASTBuilder::handle goto");
+        radeco_trace!("CCFGBuilder::handle goto");
         let ast_node = self.action_map.get(&ssa_node).cloned().expect(
             "The node should be \
              added to action_map",
@@ -251,7 +251,7 @@ impl<'a> CASTBuilder<'a> {
     // selector: SSA NodeIndex for condition expression
     // true_node: SSA NodeIndex for if-then block
     fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex) {
-        radeco_trace!("CASTBuilder::handle_if");
+        radeco_trace!("CCFGBuilder::handle_if");
         let ast_node = self.action_map.get(&ssa_node).cloned().expect(
             "The node should be \
              added to action_map",
@@ -293,7 +293,7 @@ impl<'a> CASTBuilder<'a> {
                 if let Some(succ) = self.ssa.unconditional_block(cur_node) {
                     if let Some(_) = self.ssa.selector_in(cur_node) {
                         // TODO
-                        radeco_trace!("CASTBuilder::insert_jumps INDIRET JMP");
+                        radeco_trace!("CCFGBuilder::insert_jumps INDIRET JMP");
                     } else {
                         self.handle_goto(cur_node, succ);
                     }
@@ -340,21 +340,21 @@ impl<'a> CASTBuilder<'a> {
     }
 }
 
-struct CASTDataMap<'a> {
+struct CCFGDataMap<'a> {
     rfn: &'a RadecoFunction,
     ssa: &'a SSAStorage,
     // Hashmap from node of SSAStorage to one of self.data_graph
-    // a map from node of data_graph to one of SimpleCAST's value
+    // a map from node of data_graph to one of CCFG's value
     pub var_map: HashMap<NodeIndex, NodeIndex>,
-    // a map from node of data_graph to one of SimpleCAST's register
+    // a map from node of data_graph to one of CCFG's register
     pub reg_map: HashMap<String, NodeIndex>,
     pub const_nodes: HashSet<NodeIndex>,
     seen: HashSet<NodeIndex>,
 }
 
-impl<'a> CASTDataMap<'a> {
-    fn new(rfn: &'a RadecoFunction) -> CASTDataMap<'a> {
-        CASTDataMap {
+impl<'a> CCFGDataMap<'a> {
+    fn new(rfn: &'a RadecoFunction) -> CCFGDataMap<'a> {
+        CCFGDataMap {
             ssa: rfn.ssa(),
             rfn: rfn,
             var_map: HashMap::new(),
@@ -364,10 +364,10 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
-    // Returns data map from SSAStorage's NodeIndex to SimpleCAST's NodeIndex
+    // Returns data map from SSAStorage's NodeIndex to CCFG's NodeIndex
     fn recover_data(
         rfn: &'a RadecoFunction,
-        ast: &mut SimpleCAST,
+        ast: &mut CCFG,
         strings: &'a HashMap<u64, String>,
     ) -> Self {
         let mut s = Self::new(rfn);
@@ -388,7 +388,7 @@ impl<'a> CASTDataMap<'a> {
         ret_node: NodeIndex,
         ops: Vec<NodeIndex>,
         expr: c_ast::Expr,
-        ast: &mut SimpleCAST,
+        ast: &mut CCFG,
     ) {
         debug_assert!(ops.len() == 2);
         let ops_mapped = ops.iter()
@@ -409,7 +409,7 @@ impl<'a> CASTDataMap<'a> {
         ret_node: NodeIndex,
         op: NodeIndex,
         expr: c_ast::Expr,
-        ast: &mut SimpleCAST,
+        ast: &mut CCFG,
     ) {
         if let Some(&n) = self.var_map.get(&op) {
             let expr_node = ast.expr(&[n], expr);
@@ -424,7 +424,7 @@ impl<'a> CASTDataMap<'a> {
         ret_node: NodeIndex,
         op: NodeIndex,
         expr: c_ast::Expr,
-        ast: &mut SimpleCAST,
+        ast: &mut CCFG,
     ) {
         if self.const_nodes.contains(&op) {
             let ast_node = self.var_map.get(&op).cloned().unwrap_or(ast.unknown);
@@ -434,7 +434,7 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
-    fn deref(&self, node: NodeIndex, ast: &mut SimpleCAST) -> NodeIndex {
+    fn deref(&self, node: NodeIndex, ast: &mut CCFG) -> NodeIndex {
         radeco_trace!("DeRef {:?}", node);
         let n = self.var_map.get(&node).cloned().unwrap_or(ast.unknown);
         ast.deref(n)
@@ -442,9 +442,9 @@ impl<'a> CASTDataMap<'a> {
 
     fn handle_phi(&mut self, node: NodeIndex) {
         debug_assert!(self.ssa.is_phi(node));
-        radeco_trace!("CASTBuilder::handle_phi {:?}", node);
+        radeco_trace!("CCFGBuilder::handle_phi {:?}", node);
         let ops = self.ssa.operands_of(node);
-        // Take first available/mappable node of SimpleCAST's node from phi node
+        // Take first available/mappable node of CCFG's node from phi node
         if let Some(&head) = ops.into_iter().filter_map(|n| self.var_map.get(&n)).next() {
             self.var_map.insert(node, head);
         }
@@ -458,9 +458,9 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
-    fn update_values(&mut self, ret_node: NodeIndex, ast: &mut SimpleCAST) {
+    fn update_values(&mut self, ret_node: NodeIndex, ast: &mut CCFG) {
         debug_assert!(self.ssa.is_expr(ret_node));
-        radeco_trace!("CASTBuilder::update_values {:?}", ret_node);
+        radeco_trace!("CCFGBuilder::update_values {:?}", ret_node);
         if self.seen.contains(&ret_node) {
             return;
         }
@@ -476,7 +476,7 @@ impl<'a> CASTDataMap<'a> {
         let ops = self.ssa.operands_of(ret_node);
 
         radeco_trace!(
-            "CASTBuilder::update_values opcode: {:?}",
+            "CCFGBuilder::update_values opcode: {:?}",
             self.ssa.opcode(ret_node)
         );
         match self.ssa.opcode(ret_node).unwrap_or(MOpcode::OpInvalid) {
@@ -534,8 +534,8 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
-    fn update_data_graph_by_call(&mut self, call_node: NodeIndex, ast: &mut SimpleCAST) {
-        radeco_trace!("CASTBuilder::update_data_graph_by_call {:?}", call_node);
+    fn update_data_graph_by_call(&mut self, call_node: NodeIndex, ast: &mut CCFG) {
+        radeco_trace!("CCFGBuilder::update_data_graph_by_call {:?}", call_node);
         let ret_reg_name_opt = ret_value_string(self.rfn);
         if ret_reg_name_opt.is_none() {
             return;
@@ -553,7 +553,7 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
-    fn prepare_consts(&mut self, ast: &mut SimpleCAST, strings: &HashMap<u64, String>) {
+    fn prepare_consts(&mut self, ast: &mut CCFG, strings: &HashMap<u64, String>) {
         for (&val, &node) in self.ssa.constants.iter() {
             if self.ssa.node_data(node).is_ok() {
                 // TODO add type
@@ -570,7 +570,7 @@ impl<'a> CASTDataMap<'a> {
         }
     }
 
-    fn prepare_regs(&mut self, ast: &mut SimpleCAST) {
+    fn prepare_regs(&mut self, ast: &mut CCFG) {
         for walk_node in self.ssa.inorder_walk() {
             let reg_state = self.ssa.registers_in(walk_node);
             if reg_state.is_none() {
@@ -579,7 +579,7 @@ impl<'a> CASTDataMap<'a> {
             let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
             for (idx, (node, _)) in reg_map.into_iter() {
                 let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-                // XXX SimpleCAST::constant may not be proper method for registering regs.
+                // XXX CCFG::constant may not be proper method for registering regs.
                 let ast_node = ast.constant(&name, None);
                 radeco_trace!("Add register {:?}", node);
                 self.var_map.insert(node, ast_node);
@@ -590,13 +590,13 @@ impl<'a> CASTDataMap<'a> {
     }
 }
 
-struct CASTBuilderVerifier {}
+struct CCFGBuilderVerifier {}
 
-// type Verifier = Fn(NodeIndex, &mut SimpleCAST, &mut CASTDataMap) -> Result<(), String>;
-impl CASTBuilderVerifier {
+// type Verifier = Fn(NodeIndex, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
+impl CCFGBuilderVerifier {
     const DELIM: &'static str = "; ";
 
-    fn verify(builder: &mut CASTBuilder) -> Result<(), String> {
+    fn verify(builder: &mut CCFGBuilder) -> Result<(), String> {
         let ssa = builder.ssa.clone();
         let mut errors = Vec::new();
         for node in ssa.inorder_walk() {
@@ -625,7 +625,7 @@ impl CASTBuilderVerifier {
     }
 
     // All argument node exist in SSAStorage
-    fn verify_args_inorder_at(builder: &CASTBuilder, call_node: NodeIndex) -> Result<(), String> {
+    fn verify_args_inorder_at(builder: &CCFGBuilder, call_node: NodeIndex) -> Result<(), String> {
         let mut errors = Vec::new();
         let args = builder.args_inorder(call_node);
         for arg in args {
@@ -641,18 +641,18 @@ impl CASTBuilderVerifier {
         }
     }
 
-    // Verify `assign` made `SimpleCAST::Action(ActionNode::Assignment)` node.
-    fn verify_assign_at(builder: &mut CASTBuilder, node: NodeIndex) -> Result<(), String> {
+    // Verify `assign` made `CCFG::Action(ActionNode::Assignment)` node.
+    fn verify_assign_at(builder: &mut CCFGBuilder, node: NodeIndex) -> Result<(), String> {
         let ops = builder.ssa.operands_of(node);
         let dst = builder.datamap.var_map.get(&ops[1]).map(|&x| {
             builder.ast.derefed_node(x).unwrap_or(x)
         });
         let src = builder.datamap.var_map.get(&ops[2]).cloned();
         if src.is_none() {
-            return Err("Failed to get src operand node from SimpleCAST".to_string());
+            return Err("Failed to get src operand node from CCFG".to_string());
         }
         if dst.is_none() {
-            return Err("Failed to get dst operand node from SimpleCAST".to_string());
+            return Err("Failed to get dst operand node from CCFG".to_string());
         }
         let assign_node = builder.assign(dst.unwrap(), src.unwrap());
         let is_err = builder.last_action != assign_node || !builder.ast.is_assign_node(assign_node);
@@ -663,30 +663,30 @@ impl CASTBuilderVerifier {
         }
     }
 
-    // Verify `call_action` made `SimpleCAST::Action(ActionNode::Call(_))` node.
+    // Verify `call_action` made `CCFG::Action(ActionNode::Call(_))` node.
     fn verify_call_action_at(
-        builder: &mut CASTBuilder,
+        builder: &mut CCFGBuilder,
         call_node: NodeIndex,
     ) -> Result<(), String> {
         let call_node = builder.call_action(call_node);
         let is_err = builder.last_action != call_node || !builder.ast.is_call_node(call_node);
         if is_err {
-            Err("`CASTBuilder::call_action` is failed.".to_string())
+            Err("`CCFGBuilder::call_action` is failed.".to_string())
         } else {
             Ok(())
         }
     }
 }
 
-struct CASTDataMapVerifier {}
+struct CCFGDataMapVerifier {}
 
-type Verifier = Fn(NodeIndex, &mut SimpleCAST, &mut CASTDataMap) -> Result<(), String>;
-impl CASTDataMapVerifier {
+type Verifier = Fn(NodeIndex, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
+impl CCFGDataMapVerifier {
     const DELIM: &'static str = "; ";
 
     fn verify_datamap(
-        datamap: &mut CASTDataMap,
-        ast: &mut SimpleCAST,
+        datamap: &mut CCFGDataMap,
+        ast: &mut CCFG,
         strings: &HashMap<u64, String>,
     ) -> Result<(), String> {
         Self::verify_prepare(ast, datamap, strings)?;
@@ -695,8 +695,8 @@ impl CASTDataMapVerifier {
     }
 
     fn verify_prepare(
-        ast: &mut SimpleCAST,
-        datamap: &mut CASTDataMap,
+        ast: &mut CCFG,
+        datamap: &mut CCFGDataMap,
         strings: &HashMap<u64, String>,
     ) -> Result<(), String> {
         datamap.prepare_consts(ast, strings);
@@ -706,7 +706,7 @@ impl CASTDataMapVerifier {
         Ok(())
     }
 
-    fn verify_ops(ast: &mut SimpleCAST, datamap: &mut CASTDataMap) -> Result<(), String> {
+    fn verify_ops(ast: &mut CCFG, datamap: &mut CCFGDataMap) -> Result<(), String> {
         Self::verify_handler_each_node(
             ast,
             datamap,
@@ -730,8 +730,8 @@ impl CASTDataMapVerifier {
     }
 
     fn verify_prepare_consts(
-        ast: &SimpleCAST,
-        datamap: &CASTDataMap,
+        ast: &CCFG,
+        datamap: &CCFGDataMap,
         strings: &HashMap<u64, String>,
     ) -> Result<(), String> {
         let mut errors = Vec::new();
@@ -742,7 +742,7 @@ impl CASTDataMapVerifier {
             }
         }
 
-        // All values of constant nodes between SSAStorage and SimpleCAST should be same.
+        // All values of constant nodes between SSAStorage and CCFG should be same.
         for (&node, &ast_node) in &datamap.var_map {
             let val = if let Some(tmp_val) = datamap.ssa.constant_value(node) {
                 let ret = if let Some(s) = strings.get(&tmp_val) {
@@ -781,7 +781,7 @@ impl CASTDataMapVerifier {
 
     // node: NodeIndex of SSAStorage
     fn verify_prepare_regs_of(
-        datamap: &CASTDataMap,
+        datamap: &CCFGDataMap,
         node: NodeIndex,
         name: String,
     ) -> Result<(), String> {
@@ -804,7 +804,7 @@ impl CASTDataMapVerifier {
         }
     }
 
-    fn verify_prepare_regs(datamap: &CASTDataMap) -> Result<(), String> {
+    fn verify_prepare_regs(datamap: &CCFGDataMap) -> Result<(), String> {
         let mut errors = Vec::new();
         for walk_node in datamap.ssa.inorder_walk() {
             let reg_state = datamap.ssa.registers_in(walk_node);
@@ -833,8 +833,8 @@ impl CASTDataMapVerifier {
     }
 
     fn verify_handler_each_node(
-        ast: &mut SimpleCAST,
-        datamap: &mut CASTDataMap,
+        ast: &mut CCFG,
+        datamap: &mut CCFGDataMap,
         verifier: &Verifier,
         name: &str,
     ) -> Result<(), String> {
@@ -857,8 +857,8 @@ impl CASTDataMapVerifier {
 
     fn verify_handle_uniop(
         node: NodeIndex,
-        ast: &mut SimpleCAST,
-        datamap: &mut CASTDataMap,
+        ast: &mut CCFG,
+        datamap: &mut CCFGDataMap,
     ) -> Result<(), String> {
         // Ensure `handle_uniop` insert node as key into var_map.
         let expr = c_ast::Expr::Not;
@@ -882,8 +882,8 @@ impl CASTDataMapVerifier {
 
     fn verify_handle_binop(
         node: NodeIndex,
-        ast: &mut SimpleCAST,
-        datamap: &mut CASTDataMap,
+        ast: &mut CCFG,
+        datamap: &mut CCFGDataMap,
     ) -> Result<(), String> {
         // Ensure `handle_binop` insert node as key into var_map.
         let expr = c_ast::Expr::Add;
@@ -907,8 +907,8 @@ impl CASTDataMapVerifier {
 
     fn verify_handle_cast(
         node: NodeIndex,
-        ast: &mut SimpleCAST,
-        datamap: &mut CASTDataMap,
+        ast: &mut CCFG,
+        datamap: &mut CCFGDataMap,
     ) -> Result<(), String> {
         // Ensure `handle_cast` insert node as key into var_map.
         let expr = c_ast::Expr::Cast(8);
@@ -934,9 +934,9 @@ impl CASTDataMapVerifier {
 
 #[cfg(test)]
 mod test {
-    use backend::lang_c::c_simple_ast;
-    use backend::lang_c::c_simple_ast_builder::{CASTBuilder, CASTDataMap, CASTBuilderVerifier,
-                                                CASTDataMapVerifier};
+    use backend::lang_c::c_cfg;
+    use backend::lang_c::c_cfg_builder::{CCFGBuilder, CCFGDataMap, CCFGBuilderVerifier,
+                                                CCFGDataMapVerifier};
     use frontend::radeco_containers::RadecoFunction;
     use frontend::radeco_source::SourceErr;
     use middle::ir_reader;
@@ -984,9 +984,9 @@ mod test {
     fn c_ast_data_map_test() {
         for file in FILES.iter() {
             let mut rfn = load("./test_files/bin1_main_ssa");
-            let mut datamap = CASTDataMap::new(&rfn);
-            let mut cast = c_simple_ast::SimpleCAST::new(rfn.name.as_ref());
-            CASTDataMapVerifier::verify_datamap(&mut datamap, &mut cast, &HashMap::new())
+            let mut datamap = CCFGDataMap::new(&rfn);
+            let mut cast = c_cfg::CCFG::new(rfn.name.as_ref());
+            CCFGDataMapVerifier::verify_datamap(&mut datamap, &mut cast, &HashMap::new())
                 .expect(&format!("CASTBDataMap verification failed {}", file));
         }
     }
@@ -996,11 +996,11 @@ mod test {
         for file in FILES.iter() {
             let mut rfn = load("./test_files/bin1_main_ssa");
             let dummy_map = HashMap::new();
-            let mut builder = CASTBuilder::new(&rfn, &dummy_map);
-            let data_graph = CASTDataMap::recover_data(&rfn, &mut builder.ast, &dummy_map);
+            let mut builder = CCFGBuilder::new(&rfn, &dummy_map);
+            let data_graph = CCFGDataMap::recover_data(&rfn, &mut builder.ast, &dummy_map);
             builder.datamap = data_graph;
-            CASTBuilderVerifier::verify(&mut builder).expect(&format!(
-                "CASTBuilder \
+            CCFGBuilderVerifier::verify(&mut builder).expect(&format!(
+                "CCFGBuilder \
                  verification \
                  failed {}",
                 file
