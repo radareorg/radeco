@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Default, Debug)]
 struct StringAst {
-    var_count: u64,
+    vars: Vec<Option<u64>>,
 }
 
 impl AstContext for StringAst {
@@ -15,8 +15,14 @@ impl AstContext for StringAst {
 
 impl AstContextMut for StringAst {
     fn mk_fresh_var(&mut self) -> String {
-        let ret = format!("i_{}", self.var_count);
-        self.var_count += 1;
+        let ret = format!("i_{}", self.vars.len());
+        self.vars.push(None);
+        ret
+    }
+
+    fn mk_fresh_var_with_val(&mut self, val: u64) -> String {
+        let ret = format!("i_{}", self.vars.len());
+        self.vars.push(Some(val));
         ret
     }
 
