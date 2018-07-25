@@ -100,7 +100,7 @@ impl fmt::Display for BTy {
 #[derive(Clone, Debug)]
 pub enum CASTNode {
     FunctionHeader(String),
-    Conditional,
+    If,
     Declaration(Ty),
     Loop,
     Goto(String),
@@ -281,7 +281,7 @@ impl CAST {
         loop_h
     }
 
-    pub fn new_conditional(&mut self,
+    pub fn new_if(&mut self,
                            condition: NodeIndex,
                            body: Vec<NodeIndex>,
                            else_condition: Option<Vec<NodeIndex>>)
@@ -293,12 +293,12 @@ impl CAST {
         } else {
             self.next_edge_idx()
         };
-        let conditional = self.ast.add_node(CASTNode::Conditional);
-        self.ast.add_edge(self.fn_head, conditional, CASTEdge::StatementOrd(idx));
-        self.ast.add_edge(conditional, condition, CASTEdge::OpOrd(0));
+        let if_h = self.ast.add_node(CASTNode::If);
+        self.ast.add_edge(self.fn_head, if_h, CASTEdge::StatementOrd(idx));
+        self.ast.add_edge(if_h, condition, CASTEdge::OpOrd(0));
 
         let node = self.ast.add_node(CASTNode::Block);
-        self.ast.add_edge(conditional, node, CASTEdge::OpOrd(1));
+        self.ast.add_edge(if_h, node, CASTEdge::OpOrd(1));
         for (i, n) in body.iter().enumerate() {
             let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
             self.ast.remove_edge(e);
@@ -307,14 +307,14 @@ impl CAST {
 
         if let Some(elses) = else_condition {
             let else_node = self.ast.add_node(CASTNode::Block);
-            self.ast.add_edge(conditional, else_node, CASTEdge::OpOrd(2));
+            self.ast.add_edge(if_h, else_node, CASTEdge::OpOrd(2));
             for (i, n) in elses.into_iter().enumerate() {
                 let e = self.ast.find_edge(self.fn_head, n).expect("This cannot be `None`");
                 self.ast.remove_edge(e);
                 self.ast.add_edge(else_node, n, CASTEdge::BlockOrd(i as u64));
             }
         }
-        conditional
+        if_h
     }
 
     pub fn call_func(&mut self, func_name: &str, args: Vec<Option<NodeIndex>>) -> NodeIndex {
@@ -405,7 +405,7 @@ impl CAST {
         let comment = self.comments.get(&node).cloned();
         let result = match self.ast[*node] {
             CASTNode::FunctionHeader(_) => unimplemented!(),
-            CASTNode::Conditional => {
+            CASTNode::If => {
                 // Get the arguments -> condition, body, else branch.
                 let args = self.get_args_ordered(node);
                 let arg1 = args[0];
@@ -417,7 +417,7 @@ impl CAST {
                 let true_body = self.emit_c(&arg2, indent + 1);
                 let false_body = if let Some(arg3) = arg3 {
                     let fbody = self.emit_c(&arg3, indent + 1);
-                    if let CASTNode::Conditional = self.ast[arg3] {
+                    if let CASTNode::If = self.ast[arg3] {
                         // Else-If case
                         format_with_indent("} else ", indent) + &fbody
                     } else {
@@ -637,7 +637,7 @@ mod test {
         let eq = c_ast.expr(Expr::Eq, &vars, false);
         let increment = c_ast.expr(Expr::Add, &vars, false);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
-        c_ast.new_conditional(eq, vec![assignment], None);
+        c_ast.new_if(eq, vec![assignment], None);
         let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }

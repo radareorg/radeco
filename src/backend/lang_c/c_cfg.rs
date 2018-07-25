@@ -845,7 +845,7 @@ impl<'a> CASTConverter<'a> {
                     let e = if_else.map(|x| x.iter().map(|y| {
                         self.node_map.get(y).cloned().unwrap_or(self.ast.unknown)
                     }).collect::<Vec<_>>());
-                    let node = c_ast.new_conditional(c, t, e);
+                    let node = c_ast.new_if(c, t, e);
                     self.node_map.insert(current_node, node);
                 }
             },
