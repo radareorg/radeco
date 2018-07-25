@@ -703,4 +703,30 @@ mod test {
         let _ = c_ast.goto(lbl_str);
         println!("{}", c_ast.print());
     }
+
+    #[test]
+    fn c_ast_while_test() {
+        let mut c_ast = CAST::new("main");
+        c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let eq = c_ast.expr(Expr::Eq, &vars, false);
+        let increment = c_ast.expr(Expr::Add, &vars, false);
+        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
+        c_ast.new_while(eq, vec![assignment], None);
+        let _ = c_ast.ret(None);
+        println!("{}", c_ast.print());
+    }
+
+    #[test]
+    fn c_ast_do_while_test() {
+        let mut c_ast = CAST::new("main");
+        c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let eq = c_ast.expr(Expr::Eq, &vars, false);
+        let increment = c_ast.expr(Expr::Add, &vars, false);
+        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
+        c_ast.new_do_while(eq, vec![assignment], None);
+        let _ = c_ast.ret(None);
+        println!("{}", c_ast.print());
+    }
 }
