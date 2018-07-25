@@ -34,8 +34,6 @@ pub(super) fn refine<'cd, A: AstContext>(
 
 impl<'cd, A: AstContext> Refiner<'cd, A> {
     fn refine(mut self) -> AstNode<'cd, A> {
-        let cctx = self.cctx;
-
         self.try_find_if_else_pair();
         self.try_find_if();
         // TODO: find switch
@@ -56,7 +54,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
             }
         }
 
-        simplify_ast_node::<A>(cctx, AstNodeC::Seq(ast_seq)).unwrap_or_default()
+        mk_seq_vec(ast_seq)
     }
 
     /// Repeatedly look for and try to combine pairs of `break` nodes.
@@ -379,7 +377,7 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
 }
 
 /// Performs trivial simplifications.
-fn simplify_ast_node<'cd, A: AstContext>(
+pub fn simplify_ast_node<'cd, A: AstContext>(
     cctx: CondContext<'cd, A>,
     ast: AstNode<'cd, A>,
 ) -> Option<AstNode<'cd, A>> {
@@ -389,16 +387,10 @@ fn simplify_ast_node<'cd, A: AstContext>(
         Seq(seq) => {
             let mut new_seq: Vec<_> = seq
                 .into_iter()
-                .flat_map(|a| {
-                    if let Some(a) = simplify_ast_node::<A>(cctx, a) {
-                        if let Seq(s) = a {
-                            s
-                        } else {
-                            vec![a]
-                        }
-                    } else {
-                        Vec::new()
-                    }
+                .flat_map(|a| match simplify_ast_node::<A>(cctx, a) {
+                    Some(Seq(s)) => s,
+                    Some(a) => vec![a],
+                    None => Vec::new(),
                 })
                 .collect();
             match new_seq.len() {
@@ -418,9 +410,9 @@ fn simplify_ast_node<'cd, A: AstContext>(
                 match (ot, oe) {
                     (Some(t), Some(e)) => {
                         if always_breaks(&t) {
-                            Some(Seq(vec![Cond(c, Box::new(t), None), e]))
+                            Some(mk_seq_2(Cond(c, Box::new(t), None), e))
                         } else if always_breaks(&e) {
-                            Some(Seq(vec![Cond(cctx.mk_not(c), Box::new(e), None), t]))
+                            Some(mk_seq_2(Cond(cctx.mk_not(c), Box::new(e), None), t))
                         } else {
                             Some(Cond(c, Box::new(t), Some(Box::new(e))))
                         }
@@ -505,7 +497,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         if let Seq(mut seq) = body {
             if let Some(&Cond(c, box Break, None)) = seq.first() {
                 seq.remove(0);
-                Ok(Loop(PreChecked(self.cctx.mk_not(c)), Box::new(Seq(seq))))
+                Ok(Loop(PreChecked(self.cctx.mk_not(c)), Box::new(mk_seq_vec(seq))))
             } else {
                 Err(Seq(seq))
             }
@@ -518,7 +510,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         if let Seq(mut seq) = body {
             if let Some(&Cond(c, box Break, None)) = seq.last() {
                 seq.pop();
-                Ok(Loop(PostChecked(self.cctx.mk_not(c)), Box::new(Seq(seq))))
+                Ok(Loop(PostChecked(self.cctx.mk_not(c)), Box::new(mk_seq_vec(seq))))
             } else {
                 Err(Seq(seq))
             }
@@ -532,10 +524,13 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
             if let Some(last) = seq.pop() {
                 if let Cond(c, t, None) = last {
                     if seq.iter().all(|a| !contains_break(a)) {
-                        let new_body = Seq(vec![
-                            Loop(PostChecked(self.cctx.mk_not(c)), Box::new(Seq(seq))),
+                        let new_body = mk_seq_2(
+                            Loop(
+                                PostChecked(self.cctx.mk_not(c)),
+                                Box::new(mk_seq_vec(seq)),
+                            ),
                             *t
-                        ]);
+                        );
                         Ok(self.refine_loop(new_body))
                     } else {
                         seq.push(Cond(c, t, None));
@@ -559,8 +554,10 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
                 if always_breaks(&last) {
                     if let Some(new_last) = remove_breaks(last) {
                         seq.push(new_last);
+                        Ok(Seq(seq))
+                    } else {
+                        Ok(mk_seq_vec(seq))
                     }
-                    Ok(Seq(seq))
                 } else {
                     seq.push(last);
                     Err(Seq(seq))
@@ -576,14 +573,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
     gen_rule!{rule_CondToSeq, |self, body| {
         if let Cond(c, t, Some(e)) = body {
             if !contains_break(&*t) && contains_break(&*e) {
-                let inner_loop = Loop(PreChecked(c), t);
-                let new_body_seq = if let Seq(mut else_seq) = *e {
-                    else_seq.insert(0, inner_loop);
-                    else_seq
-                } else {
-                    vec![inner_loop, *e]
-                };
-                Ok(self.refine_loop(Seq(new_body_seq)))
+                Ok(self.refine_loop(mk_seq_2(Loop(PreChecked(c), t), *e)))
             } else {
                 Err(Cond(c, t, Some(e)))
             }
@@ -595,14 +585,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
     gen_rule!{rule_CondToSeqNeg, |self, body| {
         if let Cond(c, t, Some(e)) = body {
             if contains_break(&*t) && !contains_break(&*e) {
-                let inner_loop = Loop(PreChecked(self.cctx.mk_not(c)), t);
-                let new_body_seq = if let Seq(mut else_seq) = *e {
-                    else_seq.insert(0, inner_loop);
-                    else_seq
-                } else {
-                    vec![inner_loop, *e]
-                };
-                Ok(self.refine_loop(Seq(new_body_seq)))
+                Ok(self.refine_loop(mk_seq_2(Loop(PreChecked(self.cctx.mk_not(c)), t), *e)))
             } else {
                 Err(Cond(c, t, Some(e)))
             }
@@ -674,4 +657,31 @@ fn remove_breaks<B, C, V>(ast: AstNodeC<B, C, V>) -> Option<AstNodeC<B, C, V>> {
 
 fn empty_loop<B, C, V>() -> AstNodeC<B, C, V> {
     AstNodeC::Loop(LoopType::Endless, Box::new(AstNodeC::Seq(Vec::new())))
+}
+
+fn mk_seq_vec<B, C, V>(mut vec: Vec<AstNodeC<B, C, V>>) -> AstNodeC<B, C, V> {
+    if vec.len() == 1 {
+        vec.pop().unwrap()
+    } else {
+        AstNodeC::Seq(vec)
+    }
+}
+
+fn mk_seq_2<B, C, V>(ast1: AstNodeC<B, C, V>, ast2: AstNodeC<B, C, V>) -> AstNodeC<B, C, V> {
+    use self::AstNodeC::Seq;
+    match (ast1, ast2) {
+        (Seq(mut seq1), Seq(mut seq2)) => {
+            seq1.append(&mut seq2);
+            Seq(seq1)
+        }
+        (Seq(mut seq1), ast2) => {
+            seq1.push(ast2);
+            Seq(seq1)
+        }
+        (ast1, Seq(mut seq2)) => {
+            seq2.insert(0, ast1);
+            Seq(seq2)
+        }
+        (ast1, ast2) => Seq(vec![ast1, ast2]),
+    }
 }

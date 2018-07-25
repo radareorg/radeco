@@ -23,6 +23,7 @@ use petgraph::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::iter::{self, FromIterator};
+use std::marker::PhantomData;
 use std::mem;
 
 /// Preconditions:
@@ -188,19 +189,18 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         }
 
         let mut region_graph =
-            StableDiGraph::<refinement::RefinementAstNode<'cd, A>, ()>::with_capacity(
-                slice.topo_order.len(),
-                slice.edges.len(),
-            );
+            StableDiGraph::with_capacity(slice.topo_order.len(), slice.edges.len());
         let mut old_new_map = HashMap::with_capacity(slice.topo_order.len());
 
         // move all region nodes into `region_graph`.
         for &old_n in &slice.topo_order {
             let cfg_node = mem::replace(&mut self.graph[old_n], CfgNode::Dummy("sasr replaced"));
-            let new_node = if let CfgNode::Code(ast) = cfg_node {
-                Some(ast)
-            } else {
-                None
+            let new_node = match cfg_node {
+                // refinement needs to be able to see `Break`s
+                CfgNode::Code(AstNodeC::Break) => Some(AstNodeC::Break),
+                // other nodes should be opaque
+                CfgNode::Code(ast) => Some(AstNodeC::BasicBlock(ast)),
+                _ => None,
             };
             let new_n = region_graph.add_node((reaching_conds[&old_n], new_node));
             old_new_map.insert(old_n, new_n);
@@ -223,7 +223,14 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             }
         }
 
-        refinement::refine::<A>(self.cctx, region_graph, old_new_map[&header])
+        let ast = refinement::refine::<RegionAstContext<A>>(
+            self.cctx,
+            region_graph,
+            old_new_map[&header],
+        );
+
+        let ast = RegionAstContext::<A>::export(ast);
+        refinement::simplify_ast_node::<A>(self.cctx, ast).unwrap_or_default()
     }
 
     /// Computes the reaching condition for every node in the given graph slice.
@@ -448,6 +455,39 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         }
 
         cur_succ
+    }
+}
+
+struct RegionAstContext<'cd, A>(PhantomData<(&'cd (), A)>);
+
+impl<'cd, A: AstContext> AstContext for RegionAstContext<'cd, A> {
+    type Block = AstNode<'cd, A>;
+    type Condition = A::Condition;
+    type Variable = A::Variable;
+}
+
+impl<'cd, A: AstContext> RegionAstContext<'cd, A> {
+    fn export(ast: AstNode<'cd, Self>) -> AstNode<'cd, A> {
+        use self::AstNodeC::*;
+        match ast {
+            BasicBlock(b) => b,
+            Seq(seq) => Seq(seq.into_iter().map(Self::export).collect()),
+            Cond(c, t, oe) => Cond(
+                c,
+                Box::new(Self::export(*t)),
+                oe.map(|e| Box::new(Self::export(*e))),
+            ),
+            Loop(t, b) => Loop(t, Box::new(Self::export(*b))),
+            Break => Break,
+            Switch(v, cases, default) => Switch(
+                v,
+                cases
+                    .into_iter()
+                    .map(|(vs, a)| (vs, Self::export(a)))
+                    .collect(),
+                Box::new(Self::export(*default)),
+            ),
+        }
     }
 }
 
