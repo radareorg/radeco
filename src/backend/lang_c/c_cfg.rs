@@ -876,7 +876,7 @@ impl<'a> CASTConverter<'a> {
                         .map(|x| {
                             self.node_map.get(&x).cloned().unwrap_or(self.ast.unknown)
                         }).collect::<Vec<_>>();
-                    let node = unimplemented!();
+                    let node = c_ast.new_while(c, b);
                     self.node_map.insert(current_node, node);
                 } else {
                     radeco_err!("No node in body of while found.");
@@ -894,7 +894,7 @@ impl<'a> CASTConverter<'a> {
                         .map(|x| {
                             self.node_map.get(&x).cloned().unwrap_or(self.ast.unknown)
                         }).collect::<Vec<_>>();
-                    let node = unimplemented!();
+                    let node = c_ast.new_do_while(c, b);
                     self.node_map.insert(current_node, node);
                 } else {
                     radeco_err!("No node in body of do-while found.");

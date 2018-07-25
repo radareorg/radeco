@@ -102,7 +102,8 @@ pub enum CASTNode {
     FunctionHeader(String),
     If,
     Declaration(Ty),
-    Loop,
+    While,
+    DoWhile,
     Goto(String),
     Label(String),
     Break,
@@ -268,17 +269,46 @@ impl CAST {
         operator
     }
 
-    pub fn new_loop(&mut self, loop_header: NodeIndex, loop_body: NodeIndex) -> NodeIndex {
-        let e1 = self.ast.find_edge(self.fn_head, loop_header).expect("This cannot be `None`");
-        let e2 = self.ast.find_edge(self.fn_head, loop_body).expect("This cannot be `None`");
-        let loop_h = self.ast.add_node(CASTNode::Loop);
-        let idx = self.get_statement_ord(e1);
-        self.ast.remove_edge(e2);
-        self.ast.remove_edge(e1);
-        self.ast.add_edge(self.fn_head, loop_h, CASTEdge::StatementOrd(idx));
-        self.ast.add_edge(loop_h, loop_header, CASTEdge::OpOrd(0));
-        self.ast.add_edge(loop_h, loop_body, CASTEdge::OpOrd(1));
-        loop_h
+    pub fn new_while(&mut self, condition: NodeIndex, body: Vec<NodeIndex>) -> NodeIndex {
+        let idx = if let Some(e1) = self.ast.find_edge(self.fn_head, condition) {
+            let idx = self.get_statement_ord(e1);
+            self.ast.remove_edge(e1);
+            idx
+        } else {
+            self.next_edge_idx()
+        };
+        let while_h = self.ast.add_node(CASTNode::While);
+        self.ast.add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
+        self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
+        let node = self.ast.add_node(CASTNode::Block);
+        self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
+        for (i, n) in body.iter().enumerate() {
+            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            self.ast.remove_edge(e);
+            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+        }
+        while_h
+    }
+
+    pub fn new_do_while(&mut self, condition: NodeIndex, body: Vec<NodeIndex>) -> NodeIndex {
+        let idx = if let Some(e1) = self.ast.find_edge(self.fn_head, condition) {
+            let idx = self.get_statement_ord(e1);
+            self.ast.remove_edge(e1);
+            idx
+        } else {
+            self.next_edge_idx()
+        };
+        let while_h = self.ast.add_node(CASTNode::DoWhile);
+        self.ast.add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
+        self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
+        let node = self.ast.add_node(CASTNode::Block);
+        self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
+        for (i, n) in body.iter().enumerate() {
+            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            self.ast.remove_edge(e);
+            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+        }
+        while_h
     }
 
     pub fn new_if(&mut self,
@@ -448,16 +478,27 @@ impl CAST {
                 }
                 format!("{} {};", ty, vars)
             }
-            CASTNode::Loop => {
-                // Get the arguments -> loop header/check condition, loop body.
+            CASTNode::While => {
+                // Get the arguments -> while header/check condition, while body.
                 let args = self.get_args_ordered(node);
-                let loop_header = self.emit_c(&args[0], 0);
-                let loop_body = self.emit_c(&args[1], indent + 1);
+                let condition = self.emit_c(&args[0], 0);
+                let while_body = self.emit_c(&args[1], indent + 1);
                 format!("{} ({}) {{\n{}\n{}",
                         format_with_indent("while", indent),
-                        loop_header,
-                        loop_body,
+                        condition,
+                        while_body,
                         format_with_indent("}", indent))
+            }
+            CASTNode::DoWhile => {
+                // Get the arguments -> while header/check condition, while body.
+                let args = self.get_args_ordered(node);
+                let condition = self.emit_c(&args[0], 0);
+                let while_body = self.emit_c(&args[1], indent + 1);
+                format!("{} {{\n{}}}\n{}({})",
+                        format_with_indent("do", indent),
+                        while_body,
+                        format_with_indent("while", indent),
+                        condition)
             }
             CASTNode::Goto(ref label) => {
                 format_with_indent(&format!("goto {}", label), indent)
