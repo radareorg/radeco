@@ -30,7 +30,7 @@ use std::mem;
 /// - all nodes (except possibly `exit`) must be reachable from `entry`
 /// - `exit` must not contain any code.
 struct ControlFlowGraph<'cd, A: AstContext> {
-    graph: StableDiGraph<CfgNode<'cd, A>, Option<Condition<'cd, A>>>,
+    graph: StableDiGraph<CfgNode<'cd, A>, CfgEdge>,
     entry: NodeIndex,
     exit: NodeIndex,
     cctx: CondContext<'cd, A>,
@@ -41,12 +41,18 @@ type NodeSet = IxBitSet<NodeIndex>;
 type EdgeSet = IxBitSet<EdgeIndex>;
 
 enum CfgNode<'cd, A: AstContext> {
-    /// out-degree <= 1; out-edge weights are `None`
+    /// out-degree <= 1
     Code(AstNode<'cd, A>),
-    /// out-degree >= 2; out-edge weights are `Some(..)`
-    Condition,
+    /// out-degree >= 2
+    Condition(Condition<'cd, A>),
     /// only appears temporarily in the middle of algorithms
     Dummy(&'static str),
+}
+
+#[derive(Copy, Clone, Debug)]
+enum CfgEdge {
+    True,
+    False,
 }
 
 type Condition<'cd, A> = condition::Condition<'cd, <A as AstContext>::Condition>;
@@ -120,7 +126,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                 let repl_ast = refinement::refine_loop::<A>(self.cctx, loop_body);
                 self.graph[loop_header] = CfgNode::Code(repl_ast);
                 if let Some(loop_succ) = loop_succ_opt {
-                    self.graph.add_edge(loop_header, loop_succ, None);
+                    self.graph.add_edge(loop_header, loop_succ, CfgEdge::True);
                 }
             } else {
                 // acyclic
@@ -135,7 +141,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                             // sese region
                             let repl_ast = self.structure_acyclic_sese_region(n, succ);
                             self.graph[n] = CfgNode::Code(repl_ast);
-                            self.graph.add_edge(n, succ, None);
+                            self.graph.add_edge(n, succ, CfgEdge::True);
                         }
                     }
                 }
@@ -149,7 +155,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             .filter(|&n| n != self.exit && graph_utils::is_sink(&self.graph, n))
             .collect();
         for n in sinks {
-            self.graph.add_edge(n, self.exit, None);
+            self.graph.add_edge(n, self.exit, CfgEdge::True);
         }
 
         debug_assert!(!algo::is_cyclic_directed(&self.graph));
@@ -242,10 +248,16 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                         .edges_directed(n, Incoming)
                         .filter(|e| slice.edges.contains(e.id()))
                         .map(|e| {
-                            if let &Some(ec) = e.weight() {
-                                self.cctx.mk_and(ret[&e.source()], ec)
-                            } else {
-                                ret[&e.source()]
+                            let src_cond = ret[&e.source()];
+                            match (&self.graph[e.source()], e.weight()) {
+                                (&CfgNode::Condition(c), CfgEdge::True) => {
+                                    self.cctx.mk_and(src_cond, c)
+                                }
+                                (&CfgNode::Condition(c), CfgEdge::False) => {
+                                    self.cctx.mk_and(src_cond, self.cctx.mk_not(c))
+                                }
+                                (_, CfgEdge::True) => src_cond,
+                                (_, CfgEdge::False) => self.cctx.mk_false(),
                             }
                         }),
                 );
@@ -288,7 +300,6 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
 
             let mut prev_cascade_node = dummy_preheader;
             let mut prev_entry_target = header;
-            let mut prev_out_cond = None;
             let mut prev_entry_num = 0;
 
             // we make the condition node for the *previous* entry target b/c
@@ -298,25 +309,25 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                 let prev_cond_eq = self
                     .cctx
                     .mk_var(self.actx.mk_cond_equals(&struct_var, prev_entry_num));
-                let cascade_node = self.graph.add_node(CfgNode::Condition);
+                let cascade_node = self.graph.add_node(CfgNode::Condition(prev_cond_eq));
                 self.graph
-                    .add_edge(prev_cascade_node, cascade_node, prev_out_cond);
+                    .add_edge(prev_cascade_node, cascade_node, CfgEdge::False);
                 self.graph
-                    .add_edge(cascade_node, prev_entry_target, Some(prev_cond_eq));
+                    .add_edge(cascade_node, prev_entry_target, CfgEdge::True);
 
                 let struct_reset = self.graph.add_node(CfgNode::Code(AstNodeC::BasicBlock(
                     self.actx.mk_var_assign(&struct_var, 0),
                 )));
-                self.graph.add_edge(struct_reset, entry_target, None);
+                self.graph
+                    .add_edge(struct_reset, entry_target, CfgEdge::True);
 
                 prev_cascade_node = cascade_node;
                 prev_entry_target = struct_reset;
-                prev_out_cond = Some(self.cctx.mk_not(prev_cond_eq));
                 prev_entry_num = entry_num;
             }
 
             self.graph
-                .add_edge(prev_cascade_node, prev_entry_target, prev_out_cond);
+                .add_edge(prev_cascade_node, prev_entry_target, CfgEdge::False);
 
             // we always add an edge from dummy_preheader
             let new_header = self.graph.neighbors(dummy_preheader).next().unwrap();
@@ -331,7 +342,8 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             let struct_assign = self.graph.add_node(CfgNode::Code(AstNodeC::BasicBlock(
                 self.actx.mk_var_assign(&struct_var, entry_num),
             )));
-            self.graph.add_edge(struct_assign, new_header, None);
+            self.graph
+                .add_edge(struct_assign, new_header, CfgEdge::True);
             for &entry_edge in entry_edges {
                 graph_utils::retarget_edge(&mut self.graph, entry_edge, struct_assign);
             }
@@ -390,7 +402,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                 // connect to `loop_continue` so that the graph slice from the loop
                 // header to `loop_continue` contains these "break" nodes
                 self.graph
-                    .add_edge(break_node, loop_continue, Some(self.cctx.mk_false()));
+                    .add_edge(break_node, loop_continue, CfgEdge::False);
             }
         }
 
@@ -416,7 +428,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                 // connect to `loop_continue` so that the graph slice from the loop
                 // header to `loop_continue` contains these "break" nodes
                 self.graph
-                    .add_edge(break_node, loop_continue, Some(self.cctx.mk_false()));
+                    .add_edge(break_node, loop_continue, CfgEdge::False);
             }
         }
 
@@ -427,10 +439,10 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             let cond = self
                 .cctx
                 .mk_var(self.actx.mk_cond_equals(&struct_var, exit_num));
-            let cascade_node = self.graph.add_node(CfgNode::Condition);
-            self.graph.add_edge(cascade_node, exit_target, Some(cond));
+            let cascade_node = self.graph.add_node(CfgNode::Condition(cond));
             self.graph
-                .add_edge(cascade_node, cur_succ, Some(self.cctx.mk_not(cond)));
+                .add_edge(cascade_node, exit_target, CfgEdge::True);
+            self.graph.add_edge(cascade_node, cur_succ, CfgEdge::False);
 
             cur_succ = cascade_node;
         }
@@ -466,7 +478,7 @@ where
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CfgNode::Code(c) => fmt.debug_tuple("Code").field(c).finish(),
-            CfgNode::Condition => fmt.write_str("Condition"),
+            CfgNode::Condition(c) => fmt.debug_tuple("Condition").field(c).finish(),
             CfgNode::Dummy(s) => fmt.debug_tuple("Dummy").field(s).finish(),
         }
     }

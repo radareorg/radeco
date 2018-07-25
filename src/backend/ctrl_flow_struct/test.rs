@@ -2,6 +2,9 @@ use super::ast::LoopType;
 use super::condition;
 use super::*;
 
+use super::CfgEdge::False as CEFalse;
+use super::CfgEdge::True as CETrue;
+
 #[derive(Default, Debug)]
 struct StringAst {
     vars: Vec<Option<u64>>,
@@ -40,16 +43,27 @@ fn ast_nmg_example() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
+    #[allow(non_snake_case)]
+    let c_A = cond_s(cctx, "A");
+    let c_c1 = cond_s(cctx, "c1");
+    let c_c2 = cond_s(cctx, "c2");
+    let c_c3 = cond_s(cctx, "c3");
+    let c_b1 = cond_s(cctx, "b1");
+    let c_b2 = cond_s(cctx, "b2");
+    let c_d1 = cond_s(cctx, "d1");
+    let c_d2 = cond_s(cctx, "d2");
+    let c_d3 = cond_s(cctx, "d3");
+
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(cnode());
-    let c1 = graph.add_node(cnode());
-    let c2 = graph.add_node(cnode());
-    let c3 = graph.add_node(cnode());
-    let b1 = graph.add_node(cnode());
-    let b2 = graph.add_node(cnode());
-    let d1 = graph.add_node(cnode());
-    let d2 = graph.add_node(cnode());
-    let d3 = graph.add_node(cnode());
+    let entry = graph.add_node(cnode(c_A));
+    let c1 = graph.add_node(cnode(c_c1));
+    let c2 = graph.add_node(cnode(c_c2));
+    let c3 = graph.add_node(cnode(c_c3));
+    let b1 = graph.add_node(cnode(c_b1));
+    let b2 = graph.add_node(cnode(c_b2));
+    let d1 = graph.add_node(cnode(c_d1));
+    let d2 = graph.add_node(cnode(c_d2));
+    let d3 = graph.add_node(cnode(c_d3));
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
@@ -61,57 +75,36 @@ fn ast_nmg_example() {
     let n9 = graph.add_node(node("n9"));
     let exit = graph.add_node(empty_node());
 
-    #[allow(non_snake_case)]
-    let c_A = cond_s(cctx, "A");
-    let c_c1 = cond_s(cctx, "c1");
-    let c_c2 = cond_s(cctx, "c2");
-    let c_c3 = cond_s(cctx, "c3");
-    let c_b1 = cond_s(cctx, "b1");
-    let c_b2 = cond_s(cctx, "b2");
-    let c_d1 = cond_s(cctx, "d1");
-    let c_d2 = cond_s(cctx, "d2");
-    let c_d3 = cond_s(cctx, "d3");
-    #[allow(non_snake_case)]
-    let nc_A = cctx.mk_not(c_A);
-    let nc_c1 = cctx.mk_not(c_c1);
-    let nc_c2 = cctx.mk_not(c_c2);
-    let nc_c3 = cctx.mk_not(c_c3);
-    let nc_b1 = cctx.mk_not(c_b1);
-    let nc_b2 = cctx.mk_not(c_b2);
-    let nc_d1 = cctx.mk_not(c_d1);
-    let nc_d2 = cctx.mk_not(c_d2);
-    let nc_d3 = cctx.mk_not(c_d3);
-
-    graph.add_edge(entry, c1, Some(c_A));
-    graph.add_edge(entry, b1, Some(nc_A));
-    graph.add_edge(n9, exit, None);
+    graph.add_edge(entry, c1, CETrue);
+    graph.add_edge(entry, b1, CEFalse);
+    graph.add_edge(n9, exit, CETrue);
     // R1
-    graph.add_edge(c1, n1, Some(c_c1));
-    graph.add_edge(n1, c1, None);
-    graph.add_edge(c1, c2, Some(nc_c1));
-    graph.add_edge(c2, n2, Some(c_c2));
-    graph.add_edge(n2, n9, None);
-    graph.add_edge(c2, n3, Some(nc_c2));
-    graph.add_edge(n3, c3, None);
-    graph.add_edge(c3, c1, Some(c_c3));
-    graph.add_edge(c3, n9, Some(nc_c3));
+    graph.add_edge(c1, n1, CETrue);
+    graph.add_edge(n1, c1, CETrue);
+    graph.add_edge(c1, c2, CEFalse);
+    graph.add_edge(c2, n2, CETrue);
+    graph.add_edge(n2, n9, CETrue);
+    graph.add_edge(c2, n3, CEFalse);
+    graph.add_edge(n3, c3, CETrue);
+    graph.add_edge(c3, c1, CETrue);
+    graph.add_edge(c3, n9, CEFalse);
     // R2
-    graph.add_edge(b1, b2, Some(c_b1));
-    graph.add_edge(b2, n6, Some(c_b2));
-    graph.add_edge(n6, n7, None);
-    graph.add_edge(n7, d1, None);
-    graph.add_edge(b2, n5, Some(nc_b2));
-    graph.add_edge(n5, n7, None);
-    graph.add_edge(b1, n4, Some(nc_b1));
-    graph.add_edge(n4, n5, None);
+    graph.add_edge(b1, b2, CETrue);
+    graph.add_edge(b2, n6, CETrue);
+    graph.add_edge(n6, n7, CETrue);
+    graph.add_edge(n7, d1, CETrue);
+    graph.add_edge(b2, n5, CEFalse);
+    graph.add_edge(n5, n7, CETrue);
+    graph.add_edge(b1, n4, CEFalse);
+    graph.add_edge(n4, n5, CETrue);
     // R3
-    graph.add_edge(d1, d3, Some(c_d1));
-    graph.add_edge(d3, n8, Some(c_d3));
-    graph.add_edge(n8, d1, None);
-    graph.add_edge(d3, n9, Some(nc_d3));
-    graph.add_edge(d1, d2, Some(nc_d1));
-    graph.add_edge(d2, n8, Some(c_d2));
-    graph.add_edge(d2, n9, Some(nc_d2));
+    graph.add_edge(d1, d3, CETrue);
+    graph.add_edge(d3, n8, CETrue);
+    graph.add_edge(n8, d1, CETrue);
+    graph.add_edge(d3, n9, CEFalse);
+    graph.add_edge(d1, d2, CEFalse);
+    graph.add_edge(d2, n8, CETrue);
+    graph.add_edge(d2, n9, CEFalse);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -157,9 +150,10 @@ fn ast_nmg_example() {
                     ),
                     BasicBlock("n7".to_owned()),
                     Loop(
-                        LoopType::PreChecked(
-                            cctx.mk_or(cctx.mk_and(c_d1, c_d3), cctx.mk_and(nc_d1, c_d2)),
-                        ),
+                        LoopType::PreChecked(cctx.mk_or(
+                            cctx.mk_and(c_d1, c_d3),
+                            cctx.mk_and(cctx.mk_not(c_d1), c_d2),
+                        )),
                         Box::new(BasicBlock("n8".to_owned())),
                     ),
                 ]))),
@@ -175,33 +169,30 @@ fn ast_nmg_r1() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
+    let c_c1 = cond_s(cctx, "c1");
+    let c_c2 = cond_s(cctx, "c2");
+    let c_c3 = cond_s(cctx, "c3");
+
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c1 = graph.add_node(cnode());
-    let c2 = graph.add_node(cnode());
-    let c3 = graph.add_node(cnode());
+    let c1 = graph.add_node(cnode(c_c1));
+    let c2 = graph.add_node(cnode(c_c2));
+    let c3 = graph.add_node(cnode(c_c3));
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
     let exit = graph.add_node(empty_node());
 
-    let c_c1 = cond_s(cctx, "c1");
-    let c_c2 = cond_s(cctx, "c2");
-    let c_c3 = cond_s(cctx, "c3");
-    let nc_c1 = cctx.mk_not(c_c1);
-    let nc_c2 = cctx.mk_not(c_c2);
-    let nc_c3 = cctx.mk_not(c_c3);
-
-    graph.add_edge(entry, c1, None);
-    graph.add_edge(c1, n1, Some(c_c1));
-    graph.add_edge(n1, c1, None);
-    graph.add_edge(c1, c2, Some(nc_c1));
-    graph.add_edge(c2, n2, Some(c_c2));
-    graph.add_edge(n2, exit, None);
-    graph.add_edge(c2, n3, Some(nc_c2));
-    graph.add_edge(n3, c3, None);
-    graph.add_edge(c3, c1, Some(c_c3));
-    graph.add_edge(c3, exit, Some(nc_c3));
+    graph.add_edge(entry, c1, CETrue);
+    graph.add_edge(c1, n1, CETrue);
+    graph.add_edge(n1, c1, CETrue);
+    graph.add_edge(c1, c2, CEFalse);
+    graph.add_edge(c2, n2, CETrue);
+    graph.add_edge(n2, exit, CETrue);
+    graph.add_edge(c2, n3, CEFalse);
+    graph.add_edge(n3, c3, CETrue);
+    graph.add_edge(c3, c1, CETrue);
+    graph.add_edge(c3, exit, CEFalse);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -240,28 +231,26 @@ fn ast_nmg_r2() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
+    let c_b1 = cond_s(cctx, "b1");
+    let c_b2 = cond_s(cctx, "b2");
+
     let mut graph = StableDiGraph::new();
-    let b1 = graph.add_node(cnode());
-    let b2 = graph.add_node(cnode());
+    let b1 = graph.add_node(cnode(c_b1));
+    let b2 = graph.add_node(cnode(c_b2));
     let n4 = graph.add_node(node("n4"));
     let n5 = graph.add_node(node("n5"));
     let n6 = graph.add_node(node("n6"));
     let n7 = graph.add_node(node("n7"));
     let exit = graph.add_node(empty_node());
 
-    let c_b1 = cond_s(cctx, "b1");
-    let c_b2 = cond_s(cctx, "b2");
-    let nc_b1 = cctx.mk_not(c_b1);
-    let nc_b2 = cctx.mk_not(c_b2);
-
-    graph.add_edge(b1, b2, Some(c_b1));
-    graph.add_edge(b2, n6, Some(c_b2));
-    graph.add_edge(n6, n7, None);
-    graph.add_edge(b2, n5, Some(nc_b2));
-    graph.add_edge(n5, n7, None);
-    graph.add_edge(b1, n4, Some(nc_b1));
-    graph.add_edge(n4, n5, None);
-    graph.add_edge(n7, exit, None);
+    graph.add_edge(b1, b2, CETrue);
+    graph.add_edge(b2, n6, CETrue);
+    graph.add_edge(n6, n7, CETrue);
+    graph.add_edge(b2, n5, CEFalse);
+    graph.add_edge(n5, n7, CETrue);
+    graph.add_edge(b1, n4, CEFalse);
+    graph.add_edge(n4, n5, CETrue);
+    graph.add_edge(n7, exit, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -298,29 +287,26 @@ fn ast_nmg_r3() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(empty_node());
-    let d1 = graph.add_node(cnode());
-    let d2 = graph.add_node(cnode());
-    let d3 = graph.add_node(cnode());
-    let n8 = graph.add_node(node("n8"));
-    let exit = graph.add_node(empty_node());
-
     let c_d1 = cond_s(cctx, "d1");
     let c_d2 = cond_s(cctx, "d2");
     let c_d3 = cond_s(cctx, "d3");
-    let nc_d1 = cctx.mk_not(c_d1);
-    let nc_d2 = cctx.mk_not(c_d2);
-    let nc_d3 = cctx.mk_not(c_d3);
 
-    graph.add_edge(entry, d1, None);
-    graph.add_edge(d1, d3, Some(c_d1));
-    graph.add_edge(d1, d2, Some(nc_d1));
-    graph.add_edge(d2, n8, Some(c_d2));
-    graph.add_edge(d2, exit, Some(nc_d2));
-    graph.add_edge(d3, n8, Some(c_d3));
-    graph.add_edge(d3, exit, Some(nc_d3));
-    graph.add_edge(n8, d1, None);
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let d1 = graph.add_node(cnode(c_d1));
+    let d2 = graph.add_node(cnode(c_d2));
+    let d3 = graph.add_node(cnode(c_d3));
+    let n8 = graph.add_node(node("n8"));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(entry, d1, CETrue);
+    graph.add_edge(d1, d3, CETrue);
+    graph.add_edge(d1, d2, CEFalse);
+    graph.add_edge(d2, n8, CETrue);
+    graph.add_edge(d2, exit, CEFalse);
+    graph.add_edge(d3, n8, CETrue);
+    graph.add_edge(d3, exit, CEFalse);
+    graph.add_edge(n8, d1, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -336,7 +322,10 @@ fn ast_nmg_r3() {
     use self::AstNodeC::*;
     assert_eq!(
         Loop(
-            LoopType::PreChecked(cctx.mk_or(cctx.mk_and(c_d1, c_d3), cctx.mk_and(nc_d1, c_d2))),
+            LoopType::PreChecked(cctx.mk_or(
+                cctx.mk_and(c_d1, c_d3),
+                cctx.mk_and(cctx.mk_not(c_d1), c_d2)
+            )),
             Box::new(BasicBlock("n8".to_owned())),
         ),
         ast
@@ -366,19 +355,6 @@ fn ast_switchy() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let mut graph = StableDiGraph::new();
-    let c1 = graph.add_node(cnode());
-    let c2 = graph.add_node(cnode());
-    let c3 = graph.add_node(cnode());
-    let c4 = graph.add_node(cnode());
-    let c5 = graph.add_node(cnode());
-    let c6 = graph.add_node(cnode());
-    let c7 = graph.add_node(cnode());
-    let n1 = graph.add_node(node("n1"));
-    let n2 = graph.add_node(node("n2"));
-    let n3 = graph.add_node(node("n3"));
-    let exit = graph.add_node(empty_node());
-
     let c_c1 = cond_s(cctx, "n == 7");
     let c_c2 = cond_s(cctx, "n <= 7");
     let c_c3 = cond_s(cctx, "n == 88");
@@ -386,31 +362,37 @@ fn ast_switchy() {
     let c_c5 = cond_s(cctx, "n == 98");
     let c_c6 = cond_s(cctx, "n != 4");
     let c_c7 = cond_s(cctx, "n == 34");
-    let nc_c1 = cctx.mk_not(c_c1);
-    let nc_c2 = cctx.mk_not(c_c2);
-    let nc_c3 = cctx.mk_not(c_c3);
-    let nc_c4 = cctx.mk_not(c_c4);
-    let nc_c5 = cctx.mk_not(c_c5);
-    let nc_c6 = cctx.mk_not(c_c6);
-    let nc_c7 = cctx.mk_not(c_c7);
 
-    graph.add_edge(c1, n1, Some(c_c1));
-    graph.add_edge(c1, c2, Some(nc_c1));
-    graph.add_edge(c2, c4, Some(c_c2));
-    graph.add_edge(c2, c3, Some(nc_c2));
-    graph.add_edge(c3, n2, Some(c_c3));
-    graph.add_edge(c3, c5, Some(nc_c3));
-    graph.add_edge(c4, n1, Some(c_c4));
-    graph.add_edge(c4, c6, Some(nc_c4));
-    graph.add_edge(c5, n1, Some(c_c5));
-    graph.add_edge(c5, c7, Some(nc_c5));
-    graph.add_edge(c6, n3, Some(c_c6));
-    graph.add_edge(c6, n1, Some(nc_c6));
-    graph.add_edge(c7, n2, Some(c_c7));
-    graph.add_edge(c7, n3, Some(nc_c7));
-    graph.add_edge(n1, exit, None);
-    graph.add_edge(n2, exit, None);
-    graph.add_edge(n3, exit, None);
+    let mut graph = StableDiGraph::new();
+    let c1 = graph.add_node(cnode(c_c1));
+    let c2 = graph.add_node(cnode(c_c2));
+    let c3 = graph.add_node(cnode(c_c3));
+    let c4 = graph.add_node(cnode(c_c4));
+    let c5 = graph.add_node(cnode(c_c5));
+    let c6 = graph.add_node(cnode(c_c6));
+    let c7 = graph.add_node(cnode(c_c7));
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(c1, n1, CETrue);
+    graph.add_edge(c1, c2, CEFalse);
+    graph.add_edge(c2, c4, CETrue);
+    graph.add_edge(c2, c3, CEFalse);
+    graph.add_edge(c3, n2, CETrue);
+    graph.add_edge(c3, c5, CEFalse);
+    graph.add_edge(c4, n1, CETrue);
+    graph.add_edge(c4, c6, CEFalse);
+    graph.add_edge(c5, n1, CETrue);
+    graph.add_edge(c5, c7, CEFalse);
+    graph.add_edge(c6, n3, CETrue);
+    graph.add_edge(c6, n1, CEFalse);
+    graph.add_edge(c7, n2, CETrue);
+    graph.add_edge(c7, n3, CEFalse);
+    graph.add_edge(n1, exit, CETrue);
+    graph.add_edge(n2, exit, CETrue);
+    graph.add_edge(n3, exit, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -443,41 +425,36 @@ fn ast_ifelse_cascade() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let mut graph = StableDiGraph::new();
-    let c1 = graph.add_node(cnode());
-    let c2 = graph.add_node(cnode());
-    let c3 = graph.add_node(cnode());
-    let c4 = graph.add_node(cnode());
-    let c5 = graph.add_node(cnode());
-    let n1 = graph.add_node(node("n1"));
-    let n2 = graph.add_node(node("n2"));
-    let n3 = graph.add_node(node("n3"));
-    let exit = graph.add_node(empty_node());
-
     let c_c1 = cond_s(cctx, "c1");
     let c_c2 = cond_s(cctx, "c2");
     let c_c3 = cond_s(cctx, "c3");
     let c_c4 = cond_s(cctx, "c4");
     let c_c5 = cond_s(cctx, "c5");
-    let nc_c1 = cctx.mk_not(c_c1);
-    let nc_c2 = cctx.mk_not(c_c2);
-    let nc_c3 = cctx.mk_not(c_c3);
-    let nc_c4 = cctx.mk_not(c_c4);
-    let nc_c5 = cctx.mk_not(c_c5);
 
-    graph.add_edge(c1, c4, Some(c_c1));
-    graph.add_edge(c1, c2, Some(nc_c1));
-    graph.add_edge(c2, n3, Some(c_c2));
-    graph.add_edge(c2, c3, Some(nc_c2));
-    graph.add_edge(c3, c5, Some(c_c3));
-    graph.add_edge(c3, c4, Some(nc_c3));
-    graph.add_edge(c4, n2, Some(c_c4));
-    graph.add_edge(c4, n1, Some(nc_c4));
-    graph.add_edge(c5, n3, Some(c_c5));
-    graph.add_edge(c5, n2, Some(nc_c5));
-    graph.add_edge(n1, exit, None);
-    graph.add_edge(n2, exit, None);
-    graph.add_edge(n3, exit, None);
+    let mut graph = StableDiGraph::new();
+    let c1 = graph.add_node(cnode(c_c1));
+    let c2 = graph.add_node(cnode(c_c2));
+    let c3 = graph.add_node(cnode(c_c3));
+    let c4 = graph.add_node(cnode(c_c4));
+    let c5 = graph.add_node(cnode(c_c5));
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(c1, c4, CETrue);
+    graph.add_edge(c1, c2, CEFalse);
+    graph.add_edge(c2, n3, CETrue);
+    graph.add_edge(c2, c3, CEFalse);
+    graph.add_edge(c3, c5, CETrue);
+    graph.add_edge(c3, c4, CEFalse);
+    graph.add_edge(c4, n2, CETrue);
+    graph.add_edge(c4, n1, CEFalse);
+    graph.add_edge(c5, n3, CETrue);
+    graph.add_edge(c5, n2, CEFalse);
+    graph.add_edge(n1, exit, CETrue);
+    graph.add_edge(n2, exit, CETrue);
+    graph.add_edge(n3, exit, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -489,6 +466,11 @@ fn ast_ifelse_cascade() {
     };
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
+
+    let nc_c1 = cctx.mk_not(c_c1);
+    let nc_c2 = cctx.mk_not(c_c2);
+    let nc_c3 = cctx.mk_not(c_c3);
+    let nc_c4 = cctx.mk_not(c_c4);
 
     use self::AstNodeC::*;
     assert_eq!(
@@ -515,19 +497,18 @@ fn ast_while() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
+    let c_c = cond_s(cctx, "c");
+
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c = graph.add_node(cnode());
+    let c = graph.add_node(cnode(c_c));
     let n = graph.add_node(node("n"));
     let exit = graph.add_node(empty_node());
 
-    let c_c = cond_s(cctx, "c");
-    let nc_c = cctx.mk_not(c_c);
-
-    graph.add_edge(entry, c, None);
-    graph.add_edge(c, n, Some(c_c));
-    graph.add_edge(c, exit, Some(nc_c));
-    graph.add_edge(n, c, None);
+    graph.add_edge(entry, c, CETrue);
+    graph.add_edge(c, n, CETrue);
+    graph.add_edge(c, exit, CEFalse);
+    graph.add_edge(n, c, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -560,19 +541,18 @@ fn ast_do_while() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
+    let c_c = cond_s(cctx, "c");
+
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c = graph.add_node(cnode());
+    let c = graph.add_node(cnode(c_c));
     let n = graph.add_node(node("n"));
     let exit = graph.add_node(empty_node());
 
-    let c_c = cond_s(cctx, "c");
-    let nc_c = cctx.mk_not(c_c);
-
-    graph.add_edge(entry, n, None);
-    graph.add_edge(n, c, None);
-    graph.add_edge(c, n, Some(c_c));
-    graph.add_edge(c, exit, Some(nc_c));
+    graph.add_edge(entry, n, CETrue);
+    graph.add_edge(n, c, CETrue);
+    graph.add_edge(c, n, CETrue);
+    graph.add_edge(c, exit, CEFalse);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -610,8 +590,8 @@ fn ast_infinite_loop() {
     let n1 = graph.add_node(node("n1"));
     let exit = graph.add_node(empty_node());
 
-    graph.add_edge(entry, n1, None);
-    graph.add_edge(n1, n1, None);
+    graph.add_edge(entry, n1, CETrue);
+    graph.add_edge(n1, n1, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -641,34 +621,30 @@ fn ast_complex_while_and() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(empty_node());
-    let c1 = graph.add_node(cnode());
-    let c2 = graph.add_node(cnode());
-    let c3 = graph.add_node(cnode());
-    let c4 = graph.add_node(cnode());
-    let n1 = graph.add_node(node("n1"));
-    let exit = graph.add_node(empty_node());
-
     let c_c1 = cond_s(cctx, "c1");
     let c_c2 = cond_s(cctx, "c2");
     let c_c3 = cond_s(cctx, "c3");
     let c_c4 = cond_s(cctx, "c4");
-    let nc_c1 = cctx.mk_not(c_c1);
-    let nc_c2 = cctx.mk_not(c_c2);
-    let nc_c3 = cctx.mk_not(c_c3);
-    let nc_c4 = cctx.mk_not(c_c4);
 
-    graph.add_edge(entry, c1, None);
-    graph.add_edge(c1, c2, Some(c_c1));
-    graph.add_edge(c1, exit, Some(nc_c1));
-    graph.add_edge(c2, c3, Some(c_c2));
-    graph.add_edge(c2, exit, Some(nc_c2));
-    graph.add_edge(c3, c4, Some(c_c3));
-    graph.add_edge(c3, exit, Some(nc_c3));
-    graph.add_edge(c4, n1, Some(c_c4));
-    graph.add_edge(c4, exit, Some(nc_c4));
-    graph.add_edge(n1, c1, None);
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let c1 = graph.add_node(cnode(c_c1));
+    let c2 = graph.add_node(cnode(c_c2));
+    let c3 = graph.add_node(cnode(c_c3));
+    let c4 = graph.add_node(cnode(c_c4));
+    let n1 = graph.add_node(node("n1"));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(entry, c1, CETrue);
+    graph.add_edge(c1, c2, CETrue);
+    graph.add_edge(c1, exit, CEFalse);
+    graph.add_edge(c2, c3, CETrue);
+    graph.add_edge(c2, exit, CEFalse);
+    graph.add_edge(c3, c4, CETrue);
+    graph.add_edge(c3, exit, CEFalse);
+    graph.add_edge(c4, n1, CETrue);
+    graph.add_edge(c4, exit, CEFalse);
+    graph.add_edge(n1, c1, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -701,34 +677,30 @@ fn ast_complex_while_or() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(empty_node());
-    let c1 = graph.add_node(cnode());
-    let c2 = graph.add_node(cnode());
-    let c3 = graph.add_node(cnode());
-    let c4 = graph.add_node(cnode());
-    let n1 = graph.add_node(node("n1"));
-    let exit = graph.add_node(empty_node());
-
     let c_c1 = cond_s(cctx, "c1");
     let c_c2 = cond_s(cctx, "c2");
     let c_c3 = cond_s(cctx, "c3");
     let c_c4 = cond_s(cctx, "c4");
-    let nc_c1 = cctx.mk_not(c_c1);
-    let nc_c2 = cctx.mk_not(c_c2);
-    let nc_c3 = cctx.mk_not(c_c3);
-    let nc_c4 = cctx.mk_not(c_c4);
 
-    graph.add_edge(entry, c1, None);
-    graph.add_edge(c1, n1, Some(c_c1));
-    graph.add_edge(c1, c2, Some(nc_c1));
-    graph.add_edge(c2, n1, Some(c_c2));
-    graph.add_edge(c2, c3, Some(nc_c2));
-    graph.add_edge(c3, n1, Some(c_c3));
-    graph.add_edge(c3, c4, Some(nc_c3));
-    graph.add_edge(c4, n1, Some(c_c4));
-    graph.add_edge(c4, exit, Some(nc_c4));
-    graph.add_edge(n1, c1, None);
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(empty_node());
+    let c1 = graph.add_node(cnode(c_c1));
+    let c2 = graph.add_node(cnode(c_c2));
+    let c3 = graph.add_node(cnode(c_c3));
+    let c4 = graph.add_node(cnode(c_c4));
+    let n1 = graph.add_node(node("n1"));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(entry, c1, CETrue);
+    graph.add_edge(c1, n1, CETrue);
+    graph.add_edge(c1, c2, CEFalse);
+    graph.add_edge(c2, n1, CETrue);
+    graph.add_edge(c2, c3, CEFalse);
+    graph.add_edge(c3, n1, CETrue);
+    graph.add_edge(c3, c4, CEFalse);
+    graph.add_edge(c4, n1, CETrue);
+    graph.add_edge(c4, exit, CEFalse);
+    graph.add_edge(n1, c1, CETrue);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -756,18 +728,6 @@ fn abnormal_entries() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(cnode());
-    let n1 = graph.add_node(cnode());
-    let n2 = graph.add_node(cnode());
-    let n3 = graph.add_node(cnode());
-    let n4 = graph.add_node(cnode());
-    let n5 = graph.add_node(cnode());
-    let l1 = graph.add_node(cnode());
-    let l2 = graph.add_node(node("l2"));
-    let l3 = graph.add_node(node("l3"));
-    let exit = graph.add_node(empty_node());
-
     let c_e1 = cond_s(cctx, "e1");
     let c_n1 = cond_s(cctx, "n1");
     let c_n2 = cond_s(cctx, "n2");
@@ -775,33 +735,38 @@ fn abnormal_entries() {
     let c_n4 = cond_s(cctx, "n4");
     let c_n5 = cond_s(cctx, "n5");
     let c_l1 = cond_s(cctx, "l1");
-    let nc_e1 = cctx.mk_not(c_e1);
-    let nc_n1 = cctx.mk_not(c_n1);
-    let nc_n2 = cctx.mk_not(c_n2);
-    let nc_n3 = cctx.mk_not(c_n3);
-    let nc_n4 = cctx.mk_not(c_n4);
-    let nc_n5 = cctx.mk_not(c_n5);
-    let nc_l1 = cctx.mk_not(c_l1);
 
-    graph.add_edge(entry, l1, Some(c_e1));
-    graph.add_edge(entry, n1, Some(nc_e1));
-    graph.add_edge(n1, n2, Some(c_n1));
-    graph.add_edge(n2, n3, Some(c_n2));
-    graph.add_edge(n3, n4, Some(c_n3));
-    graph.add_edge(n4, n5, Some(c_n4));
-    graph.add_edge(n5, exit, Some(c_n5));
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(cnode(c_e1));
+    let n1 = graph.add_node(cnode(c_n1));
+    let n2 = graph.add_node(cnode(c_n2));
+    let n3 = graph.add_node(cnode(c_n3));
+    let n4 = graph.add_node(cnode(c_n4));
+    let n5 = graph.add_node(cnode(c_n5));
+    let l1 = graph.add_node(cnode(c_l1));
+    let l2 = graph.add_node(node("l2"));
+    let l3 = graph.add_node(node("l3"));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(entry, l1, CETrue);
+    graph.add_edge(entry, n1, CEFalse);
+    graph.add_edge(n1, n2, CETrue);
+    graph.add_edge(n2, n3, CETrue);
+    graph.add_edge(n3, n4, CETrue);
+    graph.add_edge(n4, n5, CETrue);
+    graph.add_edge(n5, exit, CETrue);
     // loop
-    graph.add_edge(l1, l2, Some(c_l1));
-    graph.add_edge(l2, l3, None);
-    graph.add_edge(l3, l1, None);
+    graph.add_edge(l1, l2, CETrue);
+    graph.add_edge(l2, l3, CETrue);
+    graph.add_edge(l3, l1, CETrue);
     // loop exit
-    graph.add_edge(l1, exit, Some(nc_l1));
+    graph.add_edge(l1, exit, CEFalse);
     // abnormal entries
-    graph.add_edge(n1, l1, Some(nc_n1));
-    graph.add_edge(n2, l2, Some(nc_n2));
-    graph.add_edge(n3, l3, Some(nc_n3));
-    graph.add_edge(n4, l2, Some(nc_n4));
-    graph.add_edge(n5, l2, Some(nc_n5));
+    graph.add_edge(n1, l1, CEFalse);
+    graph.add_edge(n2, l2, CEFalse);
+    graph.add_edge(n3, l3, CEFalse);
+    graph.add_edge(n4, l2, CEFalse);
+    graph.add_edge(n5, l2, CEFalse);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -820,53 +785,47 @@ fn abnormal_exits() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(cnode());
-    let n1 = graph.add_node(node("n1"));
-    let n2 = graph.add_node(node("n2"));
-    let n3 = graph.add_node(node("n3"));
-    let n4 = graph.add_node(node("n4"));
-    let n5 = graph.add_node(node("n5"));
-    let l1 = graph.add_node(cnode());
-    let l2 = graph.add_node(cnode());
-    let l3 = graph.add_node(cnode());
-    let l4 = graph.add_node(cnode());
-    let l5 = graph.add_node(cnode());
-    let exit = graph.add_node(empty_node());
-
     let c_e1 = cond_s(cctx, "e1");
     let c_l1 = cond_s(cctx, "l1");
     let c_l2 = cond_s(cctx, "l2");
     let c_l3 = cond_s(cctx, "l3");
     let c_l4 = cond_s(cctx, "l4");
     let c_l5 = cond_s(cctx, "l5");
-    let nc_e1 = cctx.mk_not(c_e1);
-    let nc_l1 = cctx.mk_not(c_l1);
-    let nc_l2 = cctx.mk_not(c_l2);
-    let nc_l3 = cctx.mk_not(c_l3);
-    let nc_l4 = cctx.mk_not(c_l4);
-    let nc_l5 = cctx.mk_not(c_l5);
 
-    graph.add_edge(entry, l1, Some(c_e1));
-    graph.add_edge(entry, n1, Some(nc_e1));
-    graph.add_edge(n1, n2, None);
-    graph.add_edge(n2, n3, None);
-    graph.add_edge(n3, n4, None);
-    graph.add_edge(n4, n5, None);
-    graph.add_edge(n5, exit, None);
+    let mut graph = StableDiGraph::new();
+    let entry = graph.add_node(cnode(c_e1));
+    let n1 = graph.add_node(node("n1"));
+    let n2 = graph.add_node(node("n2"));
+    let n3 = graph.add_node(node("n3"));
+    let n4 = graph.add_node(node("n4"));
+    let n5 = graph.add_node(node("n5"));
+    let l1 = graph.add_node(cnode(c_l1));
+    let l2 = graph.add_node(cnode(c_l2));
+    let l3 = graph.add_node(cnode(c_l3));
+    let l4 = graph.add_node(cnode(c_l4));
+    let l5 = graph.add_node(cnode(c_l5));
+    let exit = graph.add_node(empty_node());
+
+    graph.add_edge(entry, l1, CETrue);
+    graph.add_edge(entry, n1, CEFalse);
+    graph.add_edge(n1, n2, CETrue);
+    graph.add_edge(n2, n3, CETrue);
+    graph.add_edge(n3, n4, CETrue);
+    graph.add_edge(n4, n5, CETrue);
+    graph.add_edge(n5, exit, CETrue);
     // loop
-    graph.add_edge(l1, l2, Some(c_l1));
-    graph.add_edge(l2, l3, Some(c_l2));
-    graph.add_edge(l3, l4, Some(c_l3));
-    graph.add_edge(l4, l5, Some(c_l4));
-    graph.add_edge(l5, l1, Some(c_l5));
+    graph.add_edge(l1, l2, CETrue);
+    graph.add_edge(l2, l3, CETrue);
+    graph.add_edge(l3, l4, CETrue);
+    graph.add_edge(l4, l5, CETrue);
+    graph.add_edge(l5, l1, CETrue);
     // loop exit
-    graph.add_edge(l1, exit, Some(nc_l1));
-    graph.add_edge(l4, exit, Some(nc_l4));
+    graph.add_edge(l1, exit, CEFalse);
+    graph.add_edge(l4, exit, CEFalse);
     // abnormal exits
-    graph.add_edge(l2, n2, Some(nc_l2));
-    graph.add_edge(l3, n2, Some(nc_l3));
-    graph.add_edge(l5, n5, Some(nc_l5));
+    graph.add_edge(l2, n2, CEFalse);
+    graph.add_edge(l3, n2, CEFalse);
+    graph.add_edge(l5, n5, CEFalse);
 
     let actx = StringAst::default();
     let cfg = ControlFlowGraph {
@@ -892,6 +851,6 @@ fn empty_node() -> CfgNode<'static, StringAst> {
     CfgNode::Code(AstNodeC::default())
 }
 
-fn cnode() -> CfgNode<'static, StringAst> {
-    CfgNode::Condition
+fn cnode<'cd>(c: Condition<'cd, StringAst>) -> CfgNode<'cd, StringAst> {
+    CfgNode::Condition(c)
 }
