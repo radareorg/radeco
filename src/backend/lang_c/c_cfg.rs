@@ -367,39 +367,52 @@ impl CCFG {
             }).next()
     }
 
+    fn gather_actions(&self, idx: NodeIndex, action_type: &CCFGEdge) -> Option<Vec<NodeIndex>> {
+        let next_node = |node, edge| {
+            let ns = self.ast
+                .edges_directed(node, Direction::Outgoing)
+                .into_iter()
+                .collect::<Vec<_>>();
+            neighbors_by_edge(&ns, edge)
+                .first().map(|e| e.clone())
+        };
+        let next_normal = move |node| {
+            next_node(node, &CCFGEdge::Action(ActionEdge::Normal))
+        };
+        let mut first = next_node(idx, action_type);
+        let mut ret = Vec::new();
+        while let Some(n) = first {
+            ret.push(n);
+            first = next_normal(n);
+        }
+        if ret.len() > 0 {
+            Some(ret)
+        } else {
+            None
+        }
+    }
+
+    fn while_body(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
+        if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::While)) {
+            return None;
+        }
+        self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::WhileBody))
+    }
+
+    fn do_while_body(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
+        if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::DoWhile)) {
+            return None;
+        }
+        self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::WhileBody))
+    }
+
     // Returns a pair (IfThen, IfElse)
     fn branch(&self, idx: NodeIndex) -> Option<(Vec<NodeIndex>, Option<Vec<NodeIndex>>)> {
         if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::If)) {
             return None;
         }
-        let gather_actions = |index, action_type| {
-            let next_node = |node, edge| {
-                let ns = self.ast
-                    .edges_directed(node, Direction::Outgoing)
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                neighbors_by_edge(&ns, edge)
-                    .first().map(|e| e.clone())
-            };
-            let next_normal = move |node| {
-                next_node(node, &CCFGEdge::Action(ActionEdge::Normal))
-            };
-            move || {
-                let mut first = next_node(index, action_type);
-                let mut ret = Vec::new();
-                while let Some(n) = first {
-                    ret.push(n);
-                    first = next_normal(n);
-                }
-                if ret.len() > 0 {
-                    Some(ret)
-                } else {
-                    None
-                }
-            }
-        };
-        let if_then = gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfThen))();
-        let if_else = gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfElse))();
+        let if_then = self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfThen));
+        let if_else = self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfElse));
         if if_then.is_some() {
             Some((if_then.unwrap(), if_else))
         } else {
@@ -852,10 +865,40 @@ impl<'a> CASTConverter<'a> {
                 // fallthrough
             },
             Some(CCFGNode::Action(ActionNode::While)) => {
-                unimplemented!()
+                let cond = self.ast.branch_condition(current_node)
+                    .unwrap_or(self.ast.unknown);
+                if let Some(body_nodes) = self.ast.while_body(current_node) {
+                    for n in body_nodes.iter() {
+                        self.to_c_ast_body(c_ast, *n);
+                    }
+                    let c = *self.node_map.get(&cond).unwrap();
+                    let b = body_nodes.into_iter()
+                        .map(|x| {
+                            self.node_map.get(&x).cloned().unwrap_or(self.ast.unknown)
+                        }).collect::<Vec<_>>();
+                    let node = unimplemented!();
+                    self.node_map.insert(current_node, node);
+                } else {
+                    radeco_err!("No node in body of while found.");
+                }
             },
             Some(CCFGNode::Action(ActionNode::DoWhile)) => {
-                unimplemented!()
+                let cond = self.ast.branch_condition(current_node)
+                    .unwrap_or(self.ast.unknown);
+                if let Some(body_nodes) = self.ast.do_while_body(current_node) {
+                    for n in body_nodes.iter() {
+                        self.to_c_ast_body(c_ast, *n);
+                    }
+                    let c = *self.node_map.get(&cond).unwrap();
+                    let b = body_nodes.into_iter()
+                        .map(|x| {
+                            self.node_map.get(&x).cloned().unwrap_or(self.ast.unknown)
+                        }).collect::<Vec<_>>();
+                    let node = unimplemented!();
+                    self.node_map.insert(current_node, node);
+                } else {
+                    radeco_err!("No node in body of do-while found.");
+                }
             },
             _ => {
                 radeco_err!("Unreachable node {:?}", idx);
