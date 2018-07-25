@@ -24,6 +24,8 @@ pub enum ActionNode {
     Call(String),
     Return,
     If,
+    While,
+    DoWhile,
     Goto,
     Dummy(String),
     DummyGoto,
@@ -242,7 +244,8 @@ impl CCFG {
         }
     }
 
-    /// Add ActionNode of if statement
+    /// Add ActionNode of if statement,
+    /// `if_then`, `if_else` is the NodeIndex of first node of ActionNode
     pub fn conditional(&mut self, condition: NodeIndex, if_then: NodeIndex,
                    if_else: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::If));
@@ -252,6 +255,28 @@ impl CCFG {
             self.ast.add_edge(node, if_else.unwrap(), CCFGEdge::Action(ActionEdge::IfElse));
         }
         self.ast.add_edge(node, if_then, CCFGEdge::Action(ActionEdge::IfThen));
+        self.ast.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
+        self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
+        node
+    }
+
+    pub fn add_while(&mut self, condition: NodeIndex, body: NodeIndex,
+                     prev_action: NodeIndex) -> NodeIndex {
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::While));
+        self.remove_incoming_actions(body);
+        // TODO replace ActionEdge::IfThen with proper Edge
+        self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::IfThen));
+        self.ast.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
+        self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
+        node
+    }
+
+    pub fn add_do_while(&mut self, condition: NodeIndex, body: NodeIndex,
+                     prev_action: NodeIndex) -> NodeIndex {
+        let node = self.ast.add_node(CCFGNode::Action(ActionNode::DoWhile));
+        self.remove_incoming_actions(body);
+        // TODO replace ActionEdge::IfThen with proper Edge
+        self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::IfThen));
         self.ast.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
         self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
@@ -826,6 +851,12 @@ impl<'a> CASTConverter<'a> {
             Some(CCFGNode::Action(ActionNode::DummyGoto)) => {
                 // fallthrough
             },
+            Some(CCFGNode::Action(ActionNode::While)) => {
+                unimplemented!()
+            },
+            Some(CCFGNode::Action(ActionNode::DoWhile)) => {
+                unimplemented!()
+            },
             _ => {
                 radeco_err!("Unreachable node {:?}", idx);
                 unreachable!()
@@ -1094,6 +1125,26 @@ mod test {
         let c = ast.var("c", Some(Ty::new(BTy::Char, true, 0)));
         let v = ast.var("v", Some(Ty::new(BTy::Void, true, 0)));
         let f = ast.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_while_test() {
+        let mut ast = CCFG::new("main");
+        let entry = ast.entry;
+        unimplemented!();
+        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
+        let output = ast.to_c_ast().print();
+        println!("{}", output);
+    }
+
+    #[test]
+    fn simple_c_ast_do_while_test() {
+        let mut ast = CCFG::new("main");
+        let entry = ast.entry;
+        unimplemented!();
         CCFGVerifier::verify(&ast).expect("CCFG verification failed");
         let output = ast.to_c_ast().print();
         println!("{}", output);
