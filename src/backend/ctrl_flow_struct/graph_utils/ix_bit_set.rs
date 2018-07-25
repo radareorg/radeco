@@ -97,6 +97,7 @@ impl<'a, Ix: IndexLike> IntoIterator for &'a IxBitSet<Ix> {
     }
 }
 
+#[derive(Clone)]
 pub struct Iter<'a, Ix: IndexLike>(bit_set::Iter<'a, u32>, PhantomData<Ix>);
 
 impl<'a, Ix: IndexLike> Iterator for Iter<'a, Ix> {
