@@ -53,6 +53,8 @@ pub enum ActionEdge {
     Normal,
     /// Destination of Goto statement
     GotoDst,
+    /// Edge between body and while/do-while 
+    WhileBody,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -264,8 +266,7 @@ impl CCFG {
                      prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::While));
         self.remove_incoming_actions(body);
-        // TODO replace ActionEdge::IfThen with proper Edge
-        self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::IfThen));
+        self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::WhileBody));
         self.ast.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
         self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
@@ -275,8 +276,7 @@ impl CCFG {
                      prev_action: NodeIndex) -> NodeIndex {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::DoWhile));
         self.remove_incoming_actions(body);
-        // TODO replace ActionEdge::IfThen with proper Edge
-        self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::IfThen));
+        self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::WhileBody));
         self.ast.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
         self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
