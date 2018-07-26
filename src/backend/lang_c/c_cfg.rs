@@ -785,37 +785,44 @@ impl<'a> CASTConverter<'a> {
             self.ast.label(l);
         };
         let idx = self.cfg.g.node_weight(current_node).cloned();
-        match idx {
+        let ast_node = match idx {
             Some(CCFGNode::Action(ActionNode::Assignment)) => {
-                self.to_c_ast_assignment(current_node);
+                self.to_c_ast_assignment(current_node)
             },
             Some(CCFGNode::Action(ActionNode::Call(ref name))) => {
-                self.to_c_ast_call(current_node);
+                self.to_c_ast_call(current_node, name)
             },
             Some(CCFGNode::Action(ActionNode::Return)) => {
-                self.to_c_ast_return(current_node);
+                self.to_c_ast_return(current_node)
             },
             Some(CCFGNode::Action(ActionNode::If)) => {
-                self.to_c_ast_if(current_node);
+                self.to_c_ast_if(current_node)
             },
             Some(CCFGNode::Action(ActionNode::Goto)) => {
-                self.to_c_ast_goto(current_node);
+                self.to_c_ast_goto(current_node)
             },
-            Some(CCFGNode::Entry) => {},
-            Some(CCFGNode::Action(ActionNode::DummyGoto)) => {
+            Some(CCFGNode::Entry)
+            | Some(CCFGNode::Action(ActionNode::DummyGoto)) => {
                 // fallthrough
+                Err("TODO")
             },
             Some(CCFGNode::Action(ActionNode::While)) => {
-                self.to_c_ast_while(current_node);
+                self.to_c_ast_while(current_node)
             },
             Some(CCFGNode::Action(ActionNode::DoWhile)) => {
-                self.to_c_ast_do_while(current_node);
+                self.to_c_ast_do_while(current_node)
             },
             _ => {
                 radeco_err!("Unreachable node {:?}", idx);
                 unreachable!()
             },
         };
+        if let Ok(n) = ast_node {
+            self.node_map.insert(current_node, ast_node.unwrap());
+        }
+        if let Err(err) = ast_node {
+            radeco_err!(err);
+        }
 
         if let Some(ref comment) = self.cfg.debug_info.get(&current_node) {
             if let Some(&node) = self.node_map.get(&current_node) {
@@ -828,7 +835,7 @@ impl<'a> CASTConverter<'a> {
         };
     }
 
-    fn to_c_ast_assignment(&mut self, node: CCFGRef) {
+    fn to_c_ast_assignment(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
         let tmp = self.cfg.assignment(node)
             .and_then(|(d, s)| {
                 match (self.node_map.get(&d), self.node_map.get(&s)) {
@@ -837,15 +844,15 @@ impl<'a> CASTConverter<'a> {
                 }
             });
         if let Some((dst, src)) = tmp {
-            let node = self.ast.expr(c_ast::Expr::Assign, &[dst, src], false);
-            self.node_map.insert(node, node);
+            let ret = self.ast.expr(c_ast::Expr::Assign, &[dst, src], false);
+            Ok(ret)
         } else {
-            radeco_err!("Something wrong");
+            Err("CASTConverter::to_c_ast_assignment")
         }
     }
 
-    fn to_c_ast_call(&mut self, node: CCFGRef) {
-        let args = self.cfg.args_call(current_node)
+    fn to_c_ast_call(&mut self, node: CCFGRef, name: &str) -> Result<CASTRef, &'static str> {
+        let args = self.cfg.args_call(node)
             .unwrap_or(Vec::new())
             .into_iter()
             .map(|arg| {
@@ -855,27 +862,26 @@ impl<'a> CASTConverter<'a> {
                 }
                 ret
             }).collect();
-        let ret_node_opt = self.cfg.func_val(current_node)
+        let ret_node_opt = self.cfg.func_val(node)
             .and_then(|x| self.node_map.get(&x).map(|a| *a));
         let node = self.ast.call_func(name, args);
         if let Some(ret_node) = ret_node_opt {
             self.ast.expr(c_ast::Expr::Assign, &[ret_node, node], false);
         }
-        self.node_map.insert(current_node, node);
+        Ok(node)
     }
 
-    fn to_c_ast_return(&mut self, node: CCFGRef) {
-        let opt = self.cfg.ret_val(current_node)
+    fn to_c_ast_return(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+        let opt = self.cfg.ret_val(node)
             .and_then(|n| self.node_map.get(&n))
             .map(|n| *n);
-        let node = self.ast.ret(opt);
-        self.node_map.insert(current_node, node);
+        Ok(self.ast.ret(opt))
     }
 
-    fn to_c_ast_if(&mut self, node: CCFGRef) {
-        let cond = self.cfg.branch_condition(current_node)
+    fn to_c_ast_if(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+        let cond = self.cfg.branch_condition(node)
             .unwrap_or(self.cfg.unknown);
-        let branches = self.cfg.branch(current_node).map(|x| x.clone());
+        let branches = self.cfg.branch(node).map(|x| x.clone());
         if let Some((if_then, if_else)) = branches {
             for n in if_then.iter() {
                 self.to_c_ast_body(*n);
@@ -894,15 +900,16 @@ impl<'a> CASTConverter<'a> {
             let e = if_else.map(|x| x.iter().map(|y| {
                 self.node_map.get(y).cloned().unwrap_or(self.cfg.unknown)
             }).collect::<Vec<_>>());
-            let node = self.ast.new_if(c, t, e);
-            self.node_map.insert(current_node, node);
+            Ok(self.ast.new_if(c, t, e))
+        } else {
+            Err("CCFG::branch failed")
         }
     }
 
-    fn to_c_ast_do_while(&mut self, node: CCFGRef) {
-        let cond = self.cfg.branch_condition(current_node)
+    fn to_c_ast_do_while(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+        let cond = self.cfg.branch_condition(node)
             .unwrap_or(self.cfg.unknown);
-        if let Some(body_nodes) = self.cfg.do_while_body(current_node) {
+        if let Some(body_nodes) = self.cfg.do_while_body(node) {
             for n in body_nodes.iter() {
                 self.to_c_ast_body(*n);
             }
@@ -911,17 +918,16 @@ impl<'a> CASTConverter<'a> {
                 .map(|x| {
                     self.node_map.get(&x).cloned().unwrap_or(self.cfg.unknown)
                 }).collect::<Vec<_>>();
-            let node = self.ast.new_do_while(c, b);
-            self.node_map.insert(current_node, node);
+            Ok(self.ast.new_do_while(c, b))
         } else {
-            radeco_err!("No node in body of do-while found.");
+            Err("No node in body of do-while found.")
         }
     }
 
-    fn to_c_ast_while(&mut self, node: CCFGRef) {
-        let cond = self.cfg.branch_condition(current_node)
+    fn to_c_ast_while(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+        let cond = self.cfg.branch_condition(node)
             .unwrap_or(self.cfg.unknown);
-        if let Some(body_nodes) = self.cfg.while_body(current_node) {
+        if let Some(body_nodes) = self.cfg.while_body(node) {
             for n in body_nodes.iter() {
                 self.to_c_ast_body(*n);
             }
@@ -930,23 +936,21 @@ impl<'a> CASTConverter<'a> {
                 .map(|x| {
                     self.node_map.get(&x).cloned().unwrap_or(self.cfg.unknown)
                 }).collect::<Vec<_>>();
-            let node = self.ast.new_while(c, b);
-            self.node_map.insert(current_node, node);
+            Ok(self.ast.new_while(c, b))
         } else {
-            radeco_err!("No node in body of while found.");
+            Err("No node in body of while found.")
         }
     }
 
-    fn to_c_ast_goto(&mut self, node: CCFGRef) {
-        let dst_opt = self.cfg.goto(current_node)
+    fn to_c_ast_goto(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+        let dst_opt = self.cfg.goto(node)
             .and_then(|d| self.cfg.label_map.get(&d))
             .map(|d| d.clone());
         if dst_opt.is_none() {
             radeco_warn!("Error Goto");
         };
         let dst = dst_opt.unwrap_or("unknown_label".to_string());
-        let node = self.ast.goto(&dst);
-        self.node_map.insert(current_node, node);
+        Ok(self.ast.goto(&dst))
     }
 }
 
