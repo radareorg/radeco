@@ -78,24 +78,27 @@ pub enum ValueEdge {
     Conditional,
 }
 
+type CCFGRef = NodeIndex;
+type CASTRef = NodeIndex;
+
 pub struct CCFG {
     /// Name of function of this AST
     fname: String,
     /// Entry node of this function
-    pub entry: NodeIndex,
+    pub entry: CCFGRef,
     /// Unknown node
-    pub unknown: NodeIndex,
+    pub unknown: CCFGRef,
     ast: Graph<CCFGNode, CCFGEdge>,
     /// Variables declared in this function, bool value is `is_implicit` flag
-    vars: HashSet<(bool, NodeIndex)>,
+    vars: HashSet<(bool, CCFGRef)>,
     /// Constants declared in this function, bool value is `is_implicit` flag
-    consts: HashSet<(bool, NodeIndex)>,
+    consts: HashSet<(bool, CCFGRef)>,
     /// Expressions declared in this function, bool value is `is_implicit` flag
-    exprs: Vec<(bool, NodeIndex)>,
+    exprs: Vec<(bool, CCFGRef)>,
     /// Hashmap from label node to string it represents
-    label_map: HashMap<NodeIndex, String>,
+    label_map: HashMap<CCFGRef, String>,
     /// Debug information retrieved from SSA
-    debug_info: HashMap<NodeIndex, String>,
+    debug_info: HashMap<CCFGRef, String>,
 }
 
 
@@ -109,7 +112,7 @@ impl CCFGNode {
 }
 
 /// Returns nodes which is connected with given type of edge
-fn neighbors_by_edge(edges: &Vec<EdgeReference<CCFGEdge>>, ty: &CCFGEdge) -> Vec<NodeIndex> {
+fn neighbors_by_edge(edges: &Vec<EdgeReference<CCFGEdge>>, ty: &CCFGEdge) -> Vec<CCFGRef> {
     edges.iter().filter(|e| (*e).weight() == ty)
         .map(|e| e.target())
         .collect()
@@ -134,7 +137,7 @@ impl CCFG {
     }
 
     /// Append a string for given node
-    pub fn debug_info_at(&mut self, node: NodeIndex, comment: String) {
+    pub fn debug_info_at(&mut self, node: CCFGRef, comment: String) {
         let s = if let Some(c) = self.debug_info.get(&node).cloned() {
             c
         } else {
@@ -143,26 +146,26 @@ impl CCFG {
         self.debug_info.insert(node, format!("{} {}", s, comment));
     }
 
-    pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, edge: CCFGEdge) -> EdgeIndex {
+    pub fn add_edge(&mut self, source: CCFGRef, target: CCFGRef, edge: CCFGEdge) -> EdgeIndex {
         self.ast.add_edge(source, target, edge)
     }
 
     /// Add ValueNode of variable
-    pub fn var(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
+    pub fn var(&mut self, name: &str, ty: Option<Ty>) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Value(ValueNode::Variable(ty, name.to_string())));
         self.vars.insert((false, node));
         node
     }
 
     /// Add ValueNode of constant value
-    pub fn constant(&mut self, name: &str, ty: Option<Ty>) -> NodeIndex {
+    pub fn constant(&mut self, name: &str, ty: Option<Ty>) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Value(ValueNode::Constant(ty, name.to_string())));
         self.consts.insert((true, node));
         node
     }
 
     /// Add ValueNode of expression
-    pub fn expr(&mut self, operands: &[NodeIndex], op: c_ast::Expr) -> NodeIndex {
+    pub fn expr(&mut self, operands: &[CCFGRef], op: c_ast::Expr) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Value(ValueNode::Expression(op)));
         for (i, operand) in operands.iter().enumerate() {
             let _ = self.ast.add_edge(node, *operand, CCFGEdge::Value(ValueEdge::Operand(i as u8)));
@@ -171,7 +174,7 @@ impl CCFG {
         node
     }
 
-    pub fn derefed_node(&self, node: NodeIndex) -> Option<NodeIndex> {
+    pub fn derefed_node(&self, node: CCFGRef) -> Option<CCFGRef> {
         // TODO check whether there are more than two derefed nodes
         self.ast.edges_directed(node, Direction::Incoming)
             .filter(|e| *e.weight() == CCFGEdge::Value(ValueEdge::DeRef))
@@ -179,7 +182,7 @@ impl CCFG {
             .map(|e| e.source())
     }
 
-    pub fn deref(&mut self, operand: NodeIndex) -> NodeIndex {
+    pub fn deref(&mut self, operand: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Value(ValueNode::Expression(c_ast::Expr::DeRef)));
         let _ = self.ast.add_edge(node, operand, CCFGEdge::Value(ValueEdge::DeRef));
         // Operand edge is needed so that CAST can evaluate a derefed node from this.
@@ -189,7 +192,7 @@ impl CCFG {
     }
 
     /// Add ActionNode of assignment
-    pub fn assign(&mut self, dst: NodeIndex, src: NodeIndex, prev_action: NodeIndex) -> NodeIndex {
+    pub fn assign(&mut self, dst: CCFGRef, src: CCFGRef, prev_action: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::Assignment));
         let _ = self.ast.add_edge(node, dst, CCFGEdge::Value(ValueEdge::AssignDst));
         let _ = self.ast.add_edge(node, src, CCFGEdge::Value(ValueEdge::AssignSrc));
@@ -197,15 +200,15 @@ impl CCFG {
         node
     }
 
-    pub fn dummy_goto(&mut self, prev_action: NodeIndex) -> NodeIndex {
+    pub fn dummy_goto(&mut self, prev_action: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::DummyGoto));
         let _ = self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
     }
 
     /// Add ActionNode of function call
-    pub fn call_func(&mut self, fname: &str, args: &[NodeIndex], prev_action: NodeIndex,
-                 ret_val: Option<NodeIndex>) -> NodeIndex {
+    pub fn call_func(&mut self, fname: &str, args: &[CCFGRef], prev_action: CCFGRef,
+                 ret_val: Option<CCFGRef>) -> CCFGRef {
         let call_node = self.ast.add_node(CCFGNode::Action(ActionNode::Call(fname.to_string())));
         for (i, arg) in args.iter().enumerate() {
             self.ast.add_edge(call_node, *arg, CCFGEdge::Value(ValueEdge::Arg(i as u8)));
@@ -217,7 +220,7 @@ impl CCFG {
         call_node
     }
 
-    fn insert_node(&mut self, prev_action: NodeIndex, next_action: NodeIndex, node: NodeIndex) {
+    fn insert_node(&mut self, prev_action: CCFGRef, next_action: CCFGRef, node: CCFGRef) {
         let e = self.ast.find_edge(prev_action, next_action)
             .map(|x| (x, self.ast.edge_weight(x).map(|a| a.clone())));
         match e {
@@ -232,7 +235,7 @@ impl CCFG {
         }
     }
 
-    fn remove_incoming_actions(&mut self, node: NodeIndex) {
+    fn remove_incoming_actions(&mut self, node: CCFGRef) {
         let ns = self.ast.edges_directed(node, Direction::Incoming)
             .into_iter()
             .filter_map(|e| {
@@ -247,9 +250,9 @@ impl CCFG {
     }
 
     /// Add ActionNode of if statement,
-    /// `if_then`, `if_else` is the NodeIndex of first node of ActionNode
-    pub fn conditional(&mut self, condition: NodeIndex, if_then: NodeIndex,
-                   if_else: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
+    /// `if_then`, `if_else` is the CCFGRef of first node of ActionNode
+    pub fn conditional(&mut self, condition: CCFGRef, if_then: CCFGRef,
+                   if_else: Option<CCFGRef>, prev_action: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::If));
         self.remove_incoming_actions(if_then);
         if if_else.is_some() {
@@ -262,8 +265,8 @@ impl CCFG {
         node
     }
 
-    pub fn add_while(&mut self, condition: NodeIndex, body: NodeIndex,
-                     prev_action: NodeIndex) -> NodeIndex {
+    pub fn add_while(&mut self, condition: CCFGRef, body: CCFGRef,
+                     prev_action: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::While));
         self.remove_incoming_actions(body);
         self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::WhileBody));
@@ -272,8 +275,8 @@ impl CCFG {
         node
     }
 
-    pub fn add_do_while(&mut self, condition: NodeIndex, body: NodeIndex,
-                     prev_action: NodeIndex) -> NodeIndex {
+    pub fn add_do_while(&mut self, condition: CCFGRef, body: CCFGRef,
+                     prev_action: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::DoWhile));
         self.remove_incoming_actions(body);
         self.ast.add_edge(node, body, CCFGEdge::Action(ActionEdge::WhileBody));
@@ -282,8 +285,8 @@ impl CCFG {
         node
     }
 
-    pub fn conditional_insert(&mut self, condition: NodeIndex, if_then: NodeIndex,
-                   if_else: Option<NodeIndex>, prev: NodeIndex) -> NodeIndex {
+    pub fn conditional_insert(&mut self, condition: CCFGRef, if_then: CCFGRef,
+                   if_else: Option<CCFGRef>, prev: CCFGRef) -> CCFGRef {
         let es = self.ast.edges_directed(prev, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
@@ -305,7 +308,7 @@ impl CCFG {
     }
 
     /// Add ActionNode of return statement
-    pub fn add_return(&mut self, ret_val: Option<NodeIndex>, prev_action: NodeIndex) -> NodeIndex {
+    pub fn add_return(&mut self, ret_val: Option<CCFGRef>, prev_action: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::Return));
         if ret_val.is_some() {
             self.ast.add_edge(node, ret_val.unwrap(), CCFGEdge::Value(ValueEdge::RetVal));
@@ -314,7 +317,7 @@ impl CCFG {
         node
     }
 
-    pub fn insert_goto_before(&mut self, next: NodeIndex, dst: NodeIndex, label_str: &str) -> NodeIndex {
+    pub fn insert_goto_before(&mut self, next: CCFGRef, dst: CCFGRef, label_str: &str) -> CCFGRef {
         let es = self.ast.edges_directed(next, Direction::Incoming)
             .into_iter()
             .filter_map(|e| {
@@ -339,7 +342,7 @@ impl CCFG {
         goto_node
     }
 
-    pub fn add_goto(&mut self, dst: NodeIndex, label_str: &str, prev_action: NodeIndex) -> NodeIndex {
+    pub fn add_goto(&mut self, dst: CCFGRef, label_str: &str, prev_action: CCFGRef) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::Goto));
         self.ast.add_edge(node, dst, CCFGEdge::Action(ActionEdge::GotoDst));
         self.ast.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
@@ -347,8 +350,8 @@ impl CCFG {
         node
     }
 
-    pub fn insert_goto(&mut self, prev_action: NodeIndex, next_action: NodeIndex,
-                   dst: NodeIndex, label_str: &str) -> NodeIndex {
+    pub fn insert_goto(&mut self, prev_action: CCFGRef, next_action: CCFGRef,
+                   dst: CCFGRef, label_str: &str) -> CCFGRef {
         let node = self.ast.add_node(CCFGNode::Action(ActionNode::Goto));
         let _ = self.ast.add_edge(node, dst, CCFGEdge::Action(ActionEdge::GotoDst));
         self.insert_node(prev_action, next_action, node);
@@ -356,7 +359,7 @@ impl CCFG {
         node
     }
 
-    fn next_action(&self, idx: NodeIndex) -> Option<NodeIndex> {
+    fn next_action(&self, idx: CCFGRef) -> Option<CCFGRef> {
         self.ast.edges_directed(idx, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
@@ -367,7 +370,7 @@ impl CCFG {
             }).next()
     }
 
-    fn gather_actions(&self, idx: NodeIndex, action_type: &CCFGEdge) -> Option<Vec<NodeIndex>> {
+    fn gather_actions(&self, idx: CCFGRef, action_type: &CCFGEdge) -> Option<Vec<CCFGRef>> {
         let next_node = |node, edge| {
             let ns = self.ast
                 .edges_directed(node, Direction::Outgoing)
@@ -392,14 +395,14 @@ impl CCFG {
         }
     }
 
-    fn while_body(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
+    fn while_body(&self, idx: CCFGRef) -> Option<Vec<CCFGRef>> {
         if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::While)) {
             return None;
         }
         self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::WhileBody))
     }
 
-    fn do_while_body(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
+    fn do_while_body(&self, idx: CCFGRef) -> Option<Vec<CCFGRef>> {
         if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::DoWhile)) {
             return None;
         }
@@ -407,7 +410,7 @@ impl CCFG {
     }
 
     // Returns a pair (IfThen, IfElse)
-    fn branch(&self, idx: NodeIndex) -> Option<(Vec<NodeIndex>, Option<Vec<NodeIndex>>)> {
+    fn branch(&self, idx: CCFGRef) -> Option<(Vec<CCFGRef>, Option<Vec<CCFGRef>>)> {
         if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::If)) {
             return None;
         }
@@ -421,7 +424,7 @@ impl CCFG {
     }
 
     // Returns value node which represents condition used by If statement
-    fn branch_condition(&self, idx: NodeIndex) -> Option<NodeIndex> {
+    fn branch_condition(&self, idx: CCFGRef) -> Option<CCFGRef> {
         if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::If)) {
             return None;
         }
@@ -437,7 +440,7 @@ impl CCFG {
     }
 
     // Returns destination of goto statement
-    fn goto(&self, idx: NodeIndex) -> Option<NodeIndex> {
+    fn goto(&self, idx: CCFGRef) -> Option<CCFGRef> {
         if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::Goto))  {
             return None;
         };
@@ -457,7 +460,7 @@ impl CCFG {
     }
 
     // Returns a pair (Dst, Src) which represents Dst = Src
-    fn assignment(&self, idx: NodeIndex) -> Option<(NodeIndex, NodeIndex)> {
+    fn assignment(&self, idx: CCFGRef) -> Option<(CCFGRef, CCFGRef)> {
         if self.ast.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::Assignment)) {
             return None;
         }
@@ -473,7 +476,7 @@ impl CCFG {
     }
 
     // Returns arguments of function call
-    fn args_call(&self, idx: NodeIndex) -> Option<Vec<NodeIndex>> {
+    fn args_call(&self, idx: CCFGRef) -> Option<Vec<CCFGRef>> {
         match self.ast.node_weight(idx) {
             Some(&CCFGNode::Action(ActionNode::Call(_))) => {},
             _ => {return None;},
@@ -494,7 +497,7 @@ impl CCFG {
     }
 
     // Returns value node which is assigned by a given function call
-    fn func_val(&self, idx: NodeIndex) -> Option<NodeIndex> {
+    fn func_val(&self, idx: CCFGRef) -> Option<CCFGRef> {
         match self.ast.node_weight(idx) {
             Some(&CCFGNode::Action(ActionNode::Call(_))) => {},
             _ => {return None;},
@@ -514,7 +517,7 @@ impl CCFG {
     }
 
     // Returns value node of the return value of a return statement
-    fn ret_val(&self, idx: NodeIndex) -> Option<NodeIndex> {
+    fn ret_val(&self, idx: CCFGRef) -> Option<CCFGRef> {
         match self.ast.node_weight(idx) {
             Some(&CCFGNode::Action(ActionNode::Return)) => {},
             _ => {return None;}
@@ -534,7 +537,7 @@ impl CCFG {
     }
 
     // Returns operands used by a given expression
-    fn operands_from_expr(&self, expr: NodeIndex) -> Vec<NodeIndex> {
+    fn operands_from_expr(&self, expr: CCFGRef) -> Vec<CCFGRef> {
         let mut operands = self.ast.edges_directed(expr, Direction::Outgoing)
             .into_iter()
             .filter_map(|e| {
@@ -553,21 +556,21 @@ impl CCFG {
     }
 
     /// Returns constant value which is either register or immidiate value
-    pub fn constant_of(&self, node: NodeIndex) -> Option<String> {
+    pub fn constant_of(&self, node: CCFGRef) -> Option<String> {
         match self.ast.node_weight(node) {
             Some(&CCFGNode::Value(ValueNode::Constant(_, ref s))) => Some(s.clone()),
             _ => None,
         }
     }
 
-    pub fn is_assign_node(&self, node: NodeIndex) -> bool {
+    pub fn is_assign_node(&self, node: CCFGRef) -> bool {
         match self.ast.node_weight(node) {
             Some(&CCFGNode::Action(ActionNode::Assignment)) => true,
             _ => false
         }
     }
 
-    pub fn is_call_node(&self, node: NodeIndex) -> bool {
+    pub fn is_call_node(&self, node: CCFGRef) -> bool {
         match self.ast.node_weight(node) {
             Some(&CCFGNode::Action(ActionNode::Call(_))) => true,
             _ => false
@@ -583,7 +586,7 @@ impl CCFG {
 pub struct CCFGVerifier {
 }
 
-type Verifier = Fn(NodeIndex, &CCFG) -> Result<(), String>;
+type Verifier = Fn(CCFGRef, &CCFG) -> Result<(), String>;
 impl CCFGVerifier {
     const DELIM: &'static str = "; ";
     pub fn verify(cast: &CCFG) -> Result<(), String> {
@@ -610,7 +613,7 @@ impl CCFGVerifier {
     }
 
     // 1. There are at most 1 ActionEdge::Normal from each node.
-    fn verify_normal_action(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
+    fn verify_normal_action(node: CCFGRef, cast: &CCFG) -> Result<(), String> {
         match cast.ast.node_weight(node) {
             Some(&CCFGNode::Action(_)) => {},
             _ => return Ok(()),
@@ -631,7 +634,7 @@ impl CCFGVerifier {
     }
 
     // 2. There are ActionEdge::IfThen, ValueEdge::Conditional from ActionNode::If
-    fn verify_if(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
+    fn verify_if(node: CCFGRef, cast: &CCFG) -> Result<(), String> {
         match cast.ast.node_weight(node) {
             Some(&CCFGNode::Action(ActionNode::If)) => {},
             _ => return Ok(()),
@@ -653,7 +656,7 @@ impl CCFGVerifier {
     }
 
     // 3. The targets of value edges are ValueNode, The target of action edges are ActionNode.
-    fn verify_edge_action(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
+    fn verify_edge_action(node: CCFGRef, cast: &CCFG) -> Result<(), String> {
         let mut errors = Vec::new();
         let edges = cast.ast.edges_directed(node, Direction::Outgoing);
         for edge in edges {
@@ -676,7 +679,7 @@ impl CCFGVerifier {
     }
 
     // 4. The destination node of GotoDst edge is ActionNode.
-    fn verify_goto(node: NodeIndex, cast: &CCFG) -> Result<(), String> {
+    fn verify_goto(node: CCFGRef, cast: &CCFG) -> Result<(), String> {
         match cast.ast.node_weight(node) {
             Some(&CCFGNode::Action(ActionNode::Goto)) => {},
             _ => return Ok(()),
@@ -712,8 +715,8 @@ impl CCFGVerifier {
 struct CASTConverter<'a> {
     ast: &'a CCFG,
     /// HashMap from CCFG's node to CAST's node
-    node_map: HashMap<NodeIndex, NodeIndex>,
-    visited: HashSet<NodeIndex>,
+    node_map: HashMap<CCFGRef, CASTRef>,
+    visited: HashSet<CCFGRef>,
 }
 
 impl<'a> CASTConverter<'a> {
@@ -759,7 +762,7 @@ impl<'a> CASTConverter<'a> {
                         if let Some(&n) = self.node_map.get(&_n) {
                             n
                         } else {
-                            radeco_warn!("NodeIndex {:?} not found", _n);
+                            radeco_warn!("{:?} not found", _n);
                             unknown_node
                         }
                     }).collect::<Vec<_>>();
@@ -772,7 +775,7 @@ impl<'a> CASTConverter<'a> {
         c_ast
     }
 
-    fn to_c_ast_body(&mut self, c_ast: &mut CAST, current_node: NodeIndex) {
+    fn to_c_ast_body(&mut self, c_ast: &mut CAST, current_node: CCFGRef) {
         if self.visited.contains(&current_node) {
             return;
         };
