@@ -56,5 +56,5 @@ git = "https://github.com/radare/radare2-r2pipe-api"
 git = "https://github.com/radareorg/esil-rs"
 #path = "../esil-rs"
 
-[dependencies.capstone_rust]
-git = "https://github.com/sushant94/capstone-rust"
+# [dependencies.capstone_rust]
+# git = "https://github.com/sushant94/capstone-rust"

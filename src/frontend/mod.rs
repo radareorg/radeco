@@ -15,6 +15,6 @@ pub mod radeco_source;
 pub mod radeco_containers;
 
 pub mod bindings;
-pub mod instruction_analyzer;
+// pub mod instruction_analyzer;
 pub mod llanalyzer;
 pub mod imports;

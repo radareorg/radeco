@@ -15,7 +15,7 @@
 use esil::lexer::{Token, Tokenizer};
 
 use esil::parser::{Parse, Parser};
-use frontend::instruction_analyzer::{InstructionAnalyzer, X86_CS_IA, IOperand};
+// use frontend::instruction_analyzer::{InstructionAnalyzer, X86_CS_IA, IOperand};
 use frontend::radeco_containers::RadecoFunction;
 
 use middle::ir::{self, MAddress, MOpcode};
@@ -26,9 +26,10 @@ use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
 
 use r2api::structs::{LOpInfo, LRegInfo};
 
-use regex::Regex;
+// use regex::Regex;
 use std::{fmt, cmp, u64};
 use std::sync::Arc;
+use std::borrow::Cow;
 
 pub type VarId = usize;
 
@@ -481,11 +482,28 @@ impl<'a, T> SSAConstruct<'a, T>
 
             // Handle call separately.
             // NOTE: This is a hack.
-            if let Some(ref ty) = op.optype {
-                if ty == "call" || ty == "ucall" {
+            {
+                // also handle unknown ESIL this way
+                let overrides = &["GOTO", "TRAP", "$", "TODO", "REPEAT"];
+                let opt_call_ty =
+                    if esil_str.split(",").any(|x| overrides.contains(&x)) {
+                        Some(Cow::Owned(format!("ESIL: {}", esil_str)))
+                    } else if let Some(ref ty) = op.optype {
+                        if ty == "call" || ty == "ucall" {
+                            Some(Cow::Borrowed(ty))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                if let Some(call_ty) = opt_call_ty {
+                    let is_real_call = &*call_ty == "call" || &*call_ty == "ucall";
+
                     let unknown_str = "unknown".to_owned();
 
-                    let value_type = if ty == "call" {
+                    let value_type = if &*call_ty == "call" {
                         scalar!(0)
                     } else {
                         //TODO Specify WidthSpec from esil
@@ -497,13 +515,18 @@ impl<'a, T> SSAConstruct<'a, T>
                                                    value_type,
                                                    op.opcode.clone().unwrap_or(unknown_str));
 
+                    let opcode = if is_real_call {
+                        MOpcode::OpCall
+                    } else {
+                        MOpcode::OpCustom(call_ty.into_owned())
+                    };
                     let op_call = self.phiplacer
-                        .add_op(&MOpcode::OpCall, &mut current_address, value_type);
+                        .add_op(&opcode, &mut current_address, value_type);
 
 
                     // If `self.assume_cc` is set, then we assume that the callee strictly obeys the
                     // calling convention.
-                    let (cargs, retr) = if self.assume_cc {
+                    let (cargs, retr) = if self.assume_cc && is_real_call {
                         (self.regfile.iter_args(), self.regfile.alias_info.get("SN"))
                     } else {
                         // If we cannot make any assumption about the calling convention, then we
@@ -566,6 +589,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 }
             }
 
+            /*
             // Some overrides as we do not support all esil and don't want to panic.
             let overrides = &["GOTO", "TRAP", "$", "TODO", "REPEAT"];
             if esil_str.split(",").any(|x| overrides.contains(&x)) {
@@ -586,6 +610,7 @@ impl<'a, T> SSAConstruct<'a, T>
                 self.process_custom(&ia, &mut current_address);
                 continue;
             }
+            */
 
             while let Some(ref token) = p.parse::<_, Tokenizer>(esil_str) {
                 radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
@@ -605,6 +630,7 @@ impl<'a, T> SSAConstruct<'a, T>
         self.phiplacer.finish(op_info);
     }
 
+    #[allow(dead_code)]
     fn process_memory_op(&mut self,
                          base: &Option<String>,
                          index: &Option<String>,
@@ -663,6 +689,7 @@ impl<'a, T> SSAConstruct<'a, T>
     }
 
 
+    /*
     fn process_custom<IA: InstructionAnalyzer>(&mut self, ia: &IA, addr: &mut MAddress) {
         let mnemonic = ia.mnemonic().clone();
         let opcode = MOpcode::OpCustom(mnemonic.into_owned());
@@ -756,6 +783,7 @@ impl<'a, T> SSAConstruct<'a, T>
             }
         }
     }
+    */
 } // end impl SSAConstruct
 
 #[cfg(test)]
