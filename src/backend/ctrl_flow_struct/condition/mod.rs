@@ -12,8 +12,8 @@
 //! let cctx = cstore.cctx();
 //!
 //! // make some variables
-//! let a = cctx.mk_var("a");
-//! let b = cctx.mk_var("b");
+//! let a = cctx.mk_var(cctx.new_var("a"));
+//! let b = cctx.mk_var(cctx.new_var("b"));
 //!
 //! // make some expressions
 //! let cond1 = cctx.mk_not(cctx.mk_and(a, b));
@@ -75,9 +75,10 @@ enum Op {
     Or,
 }
 
-/// Wrapper for comparing and hashing by pointer
+/// A variable. This can be freely copied.
+/// Use [`Context::new_var`] to make one.
 #[derive(Debug)]
-struct VarRef<'cd, T: 'cd>(&'cd T);
+pub struct VarRef<'cd, T: 'cd>(&'cd T);
 impl_copy!{VarRef}
 
 /// Helper for creating new conditions. This can be freely copied.
@@ -101,8 +102,12 @@ use self::CondVariants::*;
 impl<'cd, T> Context<'cd, T> {
     /// Creates a new boolean variable. This will not compare equal to any
     /// previously created variable, regardless of the underlying values.
-    pub fn mk_var(self, t: T) -> Condition<'cd, T> {
-        let vr = self.store.mk_var(t);
+    pub fn new_var(self, t: T) -> VarRef<'cd, T> {
+        self.store.mk_var(t)
+    }
+
+    /// Creates a condition representing the given variable.
+    pub fn mk_var(self, vr: VarRef<'cd, T>) -> Condition<'cd, T> {
         Condition(
             self.store.mk_cond(Var(Negation::Normal, vr)),
             self.store.mk_cond(Var(Negation::Negated, vr)),
@@ -279,6 +284,34 @@ impl<'cd, T> Context<'cd, T> {
             }
         }
     }
+
+    /// Replaces all uses of `old_var` in `cond` with `new_var`.
+    pub fn replace_var_in(
+        self,
+        cond: Condition<'cd, T>,
+        old_var: VarRef<'cd, T>,
+        new_var: VarRef<'cd, T>,
+    ) -> Condition<'cd, T> {
+        match cond.0 {
+            &Var(inv, vr) => {
+                if vr == old_var {
+                    Condition(
+                        self.store.mk_cond(Var(inv, new_var)),
+                        self.store.mk_cond(Var(!inv, new_var)),
+                    )
+                } else {
+                    cond
+                }
+            }
+            &Expr(op, ref opn_v) => self.store_expr(
+                op,
+                opn_v
+                    .iter()
+                    .map(|&opn| self.replace_var_in(opn, old_var, new_var))
+                    .collect(),
+            ),
+        }
+    }
 }
 
 impl<'cd, T> Condition<'cd, T> {
@@ -310,6 +343,13 @@ impl<'cd, T> Condition<'cd, T> {
         match self.0 {
             &Var(_, _) => 1,
             &Expr(_, ref opn_v) => opn_v.iter().map(|opn| opn.complexity()).sum(),
+        }
+    }
+
+    pub fn contains_var(self, find_var: VarRef<'cd, T>) -> bool {
+        match self.0 {
+            &Var(_, vr) => vr == find_var,
+            &Expr(_, ref opn_v) => opn_v.iter().any(|opn| opn.contains_var(find_var)),
         }
     }
 }
@@ -633,6 +673,12 @@ impl<'cd, T> Hash for VarRef<'cd, T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let p: *const _ = self.0;
         p.hash(state)
+    }
+}
+impl<'cd, T> ops::Deref for VarRef<'cd, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.0
     }
 }
 
