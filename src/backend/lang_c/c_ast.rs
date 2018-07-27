@@ -494,10 +494,10 @@ impl CAST {
                 let args = self.get_args_ordered(node);
                 let condition = self.emit_c(&args[0], 0);
                 let while_body = self.emit_c(&args[1], indent + 1);
-                format!("{} {{\n{}}}\n{}({})",
+                format!("{} {{\n{}\n{}}} while ({});",
                         format_with_indent("do", indent),
                         while_body,
-                        format_with_indent("while", indent),
+                        format_with_indent("", indent),
                         condition)
             }
             CASTNode::Goto(ref label) => {
@@ -712,7 +712,7 @@ mod test {
         let eq = c_ast.expr(Expr::Eq, &vars, false);
         let increment = c_ast.expr(Expr::Add, &vars, false);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
-        c_ast.new_while(eq, vec![assignment], None);
+        c_ast.new_while(eq, vec![assignment]);
         let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }
@@ -725,7 +725,7 @@ mod test {
         let eq = c_ast.expr(Expr::Eq, &vars, false);
         let increment = c_ast.expr(Expr::Add, &vars, false);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
-        c_ast.new_do_while(eq, vec![assignment], None);
+        c_ast.new_do_while(eq, vec![assignment]);
         let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }
