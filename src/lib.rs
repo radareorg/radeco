@@ -71,7 +71,7 @@ extern crate r2pipe;
 extern crate r2api;
 
 extern crate esil;
-extern crate capstone_rust;
+// extern crate capstone_rust;
 extern crate rayon;
 
 #[cfg(feature="profile")]
