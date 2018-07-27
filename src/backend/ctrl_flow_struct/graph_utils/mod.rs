@@ -5,8 +5,8 @@
 
 pub mod ix_bit_set;
 mod ncd;
-#[cfg(test)]
-mod test;
+// #[cfg(test)]
+// mod test;
 
 pub use self::ncd::nearest_common_dominator;
 

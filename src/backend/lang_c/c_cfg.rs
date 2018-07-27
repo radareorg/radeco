@@ -971,17 +971,17 @@ mod test {
     //     func(z, w)
     // }
     #[test]
-    fn simple_c_ast_basic_test() {
-        let mut ast = CCFG::new("main");
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let z = ast.var("z", None);
-        let w = ast.var("w", None);
-        let entry = ast.entry;
-        let assn = ast.assign(x, y, entry);
-        let _ = ast.call_func("func", &[z, w], assn, None);
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_basic_test() {
+        let mut cfg = CCFG::new("main");
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let z = cfg.var("z", None);
+        let w = cfg.var("w", None);
+        let entry = cfg.entry;
+        let assn = cfg.assign(x, y, entry);
+        let _ = cfg.call_func("func", &[z, w], assn, None);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -992,16 +992,16 @@ mod test {
     //     x = (x + y)
     // }
     #[test]
-    fn simple_c_ast_expr_test() {
-        let mut ast = CCFG::new("main");
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let z = ast.var("z", None);
-        let entry = ast.entry;
-        let expr = ast.expr(&[x, y], c_ast::Expr::Add);
-        let assn = ast.assign(x, expr, entry);
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_expr_test() {
+        let mut cfg = CCFG::new("main");
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let z = cfg.var("z", None);
+        let entry = cfg.entry;
+        let expr = cfg.expr(&[x, y], c_ast::Expr::Add);
+        let assn = cfg.assign(x, expr, entry);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -1011,14 +1011,14 @@ mod test {
     //     y = func(x)
     // }
     #[test]
-    fn simple_c_ast_func_test() {
-        let mut ast = CCFG::new("main");
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let entry = ast.entry;
-        let call_f = ast.call_func("func", &[x], entry, Some(y));
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_func_test() {
+        let mut cfg = CCFG::new("main");
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let entry = cfg.entry;
+        let call_f = cfg.call_func("func", &[x], entry, Some(y));
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -1036,20 +1036,20 @@ mod test {
     //     }
     // }
     #[test]
-    fn simple_c_ast_conditional_test() {
-        let mut ast = CCFG::new("main");
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let z = ast.var("z", None);
-        let w = ast.var("w", None);
-        let entry = ast.entry;
-        let assn = ast.assign(x, y, entry);
-        let call_test1 = ast.call_func("test1", &[], assn, None);
-        let call_f = ast.call_func("func", &[z, w], assn, None);
-        let call_test2 = ast.call_func("test2", &[], call_f, None);
-        let _ = ast.conditional(x, assn, Some(call_f), entry);
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_conditional_test() {
+        let mut cfg = CCFG::new("main");
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let z = cfg.var("z", None);
+        let w = cfg.var("w", None);
+        let entry = cfg.entry;
+        let assn = cfg.assign(x, y, entry);
+        let call_test1 = cfg.call_func("test1", &[], assn, None);
+        let call_f = cfg.call_func("func", &[z, w], assn, None);
+        let call_test2 = cfg.call_func("test2", &[], call_f, None);
+        let _ = cfg.conditional(x, assn, Some(call_f), entry);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -1062,15 +1062,15 @@ mod test {
     //     return x
     // }
     #[test]
-    fn simple_c_ast_goto_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let assn = ast.assign(x, y, entry);
-        let _ = ast.add_goto(entry, "L1", assn);
-        let output = ast.to_c_ast().print();
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
+    fn c_cfg_goto_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let assn = cfg.assign(x, y, entry);
+        let _ = cfg.add_goto(entry, "L1", assn);
+        let output = cfg.to_c_ast().print();
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
         println!("{}", output);
     }
 
@@ -1079,13 +1079,13 @@ mod test {
     //     return x
     // }
     #[test]
-    fn simple_c_ast_return_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        let x = ast.var("x", None);
-        let _ = ast.add_return(Some(x), entry);
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_return_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let x = cfg.var("x", None);
+        let _ = cfg.add_return(Some(x), entry);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -1098,16 +1098,16 @@ mod test {
     //     return x
     // }
     #[test]
-    fn simple_c_ast_insert_goto_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let assn = ast.assign(x, y, entry);
-        let ret = ast.add_return(Some(x), assn);
-        let _ = ast.insert_goto(entry, assn, ret, "L1");
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_insert_goto_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let assn = cfg.assign(x, y, entry);
+        let ret = cfg.add_return(Some(x), assn);
+        let _ = cfg.insert_goto(entry, assn, ret, "L1");
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -1128,24 +1128,24 @@ mod test {
     //     return
     // }
     #[test]
-    fn simple_c_ast_complex_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let w = ast.var("w", None);
-        let z = ast.var("z", None);
-        let v = ast.var("v", None);
-        let cond = ast.var("cond", None);
-        let assn1 = ast.assign(x, y, entry);
-        let add = ast.expr(&[x, w], c_ast::Expr::Add);
-        let assn2 = ast.assign(x, add, assn1);
-        let f_call = ast.call_func("func", &[x], assn2, Some(cond));
-        let break_goto = ast.add_goto(assn2, "L1", f_call);
-        let if_node = ast.conditional(cond, break_goto, None, f_call);
-        let _ = ast.add_return(None, if_node);
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_complex_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let w = cfg.var("w", None);
+        let z = cfg.var("z", None);
+        let v = cfg.var("v", None);
+        let cond = cfg.var("cond", None);
+        let assn1 = cfg.assign(x, y, entry);
+        let add = cfg.expr(&[x, w], c_ast::Expr::Add);
+        let assn2 = cfg.assign(x, add, assn1);
+        let f_call = cfg.call_func("func", &[x], assn2, Some(cond));
+        let break_goto = cfg.add_goto(assn2, "L1", f_call);
+        let if_node = cfg.conditional(cond, break_goto, None, f_call);
+        let _ = cfg.add_return(None, if_node);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -1166,25 +1166,25 @@ mod test {
     //     }
     // }
     #[test]
-    fn simple_c_ast_complex1_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        let x = ast.var("x", None);
-        let y = ast.var("y", None);
-        let w = ast.var("w", None);
-        let z = ast.var("z", None);
-        let v = ast.var("v", None);
-        let cond = ast.var("cond", None);
-        let assn1 = ast.assign(x, y, entry);
-        let add = ast.expr(&[x, w], c_ast::Expr::Add);
-        let assn2 = ast.assign(x, add, assn1);
-        let f_call = ast.call_func("func", &[x], assn2, Some(cond));
-        let f_call1 = ast.call_func("go", &[x], f_call, None);
-        let break_goto = ast.add_goto(assn2, "L1", f_call1);
-        let if_node = ast.conditional(cond, f_call1, None, f_call);
-        let _ = ast.add_return(None, if_node);
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_complex1_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let w = cfg.var("w", None);
+        let z = cfg.var("z", None);
+        let v = cfg.var("v", None);
+        let cond = cfg.var("cond", None);
+        let assn1 = cfg.assign(x, y, entry);
+        let add = cfg.expr(&[x, w], c_ast::Expr::Add);
+        let assn2 = cfg.assign(x, add, assn1);
+        let f_call = cfg.call_func("func", &[x], assn2, Some(cond));
+        let f_call1 = cfg.call_func("go", &[x], f_call, None);
+        let break_goto = cfg.add_goto(assn2, "L1", f_call1);
+        let if_node = cfg.conditional(cond, f_call1, None, f_call);
+        let _ = cfg.add_return(None, if_node);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
@@ -1198,17 +1198,17 @@ mod test {
     //     void v;
     // }
     #[test]
-    fn simple_c_ast_type_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        let i = ast.var("i", Some(Ty::new(BTy::Int, true, 0)));
-        let u = ast.var("u", Some(Ty::new(BTy::Int, false, 1)));
-        let d = ast.var("d", Some(Ty::new(BTy::Double, true, 0)));
-        let c = ast.var("c", Some(Ty::new(BTy::Char, true, 0)));
-        let v = ast.var("v", Some(Ty::new(BTy::Void, true, 0)));
-        let f = ast.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_type_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let i = cfg.var("i", Some(Ty::new(BTy::Int, true, 0)));
+        let u = cfg.var("u", Some(Ty::new(BTy::Int, false, 1)));
+        let d = cfg.var("d", Some(Ty::new(BTy::Double, true, 0)));
+        let c = cfg.var("c", Some(Ty::new(BTy::Char, true, 0)));
+        let v = cfg.var("v", Some(Ty::new(BTy::Void, true, 0)));
+        let f = cfg.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
