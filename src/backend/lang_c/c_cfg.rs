@@ -425,8 +425,11 @@ impl CCFG {
 
     // Returns value node which represents condition used by If statement
     fn branch_condition(&self, idx: CCFGRef) -> Option<CCFGRef> {
-        if self.g.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::If)) {
-            return None;
+        match self.g.node_weight(idx) {
+            Some(&CCFGNode::Action(ActionNode::If))
+            | Some(&CCFGNode::Action(ActionNode::While))
+            | Some(&CCFGNode::Action(ActionNode::DoWhile)) => {},
+            _ => return None,
         }
         let ns = self.g.edges_directed(idx, Direction::Outgoing).into_iter().collect();
         let expr = {
@@ -1209,23 +1212,55 @@ mod test {
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int x;
+    //     unsigned int y;
+    //     unsigned int z;
+    //     while (x) {
+    //         x = (x + y)
+    //         x = (y + z)
+    //     }
+    // }
     #[test]
-    fn simple_c_ast_while_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        unimplemented!();
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_while_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let z = cfg.var("z", None);
+        let x_plus_y = cfg.expr(&[x, y], c_ast::Expr::Add);
+        let y_plus_z = cfg.expr(&[y, z], c_ast::Expr::Add);
+        let assn1 = cfg.assign(x, x_plus_y, entry);
+        let assn2 = cfg.assign(x, y_plus_z, assn1);
+        cfg.add_while(x, assn1, entry);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 
+    // fn main () {
+    //     unsigned int x;
+    //     unsigned int y;
+    //     unsigned int z;
+    //     do {
+    //         x = (x + y)
+    //         x = (y + z)
+    //     } while (x);
+    // }
     #[test]
-    fn simple_c_ast_do_while_test() {
-        let mut ast = CCFG::new("main");
-        let entry = ast.entry;
-        unimplemented!();
-        CCFGVerifier::verify(&ast).expect("CCFG verification failed");
-        let output = ast.to_c_ast().print();
+    fn c_cfg_do_while_test() {
+        let mut cfg = CCFG::new("main");
+        let entry = cfg.entry;
+        let x = cfg.var("x", None);
+        let y = cfg.var("y", None);
+        let z = cfg.var("z", None);
+        let x_plus_y = cfg.expr(&[x, y], c_ast::Expr::Add);
+        let y_plus_z = cfg.expr(&[y, z], c_ast::Expr::Add);
+        let assn1 = cfg.assign(x, x_plus_y, entry);
+        let assn2 = cfg.assign(x, y_plus_z, assn1);
+        cfg.add_do_while(x, assn1, entry);
+        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
+        let output = cfg.to_c_ast().print();
         println!("{}", output);
     }
 }
