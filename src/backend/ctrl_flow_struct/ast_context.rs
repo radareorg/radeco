@@ -1,6 +1,7 @@
 pub trait AstContext {
     type Block;
     type Variable;
+    type BoolVariable;
     type Condition: 'static;
 }
 
@@ -11,9 +12,23 @@ pub trait AstContextMut: AstContext {
     /// Returns a new unused `Variable` that is initialized with the given value.
     fn mk_fresh_var_with_val(&mut self, val: u64) -> Self::Variable;
 
+    /// Returns a new unused `BoolVariable`.
+    fn mk_fresh_bool_var(&mut self) -> Self::BoolVariable;
+
     /// Returns a `Condition` that represents `var` being equal to `val`.
     fn mk_cond_equals(&mut self, var: &Self::Variable, val: u64) -> Self::Condition;
 
+    /// Returns a `Condition` that represents the value of `var`.
+    fn mk_cond_from_bool_var(&mut self, var: &Self::BoolVariable) -> Self::Condition;
+
     /// Returns a new `Block` whose only effect is to assign `val` to `var`.
     fn mk_var_assign(&mut self, var: &Self::Variable, val: u64) -> Self::Block;
+
+    /// Returns a new `Block` whose only effect is to assign the value of `cond`
+    /// to `var`.
+    fn mk_bool_var_assign(
+        &mut self,
+        var: &Self::BoolVariable,
+        cond: &Self::Condition,
+    ) -> Self::Block;
 }

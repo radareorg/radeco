@@ -9,8 +9,8 @@ fn it_works() {
 }
 
 fn mk_ab<'cd>(cctx: Context<'cd, &'static str>) -> Condition<'cd, &'static str> {
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
     let ab = cctx.mk_and(a, b);
     ab
 }
@@ -19,8 +19,8 @@ fn mk_ab<'cd>(cctx: Context<'cd, &'static str>) -> Condition<'cd, &'static str> 
 fn identity() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
     let t = cctx.mk_true();
     let f = cctx.mk_false();
 
@@ -36,8 +36,8 @@ fn annihilation_ptr_eq() {
 
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
     let t = cctx.mk_true();
     let f = cctx.mk_false();
 
@@ -53,8 +53,8 @@ fn annihilation_ptr_eq() {
 fn idempotence() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
     let a_and_b = cctx.mk_and(a, b);
     let a_or_b = cctx.mk_or(a, b);
 
@@ -72,10 +72,10 @@ fn idempotence() {
 fn assoc_commut() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
-    let c = cctx.mk_var("c");
-    let d = cctx.mk_var("d");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
+    let c = cctx.mk_var(cctx.new_var("c"));
+    let d = cctx.mk_var(cctx.new_var("d"));
 
     assert_eq!(cctx.mk_and(a, b), cctx.mk_and(b, a));
     assert_eq!(cctx.mk_or(a, b), cctx.mk_or(b, a));
@@ -137,7 +137,7 @@ fn negate_tf_ptr_eq() {
 
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let _ = cctx.mk_var("");
+    let _ = cctx.mk_var(cctx.new_var(""));
     let t = cctx.mk_true();
     let f = cctx.mk_false();
 
@@ -149,7 +149,7 @@ fn negate_tf_ptr_eq() {
 fn double_negation() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
+    let a = cctx.mk_var(cctx.new_var("a"));
 
     assert_eq!(cctx.mk_not(cctx.mk_not(a)), a);
 }
@@ -158,10 +158,10 @@ fn double_negation() {
 fn demorgans() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
-    let c = cctx.mk_var("c");
-    let d = cctx.mk_var("d");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
+    let c = cctx.mk_var(cctx.new_var("c"));
+    let d = cctx.mk_var(cctx.new_var("d"));
     let na = cctx.mk_not(a);
     let nb = cctx.mk_not(b);
     let nc = cctx.mk_not(c);
@@ -192,10 +192,10 @@ fn demorgans() {
 fn distributivity() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
-    let c = cctx.mk_var("c");
-    let d = cctx.mk_var("d");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
+    let c = cctx.mk_var(cctx.new_var("c"));
+    let d = cctx.mk_var(cctx.new_var("d"));
 
     assert_eq!(
         cctx.mk_and(cctx.mk_or(a, b), cctx.mk_or(a, c)),
@@ -220,9 +220,9 @@ fn distributivity() {
 fn absorption() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
-    let c = cctx.mk_var("c");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
+    let c = cctx.mk_var(cctx.new_var("c"));
 
     assert_eq!(cctx.mk_and(a, cctx.mk_or(a, b)), a);
     assert_eq!(cctx.mk_or(a, cctx.mk_and(a, b)), a);
@@ -241,9 +241,9 @@ fn absorption() {
 fn complementation() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
+    let a = cctx.mk_var(cctx.new_var("a"));
     let na = cctx.mk_not(a);
-    let b = cctx.mk_var("b");
+    let b = cctx.mk_var(cctx.new_var("b"));
 
     assert_eq!(cctx.mk_and(a, na), cctx.mk_false());
     assert_eq!(cctx.mk_or(a, na), cctx.mk_true());
@@ -260,9 +260,9 @@ fn complementation() {
 fn cover() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
+    let a = cctx.mk_var(cctx.new_var("a"));
     let na = cctx.mk_not(a);
-    let b = cctx.mk_var("b");
+    let b = cctx.mk_var(cctx.new_var("b"));
 
     assert_eq!(cctx.mk_and(a, cctx.mk_or(na, b)), cctx.mk_and(a, b));
     assert_eq!(cctx.mk_or(a, cctx.mk_and(na, b)), cctx.mk_or(a, b));
@@ -272,11 +272,11 @@ fn cover() {
 fn big_complementation() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
-    let c = cctx.mk_var("c");
-    let d = cctx.mk_var("d");
-    let e = cctx.mk_var("e");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
+    let c = cctx.mk_var(cctx.new_var("c"));
+    let d = cctx.mk_var(cctx.new_var("d"));
+    let e = cctx.mk_var(cctx.new_var("e"));
 
     let expr = cctx.mk_and(a, cctx.mk_or(b, cctx.mk_and(c, cctx.mk_or(d, e))));
 
@@ -288,9 +288,9 @@ fn big_complementation() {
 fn nested_complementation() {
     let cstore = Storage::new();
     let cctx = cstore.cctx();
-    let a = cctx.mk_var("a");
-    let b = cctx.mk_var("b");
-    let c = cctx.mk_var("c");
+    let a = cctx.mk_var(cctx.new_var("a"));
+    let b = cctx.mk_var(cctx.new_var("b"));
+    let c = cctx.mk_var(cctx.new_var("c"));
     let nc = cctx.mk_not(c);
 
     let a_or_b = cctx.mk_or(a, b);

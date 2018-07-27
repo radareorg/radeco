@@ -8,6 +8,7 @@ pub mod ast_context;
 pub mod condition;
 
 mod ast;
+mod dedup_conds;
 mod graph_utils;
 mod refinement;
 #[cfg(test)]
@@ -45,7 +46,7 @@ enum CfgNode<'cd, A: AstContext> {
     /// out-degree <= 1
     Code(AstNode<'cd, A>),
     /// out-degree >= 2
-    Condition(Condition<'cd, A>),
+    Condition(CondVar<'cd, A>),
     /// only appears temporarily in the middle of algorithms
     Dummy(&'static str),
 }
@@ -56,6 +57,7 @@ enum CfgEdge {
     False,
 }
 
+type CondVar<'cd, A> = condition::VarRef<'cd, <A as AstContext>::Condition>;
 type Condition<'cd, A> = condition::Condition<'cd, <A as AstContext>::Condition>;
 type CondContext<'cd, A> = condition::Context<'cd, <A as AstContext>::Condition>;
 // hoping https://github.com/rust-lang/rust/issues/49683 lands soon
@@ -191,10 +193,15 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         let mut region_graph =
             StableDiGraph::with_capacity(slice.topo_order.len(), slice.edges.len());
         let mut old_new_map = HashMap::with_capacity(slice.topo_order.len());
+        let mut region_conditions = Vec::new();
 
         // move all region nodes into `region_graph`.
         for &old_n in &slice.topo_order {
             let cfg_node = mem::replace(&mut self.graph[old_n], CfgNode::Dummy("sasr replaced"));
+            if let CfgNode::Condition(c) = cfg_node {
+                // record all conditions in the region
+                region_conditions.push(c);
+            }
             let new_node = match cfg_node {
                 // refinement needs to be able to see `Break`s
                 CfgNode::Code(AstNodeC::Break) => Some(AstNodeC::Break),
@@ -229,6 +236,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             old_new_map[&header],
         );
 
+        let ast = dedup_conds::run(&mut self.actx, self.cctx, &region_conditions, ast);
         let ast = RegionAstContext::<A>::export(ast);
         refinement::simplify_ast_node::<A>(self.cctx, ast).unwrap_or_default()
     }
@@ -258,11 +266,11 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                             let src_cond = ret[&e.source()];
                             match (&self.graph[e.source()], e.weight()) {
                                 (&CfgNode::Condition(c), CfgEdge::True) => {
-                                    self.cctx.mk_and(src_cond, c)
+                                    self.cctx.mk_and(src_cond, self.cctx.mk_var(c))
                                 }
-                                (&CfgNode::Condition(c), CfgEdge::False) => {
-                                    self.cctx.mk_and(src_cond, self.cctx.mk_not(c))
-                                }
+                                (&CfgNode::Condition(c), CfgEdge::False) => self
+                                    .cctx
+                                    .mk_and(src_cond, self.cctx.mk_not(self.cctx.mk_var(c))),
                                 (_, CfgEdge::True) => src_cond,
                                 (_, CfgEdge::False) => self.cctx.mk_false(),
                             }
@@ -315,7 +323,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             for (entry_num, entry_target) in abnormal_entry_iter {
                 let prev_cond_eq = self
                     .cctx
-                    .mk_var(self.actx.mk_cond_equals(&struct_var, prev_entry_num));
+                    .new_var(self.actx.mk_cond_equals(&struct_var, prev_entry_num));
                 let cascade_node = self.graph.add_node(CfgNode::Condition(prev_cond_eq));
                 self.graph
                     .add_edge(prev_cascade_node, cascade_node, CfgEdge::False);
@@ -445,7 +453,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         for (exit_num, exit_target) in abn_succ_iter.clone() {
             let cond = self
                 .cctx
-                .mk_var(self.actx.mk_cond_equals(&struct_var, exit_num));
+                .new_var(self.actx.mk_cond_equals(&struct_var, exit_num));
             let cascade_node = self.graph.add_node(CfgNode::Condition(cond));
             self.graph
                 .add_edge(cascade_node, exit_target, CfgEdge::True);
@@ -463,6 +471,7 @@ struct RegionAstContext<'cd, A>(PhantomData<(&'cd (), A)>);
 impl<'cd, A: AstContext> AstContext for RegionAstContext<'cd, A> {
     type Block = AstNode<'cd, A>;
     type Condition = A::Condition;
+    type BoolVariable = A::BoolVariable;
     type Variable = A::Variable;
 }
 

@@ -13,6 +13,7 @@ struct StringAst {
 impl AstContext for StringAst {
     type Block = String;
     type Variable = String;
+    type BoolVariable = String;
     type Condition = String;
 }
 
@@ -29,11 +30,25 @@ impl AstContextMut for StringAst {
         ret
     }
 
+    fn mk_fresh_bool_var(&mut self) -> String {
+        let ret = format!("c_{}", self.vars.len());
+        self.vars.push(None);
+        ret
+    }
+
     fn mk_cond_equals(&mut self, var: &String, val: u64) -> String {
         format!("{} == {}", var, val)
     }
 
+    fn mk_cond_from_bool_var(&mut self, var: &String) -> String {
+        format!("{}", var)
+    }
+
     fn mk_var_assign(&mut self, var: &String, val: u64) -> String {
+        format!("{} = {}", var, val)
+    }
+
+    fn mk_bool_var_assign(&mut self, var: &String, val: &String) -> String {
         format!("{} = {}", var, val)
     }
 }
@@ -44,26 +59,26 @@ fn ast_nmg_example() {
     let cctx = cstore.cctx();
 
     #[allow(non_snake_case)]
-    let c_A = cond_s(cctx, "A");
-    let c_c1 = cond_s(cctx, "c1");
-    let c_c2 = cond_s(cctx, "c2");
-    let c_c3 = cond_s(cctx, "c3");
-    let c_b1 = cond_s(cctx, "b1");
-    let c_b2 = cond_s(cctx, "b2");
-    let c_d1 = cond_s(cctx, "d1");
-    let c_d2 = cond_s(cctx, "d2");
-    let c_d3 = cond_s(cctx, "d3");
+    let v_A = cond_s(cctx, "A");
+    let v_c1 = cond_s(cctx, "c1");
+    let v_c2 = cond_s(cctx, "c2");
+    let v_c3 = cond_s(cctx, "c3");
+    let v_b1 = cond_s(cctx, "b1");
+    let v_b2 = cond_s(cctx, "b2");
+    let v_d1 = cond_s(cctx, "d1");
+    let v_d2 = cond_s(cctx, "d2");
+    let v_d3 = cond_s(cctx, "d3");
 
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(cnode(c_A));
-    let c1 = graph.add_node(cnode(c_c1));
-    let c2 = graph.add_node(cnode(c_c2));
-    let c3 = graph.add_node(cnode(c_c3));
-    let b1 = graph.add_node(cnode(c_b1));
-    let b2 = graph.add_node(cnode(c_b2));
-    let d1 = graph.add_node(cnode(c_d1));
-    let d2 = graph.add_node(cnode(c_d2));
-    let d3 = graph.add_node(cnode(c_d3));
+    let entry = graph.add_node(cnode(v_A));
+    let c1 = graph.add_node(cnode(v_c1));
+    let c2 = graph.add_node(cnode(v_c2));
+    let c3 = graph.add_node(cnode(v_c3));
+    let b1 = graph.add_node(cnode(v_b1));
+    let b2 = graph.add_node(cnode(v_b2));
+    let d1 = graph.add_node(cnode(v_d1));
+    let d2 = graph.add_node(cnode(v_d2));
+    let d3 = graph.add_node(cnode(v_d3));
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
@@ -117,12 +132,23 @@ fn ast_nmg_example() {
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
 
+    #[allow(non_snake_case)]
+    let c_A = cctx.mk_var(v_A);
+    let c_c1 = cctx.mk_var(v_c1);
+    let c_c2 = cctx.mk_var(v_c2);
+    let c_c3 = cctx.mk_var(v_c3);
+    let c_b1 = cctx.mk_var(v_b1);
+    let c_b2 = cctx.mk_var(v_b2);
+    let c_d1 = cctx.mk_var(v_d1);
+    let c_d2 = cctx.mk_var(v_d2);
+    let c_d3 = cctx.mk_var(v_d3);
+
     use self::AstNodeC::*;
     assert_eq!(
         Seq(vec![
             Cond(
-                c_A,
-                Box::new(Loop(
+                format!("{:?}", c_A),
+                Box::new(stringify_conds(Loop(
                     LoopType::PostChecked(c_c3),
                     Box::new(Seq(vec![
                         Loop(
@@ -136,31 +162,32 @@ fn ast_nmg_example() {
                         ),
                         BasicBlock("n3".to_owned()),
                     ])),
-                )),
+                ))),
                 Some(Box::new(Seq(vec![
+                    BasicBlock("c_0 = b1".to_owned()),
                     Cond(
-                        cctx.mk_not(c_b1),
+                        r#"-"c_0""#.to_owned(),
                         Box::new(BasicBlock("n4".to_owned())),
                         None,
                     ),
                     Cond(
-                        cctx.mk_and(c_b1, c_b2),
+                        r#"And{"c_0", "b2"}"#.to_owned(),
                         Box::new(BasicBlock("n6".to_owned())),
                         Some(Box::new(BasicBlock("n5".to_owned()))),
                     ),
                     BasicBlock("n7".to_owned()),
-                    Loop(
+                    stringify_conds(Loop(
                         LoopType::PreChecked(cctx.mk_or(
-                            cctx.mk_and(c_d1, c_d3),
                             cctx.mk_and(cctx.mk_not(c_d1), c_d2),
+                            cctx.mk_and(c_d1, c_d3),
                         )),
                         Box::new(BasicBlock("n8".to_owned())),
-                    ),
+                    )),
                 ]))),
             ),
             BasicBlock("n9".to_owned()),
         ]),
-        ast
+        stringify_conds(ast)
     );
 }
 
@@ -169,15 +196,15 @@ fn ast_nmg_r1() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_c1 = cond_s(cctx, "c1");
-    let c_c2 = cond_s(cctx, "c2");
-    let c_c3 = cond_s(cctx, "c3");
+    let v_c1 = cond_s(cctx, "c1");
+    let v_c2 = cond_s(cctx, "c2");
+    let v_c3 = cond_s(cctx, "c3");
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c1 = graph.add_node(cnode(c_c1));
-    let c2 = graph.add_node(cnode(c_c2));
-    let c3 = graph.add_node(cnode(c_c3));
+    let c1 = graph.add_node(cnode(v_c1));
+    let c2 = graph.add_node(cnode(v_c2));
+    let c3 = graph.add_node(cnode(v_c3));
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
@@ -205,6 +232,10 @@ fn ast_nmg_r1() {
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
 
+    let c_c1 = cctx.mk_var(v_c1);
+    let c_c2 = cctx.mk_var(v_c2);
+    let c_c3 = cctx.mk_var(v_c3);
+
     use self::AstNodeC::*;
     assert_eq!(
         Loop(
@@ -231,12 +262,12 @@ fn ast_nmg_r2() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_b1 = cond_s(cctx, "b1");
-    let c_b2 = cond_s(cctx, "b2");
+    let v_b1 = cond_s(cctx, "b1");
+    let v_b2 = cond_s(cctx, "b2");
 
     let mut graph = StableDiGraph::new();
-    let b1 = graph.add_node(cnode(c_b1));
-    let b2 = graph.add_node(cnode(c_b2));
+    let b1 = graph.add_node(cnode(v_b1));
+    let b2 = graph.add_node(cnode(v_b2));
     let n4 = graph.add_node(node("n4"));
     let n5 = graph.add_node(node("n5"));
     let n6 = graph.add_node(node("n6"));
@@ -266,19 +297,20 @@ fn ast_nmg_r2() {
     use self::AstNodeC::*;
     assert_eq!(
         Seq(vec![
+            BasicBlock("c_0 = b1".to_owned()),
             Cond(
-                cctx.mk_not(c_b1),
+                r#"-"c_0""#.to_owned(),
                 Box::new(BasicBlock("n4".to_owned())),
                 None,
             ),
             Cond(
-                cctx.mk_and(c_b1, c_b2),
+                r#"And{"c_0", "b2"}"#.to_owned(),
                 Box::new(BasicBlock("n6".to_owned())),
                 Some(Box::new(BasicBlock("n5".to_owned()))),
             ),
             BasicBlock("n7".to_owned()),
         ]),
-        ast
+        stringify_conds(ast)
     );
 }
 
@@ -287,15 +319,15 @@ fn ast_nmg_r3() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_d1 = cond_s(cctx, "d1");
-    let c_d2 = cond_s(cctx, "d2");
-    let c_d3 = cond_s(cctx, "d3");
+    let v_d1 = cond_s(cctx, "d1");
+    let v_d2 = cond_s(cctx, "d2");
+    let v_d3 = cond_s(cctx, "d3");
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let d1 = graph.add_node(cnode(c_d1));
-    let d2 = graph.add_node(cnode(c_d2));
-    let d3 = graph.add_node(cnode(c_d3));
+    let d1 = graph.add_node(cnode(v_d1));
+    let d2 = graph.add_node(cnode(v_d2));
+    let d3 = graph.add_node(cnode(v_d3));
     let n8 = graph.add_node(node("n8"));
     let exit = graph.add_node(empty_node());
 
@@ -318,6 +350,10 @@ fn ast_nmg_r3() {
     };
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
+
+    let c_d1 = cctx.mk_var(v_d1);
+    let c_d2 = cctx.mk_var(v_d2);
+    let c_d3 = cctx.mk_var(v_d3);
 
     use self::AstNodeC::*;
     assert_eq!(
@@ -355,22 +391,22 @@ fn ast_switchy() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_c1 = cond_s(cctx, "n == 7");
-    let c_c2 = cond_s(cctx, "n <= 7");
-    let c_c3 = cond_s(cctx, "n == 88");
-    let c_c4 = cond_s(cctx, "n == 1");
-    let c_c5 = cond_s(cctx, "n == 98");
-    let c_c6 = cond_s(cctx, "n != 4");
-    let c_c7 = cond_s(cctx, "n == 34");
+    let v_c1 = cond_s(cctx, "n == 7");
+    let v_c2 = cond_s(cctx, "n <= 7");
+    let v_c3 = cond_s(cctx, "n == 88");
+    let v_c4 = cond_s(cctx, "n == 1");
+    let v_c5 = cond_s(cctx, "n == 98");
+    let v_c6 = cond_s(cctx, "n != 4");
+    let v_c7 = cond_s(cctx, "n == 34");
 
     let mut graph = StableDiGraph::new();
-    let c1 = graph.add_node(cnode(c_c1));
-    let c2 = graph.add_node(cnode(c_c2));
-    let c3 = graph.add_node(cnode(c_c3));
-    let c4 = graph.add_node(cnode(c_c4));
-    let c5 = graph.add_node(cnode(c_c5));
-    let c6 = graph.add_node(cnode(c_c6));
-    let c7 = graph.add_node(cnode(c_c7));
+    let c1 = graph.add_node(cnode(v_c1));
+    let c2 = graph.add_node(cnode(v_c2));
+    let c3 = graph.add_node(cnode(v_c3));
+    let c4 = graph.add_node(cnode(v_c4));
+    let c5 = graph.add_node(cnode(v_c5));
+    let c6 = graph.add_node(cnode(v_c6));
+    let c7 = graph.add_node(cnode(v_c7));
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
@@ -425,18 +461,18 @@ fn ast_ifelse_cascade() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_c1 = cond_s(cctx, "c1");
-    let c_c2 = cond_s(cctx, "c2");
-    let c_c3 = cond_s(cctx, "c3");
-    let c_c4 = cond_s(cctx, "c4");
-    let c_c5 = cond_s(cctx, "c5");
+    let v_c1 = cond_s(cctx, "c1");
+    let v_c2 = cond_s(cctx, "c2");
+    let v_c3 = cond_s(cctx, "c3");
+    let v_c4 = cond_s(cctx, "c4");
+    let v_c5 = cond_s(cctx, "c5");
 
     let mut graph = StableDiGraph::new();
-    let c1 = graph.add_node(cnode(c_c1));
-    let c2 = graph.add_node(cnode(c_c2));
-    let c3 = graph.add_node(cnode(c_c3));
-    let c4 = graph.add_node(cnode(c_c4));
-    let c5 = graph.add_node(cnode(c_c5));
+    let c1 = graph.add_node(cnode(v_c1));
+    let c2 = graph.add_node(cnode(v_c2));
+    let c3 = graph.add_node(cnode(v_c3));
+    let c4 = graph.add_node(cnode(v_c4));
+    let c5 = graph.add_node(cnode(v_c5));
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
@@ -467,23 +503,23 @@ fn ast_ifelse_cascade() {
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
 
-    let nc_c1 = cctx.mk_not(c_c1);
-    let nc_c2 = cctx.mk_not(c_c2);
-    let nc_c3 = cctx.mk_not(c_c3);
-    let nc_c4 = cctx.mk_not(c_c4);
-
     use self::AstNodeC::*;
     assert_eq!(
-        Cond(
-            cctx.mk_and(nc_c1, cctx.mk_or(c_c2, cctx.mk_and(c_c3, c_c5))),
-            Box::new(BasicBlock("n3".to_owned())),
-            Some(Box::new(Cond(
-                cctx.mk_and(cctx.mk_or(c_c1, cctx.mk_and(nc_c2, nc_c3)), nc_c4),
-                Box::new(BasicBlock("n1".to_owned())),
-                Some(Box::new(BasicBlock("n2".to_owned()))),
-            ))),
-        ),
-        ast
+        Seq(vec![
+            BasicBlock("c_0 = c1".to_owned()),
+            BasicBlock("c_1 = c2".to_owned()),
+            BasicBlock("c_2 = c3".to_owned()),
+            Cond(
+                r#"And{-"c_0", Or{"c_1", And{"c5", "c_2"}}}"#.to_owned(),
+                Box::new(BasicBlock("n3".to_owned())),
+                Some(Box::new(Cond(
+                    r#"And{Or{"c_0", And{-"c_2", -"c_1"}}, -"c4"}"#.to_owned(),
+                    Box::new(BasicBlock("n1".to_owned())),
+                    Some(Box::new(BasicBlock("n2".to_owned()))),
+                ))),
+            ),
+        ]),
+        stringify_conds(ast)
     );
 }
 
@@ -497,11 +533,11 @@ fn ast_while() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_c = cond_s(cctx, "c");
+    let v_c = cond_s(cctx, "c");
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c = graph.add_node(cnode(c_c));
+    let c = graph.add_node(cnode(v_c));
     let n = graph.add_node(node("n"));
     let exit = graph.add_node(empty_node());
 
@@ -520,6 +556,8 @@ fn ast_while() {
     };
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
+
+    let c_c = cctx.mk_var(v_c);
 
     use self::AstNodeC::*;
     assert_eq!(
@@ -541,11 +579,11 @@ fn ast_do_while() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_c = cond_s(cctx, "c");
+    let v_c = cond_s(cctx, "c");
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c = graph.add_node(cnode(c_c));
+    let c = graph.add_node(cnode(v_c));
     let n = graph.add_node(node("n"));
     let exit = graph.add_node(empty_node());
 
@@ -564,6 +602,8 @@ fn ast_do_while() {
     };
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
+
+    let c_c = cctx.mk_var(v_c);
 
     use self::AstNodeC::*;
     assert_eq!(
@@ -621,17 +661,17 @@ fn ast_complex_while_and() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_c1 = cond_s(cctx, "c1");
-    let c_c2 = cond_s(cctx, "c2");
-    let c_c3 = cond_s(cctx, "c3");
-    let c_c4 = cond_s(cctx, "c4");
+    let v_c1 = cond_s(cctx, "c1");
+    let v_c2 = cond_s(cctx, "c2");
+    let v_c3 = cond_s(cctx, "c3");
+    let v_c4 = cond_s(cctx, "c4");
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c1 = graph.add_node(cnode(c_c1));
-    let c2 = graph.add_node(cnode(c_c2));
-    let c3 = graph.add_node(cnode(c_c3));
-    let c4 = graph.add_node(cnode(c_c4));
+    let c1 = graph.add_node(cnode(v_c1));
+    let c2 = graph.add_node(cnode(v_c2));
+    let c3 = graph.add_node(cnode(v_c3));
+    let c4 = graph.add_node(cnode(v_c4));
     let n1 = graph.add_node(node("n1"));
     let exit = graph.add_node(empty_node());
 
@@ -657,6 +697,11 @@ fn ast_complex_while_and() {
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
 
+    let c_c1 = cctx.mk_var(v_c1);
+    let c_c2 = cctx.mk_var(v_c2);
+    let c_c3 = cctx.mk_var(v_c3);
+    let c_c4 = cctx.mk_var(v_c4);
+
     use self::AstNodeC::*;
     assert_eq!(
         Loop(
@@ -677,17 +722,17 @@ fn ast_complex_while_or() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_c1 = cond_s(cctx, "c1");
-    let c_c2 = cond_s(cctx, "c2");
-    let c_c3 = cond_s(cctx, "c3");
-    let c_c4 = cond_s(cctx, "c4");
+    let v_c1 = cond_s(cctx, "c1");
+    let v_c2 = cond_s(cctx, "c2");
+    let v_c3 = cond_s(cctx, "c3");
+    let v_c4 = cond_s(cctx, "c4");
 
     let mut graph = StableDiGraph::new();
     let entry = graph.add_node(empty_node());
-    let c1 = graph.add_node(cnode(c_c1));
-    let c2 = graph.add_node(cnode(c_c2));
-    let c3 = graph.add_node(cnode(c_c3));
-    let c4 = graph.add_node(cnode(c_c4));
+    let c1 = graph.add_node(cnode(v_c1));
+    let c2 = graph.add_node(cnode(v_c2));
+    let c3 = graph.add_node(cnode(v_c3));
+    let c4 = graph.add_node(cnode(v_c4));
     let n1 = graph.add_node(node("n1"));
     let exit = graph.add_node(empty_node());
 
@@ -713,6 +758,11 @@ fn ast_complex_while_or() {
     let ast = cfg.structure_whole();
     println!("{:#?}", ast);
 
+    let c_c1 = cctx.mk_var(v_c1);
+    let c_c2 = cctx.mk_var(v_c2);
+    let c_c3 = cctx.mk_var(v_c3);
+    let c_c4 = cctx.mk_var(v_c4);
+
     use self::AstNodeC::*;
     assert_eq!(
         Loop(
@@ -728,22 +778,22 @@ fn abnormal_entries() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_e1 = cond_s(cctx, "e1");
-    let c_n1 = cond_s(cctx, "n1");
-    let c_n2 = cond_s(cctx, "n2");
-    let c_n3 = cond_s(cctx, "n3");
-    let c_n4 = cond_s(cctx, "n4");
-    let c_n5 = cond_s(cctx, "n5");
-    let c_l1 = cond_s(cctx, "l1");
+    let v_e1 = cond_s(cctx, "e1");
+    let v_n1 = cond_s(cctx, "n1");
+    let v_n2 = cond_s(cctx, "n2");
+    let v_n3 = cond_s(cctx, "n3");
+    let v_n4 = cond_s(cctx, "n4");
+    let v_n5 = cond_s(cctx, "n5");
+    let v_l1 = cond_s(cctx, "l1");
 
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(cnode(c_e1));
-    let n1 = graph.add_node(cnode(c_n1));
-    let n2 = graph.add_node(cnode(c_n2));
-    let n3 = graph.add_node(cnode(c_n3));
-    let n4 = graph.add_node(cnode(c_n4));
-    let n5 = graph.add_node(cnode(c_n5));
-    let l1 = graph.add_node(cnode(c_l1));
+    let entry = graph.add_node(cnode(v_e1));
+    let n1 = graph.add_node(cnode(v_n1));
+    let n2 = graph.add_node(cnode(v_n2));
+    let n3 = graph.add_node(cnode(v_n3));
+    let n4 = graph.add_node(cnode(v_n4));
+    let n5 = graph.add_node(cnode(v_n5));
+    let l1 = graph.add_node(cnode(v_l1));
     let l2 = graph.add_node(node("l2"));
     let l3 = graph.add_node(node("l3"));
     let exit = graph.add_node(empty_node());
@@ -785,25 +835,25 @@ fn abnormal_exits() {
     let cstore = condition::Storage::new();
     let cctx = cstore.cctx();
 
-    let c_e1 = cond_s(cctx, "e1");
-    let c_l1 = cond_s(cctx, "l1");
-    let c_l2 = cond_s(cctx, "l2");
-    let c_l3 = cond_s(cctx, "l3");
-    let c_l4 = cond_s(cctx, "l4");
-    let c_l5 = cond_s(cctx, "l5");
+    let v_e1 = cond_s(cctx, "e1");
+    let v_l1 = cond_s(cctx, "l1");
+    let v_l2 = cond_s(cctx, "l2");
+    let v_l3 = cond_s(cctx, "l3");
+    let v_l4 = cond_s(cctx, "l4");
+    let v_l5 = cond_s(cctx, "l5");
 
     let mut graph = StableDiGraph::new();
-    let entry = graph.add_node(cnode(c_e1));
+    let entry = graph.add_node(cnode(v_e1));
     let n1 = graph.add_node(node("n1"));
     let n2 = graph.add_node(node("n2"));
     let n3 = graph.add_node(node("n3"));
     let n4 = graph.add_node(node("n4"));
     let n5 = graph.add_node(node("n5"));
-    let l1 = graph.add_node(cnode(c_l1));
-    let l2 = graph.add_node(cnode(c_l2));
-    let l3 = graph.add_node(cnode(c_l3));
-    let l4 = graph.add_node(cnode(c_l4));
-    let l5 = graph.add_node(cnode(c_l5));
+    let l1 = graph.add_node(cnode(v_l1));
+    let l2 = graph.add_node(cnode(v_l2));
+    let l3 = graph.add_node(cnode(v_l3));
+    let l4 = graph.add_node(cnode(v_l4));
+    let l5 = graph.add_node(cnode(v_l5));
     let exit = graph.add_node(empty_node());
 
     graph.add_edge(entry, l1, CETrue);
@@ -839,8 +889,8 @@ fn abnormal_exits() {
     println!("{:#?}", ast);
 }
 
-fn cond_s<'cd>(cctx: condition::Context<'cd, String>, c: &str) -> Condition<'cd, StringAst> {
-    cctx.mk_var(c.to_owned())
+fn cond_s<'cd>(cctx: condition::Context<'cd, String>, c: &str) -> CondVar<'cd, StringAst> {
+    cctx.new_var(c.to_owned())
 }
 
 fn node(n: &str) -> CfgNode<'static, StringAst> {
@@ -851,6 +901,41 @@ fn empty_node() -> CfgNode<'static, StringAst> {
     CfgNode::Code(AstNodeC::default())
 }
 
-fn cnode<'cd>(c: Condition<'cd, StringAst>) -> CfgNode<'cd, StringAst> {
+fn cnode<'cd>(c: CondVar<'cd, StringAst>) -> CfgNode<'cd, StringAst> {
     CfgNode::Condition(c)
+}
+
+/// note that this makes the test more fragile as it becomes sensitive to the
+/// exact internal representation of conditions
+fn stringify_conds<'cd>(ast: AstNode<'cd, StringAst>) -> AstNodeC<String, String, String> {
+    use self::AstNodeC::*;
+    use self::LoopType::*;
+
+    match ast {
+        BasicBlock(b) => BasicBlock(b),
+        Seq(seq) => Seq(seq.into_iter().map(stringify_conds).collect()),
+        Cond(c, t, oe) => Cond(
+            format!("{:?}", c),
+            Box::new(stringify_conds(*t)),
+            oe.map(|e| Box::new(stringify_conds(*e))),
+        ),
+        Loop(PreChecked(c), b) => Loop(
+            PreChecked(format!("{:?}", c)),
+            Box::new(stringify_conds(*b)),
+        ),
+        Loop(PostChecked(c), b) => Loop(
+            PostChecked(format!("{:?}", c)),
+            Box::new(stringify_conds(*b)),
+        ),
+        Loop(Endless, b) => Loop(Endless, Box::new(stringify_conds(*b))),
+        Break => Break,
+        Switch(v, cases, default) => Switch(
+            v,
+            cases
+                .into_iter()
+                .map(|(vs, a)| (vs, stringify_conds(a)))
+                .collect(),
+            Box::new(stringify_conds(*default)),
+        ),
+    }
 }
