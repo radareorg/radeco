@@ -25,8 +25,6 @@ pub enum ActionNode {
     Return,
     If,
     Goto,
-    Dummy(String),
-    DummyGoto,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -192,12 +190,6 @@ impl CCFG {
         let node = self.g.add_node(CCFGNode::Action(ActionNode::Assignment));
         let _ = self.g.add_edge(node, dst, CCFGEdge::Value(ValueEdge::AssignDst));
         let _ = self.g.add_edge(node, src, CCFGEdge::Value(ValueEdge::AssignSrc));
-        let _ = self.g.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
-        node
-    }
-
-    pub fn dummy_goto(&mut self, prev_action: CCFGRef) -> CCFGRef {
-        let node = self.g.add_node(CCFGNode::Action(ActionNode::DummyGoto));
         let _ = self.g.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
         node
     }
@@ -765,8 +757,7 @@ impl<'a> CASTConverter<'a> {
             Some(CCFGNode::Action(ActionNode::Goto)) => {
                 self.to_c_ast_goto(current_node)
             },
-            Some(CCFGNode::Entry)
-            | Some(CCFGNode::Action(ActionNode::DummyGoto)) => {
+            Some(CCFGNode::Entry) => {
                 // fallthrough
                 Err("TODO")
             },

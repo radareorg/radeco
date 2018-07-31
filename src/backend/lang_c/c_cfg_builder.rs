@@ -69,11 +69,6 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    fn dummy_goto(&mut self) -> NodeIndex {
-        self.last_action = self.ast.dummy_goto(self.last_action);
-        self.last_action
-    }
-
     fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {
         self.last_action = self.ast.assign(dst, src, self.last_action);
         self.last_action
@@ -332,8 +327,6 @@ impl<'a> CCFGBuilder<'a> {
         visited.insert(block);
         let next_blocks = self.ssa.next_blocks(block);
         for blk in next_blocks {
-            let n = self.dummy_goto();
-            self.action_map.insert(blk, n);
             self.cfg_from_nodes(blk);
             self.cfg_from_blocks(blk, visited);
         }
