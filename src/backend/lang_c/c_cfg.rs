@@ -24,8 +24,6 @@ pub enum ActionNode {
     Call(String),
     Return,
     If,
-    While,
-    DoWhile,
     Goto,
     Dummy(String),
     DummyGoto,
@@ -53,8 +51,6 @@ pub enum ActionEdge {
     Normal,
     /// Destination of Goto statement
     GotoDst,
-    /// Edge between body and while/do-while 
-    WhileBody,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,26 +261,6 @@ impl CCFG {
         node
     }
 
-    pub fn add_while(&mut self, condition: CCFGRef, body: CCFGRef,
-                     prev_action: CCFGRef) -> CCFGRef {
-        let node = self.g.add_node(CCFGNode::Action(ActionNode::While));
-        self.remove_incoming_actions(body);
-        self.g.add_edge(node, body, CCFGEdge::Action(ActionEdge::WhileBody));
-        self.g.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
-        self.g.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
-        node
-    }
-
-    pub fn add_do_while(&mut self, condition: CCFGRef, body: CCFGRef,
-                     prev_action: CCFGRef) -> CCFGRef {
-        let node = self.g.add_node(CCFGNode::Action(ActionNode::DoWhile));
-        self.remove_incoming_actions(body);
-        self.g.add_edge(node, body, CCFGEdge::Action(ActionEdge::WhileBody));
-        self.g.add_edge(node, condition, CCFGEdge::Value(ValueEdge::Conditional));
-        self.g.add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
-        node
-    }
-
     pub fn conditional_insert(&mut self, condition: CCFGRef, if_then: CCFGRef,
                    if_else: Option<CCFGRef>, prev: CCFGRef) -> CCFGRef {
         let es = self.g.edges_directed(prev, Direction::Outgoing)
@@ -395,19 +371,6 @@ impl CCFG {
         }
     }
 
-    fn while_body(&self, idx: CCFGRef) -> Option<Vec<CCFGRef>> {
-        if self.g.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::While)) {
-            return None;
-        }
-        self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::WhileBody))
-    }
-
-    fn do_while_body(&self, idx: CCFGRef) -> Option<Vec<CCFGRef>> {
-        if self.g.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::DoWhile)) {
-            return None;
-        }
-        self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::WhileBody))
-    }
 
     // Returns a pair (IfThen, IfElse)
     fn branch(&self, idx: CCFGRef) -> Option<(Vec<CCFGRef>, Option<Vec<CCFGRef>>)> {
@@ -426,9 +389,7 @@ impl CCFG {
     // Returns value node which represents condition used by If statement
     fn branch_condition(&self, idx: CCFGRef) -> Option<CCFGRef> {
         match self.g.node_weight(idx) {
-            Some(&CCFGNode::Action(ActionNode::If))
-            | Some(&CCFGNode::Action(ActionNode::While))
-            | Some(&CCFGNode::Action(ActionNode::DoWhile)) => {},
+            Some(&CCFGNode::Action(ActionNode::If)) => {},
             _ => return None,
         }
         let ns = self.g.edges_directed(idx, Direction::Outgoing).into_iter().collect();
@@ -809,12 +770,6 @@ impl<'a> CASTConverter<'a> {
                 // fallthrough
                 Err("TODO")
             },
-            Some(CCFGNode::Action(ActionNode::While)) => {
-                self.to_c_ast_while(current_node)
-            },
-            Some(CCFGNode::Action(ActionNode::DoWhile)) => {
-                self.to_c_ast_do_while(current_node)
-            },
             _ => {
                 radeco_err!("Unreachable node {:?}", idx);
                 unreachable!()
@@ -906,42 +861,6 @@ impl<'a> CASTConverter<'a> {
             Ok(self.ast.new_if(c, t, e))
         } else {
             Err("CCFG::branch failed")
-        }
-    }
-
-    fn to_c_ast_do_while(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
-        let cond = self.cfg.branch_condition(node)
-            .unwrap_or(self.cfg.unknown);
-        if let Some(body_nodes) = self.cfg.do_while_body(node) {
-            for n in body_nodes.iter() {
-                self.to_c_ast_body(*n);
-            }
-            let c = *self.node_map.get(&cond).unwrap();
-            let b = body_nodes.into_iter()
-                .map(|x| {
-                    self.node_map.get(&x).cloned().unwrap_or(self.cfg.unknown)
-                }).collect::<Vec<_>>();
-            Ok(self.ast.new_do_while(c, b))
-        } else {
-            Err("No node in body of do-while found.")
-        }
-    }
-
-    fn to_c_ast_while(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
-        let cond = self.cfg.branch_condition(node)
-            .unwrap_or(self.cfg.unknown);
-        if let Some(body_nodes) = self.cfg.while_body(node) {
-            for n in body_nodes.iter() {
-                self.to_c_ast_body(*n);
-            }
-            let c = *self.node_map.get(&cond).unwrap();
-            let b = body_nodes.into_iter()
-                .map(|x| {
-                    self.node_map.get(&x).cloned().unwrap_or(self.cfg.unknown)
-                }).collect::<Vec<_>>();
-            Ok(self.ast.new_while(c, b))
-        } else {
-            Err("No node in body of while found.")
         }
     }
 
@@ -1207,58 +1126,6 @@ mod test {
         let c = cfg.var("c", Some(Ty::new(BTy::Char, true, 0)));
         let v = cfg.var("v", Some(Ty::new(BTy::Void, true, 0)));
         let f = cfg.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
-        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
-        println!("{}", output);
-    }
-
-    // fn main () {
-    //     unsigned int x;
-    //     unsigned int y;
-    //     unsigned int z;
-    //     while (x) {
-    //         x = (x + y)
-    //         x = (y + z)
-    //     }
-    // }
-    #[test]
-    fn c_cfg_while_test() {
-        let mut cfg = CCFG::new("main");
-        let entry = cfg.entry;
-        let x = cfg.var("x", None);
-        let y = cfg.var("y", None);
-        let z = cfg.var("z", None);
-        let x_plus_y = cfg.expr(&[x, y], c_ast::Expr::Add);
-        let y_plus_z = cfg.expr(&[y, z], c_ast::Expr::Add);
-        let assn1 = cfg.assign(x, x_plus_y, entry);
-        let assn2 = cfg.assign(x, y_plus_z, assn1);
-        cfg.add_while(x, assn1, entry);
-        CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
-        println!("{}", output);
-    }
-
-    // fn main () {
-    //     unsigned int x;
-    //     unsigned int y;
-    //     unsigned int z;
-    //     do {
-    //         x = (x + y)
-    //         x = (y + z)
-    //     } while (x);
-    // }
-    #[test]
-    fn c_cfg_do_while_test() {
-        let mut cfg = CCFG::new("main");
-        let entry = cfg.entry;
-        let x = cfg.var("x", None);
-        let y = cfg.var("y", None);
-        let z = cfg.var("z", None);
-        let x_plus_y = cfg.expr(&[x, y], c_ast::Expr::Add);
-        let y_plus_z = cfg.expr(&[y, z], c_ast::Expr::Add);
-        let assn1 = cfg.assign(x, x_plus_y, entry);
-        let assn2 = cfg.assign(x, y_plus_z, assn1);
-        cfg.add_do_while(x, assn1, entry);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
         let output = cfg.to_c_ast().print();
         println!("{}", output);
