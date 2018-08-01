@@ -216,7 +216,8 @@ impl SSAStorage {
     }
 
     pub fn next_blocks(&self, node: NodeIndex) -> Vec<NodeIndex> {
-        let edges = self.outgoing_edges(node);
+        let mut edges = self.outgoing_edges(node);
+        edges.sort_by(|x, y| x.1.cmp(&y.1));
         edges.into_iter()
             .flat_map(|(e, _)| match self.g.edge_endpoints(e) {
                 Some((_, x)) => Some(x),
