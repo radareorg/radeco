@@ -2,6 +2,8 @@
 //!
 //! `CCFG` is CFG-like Graph so that we can do control flow structuring easily.
 
+pub mod ctrl_flow_struct;
+
 use std::collections::{HashMap, HashSet};
 use super::c_ast;
 use super::c_ast::{Ty, CAST};
