@@ -26,6 +26,7 @@ use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::ir_reader::parse_il;
 use radeco_lib::middle::ssa::verifier;
 use radeco_lib::backend::lang_c::c_ast::CAST;
+use radeco_lib::backend::lang_c::c_cfg_builder;
 
 //use radeco_lib::analysis::mark_refs;
 
@@ -233,6 +234,16 @@ fn main() {
                 println!("  [*] Generating dot");
                 let mut df = File::create(format!("{}.dot", fname.to_string_lossy())).expect("Unable to create .dot file");
                 let dot = dot::emit_dot(rfn.ssa());
+                writeln!(df, "{}", dot).expect("Error writing to file");
+            }
+
+            {
+                ////////////////////////
+                // Generate pseudo-C CFG Dot file
+                ///////////////////////
+                println!("  [*] Generating psuedo code");
+                let mut df = File::create(format!("{}.c.dot", fname.to_string_lossy())).expect("Unable to create .c file");
+                let dot = c_cfg_builder::recover_simple_ast(&rfn, &func_name_map, &strings).dot_str();
                 writeln!(df, "{}", dot).expect("Error writing to file");
             }
 
