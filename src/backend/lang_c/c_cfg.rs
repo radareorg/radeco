@@ -262,7 +262,7 @@ impl CCFG {
         node
     }
 
-    pub fn conditional_insert(&mut self, condition: CCFGRef, if_then: CCFGRef,
+    pub fn insert_conditional(&mut self, condition: CCFGRef, if_then: CCFGRef,
                    if_else: Option<CCFGRef>, prev: CCFGRef) -> CCFGRef {
         let es = self.g.edges_directed(prev, Direction::Outgoing)
             .into_iter()

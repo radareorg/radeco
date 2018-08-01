@@ -283,7 +283,7 @@ impl<'a> CCFGBuilder<'a> {
         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(
             self.cfg.unknown,
         );
-        let if_node = self.cfg.conditional_insert(cond, goto_then, Some(goto_else), cfg_node);
+        let if_node = self.cfg.insert_conditional(cond, goto_then, Some(goto_else), cfg_node);
         if is_debug() {
             let addr = self.addr_str(ssa_node);
             self.cfg.debug_info_at(
