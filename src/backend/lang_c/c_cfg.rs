@@ -8,6 +8,7 @@ use super::c_ast::{Ty, CAST};
 use petgraph::graph::{Graph, NodeIndex, EdgeIndex, EdgeReference};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
+use petgraph::dot::Dot;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CCFGNode {
@@ -540,6 +541,10 @@ impl CCFG {
             Some(&CCFGNode::Action(ActionNode::Call(_))) => true,
             _ => false
         }
+    }
+
+    pub fn dot_str(&self) -> String {
+        format!("{:?}", Dot::new(&self.g))
     }
 }
 
