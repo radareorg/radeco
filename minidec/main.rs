@@ -243,7 +243,7 @@ fn main() {
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 let mut df = File::create(format!("{}.c.dot", fname.to_string_lossy())).expect("Unable to create .c file");
-                let dot = c_cfg_builder::recover_simple_ast(&rfn, &func_name_map, &strings).dot_str();
+                let dot = c_cfg_builder::recover_c_cfg(&rfn, &func_name_map, &strings).dot_str();
                 writeln!(df, "{}", dot).expect("Error writing to file");
             }
 
