@@ -100,9 +100,10 @@ impl fmt::Display for BTy {
 #[derive(Clone, Debug)]
 pub enum CASTNode {
     FunctionHeader(String),
-    Conditional,
+    If,
     Declaration(Ty),
-    Loop,
+    While,
+    DoWhile,
     Goto(String),
     Label(String),
     Break,
@@ -268,20 +269,49 @@ impl CAST {
         operator
     }
 
-    pub fn new_loop(&mut self, loop_header: NodeIndex, loop_body: NodeIndex) -> NodeIndex {
-        let e1 = self.ast.find_edge(self.fn_head, loop_header).expect("This cannot be `None`");
-        let e2 = self.ast.find_edge(self.fn_head, loop_body).expect("This cannot be `None`");
-        let loop_h = self.ast.add_node(CASTNode::Loop);
-        let idx = self.get_statement_ord(e1);
-        self.ast.remove_edge(e2);
-        self.ast.remove_edge(e1);
-        self.ast.add_edge(self.fn_head, loop_h, CASTEdge::StatementOrd(idx));
-        self.ast.add_edge(loop_h, loop_header, CASTEdge::OpOrd(0));
-        self.ast.add_edge(loop_h, loop_body, CASTEdge::OpOrd(1));
-        loop_h
+    pub fn new_while(&mut self, condition: NodeIndex, body: Vec<NodeIndex>) -> NodeIndex {
+        let idx = if let Some(e1) = self.ast.find_edge(self.fn_head, condition) {
+            let idx = self.get_statement_ord(e1);
+            self.ast.remove_edge(e1);
+            idx
+        } else {
+            self.next_edge_idx()
+        };
+        let while_h = self.ast.add_node(CASTNode::While);
+        self.ast.add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
+        self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
+        let node = self.ast.add_node(CASTNode::Block);
+        self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
+        for (i, n) in body.iter().enumerate() {
+            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            self.ast.remove_edge(e);
+            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+        }
+        while_h
     }
 
-    pub fn new_conditional(&mut self,
+    pub fn new_do_while(&mut self, condition: NodeIndex, body: Vec<NodeIndex>) -> NodeIndex {
+        let idx = if let Some(e1) = self.ast.find_edge(self.fn_head, condition) {
+            let idx = self.get_statement_ord(e1);
+            self.ast.remove_edge(e1);
+            idx
+        } else {
+            self.next_edge_idx()
+        };
+        let while_h = self.ast.add_node(CASTNode::DoWhile);
+        self.ast.add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
+        self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
+        let node = self.ast.add_node(CASTNode::Block);
+        self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
+        for (i, n) in body.iter().enumerate() {
+            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            self.ast.remove_edge(e);
+            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+        }
+        while_h
+    }
+
+    pub fn new_if(&mut self,
                            condition: NodeIndex,
                            body: Vec<NodeIndex>,
                            else_condition: Option<Vec<NodeIndex>>)
@@ -293,12 +323,12 @@ impl CAST {
         } else {
             self.next_edge_idx()
         };
-        let conditional = self.ast.add_node(CASTNode::Conditional);
-        self.ast.add_edge(self.fn_head, conditional, CASTEdge::StatementOrd(idx));
-        self.ast.add_edge(conditional, condition, CASTEdge::OpOrd(0));
+        let if_h = self.ast.add_node(CASTNode::If);
+        self.ast.add_edge(self.fn_head, if_h, CASTEdge::StatementOrd(idx));
+        self.ast.add_edge(if_h, condition, CASTEdge::OpOrd(0));
 
         let node = self.ast.add_node(CASTNode::Block);
-        self.ast.add_edge(conditional, node, CASTEdge::OpOrd(1));
+        self.ast.add_edge(if_h, node, CASTEdge::OpOrd(1));
         for (i, n) in body.iter().enumerate() {
             let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
             self.ast.remove_edge(e);
@@ -307,14 +337,14 @@ impl CAST {
 
         if let Some(elses) = else_condition {
             let else_node = self.ast.add_node(CASTNode::Block);
-            self.ast.add_edge(conditional, else_node, CASTEdge::OpOrd(2));
+            self.ast.add_edge(if_h, else_node, CASTEdge::OpOrd(2));
             for (i, n) in elses.into_iter().enumerate() {
                 let e = self.ast.find_edge(self.fn_head, n).expect("This cannot be `None`");
                 self.ast.remove_edge(e);
                 self.ast.add_edge(else_node, n, CASTEdge::BlockOrd(i as u64));
             }
         }
-        conditional
+        if_h
     }
 
     pub fn call_func(&mut self, func_name: &str, args: Vec<Option<NodeIndex>>) -> NodeIndex {
@@ -405,7 +435,7 @@ impl CAST {
         let comment = self.comments.get(&node).cloned();
         let result = match self.ast[*node] {
             CASTNode::FunctionHeader(_) => unimplemented!(),
-            CASTNode::Conditional => {
+            CASTNode::If => {
                 // Get the arguments -> condition, body, else branch.
                 let args = self.get_args_ordered(node);
                 let arg1 = args[0];
@@ -417,7 +447,7 @@ impl CAST {
                 let true_body = self.emit_c(&arg2, indent + 1);
                 let false_body = if let Some(arg3) = arg3 {
                     let fbody = self.emit_c(&arg3, indent + 1);
-                    if let CASTNode::Conditional = self.ast[arg3] {
+                    if let CASTNode::If = self.ast[arg3] {
                         // Else-If case
                         format_with_indent("} else ", indent) + &fbody
                     } else {
@@ -448,16 +478,27 @@ impl CAST {
                 }
                 format!("{} {};", ty, vars)
             }
-            CASTNode::Loop => {
-                // Get the arguments -> loop header/check condition, loop body.
+            CASTNode::While => {
+                // Get the arguments -> while header/check condition, while body.
                 let args = self.get_args_ordered(node);
-                let loop_header = self.emit_c(&args[0], 0);
-                let loop_body = self.emit_c(&args[1], indent + 1);
+                let condition = self.emit_c(&args[0], 0);
+                let while_body = self.emit_c(&args[1], indent + 1);
                 format!("{} ({}) {{\n{}\n{}",
                         format_with_indent("while", indent),
-                        loop_header,
-                        loop_body,
+                        condition,
+                        while_body,
                         format_with_indent("}", indent))
+            }
+            CASTNode::DoWhile => {
+                // Get the arguments -> while header/check condition, while body.
+                let args = self.get_args_ordered(node);
+                let condition = self.emit_c(&args[0], 0);
+                let while_body = self.emit_c(&args[1], indent + 1);
+                format!("{} {{\n{}\n{}}} while ({});",
+                        format_with_indent("do", indent),
+                        while_body,
+                        format_with_indent("", indent),
+                        condition)
             }
             CASTNode::Goto(ref label) => {
                 format_with_indent(&format!("goto {}", label), indent)
@@ -637,7 +678,7 @@ mod test {
         let eq = c_ast.expr(Expr::Eq, &vars, false);
         let increment = c_ast.expr(Expr::Add, &vars, false);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
-        c_ast.new_conditional(eq, vec![assignment], None);
+        c_ast.new_if(eq, vec![assignment], None);
         let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }
@@ -660,6 +701,32 @@ mod test {
         let lbl_str = "L1";
         let _ = c_ast.label(lbl_str);
         let _ = c_ast.goto(lbl_str);
+        println!("{}", c_ast.print());
+    }
+
+    #[test]
+    fn c_ast_while_test() {
+        let mut c_ast = CAST::new("main");
+        c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let eq = c_ast.expr(Expr::Eq, &vars, false);
+        let increment = c_ast.expr(Expr::Add, &vars, false);
+        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
+        c_ast.new_while(eq, vec![assignment]);
+        let _ = c_ast.ret(None);
+        println!("{}", c_ast.print());
+    }
+
+    #[test]
+    fn c_ast_do_while_test() {
+        let mut c_ast = CAST::new("main");
+        c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
+        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let eq = c_ast.expr(Expr::Eq, &vars, false);
+        let increment = c_ast.expr(Expr::Add, &vars, false);
+        let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
+        c_ast.new_do_while(eq, vec![assignment]);
+        let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
     }
 }
