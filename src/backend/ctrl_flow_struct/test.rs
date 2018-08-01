@@ -129,7 +129,7 @@ fn ast_nmg_example() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     #[allow(non_snake_case)]
@@ -229,7 +229,7 @@ fn ast_nmg_r1() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     let c_c1 = cctx.mk_var(v_c1);
@@ -291,7 +291,7 @@ fn ast_nmg_r2() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     use self::AstNodeC::*;
@@ -348,7 +348,7 @@ fn ast_nmg_r3() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     let c_d1 = cctx.mk_var(v_d1);
@@ -438,7 +438,7 @@ fn ast_switchy() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     use self::AstNodeC::*;
@@ -500,7 +500,7 @@ fn ast_ifelse_cascade() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     use self::AstNodeC::*;
@@ -554,7 +554,7 @@ fn ast_while() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     let c_c = cctx.mk_var(v_c);
@@ -600,7 +600,7 @@ fn ast_do_while() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     let c_c = cctx.mk_var(v_c);
@@ -641,7 +641,7 @@ fn ast_infinite_loop() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     use self::AstNodeC::*;
@@ -694,7 +694,7 @@ fn ast_complex_while_and() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     let c_c1 = cctx.mk_var(v_c1);
@@ -755,7 +755,7 @@ fn ast_complex_while_or() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 
     let c_c1 = cctx.mk_var(v_c1);
@@ -826,7 +826,7 @@ fn abnormal_entries() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 }
 
@@ -885,7 +885,7 @@ fn abnormal_exits() {
         cctx,
         actx,
     };
-    let ast = cfg.structure_whole();
+    let ast = cfg.structure_whole().0;
     println!("{:#?}", ast);
 }
 

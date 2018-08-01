@@ -31,18 +31,18 @@ use std::mem;
 /// - `entry` and `exit` must be a source and a sink, respectively.
 /// - all nodes (except possibly `exit`) must be reachable from `entry`
 /// - `exit` must not contain any code.
-struct ControlFlowGraph<'cd, A: AstContext> {
-    graph: StableDiGraph<CfgNode<'cd, A>, CfgEdge>,
-    entry: NodeIndex,
-    exit: NodeIndex,
-    cctx: CondContext<'cd, A>,
-    actx: A,
+pub struct ControlFlowGraph<'cd, A: AstContext> {
+    pub graph: StableDiGraph<CfgNode<'cd, A>, CfgEdge>,
+    pub entry: NodeIndex,
+    pub exit: NodeIndex,
+    pub cctx: CondContext<'cd, A>,
+    pub actx: A,
 }
 
 type NodeSet = IxBitSet<NodeIndex>;
 type EdgeSet = IxBitSet<EdgeIndex>;
 
-enum CfgNode<'cd, A: AstContext> {
+pub enum CfgNode<'cd, A: AstContext> {
     /// out-degree <= 1
     Code(AstNode<'cd, A>),
     /// out-degree >= 2
@@ -52,7 +52,7 @@ enum CfgNode<'cd, A: AstContext> {
 }
 
 #[derive(Copy, Clone, Debug)]
-enum CfgEdge {
+pub enum CfgEdge {
     True,
     False,
 }
@@ -65,7 +65,7 @@ type AstNode<'cd, A> =
     ast::AstNode<<A as AstContext>::Block, Condition<'cd, A>, <A as AstContext>::Variable>;
 
 impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
-    fn structure_whole(mut self) -> AstNode<'cd, A> {
+    pub fn structure_whole(mut self) -> (AstNode<'cd, A>, A) {
         debug_assert!(graph_utils::is_source(&self.graph, self.entry));
         debug_assert!(graph_utils::is_sink(&self.graph, self.exit));
 
@@ -134,6 +134,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             } else {
                 // acyclic
                 let region = graph_utils::dominated_by(&self.graph, self.entry, n);
+                // TODO: region.remove(self.exit);
                 // single-block regions aren't interesting
                 if region.len() > 1 && !region.contains(self.exit) {
                     let succs = graph_utils::strict_successors_of_set(&self.graph, &region);
@@ -171,7 +172,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         self.graph.remove_node(self.entry);
         debug_assert!(self.graph.node_count() == 0);
 
-        ret
+        (ret, self.actx)
     }
 
     /// Converts the acyclic, single entry, single exit region bound by `header`
@@ -498,6 +499,21 @@ impl<'cd, A: AstContext> RegionAstContext<'cd, A> {
             ),
         }
     }
+}
+
+pub fn mk_code_node<A: AstContext>(block: A::Block) -> CfgNode<'static, A> {
+    CfgNode::Code(AstNodeC::BasicBlock(block))
+}
+
+pub fn mk_cond_node<'cd, A: AstContext>(
+    cctx: CondContext<'cd, A>,
+    cond: A::Condition,
+) -> CfgNode<'cd, A> {
+    CfgNode::Condition(cctx.new_var(cond))
+}
+
+pub fn empty_node<A: AstContext>() -> CfgNode<'static, A> {
+    CfgNode::Code(AstNodeC::default())
 }
 
 impl<'cd, A> fmt::Debug for ControlFlowGraph<'cd, A>
