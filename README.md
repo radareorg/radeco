@@ -5,6 +5,7 @@
 
 A radare2 based binary analysis framework
 
+test
 
 ### Is this ready yet?
 
