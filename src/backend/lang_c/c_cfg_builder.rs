@@ -69,6 +69,11 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
+    fn dummy_goto(&mut self) -> NodeIndex {
+        self.last_action = self.ast.dummy_goto(self.last_action);
+        self.last_action
+    }
+
     fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {
         self.last_action = self.ast.assign(dst, src, self.last_action);
         self.last_action
@@ -245,14 +250,15 @@ impl<'a> CCFGBuilder<'a> {
     // ssa_node: SSA NodeIndex for if statement
     // selector: SSA NodeIndex for condition expression
     // true_node: SSA NodeIndex for if-then block
-    fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex) {
+    fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex,
+                 false_node: NodeIndex) {
         radeco_trace!("CCFGBuilder::handle_if");
         let ast_node = self.action_map.get(&ssa_node).cloned().expect(
             "The node should be \
              added to action_map",
         );
         // Add goto statement as `if then` node
-        let goto_node = {
+        let goto_then = {
             let dst_node = self.action_map.get(&true_node).cloned().expect(
                 "This should not \
                  be None",
@@ -262,15 +268,26 @@ impl<'a> CCFGBuilder<'a> {
             let label = self.gen_label(true_node);
             self.ast.add_goto(dst_node, &label, unknown)
         };
+        // Add goto statement as `if else` node
+        let goto_else = {
+            let dst_node = self.action_map.get(&false_node).cloned().expect(
+                "This should not \
+                 be None",
+            );
+            // Edge from `unknown` will be removed later.
+            let unknown = self.ast.unknown;
+            let label = self.gen_label(false_node);
+            self.ast.add_goto(dst_node, &label, unknown)
+        };
         // Add condition node to if statement
         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(
             self.ast.unknown,
         );
-        let if_node = self.ast.conditional_insert(cond, goto_node, None, ast_node);
+        let if_node = self.ast.conditional_insert(cond, goto_then, Some(goto_else), ast_node);
         if is_debug() {
             let addr = self.addr_str(ssa_node);
             self.ast.debug_info_at(
-                goto_node,
+                goto_then,
                 format!("IF JMP {:?} @ {}", if_node, addr),
             );
         }
@@ -294,7 +311,8 @@ impl<'a> CCFGBuilder<'a> {
                     }
                 } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(cur_node) {
                     if let Some(selector) = self.ssa.selector_in(cur_node) {
-                        self.handle_if(cur_node, selector, blk_cond_info.true_side);
+                        self.handle_if(cur_node, selector, blk_cond_info.true_side,
+                                       blk_cond_info.false_side);
                     } else {
                         radeco_warn!(
                             "block with conditional successors has no selector {:?}",
@@ -327,6 +345,8 @@ impl<'a> CCFGBuilder<'a> {
         visited.insert(block);
         let next_blocks = self.ssa.next_blocks(block);
         for blk in next_blocks {
+            let n = self.dummy_goto();
+            self.action_map.insert(blk, n);
             self.cfg_from_nodes(blk);
             self.cfg_from_blocks(blk, visited);
         }
