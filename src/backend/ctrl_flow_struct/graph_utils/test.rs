@@ -86,7 +86,7 @@ fn qc_nearest_common_dominator(
     if in_node_is.is_empty() {
         return TestResult::discard();
     }
-    let root = if let Some(root) = mk_rooted_stable_graph(&mut graph, root_i, false) {
+    let root = if let Some(root) = mk_rooted_stable_graph(&mut graph, root_i, true) {
         root
     } else {
         return TestResult::discard();
