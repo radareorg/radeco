@@ -16,7 +16,7 @@ fn import<'cd>(
     cctx: flstr::condition::Context<'cd, NodeIndex>,
     ccfg: CCFG,
 ) -> Option<flstr::ControlFlowGraph<'cd, CCFG>> {
-    let mut new_graph = {
+    let (mut new_graph, entry) = {
         let ef = EdgeFiltered::from_fn(&ccfg.g, |e| {
             // ignore `Normal` edges from `Goto` nodes
             match (&ccfg.g[e.source()], e.weight()) {
@@ -40,7 +40,7 @@ fn import<'cd>(
             return None;
         }
 
-        try_filter_map_to_stable(
+        let (new_graph, node_index_map) = try_filter_map_to_stable(
             &ccfg.g,
             |n, nw| {
                 Some(if reachable_actions.is_visited(&n) {
@@ -78,13 +78,15 @@ fn import<'cd>(
                     (_, CCFGEdge::Action(_)) => return None,
                 })
             },
-        )?
+        )?;
+
+        (new_graph, node_index_map[ccfg.entry.index()])
     };
 
     let exit = new_graph.add_node(flstr::empty_node());
     Some(flstr::ControlFlowGraph {
         graph: new_graph,
-        entry: ccfg.entry,
+        entry,
         exit,
         cctx,
         actx: ccfg,
@@ -103,7 +105,7 @@ fn try_filter_map_to_stable<'a, N, E, F, G, N2, E2>(
     graph: &'a Graph<N, E>,
     mut node_map: F,
     mut edge_map: G,
-) -> Option<StableGraph<N2, E2>>
+) -> Option<(StableGraph<N2, E2>, Vec<NodeIndex>)>
 where
     F: FnMut(NodeIndex, &'a N) -> Option<Option<N2>>,
     G: FnMut(EdgeIndex, &'a E) -> Option<Option<E2>>,
@@ -116,6 +118,7 @@ where
             node_index_map[i.index()] = g.add_node(nw);
         }
     }
+    assert!(node_index_map.iter().enumerate().all(|(i, ni)| i == ni.index()));
     for edge in graph.edge_references() {
         // skip edge if any endpoint was removed
         let source = node_index_map[edge.source().index()];
@@ -126,7 +129,7 @@ where
             }
         }
     }
-    Some(g)
+    Some((g, node_index_map))
 }
 
 fn is_action_node(e: &CCFGNode) -> bool {
