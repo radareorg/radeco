@@ -27,6 +27,7 @@ use radeco_lib::middle::ir_reader::parse_il;
 use radeco_lib::middle::ssa::verifier;
 use radeco_lib::backend::lang_c::c_ast::CAST;
 use radeco_lib::backend::lang_c::c_cfg_builder;
+use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 
 //use radeco_lib::analysis::mark_refs;
 
@@ -237,13 +238,20 @@ fn main() {
                 writeln!(df, "{}", dot).expect("Error writing to file");
             }
 
+            let c_cfg = c_cfg_builder::recover_c_cfg(&rfn, &func_name_map, &strings);
+
+            if let Err(err) = CCFGVerifier::verify(&c_cfg) {
+                println!("CCFG verification failed");
+                println!("{}", err);
+            }
+
             {
                 ////////////////////////
                 // Generate pseudo-C CFG Dot file
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 let mut df = File::create(format!("{}.c.dot", fname.to_string_lossy())).expect("Unable to create .c file");
-                let dot = c_cfg_builder::recover_c_cfg(&rfn, &func_name_map, &strings).dot_str();
+                let dot = c_cfg.dot_str();
                 writeln!(df, "{}", dot).expect("Error writing to file");
             }
 
@@ -253,7 +261,7 @@ fn main() {
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 let mut df = File::create(format!("{}.c", fname.to_string_lossy())).expect("Unable to create .c file");
-                let code = CAST::construct(&rfn, &func_name_map, &strings).print();
+                let code = c_cfg.to_c_ast().print();
                 writeln!(df, "{}", code).expect("Error writing to file");
             }
         }
