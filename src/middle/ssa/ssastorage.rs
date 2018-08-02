@@ -1242,14 +1242,15 @@ impl SSAWalk<Walker> for SSAStorage {
             let mut explorer = BinaryHeap::<InorderKey>::new();
             explorer.push(InorderKey::new(MAddress::new(0, 0),
                 entry_node_err!(self)));
-            let nodes = &mut walker.nodes;
+            let mut blocks = Vec::new();
             while let Some(ref key) = explorer.pop() {
                 let block = &key.value;
                 if visited.contains(block) {
                     continue;
                 }
                 visited.insert(*block);
-                nodes.push_back(*block);
+                let mut nodes = Vec::new();
+                nodes.push(*block);
                 let mut exprs = self.exprs_in(*block)
                                     .iter()
                                     .chain(self.phis_in(*block).iter())
@@ -1265,7 +1266,7 @@ impl SSAWalk<Walker> for SSAStorage {
                     addr_x.cmp(&addr_y)
                 });
                 for expr in &exprs {
-                    nodes.push_back(*expr);
+                    nodes.push(*expr);
                 }
                 for outedge in self.outgoing_edges(*block) {
                     let target = self.edge_info(outedge.0)
@@ -1275,7 +1276,12 @@ impl SSAWalk<Walker> for SSAStorage {
                     let key = InorderKey::new(addr, target);
                     explorer.push(key);
                 }
+                blocks.push((key.address, nodes));
             }
+            blocks.sort_by(|x, y| x.0.cmp(&y.0));
+            walker.nodes = blocks.into_iter()
+                .flat_map(|(_, x)| x)
+                .collect();
         }
         walker
     }
