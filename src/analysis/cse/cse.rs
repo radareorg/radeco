@@ -6,6 +6,7 @@
 //! a huge memory consume. Thus, a balanced solution should be 
 //! improved.
 
+use std::fmt::Display;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -45,7 +46,14 @@ where I: Iterator<Item = S::ValueRef>,
                     NodeType::Op(opc) => {
                         match opc {
                             MOpcode::OpConst(val) => result.push_str(&format!("{}", val)),
-                            _ => result.push_str(self.hashed.get(arg).expect("Hash value not found!")),
+                            _ => {
+                                if let Some(hash) = self.hashed.get(arg) {
+                                    result.push_str(hash);
+                                } else {
+                                    radeco_err!("Hash value not found!");
+                                    result.push_str(&format!("{:?}", arg));
+                                }
+                            },
                         }
                     }
                     _ => {
