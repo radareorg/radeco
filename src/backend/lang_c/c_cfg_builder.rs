@@ -29,7 +29,7 @@ pub fn recover_c_cfg(
     let mut builder = CCFGBuilder::new(rfn, fname_map);
     let data_graph = CCFGDataMap::recover_data(rfn, &mut builder.cfg, strings);
     builder.datamap = data_graph;
-    builder.cfg_from_blocks(builder.ssa.entry_node().unwrap(), &mut HashSet::new());
+    builder.cfg_from_ssa();
     builder.insert_jumps();
     builder.cfg
 }
@@ -293,62 +293,61 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
+    fn insert_jump(&mut self, cur_block: NodeIndex, prev_block: NodeIndex) {
+        if let Some(succ) = self.ssa.unconditional_block(prev_block) {
+            if let Some(_) = self.ssa.selector_in(prev_block) {
+                // TODO
+                radeco_trace!("CCFGBuilder::insert_jumps INDIRET JMP");
+            } else {
+                self.handle_goto(cur_block, succ);
+            }
+        } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(prev_block) {
+            if let Some(selector) = self.ssa.selector_in(prev_block) {
+                self.handle_if(cur_block, selector, blk_cond_info.true_side,
+                               blk_cond_info.false_side);
+            } else {
+                radeco_warn!(
+                    "block with conditional successors has no selector {:?}",
+                    prev_block
+                );
+            }
+        } else {
+            radeco_err!("Unreachable node {:?}", prev_block);
+        }
+    }
+
     // Insert goto, if statements
     fn insert_jumps(&mut self) {
         let mut last = None;
         let entry_node = entry_node_err!(self.ssa);
+        let exit_node = exit_node_err!(self.ssa);
         for cur_node in self.ssa.inorder_walk() {
             if cur_node == entry_node {
                 continue;
             }
-            if last.is_some() && self.ssa.is_block(cur_node) {
-                if let Some(succ) = self.ssa.unconditional_block(cur_node) {
-                    if let Some(_) = self.ssa.selector_in(cur_node) {
-                        // TODO
-                        radeco_trace!("CCFGBuilder::insert_jumps INDIRET JMP");
-                    } else {
-                        self.handle_goto(cur_node, succ);
-                    }
-                } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(cur_node) {
-                    if let Some(selector) = self.ssa.selector_in(cur_node) {
-                        self.handle_if(cur_node, selector, blk_cond_info.true_side,
-                                       blk_cond_info.false_side);
-                    } else {
-                        radeco_warn!(
-                            "block with conditional successors has no selector {:?}",
-                            cur_node
-                        );
-                    }
-                } else {
-                    radeco_err!("Unreachable node {:?}", cur_node);
+            if self.ssa.is_action(cur_node) {
+                if let Some(prev_block) = last {
+                    self.insert_jump(cur_node, prev_block);
                 }
-            } else if self.ssa.is_block(cur_node) {
                 last = Some(cur_node);
             }
         }
-    }
-
-    fn cfg_from_nodes(&mut self, block: NodeIndex) {
-        let nodes = self.ssa.nodes_in(block);
-        for node in nodes {
-            if self.is_recover_action(node) {
-                let n = self.recover_action(node);
-                self.action_map.insert(node, n);
+        if let Some(prev_block) = last {
+            if prev_block != exit_node {
+                self.insert_jump(exit_node, prev_block);
             }
         }
     }
 
-    fn cfg_from_blocks(&mut self, block: NodeIndex, visited: &mut HashSet<NodeIndex>) {
-        if visited.contains(&block) {
-            return;
-        }
-        visited.insert(block);
-        let next_blocks = self.ssa.next_blocks(block);
-        for blk in next_blocks {
-            let n = self.dummy_goto();
-            self.action_map.insert(blk, n);
-            self.cfg_from_nodes(blk);
-            self.cfg_from_blocks(blk, visited);
+    fn cfg_from_ssa(&mut self) {
+        for node in self.ssa.inorder_walk() {
+            if self.is_recover_action(node) {
+                let n = self.recover_action(node);
+                self.action_map.insert(node, n);
+            } else if self.ssa.is_action(node) {
+                let n = self.dummy_goto();
+                self.action_map.insert(node, n);
+            };
         }
     }
 }
