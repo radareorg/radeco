@@ -16,7 +16,7 @@ fn import<'cd>(
     cctx: flstr::condition::Context<'cd, NodeIndex>,
     ccfg: CCFG,
 ) -> Option<flstr::ControlFlowGraph<'cd, CCFG>> {
-    let (mut new_graph, entry) = {
+    let (new_graph, entry) = {
         let ef = EdgeFiltered::from_fn(&ccfg.g, |e| {
             // ignore `Normal` edges from `Goto` nodes
             match (&ccfg.g[e.source()], e.weight()) {
@@ -83,14 +83,7 @@ fn import<'cd>(
         (new_graph, node_index_map[ccfg.entry.index()])
     };
 
-    let exit = new_graph.add_node(flstr::empty_node());
-    Some(flstr::ControlFlowGraph {
-        graph: new_graph,
-        entry,
-        exit,
-        cctx,
-        actx: ccfg,
-    })
+    Some(flstr::ControlFlowGraph::new(new_graph, entry, cctx, ccfg))
 }
 
 impl AstContext for CCFG {
@@ -98,6 +91,42 @@ impl AstContext for CCFG {
     type Variable = String;
     type BoolVariable = String;
     type Condition = NodeIndex;
+}
+
+// XXX
+#[allow(unused_variables)]
+impl AstContextMut for CCFG {
+    fn mk_fresh_var(&mut self) -> Self::Variable {
+        unimplemented!()
+    }
+
+    fn mk_fresh_var_with_val(&mut self, val: u64) -> Self::Variable {
+        unimplemented!()
+    }
+
+    fn mk_fresh_bool_var(&mut self) -> Self::BoolVariable {
+        unimplemented!()
+    }
+
+    fn mk_cond_equals(&mut self, var: &Self::Variable, val: u64) -> Self::Condition {
+        unimplemented!()
+    }
+
+    fn mk_cond_from_bool_var(&mut self, var: &Self::BoolVariable) -> Self::Condition {
+        unimplemented!()
+    }
+
+    fn mk_var_assign(&mut self, var: &Self::Variable, val: u64) -> Self::Block {
+        unimplemented!()
+    }
+
+    fn mk_bool_var_assign(
+        &mut self,
+        var: &Self::BoolVariable,
+        cond: &Self::Condition,
+    ) -> Self::Block {
+        unimplemented!()
+    }
 }
 
 /// based on https://docs.rs/petgraph/0.4.12/src/petgraph/graph_impl/mod.rs.html#1293-1317
@@ -118,7 +147,6 @@ where
             node_index_map[i.index()] = g.add_node(nw);
         }
     }
-    assert!(node_index_map.iter().enumerate().all(|(i, ni)| i == ni.index()));
     for edge in graph.edge_references() {
         // skip edge if any endpoint was removed
         let source = node_index_map[edge.source().index()];
