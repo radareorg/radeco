@@ -75,8 +75,8 @@ pub enum ValueEdge {
     Conditional,
 }
 
-type CCFGRef = NodeIndex;
-type CASTRef = NodeIndex;
+pub type CCFGRef = NodeIndex;
+pub type CASTRef = NodeIndex;
 
 pub struct CCFG {
     /// Name of function of this AST
