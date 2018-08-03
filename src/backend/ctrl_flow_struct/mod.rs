@@ -18,25 +18,22 @@ use self::ast::AstNode as AstNodeC;
 use self::ast_context::*;
 use self::graph_utils::ix_bit_set::IxBitSet;
 
-use petgraph::algo;
 use petgraph::prelude::*;
+use petgraph::visit::{DfsPostOrder, NodeIndexable, Walker};
 
 use std::collections::HashMap;
 use std::fmt;
-use std::iter::{self, FromIterator};
+use std::iter;
 use std::marker::PhantomData;
 use std::mem;
 
-/// Preconditions:
-/// - `entry` and `exit` must be a source and a sink, respectively.
-/// - all nodes (except possibly `exit`) must be reachable from `entry`
-/// - `exit` must not contain any code.
+/// Note: Conditions may be evaluated "eagerly". Thus, all conditions must always
+/// be "safe" to evaluate, but may produce garbage.
 pub struct ControlFlowGraph<'cd, A: AstContext> {
-    pub graph: StableDiGraph<CfgNode<'cd, A>, CfgEdge>,
-    pub entry: NodeIndex,
-    pub exit: NodeIndex,
-    pub cctx: CondContext<'cd, A>,
-    pub actx: A,
+    graph: StableDiGraph<CfgNode<'cd, A>, CfgEdge>,
+    entry: NodeIndex,
+    cctx: CondContext<'cd, A>,
+    actx: A,
 }
 
 type NodeSet = IxBitSet<NodeIndex>;
@@ -65,67 +62,103 @@ type AstNode<'cd, A> =
     ast::AstNode<<A as AstContext>::Block, Condition<'cd, A>, <A as AstContext>::Variable>;
 
 impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
-    pub fn structure_whole(mut self) -> (AstNode<'cd, A>, A) {
-        debug_assert!(graph_utils::is_source(&self.graph, self.entry));
-        debug_assert!(graph_utils::is_sink(&self.graph, self.exit));
+    /// Preconditions:
+    /// - `entry` must be a source
+    /// - all nodes must be reachable from `entry`
+    pub fn new(
+        graph: StableDiGraph<CfgNode<'cd, A>, CfgEdge>,
+        entry: NodeIndex,
+        cctx: CondContext<'cd, A>,
+        actx: A,
+    ) -> Self {
+        let ret = Self {
+            graph,
+            entry,
+            cctx,
+            actx,
+        };
+        ret.check();
+        ret
+    }
 
-        let mut backedge_map = HashMap::new();
+    #[cfg(not(debug_assertions))]
+    fn check(&self) {}
+
+    #[cfg(debug_assertions)]
+    fn check(&self) {
+        for n in self.graph.node_indices() {
+            assert!(graph_utils::is_source(&self.graph, n) == (n == self.entry));
+            match &self.graph[n] {
+                CfgNode::Code(_) => assert!(self.graph.neighbors(n).count() <= 1),
+                CfgNode::Condition(_) => assert!(self.graph.neighbors(n).count() == 2),
+                CfgNode::Dummy(s) => panic!("found `CfgNode::Dummy({:?})`", s),
+            }
+        }
+    }
+
+    pub fn structure_whole(mut self) -> (AstNode<'cd, A>, A) {
+        let mut loop_headers = NodeSet::new();
         let mut podfs_trace = Vec::new();
         graph_utils::depth_first_search(&self.graph, self.entry, |ev| {
             use self::graph_utils::DfsEvent::*;
             match ev {
                 BackEdge(e) => {
-                    let (ref mut sources, ref mut edges) = backedge_map
-                        .entry(e.target())
-                        .or_insert((NodeSet::new(), EdgeSet::new()));
-                    sources.insert(e.source());
-                    edges.insert(e.id());
+                    loop_headers.insert(e.target());
                 }
                 Finish(n) => podfs_trace.push(n),
                 _ => (),
             }
         });
+        let (podfs_trace, loop_headers) = (podfs_trace, loop_headers);
 
-        for &n in &podfs_trace {
-            if let Some((latch_nodes, backedges)) = backedge_map.get(&n) {
+        let mut visited = NodeSet::with_capacity(self.graph.node_bound());
+        for &cur_node in &podfs_trace {
+            visited.insert(cur_node);
+
+            if loop_headers.contains(cur_node) {
                 // loop
 
-                // retarget backedges to a "loop continue" node
-                let loop_continue = self.graph.add_node(CfgNode::Dummy("loop continue"));
-                for backedge in backedges {
-                    graph_utils::retarget_edge(&mut self.graph, backedge, loop_continue);
+                // find latch nodes
+                let mut backedges = EdgeSet::new();
+                let mut latch_nodes = NodeSet::new();
+                for edge in self.graph.edges_directed(cur_node, Incoming) {
+                    // backedges are always from original graph nodes
+                    if visited.contains(edge.source()) {
+                        backedges.insert(edge.id());
+                        latch_nodes.insert(edge.source());
+                    }
                 }
 
-                let initial_loop_nodes = graph_utils::slice(&self.graph, n, latch_nodes).nodes;
+                // remove backedges
+                for e in &backedges {
+                    self.graph.remove_edge(e);
+                }
 
-                let loop_header = self.funnel_abnormal_entries(n, &initial_loop_nodes);
-
+                // regionify loop
+                let mut loop_nodes = graph_utils::slice(&self.graph, cur_node, &latch_nodes).nodes;
+                let loop_header = self.funnel_abnormal_entries(cur_node, &loop_nodes);
+                let mut succ_nodes =
+                    graph_utils::strict_successors_of_set(&self.graph, &loop_nodes);
+                self.refine_loop(&mut loop_nodes, &mut succ_nodes);
                 let loop_succ_opt = {
-                    let mut succ_nodes =
-                        graph_utils::strict_successors_of_set(&self.graph, &initial_loop_nodes);
-                    let mut loop_nodes = initial_loop_nodes;
-                    self.refine_loop(&mut loop_nodes, &mut succ_nodes);
-
                     // pick the successor with the smallest post-order
-                    let final_succ_opt = podfs_trace
-                        .iter()
-                        .find(|&&n| succ_nodes.contains(n))
-                        .cloned();
+                    let final_succ_opt = DfsPostOrder::new(&self.graph, self.entry)
+                        .iter(&self.graph)
+                        .find(|&n| succ_nodes.contains(n));
                     if let Some(final_succ) = final_succ_opt {
                         succ_nodes.remove(final_succ);
-                        Some(self.funnel_abnormal_exits(
-                            &loop_nodes,
-                            loop_continue,
-                            final_succ,
-                            &succ_nodes,
-                        ))
+                        let loop_succ =
+                            self.funnel_abnormal_exits(&mut loop_nodes, final_succ, &succ_nodes);
+                        Some(loop_succ)
                     } else {
                         None
                     }
                 };
+                debug_assert!(
+                    graph_utils::strict_successors_of_set(&self.graph, &loop_nodes).len() <= 1
+                );
 
-                let loop_body = self.structure_acyclic_sese_region(loop_header, loop_continue);
-                self.graph.remove_node(loop_continue);
+                let loop_body = self.structure_acyclic_sese_region(loop_header, &loop_nodes);
                 let repl_ast = refinement::refine_loop::<A>(self.cctx, loop_body);
                 self.graph[loop_header] = CfgNode::Code(repl_ast);
                 if let Some(loop_succ) = loop_succ_opt {
@@ -133,63 +166,41 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                 }
             } else {
                 // acyclic
-                let region = graph_utils::dominated_by(&self.graph, self.entry, n);
-                // TODO: region.remove(self.exit);
+                let region = graph_utils::dominated_by(&self.graph, self.entry, cur_node);
                 // single-block regions aren't interesting
-                if region.len() > 1 && !region.contains(self.exit) {
+                if region.len() > 1 {
                     let succs = graph_utils::strict_successors_of_set(&self.graph, &region);
-                    // is `region` single-exit?
-                    let mut succs_iter = succs.iter();
-                    if let Some(succ) = succs_iter.next() {
-                        if succs_iter.next().is_none() {
-                            // sese region
-                            let repl_ast = self.structure_acyclic_sese_region(n, succ);
-                            self.graph[n] = CfgNode::Code(repl_ast);
-                            self.graph.add_edge(n, succ, CfgEdge::True);
+                    // `region` must have one or zero successors
+                    if succs.len() <= 1 {
+                        let opt_succ = succs.iter().next();
+                        let repl_ast = self.structure_acyclic_sese_region(cur_node, &region);
+                        self.graph[cur_node] = CfgNode::Code(repl_ast);
+                        if let Some(succ) = opt_succ {
+                            self.graph.add_edge(cur_node, succ, CfgEdge::True);
                         }
                     }
                 }
             }
         }
 
-        // connect all remaining sinks to the exit node
-        let sinks: Vec<_> = self
-            .graph
-            .node_indices()
-            .filter(|&n| n != self.exit && graph_utils::is_sink(&self.graph, n))
-            .collect();
-        for n in sinks {
-            self.graph.add_edge(n, self.exit, CfgEdge::True);
-        }
-
-        debug_assert!(!algo::is_cyclic_directed(&self.graph));
-
-        let entry = self.entry;
-        let exit = self.exit;
-        let ret = self.structure_acyclic_sese_region(entry, exit);
-
-        self.graph.remove_node(self.exit);
-        self.graph.remove_node(self.entry);
+        let ret = self.graph.remove_node(self.entry).unwrap();
         debug_assert!(self.graph.node_count() == 0);
 
-        (ret, self.actx)
+        if let CfgNode::Code(ret) = ret {
+            (ret, self.actx)
+        } else {
+            panic!("last node wasn't a Code node")
+        }
     }
 
-    /// Converts the acyclic, single entry, single exit region bound by `header`
-    /// and `successor` into an `AstNode`.
+    /// Converts the given acyclic region headed by `header` into an `AstNode`.
     fn structure_acyclic_sese_region(
         &mut self,
         header: NodeIndex,
-        successor: NodeIndex,
+        region: &NodeSet,
     ) -> AstNode<'cd, A> {
-        let mut slice = graph_utils::slice(&self.graph, header, &NodeSet::from_iter(&[successor]));
+        let slice = graph_utils::slice(&self.graph, header, region);
         let reaching_conds = self.reaching_conditions(&slice);
-        // slice includes `successor`, but its not actually part of the region.
-        let _popped = slice.topo_order.pop();
-        debug_assert!(_popped == Some(successor));
-        for er in self.graph.edges_directed(successor, Incoming) {
-            slice.edges.remove(er.id());
-        }
 
         let mut region_graph =
             StableDiGraph::with_capacity(slice.topo_order.len(), slice.edges.len());
@@ -375,11 +386,10 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         let mut new_nodes = NodeSet::new();
         while succ_nodes.len() > 1 {
             for n in &*succ_nodes {
-                if n != self.exit
-                    && self
-                        .graph
-                        .neighbors_directed(n, Incoming)
-                        .all(|pred| loop_nodes.contains(pred))
+                if self
+                    .graph
+                    .neighbors_directed(n, Incoming)
+                    .all(|pred| loop_nodes.contains(pred))
                 {
                     // post-pone removal from `succ_nodes` b/c rust ownership
                     loop_nodes.insert(n);
@@ -402,8 +412,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
     /// Returns the new loop successor.
     fn funnel_abnormal_exits(
         &mut self,
-        loop_nodes: &NodeSet,
-        loop_continue: NodeIndex,
+        loop_nodes: &mut NodeSet,
         final_succ: NodeIndex,
         abn_succ_nodes: &NodeSet,
     ) -> NodeIndex {
@@ -415,10 +424,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             for exit_edge in exit_edges {
                 let break_node = self.graph.add_node(CfgNode::Code(AstNodeC::Break));
                 graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
-                // connect to `loop_continue` so that the graph slice from the loop
-                // header to `loop_continue` contains these "break" nodes
-                self.graph
-                    .add_edge(break_node, loop_continue, CfgEdge::False);
+                loop_nodes.insert(break_node);
             }
         }
 
@@ -441,10 +447,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
                     AstNodeC::Break,
                 ])));
                 graph_utils::retarget_edge(&mut self.graph, exit_edge, break_node);
-                // connect to `loop_continue` so that the graph slice from the loop
-                // header to `loop_continue` contains these "break" nodes
-                self.graph
-                    .add_edge(break_node, loop_continue, CfgEdge::False);
+                loop_nodes.insert(break_node);
             }
         }
 

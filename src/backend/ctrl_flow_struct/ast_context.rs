@@ -6,13 +6,15 @@ pub trait AstContext {
 }
 
 pub trait AstContextMut: AstContext {
-    /// Returns a new unused `Variable`.
+    /// Returns a new unused `Variable`. It must be initialized to some value,
+    /// but it doesn't matter what.
     fn mk_fresh_var(&mut self) -> Self::Variable;
 
     /// Returns a new unused `Variable` that is initialized with the given value.
     fn mk_fresh_var_with_val(&mut self, val: u64) -> Self::Variable;
 
-    /// Returns a new unused `BoolVariable`.
+    /// Returns a new unused `BoolVariable`. It must be initialized to some
+    /// value, but it doesn't matter what.
     fn mk_fresh_bool_var(&mut self) -> Self::BoolVariable;
 
     /// Returns a `Condition` that represents `var` being equal to `val`.
