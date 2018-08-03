@@ -69,8 +69,8 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    fn dummy_goto(&mut self) -> NodeIndex {
-        self.last_action = self.cfg.dummy_goto(self.last_action);
+    fn basic_block(&mut self) -> NodeIndex {
+        self.last_action = self.cfg.basic_block(self.last_action);
         self.last_action
     }
 
@@ -345,7 +345,7 @@ impl<'a> CCFGBuilder<'a> {
                 let n = self.recover_action(node);
                 self.action_map.insert(node, n);
             } else if self.ssa.is_action(node) {
-                let n = self.dummy_goto();
+                let n = self.basic_block();
                 self.action_map.insert(node, n);
             };
         }
