@@ -276,7 +276,6 @@ impl CCFG {
             radeco_warn!("More than one Normal Edges found");
         }
         let if_node = self.conditional(condition, if_then, if_else, prev);
-        self.add_edge(prev, if_node, CCFGEdge::Action(ActionEdge::Normal));
         if let Some(&(next, idx)) = es.first() {
             self.g.remove_edge(idx);
             self.add_edge(if_node, next, CCFGEdge::Action(ActionEdge::Normal));
@@ -309,7 +308,6 @@ impl CCFG {
         let goto_node = if let Some(&(prev, idx)) = es.first() {
             self.g.remove_edge(idx);
             let goto_node = self.add_goto(dst, label_str, prev);
-            self.add_edge(prev, goto_node, CCFGEdge::Action(ActionEdge::Normal));
             goto_node
         } else {
             let entry = self.entry;

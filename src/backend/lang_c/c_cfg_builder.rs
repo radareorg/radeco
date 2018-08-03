@@ -297,7 +297,7 @@ impl<'a> CCFGBuilder<'a> {
         if let Some(succ) = self.ssa.unconditional_block(prev_block) {
             if let Some(_) = self.ssa.selector_in(prev_block) {
                 // TODO
-                radeco_trace!("CCFGBuilder::insert_jumps INDIRET JMP");
+                radeco_trace!("CCFGBuilder::insert_jump INDIRET JMP");
             } else {
                 self.handle_goto(cur_block, succ);
             }
