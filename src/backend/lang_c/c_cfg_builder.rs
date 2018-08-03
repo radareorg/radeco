@@ -253,10 +253,9 @@ impl<'a> CCFGBuilder<'a> {
     fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex,
                  false_node: NodeIndex) {
         radeco_trace!("CCFGBuilder::handle_if");
-        let cfg_node = self.action_map.get(&ssa_node).cloned().expect(
-            "The node should be \
-             added to action_map",
-        );
+        let cfg_node = self.action_map.get(&ssa_node)
+            .and_then(|&n| self.cfg.preds_of(n).first().cloned())
+            .expect("This should not be `None`");
         // Add goto statement as `if then` node
         let goto_then = {
             let dst_node = self.action_map.get(&true_node).cloned().expect(

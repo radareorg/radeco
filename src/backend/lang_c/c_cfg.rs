@@ -544,6 +544,17 @@ impl CCFG {
     pub fn dot_str(&self) -> String {
         format!("{:?}", Dot::new(&self.g))
     }
+
+    pub fn preds_of(&self, node: CCFGRef) -> Vec<NodeIndex> {
+        self.g.edges_directed(node, Direction::Incoming)
+            .into_iter()
+            .filter_map(|e| {
+                match e.weight() {
+                    CCFGEdge::Action(ActionEdge::Normal) => Some(e.source()),
+                    _ => None,
+                }
+            }).collect::<Vec<_>>()
+    }
 }
 
 /// CCFG should meet following conditions.
