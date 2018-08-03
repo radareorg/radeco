@@ -631,6 +631,7 @@ impl CCFGVerifier {
             match (edge.weight(), cast.g.node_weight(edge.target())) {
                 (CCFGEdge::Action(_), Some(&CCFGNode::Action(_)))
                 | (CCFGEdge::Value(_), Some(&CCFGNode::Value(_)))
+                | (_, Some(&CCFGNode::Unknown))
                 | (CCFGEdge::Action(ActionEdge::GotoDst), Some(&CCFGNode::Entry)) => {},
                 _ => {
                     let error = format!("{:?} {:?}", edge.weight(),
