@@ -6,7 +6,7 @@
 
 use super::c_ast;
 use super::c_ast::Ty;
-use super::c_cfg::CCFG;
+use super::c_cfg::{CCFG, CCFGRef};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MOpcode, MAddress};
 use middle::ssa::cfg_traits::CFG;
@@ -42,16 +42,16 @@ fn ret_value_string(rfn: &RadecoFunction) -> Option<String> {
     ret_reg_opt.unwrap().ret
 }
 
+type SSARef = NodeIndex;
 // CCFGBuilder constructs CCFG from RadecoFunction
 struct CCFGBuilder<'a> {
     cfg: CCFG,
-    // NodeIndex of CCFG
-    last_action: NodeIndex,
+    last_action: CCFGRef,
     rfn: &'a RadecoFunction,
     // SSA of RadecoFunction
     ssa: &'a SSAStorage,
     fname_map: &'a HashMap<u64, String>,
-    action_map: HashMap<NodeIndex, NodeIndex>,
+    action_map: HashMap<SSARef, CCFGRef>,
     datamap: CCFGDataMap<'a>,
 }
 
@@ -69,18 +69,18 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    fn basic_block(&mut self) -> NodeIndex {
+    fn basic_block(&mut self) -> CCFGRef {
         self.last_action = self.cfg.basic_block(self.last_action);
         self.last_action
     }
 
-    fn assign(&mut self, dst: NodeIndex, src: NodeIndex) -> NodeIndex {
+    fn assign(&mut self, dst: CCFGRef, src: CCFGRef) -> CCFGRef {
         self.last_action = self.cfg.assign(dst, src, self.last_action);
         self.last_action
     }
 
     // Retrieve CCFG's return value node of function call
-    fn return_node(&self, call_node: NodeIndex) -> Option<NodeIndex> {
+    fn return_node(&self, call_node: SSARef) -> Option<SSARef> {
         let ret_reg_name_opt = ret_value_string(self.rfn);
         if ret_reg_name_opt.is_none() {
             return None;
@@ -97,7 +97,7 @@ impl<'a> CCFGBuilder<'a> {
         return None;
     }
 
-    fn args_inorder(&self, call_node: NodeIndex) -> Vec<NodeIndex> {
+    fn args_inorder(&self, call_node: SSARef) -> Vec<SSARef> {
         let call_info = utils::call_info(call_node, self.ssa).expect("This should not be `None`");
         if self.rfn.callconv.is_none() {
             return Vec::new();
@@ -124,7 +124,7 @@ impl<'a> CCFGBuilder<'a> {
         args.into_iter().map(|(_, n)| n).collect()
     }
 
-    fn call_action(&mut self, call_node: NodeIndex) -> NodeIndex {
+    fn call_action(&mut self, call_node: SSARef) -> CCFGRef {
         let call_info = utils::call_info(call_node, self.ssa).expect("This should not be `None`");
         let callee_node = call_info.target;
         let func_name = {
@@ -155,13 +155,13 @@ impl<'a> CCFGBuilder<'a> {
         self.last_action
     }
 
-    fn addr_str(&self, node: NodeIndex) -> String {
+    fn addr_str(&self, node: SSARef) -> String {
         self.ssa.address(node).map(|a| format!("{}", a)).unwrap_or(
             "unknown".to_string(),
         )
     }
 
-    fn recover_action(&mut self, node: NodeIndex) -> NodeIndex {
+    fn recover_action(&mut self, node: SSARef) -> CCFGRef {
         debug_assert!(self.is_recover_action(node));
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         radeco_trace!("CCFGBuilder::recover {:?} @ {:?}", op, node);
@@ -202,7 +202,7 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    fn is_recover_action(&self, node: NodeIndex) -> bool {
+    fn is_recover_action(&self, node: SSARef) -> bool {
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         match op {
             MOpcode::OpCall | MOpcode::OpStore => true,
@@ -210,14 +210,14 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    fn get_block_addr(&self, block: NodeIndex) -> Option<MAddress> {
+    fn get_block_addr(&self, block: SSARef) -> Option<MAddress> {
         match self.ssa.g[block] {
             NodeData::BasicBlock(addr, _) => Some(addr),
             _ => None,
         }
     }
 
-    fn gen_label(&self, block: NodeIndex) -> String {
+    fn gen_label(&self, block: SSARef) -> String {
         if let Some(addr) = self.get_block_addr(block) {
             format!("addr_{:}", addr).to_string()
         } else {
@@ -225,11 +225,9 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    // ssa_node: SSA NodeIndex for goto statement
-    // succ: SSA NodeIndex for destination node
-    fn handle_goto(&mut self, ssa_node: NodeIndex, succ: NodeIndex) {
+    fn handle_goto(&mut self, _next: SSARef, succ: SSARef) {
         radeco_trace!("CCFGBuilder::handle goto");
-        let cfg_node = self.action_map.get(&ssa_node).cloned().expect(
+        let next = self.action_map.get(&_next).cloned().expect(
             "The node should be \
              added to action_map",
         );
@@ -237,9 +235,9 @@ impl<'a> CCFGBuilder<'a> {
             "This should not be None",
         );
         let label = self.gen_label(succ);
-        let goto_node = self.cfg.insert_goto_before(cfg_node, succ_node, &label);
+        let goto_node = self.cfg.insert_goto_before(next, succ_node, &label);
         if is_debug() {
-            let addr = self.addr_str(ssa_node);
+            let addr = self.addr_str(_next);
             self.cfg.debug_info_at(
                 goto_node,
                 format!("JMP {:?} @ {}", succ_node, addr),
@@ -247,13 +245,10 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    // ssa_node: SSA NodeIndex for if statement
-    // selector: SSA NodeIndex for condition expression
-    // true_node: SSA NodeIndex for if-then block
-    fn handle_if(&mut self, ssa_node: NodeIndex, selector: NodeIndex, true_node: NodeIndex,
-                 false_node: NodeIndex) {
+    fn handle_if(&mut self, _prev: SSARef, selector: SSARef, true_node: SSARef,
+                 false_node: SSARef) {
         radeco_trace!("CCFGBuilder::handle_if");
-        let cfg_node = self.action_map.get(&ssa_node)
+        let prev = self.action_map.get(&_prev)
             .and_then(|&n| self.cfg.preds_of(n).first().cloned())
             .expect("This should not be `None`");
         // Add goto statement as `if then` node
@@ -282,9 +277,9 @@ impl<'a> CCFGBuilder<'a> {
         let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(
             self.cfg.unknown,
         );
-        let if_node = self.cfg.insert_conditional(cond, goto_then, Some(goto_else), cfg_node);
+        let if_node = self.cfg.insert_conditional(cond, goto_then, Some(goto_else), prev);
         if is_debug() {
-            let addr = self.addr_str(ssa_node);
+            let addr = self.addr_str(prev);
             self.cfg.debug_info_at(
                 goto_then,
                 format!("IF JMP {:?} @ {}", if_node, addr),
@@ -292,7 +287,7 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
-    fn insert_jump(&mut self, cur_block: NodeIndex, prev_block: NodeIndex) {
+    fn insert_jump(&mut self, cur_block: SSARef, prev_block: SSARef) {
         if let Some(succ) = self.ssa.unconditional_block(prev_block) {
             if let Some(_) = self.ssa.selector_in(prev_block) {
                 // TODO
@@ -356,11 +351,11 @@ struct CCFGDataMap<'a> {
     ssa: &'a SSAStorage,
     // Hashmap from node of SSAStorage to one of self.data_graph
     // a map from node of data_graph to one of CCFG's value
-    pub var_map: HashMap<NodeIndex, NodeIndex>,
+    pub var_map: HashMap<SSARef, CCFGRef>,
     // a map from node of data_graph to one of CCFG's register
-    pub reg_map: HashMap<String, NodeIndex>,
-    pub const_nodes: HashSet<NodeIndex>,
-    seen: HashSet<NodeIndex>,
+    pub reg_map: HashMap<String, CCFGRef>,
+    pub const_nodes: HashSet<SSARef>,
+    seen: HashSet<SSARef>,
 }
 
 impl<'a> CCFGDataMap<'a> {
@@ -375,7 +370,6 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    // Returns data map from SSAStorage's NodeIndex to CCFG's NodeIndex
     fn recover_data(
         rfn: &'a RadecoFunction,
         ast: &mut CCFG,
@@ -396,8 +390,8 @@ impl<'a> CCFGDataMap<'a> {
 
     fn handle_binop(
         &mut self,
-        ret_node: NodeIndex,
-        ops: Vec<NodeIndex>,
+        ret_node: SSARef,
+        ops: Vec<SSARef>,
         expr: c_ast::Expr,
         ast: &mut CCFG,
     ) {
@@ -417,8 +411,8 @@ impl<'a> CCFGDataMap<'a> {
 
     fn handle_uniop(
         &mut self,
-        ret_node: NodeIndex,
-        op: NodeIndex,
+        ret_node: SSARef,
+        op: SSARef,
         expr: c_ast::Expr,
         ast: &mut CCFG,
     ) {
@@ -432,8 +426,8 @@ impl<'a> CCFGDataMap<'a> {
 
     fn handle_cast(
         &mut self,
-        ret_node: NodeIndex,
-        op: NodeIndex,
+        ret_node: SSARef,
+        op: SSARef,
         expr: c_ast::Expr,
         ast: &mut CCFG,
     ) {
@@ -445,13 +439,13 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    fn deref(&self, node: NodeIndex, ast: &mut CCFG) -> NodeIndex {
+    fn deref(&self, node: SSARef, ast: &mut CCFG) -> CCFGRef {
         radeco_trace!("DeRef {:?}", node);
         let n = self.var_map.get(&node).cloned().unwrap_or(ast.unknown);
         ast.deref(n)
     }
 
-    fn handle_phi(&mut self, node: NodeIndex) {
+    fn handle_phi(&mut self, node: SSARef) {
         debug_assert!(self.ssa.is_phi(node));
         radeco_trace!("CCFGBuilder::handle_phi {:?}", node);
         let ops = self.ssa.operands_of(node);
@@ -469,7 +463,7 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    fn update_values(&mut self, ret_node: NodeIndex, ast: &mut CCFG) {
+    fn update_values(&mut self, ret_node: SSARef, ast: &mut CCFG) {
         debug_assert!(self.ssa.is_expr(ret_node));
         radeco_trace!("CCFGBuilder::update_values {:?}", ret_node);
         if self.seen.contains(&ret_node) {
@@ -545,7 +539,7 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    fn update_data_graph_by_call(&mut self, call_node: NodeIndex, ast: &mut CCFG) {
+    fn update_data_graph_by_call(&mut self, call_node: SSARef, ast: &mut CCFG) {
         radeco_trace!("CCFGBuilder::update_data_graph_by_call {:?}", call_node);
         let ret_reg_name_opt = ret_value_string(self.rfn);
         if ret_reg_name_opt.is_none() {
@@ -603,7 +597,7 @@ impl<'a> CCFGDataMap<'a> {
 
 struct CCFGBuilderVerifier {}
 
-// type Verifier = Fn(NodeIndex, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
+// type Verifier = Fn(SSARef, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
 impl CCFGBuilderVerifier {
     const DELIM: &'static str = "; ";
 
@@ -636,7 +630,7 @@ impl CCFGBuilderVerifier {
     }
 
     // All argument node exist in SSAStorage
-    fn verify_args_inorder_at(builder: &CCFGBuilder, call_node: NodeIndex) -> Result<(), String> {
+    fn verify_args_inorder_at(builder: &CCFGBuilder, call_node: SSARef) -> Result<(), String> {
         let mut errors = Vec::new();
         let args = builder.args_inorder(call_node);
         for arg in args {
@@ -653,7 +647,7 @@ impl CCFGBuilderVerifier {
     }
 
     // Verify `assign` made `CCFG::Action(ActionNode::Assignment)` node.
-    fn verify_assign_at(builder: &mut CCFGBuilder, node: NodeIndex) -> Result<(), String> {
+    fn verify_assign_at(builder: &mut CCFGBuilder, node: SSARef) -> Result<(), String> {
         let ops = builder.ssa.operands_of(node);
         let dst = builder.datamap.var_map.get(&ops[1]).map(|&x| {
             builder.cfg.derefed_node(x).unwrap_or(x)
@@ -677,7 +671,7 @@ impl CCFGBuilderVerifier {
     // Verify `call_action` made `CCFG::Action(ActionNode::Call(_))` node.
     fn verify_call_action_at(
         builder: &mut CCFGBuilder,
-        call_node: NodeIndex,
+        call_node: SSARef,
     ) -> Result<(), String> {
         let call_node = builder.call_action(call_node);
         let is_err = builder.last_action != call_node || !builder.cfg.is_call_node(call_node);
@@ -691,7 +685,7 @@ impl CCFGBuilderVerifier {
 
 struct CCFGDataMapVerifier {}
 
-type Verifier = Fn(NodeIndex, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
+type Verifier = Fn(SSARef, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
 impl CCFGDataMapVerifier {
     const DELIM: &'static str = "; ";
 
@@ -790,10 +784,9 @@ impl CCFGDataMapVerifier {
         }
     }
 
-    // node: NodeIndex of SSAStorage
     fn verify_prepare_regs_of(
         datamap: &CCFGDataMap,
-        node: NodeIndex,
+        node: SSARef,
         name: String,
     ) -> Result<(), String> {
         let mut errors = Vec::new();
@@ -867,7 +860,7 @@ impl CCFGDataMapVerifier {
     }
 
     fn verify_handle_uniop(
-        node: NodeIndex,
+        node: SSARef,
         ast: &mut CCFG,
         datamap: &mut CCFGDataMap,
     ) -> Result<(), String> {
@@ -892,7 +885,7 @@ impl CCFGDataMapVerifier {
     }
 
     fn verify_handle_binop(
-        node: NodeIndex,
+        node: SSARef,
         ast: &mut CCFG,
         datamap: &mut CCFGDataMap,
     ) -> Result<(), String> {
@@ -917,7 +910,7 @@ impl CCFGDataMapVerifier {
     }
 
     fn verify_handle_cast(
-        node: NodeIndex,
+        node: SSARef,
         ast: &mut CCFG,
         datamap: &mut CCFGDataMap,
     ) -> Result<(), String> {
