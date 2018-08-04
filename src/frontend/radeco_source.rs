@@ -435,17 +435,10 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
             }
 
             {
-                let strings = r2.borrow_mut().strings(false).expect("Unable to load String info from r2");
+                let strings = r2.borrow_mut().strings(true).expect("Unable to load String info from r2");
                 let json_str = serde_json::to_string(&strings).expect("Failed to encode to json");
                 fsource.write_file(suffix::STRING, &json_str);
             }
-
-            {
-                let sections = r2.borrow_mut().sections().expect("Unable to load section info from r2");
-                let json_str = serde_json::to_string(&sections).expect("Failed to encode to json");
-                fsource.write_file(suffix::SECTION, &json_str);
-            }
-
 
             {
                 let imports = r2.borrow_mut().imports().expect("Unable to load import info from r2");
@@ -453,11 +446,12 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
                 fsource.write_file(suffix::IMPORT, &json_str);
             }
 
-            {
-                let exports = r2.borrow_mut().exports().expect("Unable to load export info from r2");
-                let json_str = serde_json::to_string(&exports).expect("Failed to encode to json");
-                fsource.write_file(suffix::EXPORT, &json_str);
-            }
+            // FIXME: Error occurs during `r2.borrow_mut().exports()`
+            // {
+            //     let exports = r2.borrow_mut().exports().expect("Unable to load export info from r2");
+            //     let json_str = serde_json::to_string(&exports).expect("Failed to encode to json");
+            //     fsource.write_file(suffix::EXPORT, &json_str);
+            // }
 
             {
                 let relocs = r2.borrow_mut().relocs().expect("Unable to load reloc info from r2");
@@ -479,5 +473,35 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
         }
 
         fsource
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use std::rc::Rc;
+    use r2pipe::r2::R2;
+    use frontend::radeco_containers::*;
+    use frontend::radeco_source::*;
+
+    #[test]
+    fn file_source_test() {
+        let paths = ["./ex-bins/bin1",
+            "./ex-bins/simple", "./ex-bins/simple2"];
+        for p in paths.iter() {
+            let path = Path::new(p);
+            let base_name = path.file_name()
+                .unwrap().to_str().unwrap();
+            write_source_test(p);
+            FileSource::open(base_name);
+        }
+    }
+
+    fn write_source_test(proj_path: &str) {
+        let mut r2 = R2::new(Some(proj_path))
+            .expect("Unable to open r2");
+        r2.analyze_all();
+        let r2w = Rc::new(RefCell::new(r2));
+        FileSource::from(r2w);
     }
 }
