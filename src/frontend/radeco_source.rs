@@ -257,7 +257,7 @@ mod suffix {
     pub const IMPORT: &'static str = "imports";
     pub const EXPORT: &'static str = "exports";
     pub const RELOC: &'static str = "relocs";
-    pub const LIBRALY: &'static str = "libraries";
+    pub const LIBRARY: &'static str = "libraries";
     pub const LOCAL: &'static str = "locals";
     pub const CCINFO: &'static str = "ccinfo";
     pub const ENTRY: &'static str = "entrypoint";
@@ -315,7 +315,7 @@ impl Source for FileSource {
     }
 
     fn libraries(&self) -> Result<Vec<String>, SourceErr> {
-        Ok(serde_json::from_str(&self.read_file(suffix::LIBRALY)?)?)
+        Ok(serde_json::from_str(&self.read_file(suffix::LIBRARY)?)?)
     }
 
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
@@ -376,10 +376,44 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
             }
 
             for f in fns {
-                let result = r2.instructions_at(f.offset.unwrap()).expect("Failed to load instructions");
-                let json_str = serde_json::to_string(&result).expect("Failed to encode to json");
-                let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, f.offset.unwrap());
-                fsource.write_file(&suffix, &json_str)
+                {
+                    let result = r2.instructions_at(f.offset.unwrap()).expect("Failed to load instructions");
+                    let json_str = serde_json::to_string(&result).expect("Failed to encode to json");
+                    let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, f.offset.unwrap());
+                    fsource.write_file(&suffix, &json_str)
+                }
+
+                {
+                    let name = f.name.clone().unwrap();
+                    let result = r2.disassemble_function(&name).map(|ops| {
+                        LFunctionInfo {
+                            addr: f.offset,
+                            name: f.name.clone(),
+                            ops: Some(ops),
+                            size: f.size,
+                        }}).expect(&format!("Failed to load instructions @ {}", name));
+                    let json_str = serde_json::to_string(&result).expect("Failed to encode to json");
+                    let suffix = format!("{}_{}", suffix::FUNCTION, name);
+                    fsource.write_file(&suffix, &json_str)
+                }
+
+                {
+                    let result = r2.locals_of(f.offset.unwrap())
+                        .expect("Failed to load locals");
+                    let json_str = serde_json::to_string(&result)
+                        .expect("Failed to encode to json");
+                    let suffix = format!("{}_{}", suffix::LOCAL, f.offset.unwrap());
+                    fsource.write_file(&suffix, &json_str)
+                }
+
+                {
+                    let result = r2.cc_info_of(f.offset.unwrap())
+                        .expect("Failed to load cc info");
+                    let json_str = serde_json::to_string(&result)
+                        .expect("Failed to encode to json");
+                    let suffix = format!("{}_{}", suffix::CCINFO, f.offset.unwrap());
+                    fsource.write_file(&suffix, &json_str)
+                }
             }
 
             {
@@ -404,6 +438,43 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
                 let strings = r2.borrow_mut().strings(false).expect("Unable to load String info from r2");
                 let json_str = serde_json::to_string(&strings).expect("Failed to encode to json");
                 fsource.write_file(suffix::STRING, &json_str);
+            }
+
+            {
+                let sections = r2.borrow_mut().sections().expect("Unable to load section info from r2");
+                let json_str = serde_json::to_string(&sections).expect("Failed to encode to json");
+                fsource.write_file(suffix::SECTION, &json_str);
+            }
+
+
+            {
+                let imports = r2.borrow_mut().imports().expect("Unable to load import info from r2");
+                let json_str = serde_json::to_string(&imports).expect("Failed to encode to json");
+                fsource.write_file(suffix::IMPORT, &json_str);
+            }
+
+            {
+                let exports = r2.borrow_mut().exports().expect("Unable to load export info from r2");
+                let json_str = serde_json::to_string(&exports).expect("Failed to encode to json");
+                fsource.write_file(suffix::EXPORT, &json_str);
+            }
+
+            {
+                let relocs = r2.borrow_mut().relocs().expect("Unable to load reloc info from r2");
+                let json_str = serde_json::to_string(&relocs).expect("Failed to encode to json");
+                fsource.write_file(suffix::RELOC, &json_str);
+            }
+
+            {
+                let libraries = r2.borrow_mut().libraries().expect("Unable to load library info from r2");
+                let json_str = serde_json::to_string(&libraries).expect("Failed to encode to json");
+                fsource.write_file(suffix::LIBRARY, &json_str);
+            }
+
+            {
+                let entry = r2.borrow_mut().entrypoint().expect("Unable to load entry info from r2");
+                let json_str = serde_json::to_string(&entry).expect("Failed to encode to json");
+                fsource.write_file(suffix::ENTRY, &json_str);
             }
         }
 
