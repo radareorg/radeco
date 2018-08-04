@@ -50,7 +50,7 @@ fn main() {
     let proj_name = env::args().nth(env::args().len() - 1).unwrap();
     let mut rproj = {
         if is_filesource {
-        let source = FileSource::open(&proj_name);
+            let source = FileSource::open(&proj_name);
             ProjectLoader::new().source(Rc::new(source)).load()
         } else {
             ProjectLoader::new().path(&proj_name).load()
