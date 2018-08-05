@@ -1,0 +1,1 @@
+{"ret":"rax","args":["rdi","rsi","rdx","rcx","r8","r9"],"float_args":["xmm0","xmm1","xmm2","xmm3","xmm4"]}

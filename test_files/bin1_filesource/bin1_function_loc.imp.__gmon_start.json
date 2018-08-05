@@ -1,0 +1,1 @@
+{"addr":4195472,"name":"loc.imp.__gmon_start","ops":[{"esil":"0x200b92,rip,+,[8],rip,=","offset":4195472,"opcode":"jmp qword [rip + 0x200b92]","type":"ujmp","size":6,"bytes":"ff25920b2000"}],"size":6}

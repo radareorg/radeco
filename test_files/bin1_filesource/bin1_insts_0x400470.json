@@ -1,0 +1,1 @@
+[{"esil":"0x200ba2,rip,+,[8],rip,=","offset":4195440,"opcode":"jmp qword [rip + 0x200ba2]","type":"ujmp","size":6,"bytes":"ff25a20b2000"}]
