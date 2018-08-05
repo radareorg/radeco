@@ -1,0 +1,1 @@
+{"addr":4195456,"name":"sym.imp.__libc_start_main","ops":[{"esil":"0x200b9a,rip,+,[8],rip,=","offset":4195456,"opcode":"jmp qword [rip + 0x200b9a]","type":"ujmp","size":6,"bytes":"ff259a0b2000"}],"size":6}

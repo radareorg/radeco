@@ -1,0 +1,1 @@
+{"addr":4195488,"name":"sym.imp.__isoc99_scanf","ops":[{"esil":"0x200b8a,rip,+,[8],rip,=","offset":4195488,"opcode":"jmp qword [rip + 0x200b8a]","type":"ujmp","size":6,"bytes":"ff258a0b2000"}],"size":6}

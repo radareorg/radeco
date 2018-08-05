@@ -1,0 +1,1 @@
+{"addr":4196000,"name":"sym.__libc_csu_fini","ops":[{"esil":"rsp,[8],rip,=,8,rsp,+=","offset":4196000,"opcode":"ret","type":"ret","size":2,"bytes":"f3c3"}],"size":2}

@@ -1,0 +1,1 @@
+[{"name":"local_ch","kind":"var","type":"int","ref":{"base":"rbp","offset":-12}},{"name":"local_8h","kind":"var","type":"int","ref":{"base":"rbp","offset":-8}},{"name":"local_4h","kind":"var","type":"int","ref":{"base":"rbp","offset":-4}}]

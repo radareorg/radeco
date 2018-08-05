@@ -1,0 +1,1 @@
+[{"bind":"GLOBAL","name":"puts","ordinal":1,"plt":4195440,"type":"FUNC"},{"bind":"GLOBAL","name":"__libc_start_main","ordinal":2,"plt":4195456,"type":"FUNC"},{"bind":"WEAK","name":"__gmon_start__","ordinal":3,"plt":4195472,"type":"NOTYPE"},{"bind":"GLOBAL","name":"__isoc99_scanf","ordinal":4,"plt":4195488,"type":"FUNC"}]
