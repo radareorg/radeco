@@ -16,9 +16,10 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use petgraph::prelude::NodeIndex;
 
-use analysis::cse::ssasort::Sorter;
 use frontend::radeco_containers::RadecoModule;
+
 use middle::ir::MOpcode;
+use middle::ssa::sorter::Sorter;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, SSAMod};
 use middle::ssa::ssastorage::SSAStorage;

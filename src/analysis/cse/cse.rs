@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
+use middle::ssa::sorter::Sorter;
 use middle::ir::MOpcode;
-use super::ssasort::Sorter;
 
 #[derive(Debug)]
 pub struct CSE<'a, I, S>

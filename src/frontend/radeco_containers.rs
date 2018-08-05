@@ -40,7 +40,7 @@ use middle::regfile::{SubRegisterFile, RegisterUsage};
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::{SSA, NodeType};
 
-use middle::ssa::ssastorage::SSAStorage;
+use middle::ssa::ssastorage::{SSAStorage, Walker};
 use petgraph::Direction;
 
 use petgraph::graph::{NodeIndex, Graph};
@@ -797,18 +797,18 @@ impl<'a> ModuleLoader<'a> {
             if self.parallel {
                 let ascc = self.assume_cc;
                 rmod.functions.par_iter_mut().for_each(|(_, rfn)| {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, ascc, true);
+                    SSAConstruct::<Walker, SSAStorage>::construct(rfn, &reg_p, ascc, true);
                 });
             } else {
                 for rfn in rmod.functions.values_mut() {
-                    SSAConstruct::<SSAStorage>::construct(rfn, &reg_p, self.assume_cc, true);
+                    SSAConstruct::<Walker, SSAStorage>::construct(rfn, &reg_p, self.assume_cc, true);
                 }
             }
         }
 
         if self.stub_imports {
             for ifn in rmod.imports.values_mut() {
-                SSAConstruct::<SSAStorage>::construct(&mut ifn.rfn.borrow_mut(), &reg_p, self.assume_cc, true);
+                SSAConstruct::<Walker, SSAStorage>::construct(&mut ifn.rfn.borrow_mut(), &reg_p, self.assume_cc, true);
             }
         }
 

@@ -16,6 +16,7 @@ pub mod ssa {
     pub mod error;
     pub mod ssadot;
     pub mod memoryssa;
+    pub mod sorter;
     #[allow(non_snake_case)] pub mod verifier;
     pub mod utils;
 }

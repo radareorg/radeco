@@ -11,11 +11,14 @@
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::collections::Bound::Included;
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 use std::u64;
 
 use r2api::structs::{LOpInfo};
-use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueInfo};
+
+use middle::ssa::ssa_traits::{SSAMod, SSAExtra, SSAWalk, ValueInfo};
 use middle::ssa::graph_traits::{Graph, EdgeInfo, ConditionInfo};
+use middle::ssa::sorter::Sorter;
 use middle::ir::{self, MAddress, MOpcode};
 
 use middle::ssa::ssa_traits::{NodeType, NodeData};
@@ -25,11 +28,12 @@ pub type VarId = u64;
 
 const UNCOND_EDGE: u8 = 2;
 
-pub struct PhiPlacer<'a, T> 
-    where T: 'a + SSAExtra +
-        SSAMod<BBInfo = MAddress,
-               ActionRef = <T as Graph>::GraphNodeRef,
-               CFEdgeRef = <T as Graph>::GraphEdgeRef>
+pub struct PhiPlacer<'a, I, T> 
+    where I: Iterator<Item = T::ValueRef>,
+          T: 'a + SSAExtra + SSAWalk<I> + 
+            SSAMod<BBInfo = MAddress,
+                ActionRef = <T as Graph>::GraphNodeRef,
+                CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
     current_def: Vec<BTreeMap<MAddress, T::ValueRef>>,
     incomplete_phis: HashMap<MAddress, HashMap<VarId, T::ValueRef>>,
@@ -42,17 +46,19 @@ pub struct PhiPlacer<'a, T>
     sealed_blocks: HashSet<T::ActionRef>,
     ssa: &'a mut T,
     unexplored_addr: u64,
+    foo: PhantomData<I>,
 }
 
-impl<'a, T> PhiPlacer<'a, T> 
-    where T: 'a + SSAExtra +
-        SSAMod<BBInfo = MAddress,
-               ActionRef = <T as Graph>::GraphNodeRef,
-               CFEdgeRef = <T as Graph>::GraphEdgeRef>
+impl<'a, I, T> PhiPlacer<'a, I, T> 
+    where I: Iterator<Item = T::ValueRef>,
+          T: 'a + SSAExtra + SSAWalk<I> + 
+            SSAMod<BBInfo = MAddress,
+                ActionRef = <T as Graph>::GraphNodeRef,
+                CFEdgeRef = <T as Graph>::GraphEdgeRef>
 {
 
     /// Create a new instance of phiplacer
-    pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) -> PhiPlacer<'a, T> {
+    pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) -> PhiPlacer<'a, I, T> {
         PhiPlacer {
             blocks: BTreeMap::new(),
             current_def: Vec::new(),
@@ -65,6 +71,7 @@ impl<'a, T> PhiPlacer<'a, T>
             ssa: ssa,
             unexplored_addr: u64::max_value() - 1,
             variable_types: Vec::new(),
+            foo: PhantomData,
         }
     }
 
@@ -1022,6 +1029,12 @@ impl<'a, T> PhiPlacer<'a, T>
                 }
                 (_, _) => { }
             }
+        }
+		
+        // Sort nodes' operands for SSA, to deal with commutative opcode.
+		{
+            let mut sorter = Sorter::new(self.ssa);
+            sorter.run();
         }
     }
 }
