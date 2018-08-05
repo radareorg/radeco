@@ -486,24 +486,9 @@ mod test {
 
     #[test]
     fn file_source_test() {
-        let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let paths = ["ex-bins/bin1",
-            "ex-bins/simple", "ex-bins/simple2"];
-        for p in paths.iter() {
-            let mut path = root_dir.clone();
-            path.push(p);
-            let base_name = path.file_name()
-                .unwrap().to_str().unwrap();
-            write_source_test(path.to_str().unwrap());
-            FileSource::open(base_name);
-        }
-    }
-
-    fn write_source_test(proj_path: &str) {
-        let mut r2 = R2::new(Some(proj_path))
-            .expect("Unable to open r2");
-        r2.analyze_all();
-        let r2w = Rc::new(RefCell::new(r2));
-        FileSource::from(r2w);
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("test_files/bin1_filesource/bin1");
+        let source = FileSource::open(path.to_str().unwrap());
+        ProjectLoader::new().source(Rc::new(source)).load();
     }
 }
