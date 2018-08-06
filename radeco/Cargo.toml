@@ -14,13 +14,18 @@ trace_log = ["radeco-lib/trace_log"]
 docopt = "*"
 rustc-serialize = "*"
 log = "*"
+base64 = "0.9.2"
 
 [dependencies.r2pipe]
 git = "https://github.com/radare/r2pipe.rs"
 
+[dependencies.r2api]
+git = "https://github.com/radare/radare2-r2pipe-api"
+
 [dependencies.radeco-lib]
 # path = "../radeco-lib"
 git = "https://github.com/radare/radeco-lib"
+branch = "dev"
 
 [profile.release]
 lto = true
