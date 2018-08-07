@@ -14,7 +14,6 @@ use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 use radeco_lib::backend::lang_c::c_cfg_builder;
 use radeco_lib::frontend::radeco_containers::*;
 use radeco_lib::middle::{dce, dot};
-use radeco_lib::middle::ir_reader::parse_il;
 use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::regfile::SubRegisterFile;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
@@ -82,11 +81,13 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
         }
         _ => {}
     };
-    if proj_opt.is_none() {
-        println!("Load a project first");
-        return;
-    }
-    let mut proj = proj_opt.as_mut().unwrap();
+    let mut proj = match proj_opt {
+        Some(proj) => proj,
+        None => {
+            println!("Load a project first");
+            return;
+        }
+    };
     match (op1, op2) {
         (Some(command::ANALYZE), Some("*")) => {
             let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
@@ -236,18 +237,6 @@ fn emit_ir(rfn: &RadecoFunction) -> String {
     let mut res = String::new();
     ir_writer::emit_il(&mut res, Some(rfn.name.to_string()), rfn.ssa()).unwrap();
     res
-}
-
-fn parse_ir(name: &str, ir_str: &str, regfile: Arc<SubRegisterFile>) {
-    println!("  [*] Testing IR parser");
-    let parsed = parse_il(ir_str, regfile.clone());
-    let mut res = String::new();
-    ir_writer::emit_il(&mut res, Some(name.to_string()), &parsed).unwrap();
-    for (orig, roundtrip) in ir_str.lines().zip(res.lines()) {
-        if orig != roundtrip {
-            println!("  FAILED TO ROUND-TRIP: \"{}\" => \"{}\"", orig, roundtrip);
-        }
-    }
 }
 
 fn emit_dot(ssa: &SSAStorage) -> String {
