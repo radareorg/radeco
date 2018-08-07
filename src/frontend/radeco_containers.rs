@@ -56,7 +56,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
-use std::collections::btree_map;
+use std::collections::{HashSet, btree_map};
 use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
@@ -1197,8 +1197,13 @@ impl RadecoFunction {
         }
     }
 
-    pub fn local_at(&self, node: NodeIndex) -> Option<VarBindings> {
-        self.binding_map.get(&node).cloned()
+    pub fn local_at(&self, mut node: NodeIndex, forward: bool) -> Option<VarBindings> {
+        let next = self.ssa.replaced_map.get(&node).cloned();
+        if next.is_some() && forward {
+            self.binding_map.get(&next.unwrap()).cloned()
+        } else {
+            self.binding_map.get(&node).cloned()
+        }
     }
 }
 
