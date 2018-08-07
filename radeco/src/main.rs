@@ -82,71 +82,72 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
         }
         _ => {}
     };
-    if let Some(proj) = proj_opt {
-        match (op1, op2) {
-            (Some(command::ANALYZE), Some("*")) => {
-                let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
-                    rmod.functions.values_mut()
-                });
-                for rfn in rfns {
-                    analyze(rfn);
-                }
-            }
-            (Some(command::FNLIST), _) => {
-                let funcs = fn_list(&proj);
-                println!("{:?}", funcs);
-            }
-            (Some(command::ANALYZE), Some(f)) => {
-                if let Some(rfn) = get_function_mut(f, proj) {
-                    analyze(rfn);
-                } else {
-                    println!("{} is not found", f);
-                }
-            }
-            (Some(command::DOT), Some(f)) => {
-                if let Some(rfn) = get_function(f, &proj) {
-                    println!("{}", emit_dot(rfn.ssa()));
-                } else {
-                    println!("{} is not found", f);
-                }
-            }
-            (Some(command::IR), Some(f)) => {
-                if let Some(rfn) = get_function(f, &proj) {
-                    println!("{}", emit_ir(rfn));
-                } else {
-                    println!("{} is not found", f);
-                }
-            }
-            (Some(command::DECOMPILE), Some(f)) => {
-                if let Some(rfn) = get_function(f, &proj) {
-                    let rmod = proj.iter().map(|i| i.module).next().unwrap();
-                    let func_name_map = rmod.functions
-                        .iter()
-                        .map(|(&addr, f)| (addr, f.name.to_string()))
-                        .collect();
-                    let strings = rmod.strings()
-                        .iter()
-                        .filter(|ref s| s.vaddr.is_some() && s.string.is_some())
-                        .cloned()
-                        .map(|s| {
-                            let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());
-                            let bytes = base64::decode(&_s).unwrap_or(Vec::new());
-                            let ret_string = match str::from_utf8(bytes.as_slice()) {
-                                Ok(v) => v.to_string(),
-                                Err(_e) => _s,
-                            };
-                            (addr, ret_string)
-                        })
-                        .collect();
-                    println!("{}", decompile(rfn, &func_name_map, &strings));
-                } else {
-                    println!("{} is not found", f);
-                }
-            }
-            _ => {}
-        }
-    } else {
+    if proj_opt.is_none() {
         println!("Load a project first");
+        return;
+    }
+    let mut proj = proj_opt.as_mut().unwrap();
+    match (op1, op2) {
+        (Some(command::ANALYZE), Some("*")) => {
+            let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
+                rmod.functions.values_mut()
+            });
+            for rfn in rfns {
+                analyze(rfn);
+            }
+        }
+        (Some(command::FNLIST), _) => {
+            let funcs = fn_list(&proj);
+            println!("{}", funcs.join("\n"));
+        }
+        (Some(command::ANALYZE), Some(f)) => {
+            if let Some(rfn) = get_function_mut(f, &mut proj) {
+                analyze(rfn);
+            } else {
+                println!("{} is not found", f);
+            }
+        }
+        (Some(command::DOT), Some(f)) => {
+            if let Some(rfn) = get_function(f, &proj) {
+                println!("{}", emit_dot(rfn.ssa()));
+            } else {
+                println!("{} is not found", f);
+            }
+        }
+        (Some(command::IR), Some(f)) => {
+            if let Some(rfn) = get_function(f, &proj) {
+                println!("{}", emit_ir(rfn));
+            } else {
+                println!("{} is not found", f);
+            }
+        }
+        (Some(command::DECOMPILE), Some(f)) => {
+            if let Some(rfn) = get_function(f, &proj) {
+                let rmod = proj.iter().map(|i| i.module).next().unwrap();
+                let func_name_map = rmod.functions
+                    .iter()
+                    .map(|(&addr, f)| (addr, f.name.to_string()))
+                    .collect();
+                let strings = rmod.strings()
+                    .iter()
+                    .filter(|ref s| s.vaddr.is_some() && s.string.is_some())
+                    .cloned()
+                    .map(|s| {
+                        let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());
+                        let bytes = base64::decode(&_s).unwrap_or(Vec::new());
+                        let ret_string = match str::from_utf8(bytes.as_slice()) {
+                            Ok(v) => v.to_string(),
+                            Err(_e) => _s,
+                        };
+                        (addr, ret_string)
+                    })
+                    .collect();
+                println!("{}", decompile(rfn, &func_name_map, &strings));
+            } else {
+                println!("{} is not found", f);
+            }
+        }
+        _ => {}
     }
 }
 
