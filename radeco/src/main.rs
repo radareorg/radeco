@@ -71,7 +71,7 @@ mod command {
 
 fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject>) {
     match (op1, op2) {
-        (Some("load"), Some(s)) => {
+        (Some(command::LOAD), Some(s)) => {
             let mut p = ProjectLoader::new().path(s).load();
             let regfile = p.regfile().clone();
             for mut xy in p.iter_mut() {
