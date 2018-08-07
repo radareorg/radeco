@@ -6,6 +6,7 @@
 
 pub mod ast_context;
 pub mod condition;
+pub mod export;
 
 mod ast;
 mod dedup_conds;
@@ -434,7 +435,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         }
 
         let abn_succ_iter = (1..).zip(abn_succ_nodes);
-        let struct_var = self.actx.mk_fresh_var_with_val(0);
+        let struct_var = self.actx.mk_fresh_var_zeroed();
 
         // replace abnormal exit edges with "break"
         for (exit_num, exit_target) in abn_succ_iter.clone() {

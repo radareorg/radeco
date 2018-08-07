@@ -352,6 +352,27 @@ impl<'cd, T> Condition<'cd, T> {
             &Expr(_, ref opn_v) => opn_v.iter().any(|opn| opn.contains_var(find_var)),
         }
     }
+
+    pub fn fold<F: Folder<T>>(self, mut folder: F) -> F::Output {
+        match self.0 {
+            &Var(inv, vr) => folder.var(inv == Negation::Normal, vr.0),
+            &Expr(Op::And, ref opn_v) => folder.and(opn_v.iter().cloned()),
+            &Expr(Op::Or, ref opn_v) => folder.or(opn_v.iter().cloned()),
+        }
+    }
+}
+
+pub trait Folder<T> {
+    type Output;
+    fn var(&mut self, negated: bool, var: &T) -> Self::Output;
+    fn and<'a, I>(&mut self, operands: I) -> Self::Output
+    where
+        I: IntoIterator<Item = Condition<'a, T>>,
+        T: 'a;
+    fn or<'a, I>(&mut self, operands: I) -> Self::Output
+    where
+        I: IntoIterator<Item = Condition<'a, T>>,
+        T: 'a;
 }
 
 struct ExprBuilder<'cd, T: 'cd> {
@@ -413,8 +434,7 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                     ExprView::new_or_panic(opn, self.op.dual())
                         .find_opn(p1_opn)
                         .map(|x| (opn, x))
-                })
-                .next();
+                }).next();
 
             if let Some((p2_opn, (inv, p2_found))) = opt_part_2 {
                 if inv == Negation::Normal {

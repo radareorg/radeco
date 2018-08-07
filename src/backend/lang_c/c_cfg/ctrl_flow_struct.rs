@@ -1,15 +1,19 @@
 use super::{ActionEdge, ActionNode, CCFGEdge, CCFGNode, CCFG};
 use backend::ctrl_flow_struct as flstr;
 use backend::ctrl_flow_struct::ast_context::{AstContext, AstContextMut};
-use backend::lang_c::c_ast;
+use backend::lang_c::c_ast::{self, CAST};
 
+use petgraph::graph::EdgeReference;
 use petgraph::prelude::*;
 use petgraph::visit::{Dfs, EdgeFiltered, IntoNodeReferences, VisitMap};
 
-pub fn structure_and_convert(ccfg: CCFG) -> Option<c_ast::CAST> {
+pub fn structure_and_convert(ccfg: CCFG) -> Option<CAST> {
     let cstore = flstr::condition::Storage::new();
     let flstr_cfg = import(cstore.cctx(), ccfg)?;
-    unimplemented!()
+    let (flstr_ast, ccfg) = flstr_cfg.structure_whole();
+    flstr::export::to_c_ast(&ccfg, flstr_ast)
+        .map_err(|e| radeco_err!("{}", e))
+        .ok()
 }
 
 fn import<'cd>(
@@ -17,15 +21,20 @@ fn import<'cd>(
     ccfg: CCFG,
 ) -> Option<flstr::ControlFlowGraph<'cd, CCFG>> {
     let (new_graph, entry) = {
-        let ef = EdgeFiltered::from_fn(&ccfg.g, |e| {
-            // ignore `Normal` edges from `Goto` nodes
-            match (&ccfg.g[e.source()], e.weight()) {
-                (CCFGNode::Action(ActionNode::Goto), CCFGEdge::Action(ActionEdge::Normal)) => false,
-                (_, CCFGEdge::Action(_)) => true,
-                _ => false,
-            }
-        });
         let reachable_actions = {
+            let ef = EdgeFiltered::from_fn(&ccfg.g, |e| {
+                // ignore `Normal` edges from `Goto` and `If` nodes
+                match (&ccfg.g[e.source()], e.weight()) {
+                    (CCFGNode::Action(ActionNode::Goto), CCFGEdge::Action(ActionEdge::Normal)) => {
+                        false
+                    }
+                    (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::Normal)) => {
+                        false
+                    }
+                    (_, CCFGEdge::Action(_)) => true,
+                    _ => false,
+                }
+            });
             let mut dfs = Dfs::new(&ef, ccfg.entry);
             while let Some(_) = dfs.next(&ef) {}
             dfs.discovered
@@ -53,19 +62,19 @@ fn import<'cd>(
                     None
                 })
             },
-            |e, ew| {
+            |e| {
                 // `Some(_)`     <=> keep edge
                 // `None`        <=> ignore edge
                 // `return None` <=> error
-                Some(match (&ccfg.g[ccfg.g.edge_endpoints(e).unwrap().0], ew) {
+                Some(match (&ccfg.g[e.source()], e.weight()) {
                     (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::IfThen)) => {
                         Some(flstr::CfgEdge::True)
                     }
                     (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::IfElse)) => {
-                        return None
+                        Some(flstr::CfgEdge::False)
                     }
                     (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::Normal)) => {
-                        Some(flstr::CfgEdge::False)
+                        None
                     }
                     (CCFGNode::Action(ActionNode::Goto), CCFGEdge::Action(ActionEdge::GotoDst)) => {
                         Some(flstr::CfgEdge::True)
@@ -88,44 +97,56 @@ fn import<'cd>(
 
 impl AstContext for CCFG {
     type Block = NodeIndex;
-    type Variable = String;
-    type BoolVariable = String;
+    type Variable = NodeIndex;
+    type BoolVariable = NodeIndex;
     type Condition = NodeIndex;
 }
 
-// XXX
-#[allow(unused_variables)]
+fn var_ty() -> c_ast::Ty {
+    c_ast::Ty::new(c_ast::BTy::Int, false, 0)
+}
+
 impl AstContextMut for CCFG {
     fn mk_fresh_var(&mut self) -> Self::Variable {
-        unimplemented!()
+        // XXX: initialized to something
+        let var = format!("i_{}", self.vars.len());
+        self.var(&var, Some(var_ty()))
     }
 
-    fn mk_fresh_var_with_val(&mut self, val: u64) -> Self::Variable {
-        unimplemented!()
+    fn mk_fresh_var_zeroed(&mut self) -> Self::Variable {
+        // XXX: initialized to zero
+        let var = format!("i_{}", self.vars.len());
+        self.var(&var, Some(var_ty()))
     }
 
     fn mk_fresh_bool_var(&mut self) -> Self::BoolVariable {
-        unimplemented!()
+        // XXX: initialized to something
+        let var = format!("c_{}", self.vars.len());
+        self.var(&var, Some(var_ty()))
     }
 
-    fn mk_cond_equals(&mut self, var: &Self::Variable, val: u64) -> Self::Condition {
-        unimplemented!()
+    fn mk_cond_equals(&mut self, &var: &Self::Variable, val: u64) -> Self::Condition {
+        let val = self.constant(&format!("{}", val), Some(var_ty()));
+        self.expr(&[var, val], c_ast::Expr::Eq)
     }
 
-    fn mk_cond_from_bool_var(&mut self, var: &Self::BoolVariable) -> Self::Condition {
-        unimplemented!()
+    fn mk_cond_from_bool_var(&mut self, &var: &Self::BoolVariable) -> Self::Condition {
+        var
     }
 
-    fn mk_var_assign(&mut self, var: &Self::Variable, val: u64) -> Self::Block {
-        unimplemented!()
+    fn mk_var_assign(&mut self, &var: &Self::Variable, val: u64) -> Self::Block {
+        let val = self.constant(&format!("{}", val), Some(var_ty()));
+        let unk = self.unknown;
+        self.assign(var, val, unk)
     }
 
     fn mk_bool_var_assign(
         &mut self,
-        var: &Self::BoolVariable,
-        cond: &Self::Condition,
+        &var: &Self::BoolVariable,
+        &cond: &Self::Condition,
     ) -> Self::Block {
-        unimplemented!()
+        let unk = self.unknown;
+        self.assign(var, cond, unk)
     }
 }
 
@@ -137,7 +158,7 @@ fn try_filter_map_to_stable<'a, N, E, F, G, N2, E2>(
 ) -> Option<(StableGraph<N2, E2>, Vec<NodeIndex>)>
 where
     F: FnMut(NodeIndex, &'a N) -> Option<Option<N2>>,
-    G: FnMut(EdgeIndex, &'a E) -> Option<Option<E2>>,
+    G: FnMut(EdgeReference<'a, E>) -> Option<Option<E2>>,
 {
     let mut g = StableGraph::new();
     // mapping from old node index to new node index, end represents removed.
@@ -152,7 +173,7 @@ where
         let source = node_index_map[edge.source().index()];
         let target = node_index_map[edge.target().index()];
         if source != NodeIndex::end() && target != NodeIndex::end() {
-            if let Some(ew) = edge_map(edge.id(), edge.weight())? {
+            if let Some(ew) = edge_map(edge)? {
                 g.add_edge(source, target, ew);
             }
         }
@@ -161,9 +182,8 @@ where
 }
 
 fn is_action_node(e: &CCFGNode) -> bool {
-    if let CCFGNode::Action(_) = e {
-        true
-    } else {
-        false
+    match e {
+        CCFGNode::Entry | CCFGNode::Action(_) => true,
+        _ => false,
     }
 }

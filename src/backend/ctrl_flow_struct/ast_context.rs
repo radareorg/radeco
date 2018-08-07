@@ -10,8 +10,8 @@ pub trait AstContextMut: AstContext {
     /// but it doesn't matter what.
     fn mk_fresh_var(&mut self) -> Self::Variable;
 
-    /// Returns a new unused `Variable` that is initialized with the given value.
-    fn mk_fresh_var_with_val(&mut self, val: u64) -> Self::Variable;
+    /// Returns a new unused `Variable` that is initialized with zero.
+    fn mk_fresh_var_zeroed(&mut self) -> Self::Variable;
 
     /// Returns a new unused `BoolVariable`. It must be initialized to some
     /// value, but it doesn't matter what.

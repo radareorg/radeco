@@ -397,10 +397,11 @@ impl CAST {
         label
     }
 
-    pub fn insert_break(&mut self, _ : NodeIndex) {
+    pub fn insert_break(&mut self) -> NodeIndex {
         let break_n = self.ast.add_node(CASTNode::Break);
         let idx = self.next_edge_idx();
         self.ast.add_edge(self.fn_head, break_n, CASTEdge::StatementOrd(idx));
+        break_n
     }
 
     // Declare variables/constants without declaration in case is_implicit is true

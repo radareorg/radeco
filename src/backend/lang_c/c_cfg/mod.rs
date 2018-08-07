@@ -517,7 +517,8 @@ impl CCFG {
 
     pub fn to_c_ast(&self) -> CAST {
         let mut converter = CASTConverter::new(&self);
-        converter.to_c_ast();
+        converter.init();
+        converter.to_c_ast_body(self.entry);
         converter.ast
     }
 
@@ -694,7 +695,7 @@ impl CCFGVerifier {
 }
 
 /// This is used for translating CCFG to CAST
-struct CASTConverter<'a> {
+pub struct CASTConverter<'a> {
     cfg: &'a CCFG,
     ast: CAST,
     /// HashMap from CCFG's node to CAST's node
@@ -703,7 +704,7 @@ struct CASTConverter<'a> {
 }
 
 impl<'a> CASTConverter<'a> {
-    fn new(cfg: &CCFG) -> CASTConverter {
+    pub fn new(cfg: &CCFG) -> CASTConverter {
         CASTConverter {
             ast: CAST::new(&cfg.fname),
             cfg: cfg,
@@ -712,8 +713,20 @@ impl<'a> CASTConverter<'a> {
         }
     }
 
+    pub fn ast_mut(&mut self) -> &mut CAST {
+        &mut self.ast
+    }
+
+    pub fn into_ast(self) -> CAST {
+        self.ast
+    }
+
+    pub fn get_node(&self, node: CCFGRef) -> Option<CASTRef> {
+        self.node_map.get(&node).cloned()
+    }
+
     /// Entry point of Simple-C-AST to C-AST conversion.
-    pub fn to_c_ast(&mut self) {
+    pub fn init(&mut self) {
         let unknown_node = self.ast.declare_vars(Ty::new(c_ast::BTy::Int, false, 0), &["unknown".to_string()], true)
             .first().cloned().expect("This can not be None");
         self.node_map.insert(self.cfg.unknown, unknown_node);
@@ -753,8 +766,6 @@ impl<'a> CASTConverter<'a> {
                 self.node_map.insert(expr, n);
             }
         }
-        let entry = self.cfg.entry;
-        self.to_c_ast_body(entry);
     }
 
     fn to_c_ast_body(&mut self, current_node: CCFGRef) {
@@ -765,8 +776,28 @@ impl<'a> CASTConverter<'a> {
         if let Some(ref l) = self.cfg.label_map.get(&current_node) {
             self.ast.label(l);
         };
+        let ast_node = self.to_c_ast_single(current_node);
+        if let Ok(n) = ast_node {
+            self.node_map.insert(current_node, ast_node.unwrap());
+        }
+        if let Err(err) = ast_node {
+            radeco_err!(err);
+        }
+
+        if let Some(ref comment) = self.cfg.debug_info.get(&current_node) {
+            if let Some(&node) = self.node_map.get(&current_node) {
+                self.ast.comment_at(node, comment);
+            }
+        }
+
+        if let Some(n) = self.cfg.next_action(current_node) {
+            self.to_c_ast_body(n);
+        };
+    }
+
+    pub fn to_c_ast_single(&mut self, current_node: CCFGRef) -> Result<CASTRef, &'static str> {
         let idx = self.cfg.g.node_weight(current_node).cloned();
-        let ast_node = match idx {
+        match idx {
             Some(CCFGNode::Action(ActionNode::Assignment)) => {
                 self.to_c_ast_assignment(current_node)
             },
@@ -792,23 +823,7 @@ impl<'a> CASTConverter<'a> {
                 radeco_err!("Unreachable node {:?}", idx);
                 unreachable!()
             },
-        };
-        if let Ok(n) = ast_node {
-            self.node_map.insert(current_node, ast_node.unwrap());
         }
-        if let Err(err) = ast_node {
-            radeco_err!(err);
-        }
-
-        if let Some(ref comment) = self.cfg.debug_info.get(&current_node) {
-            if let Some(&node) = self.node_map.get(&current_node) {
-                self.ast.comment_at(node, comment);
-            }
-        }
-
-        if let Some(n) = self.cfg.next_action(current_node) {
-            self.to_c_ast_body(n);
-        };
     }
 
     fn to_c_ast_assignment(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
@@ -840,9 +855,9 @@ impl<'a> CASTConverter<'a> {
             }).collect();
         let ret_node_opt = self.cfg.func_val(node)
             .and_then(|x| self.node_map.get(&x).map(|a| *a));
-        let node = self.ast.call_func(name, args);
+        let mut node = self.ast.call_func(name, args);
         if let Some(ret_node) = ret_node_opt {
-            self.ast.expr(c_ast::Expr::Assign, &[ret_node, node], false);
+            node = self.ast.expr(c_ast::Expr::Assign, &[ret_node, node], false);
         }
         Ok(node)
     }

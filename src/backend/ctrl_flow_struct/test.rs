@@ -29,9 +29,9 @@ impl AstContextMut for StringAst {
         ret
     }
 
-    fn mk_fresh_var_with_val(&mut self, val: u64) -> String {
+    fn mk_fresh_var_zeroed(&mut self) -> String {
         let ret = format!("i_{}", self.vars.len());
-        self.vars.push(Some(val));
+        self.vars.push(Some(0));
         ret
     }
 
