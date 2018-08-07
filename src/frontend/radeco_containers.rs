@@ -787,7 +787,9 @@ impl<'a> ModuleLoader<'a> {
         for (&imp_addr, imp_info) in &mut rmod.imports {
             let imp_rfn = &mut *imp_info.rfn.borrow_mut();
             imp_rfn.callconv = source.cc_info_of(imp_addr).ok();
-            imp_rfn.callconv_name = rmod.functions[&imp_addr].callconv_name.clone();
+            if let Some(ref f) = rmod.functions.get(&imp_addr) {
+                imp_rfn.callconv_name = f.callconv_name.clone();
+            }
         }
 
         // Optionally construct the SSA.
