@@ -471,7 +471,7 @@ impl<'a> CCFGDataMap<'a> {
         }
         self.seen.insert(ret_node);
         // Checking whether `ret_node` is a local variable.
-        if let Some(bindings) = self.rfn.local_at(ret_node) {
+        if let Some(bindings) = self.rfn.local_at(ret_node, true) {
             // TODO add type
             let type_info = Self::type_from_str(&bindings[0].type_str);
             let cfg_node = ast.var(bindings[0].name(), type_info);
@@ -488,13 +488,13 @@ impl<'a> CCFGDataMap<'a> {
             MOpcode::OpStore => {
                 debug_assert!(ops.len() == 3);
                 // Variables do not need Deref
-                if self.rfn.local_at(ops[1]).is_none() {
+                if self.rfn.local_at(ops[1], true).is_none() {
                     self.deref(ops[1], ast);
                 }
             }
             MOpcode::OpLoad => {
                 // Variables do not need Deref
-                if self.rfn.local_at(ops[1]).is_none() {
+                if self.rfn.local_at(ops[1], true).is_none() {
                     let deref_node = self.deref(ops[1], ast);
                     self.var_map.insert(ret_node, deref_node);
                 } else {

@@ -169,6 +169,7 @@ pub struct SSAStorage {
     entry_node: NodeIndex,
     exit_node: NodeIndex,
     pub assoc_data: AssociatedData,
+    pub replaced_map: HashMap<NodeIndex, NodeIndex>,
     pub regfile: Arc<SubRegisterFile>,
     pub constants: HashMap<u64, NodeIndex>,
 }
@@ -180,6 +181,7 @@ impl default::Default for SSAStorage {
             entry_node: NodeIndex::end(),
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
+            replaced_map: HashMap::new(),
             regfile: Arc::default(),
             constants: HashMap::new(),
         }
@@ -193,6 +195,7 @@ impl SSAStorage {
             entry_node: NodeIndex::end(),
             exit_node: NodeIndex::end(),
             assoc_data: HashMap::new(),
+            replaced_map: HashMap::new(),
             regfile: Arc::default(),
             constants: HashMap::new(),
         }
@@ -304,6 +307,11 @@ impl Graph for SSAStorage {
 
         if self.entry_node == i {
             self.entry_node = j;
+        }
+        if let Some(repl_i) = self.replaced_map.get(&i).cloned() {
+            self.replaced_map.insert(j, repl_i);
+        } else {
+            self.replaced_map.insert(j, i);
         }
         self.remove_node(i);
     }
