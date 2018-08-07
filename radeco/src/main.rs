@@ -31,18 +31,18 @@ use std::sync::Arc;
 
 // On unix platforms you can use ANSI escape sequences
 #[cfg(unix)]
-static PROMPT: &'static str = "\x1b[1;32m>>\x1b[0m ";
+const PROMPT: &'static str = "\x1b[1;32m>>\x1b[0m ";
 
 // Windows consoles typically don't support ANSI escape sequences out
 // of the box
 #[cfg(windows)]
-static PROMPT: &'static str = ">> ";
+const PROMPT: &'static str = ">> ";
 
 fn main() {
     let mut rl = Editor::<()>::new();
     let mut proj = None;
     loop {
-        let readline = rl.readline(">> ");
+        let readline = rl.readline(PROMPT);
         match readline {
             Ok(line) => {
                 let mut terms = line.split_whitespace();
