@@ -63,10 +63,6 @@ PROFILER.lock().unwrap().stop().unwrap();
 ## Project layout
 
 ```
-minidec/
-├── cli.rs                  Command line utility
-└── main.rs                 Minidec
-
 src/
 ├── analysis/               Analyzers on SSA form Radeco-IR
 ├── backend/                Analyzers on C-pseudo code
