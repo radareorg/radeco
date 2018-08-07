@@ -31,12 +31,10 @@ impl<'a> Exporter<'a> {
         use self::AstNodeC::*;
         use self::LoopType::*;
         match ast {
-            BasicBlock(b) => Ok(match self.conv.to_c_ast_single(b) {
-                Ok(n) => vec![n],
-                // XXX: `Entry` and `BasicBlock` nodes apparently produce this
-                Err(e) if e == "TODO" => vec![],
-                Err(e) => Err(e)?,
-            }),
+            BasicBlock(b) => b
+                .into_iter()
+                .map(|c| self.conv.to_c_ast_single(c))
+                .collect(),
             Seq(seq) => {
                 let seq = seq
                     .into_iter()

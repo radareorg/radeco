@@ -1,105 +1,167 @@
-use super::{ActionEdge, ActionNode, CCFGEdge, CCFGNode, CCFG};
+use super::{ActionEdge, ActionNode, CCFGEdge, CCFGNode, CCFGRef, ValueEdge, CCFG};
 use backend::ctrl_flow_struct as flstr;
 use backend::ctrl_flow_struct::ast_context::{AstContext, AstContextMut};
 use backend::lang_c::c_ast::{self, CAST};
 
-use petgraph::graph::EdgeReference;
-use petgraph::prelude::*;
-use petgraph::visit::{Dfs, EdgeFiltered, IntoNodeReferences, VisitMap};
+use petgraph::stable_graph::StableDiGraph;
+use petgraph::visit::EdgeRef;
 
-pub fn structure_and_convert(ccfg: CCFG) -> Option<CAST> {
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+
+pub fn structure_and_convert(ccfg: CCFG) -> Result<CAST, &'static str> {
     let cstore = flstr::condition::Storage::new();
-    let flstr_cfg = import(cstore.cctx(), ccfg)?;
+    let flstr_cfg = Importer::new(cstore.cctx(), ccfg).run()?;
     let (flstr_ast, ccfg) = flstr_cfg.structure_whole();
     flstr::export::to_c_ast(&ccfg, flstr_ast)
-        .map_err(|e| radeco_err!("{}", e))
-        .ok()
 }
 
-fn import<'cd>(
-    cctx: flstr::condition::Context<'cd, NodeIndex>,
+struct Importer<'cd> {
+    cctx: flstr::condition::Context<'cd, CCFGRef>,
     ccfg: CCFG,
-) -> Option<flstr::ControlFlowGraph<'cd, CCFG>> {
-    let (new_graph, entry) = {
-        let reachable_actions = {
-            let ef = EdgeFiltered::from_fn(&ccfg.g, |e| {
-                // ignore `Normal` edges from `Goto` and `If` nodes
-                match (&ccfg.g[e.source()], e.weight()) {
-                    (CCFGNode::Action(ActionNode::Goto), CCFGEdge::Action(ActionEdge::Normal)) => {
-                        false
-                    }
-                    (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::Normal)) => {
-                        false
-                    }
-                    (_, CCFGEdge::Action(_)) => true,
-                    _ => false,
-                }
-            });
-            let mut dfs = Dfs::new(&ef, ccfg.entry);
-            while let Some(_) = dfs.next(&ef) {}
-            dfs.discovered
-        };
+    new_graph: StableDiGraph<flstr::CfgNode<'cd, CCFG>, flstr::CfgEdge>,
+}
 
-        if ccfg
-            .g
-            .node_references()
-            .filter(|(n, _)| reachable_actions.is_visited(n))
-            .any(|(_, nw)| !is_action_node(nw))
-        {
-            return None;
+enum SuccInfo {
+    Single(CCFGRef),
+    Branch(CCFGRef, CCFGRef, CCFGRef),
+}
+
+impl<'cd> Importer<'cd> {
+    fn new(cctx: flstr::condition::Context<'cd, CCFGRef>, ccfg: CCFG) -> Self {
+        Self {
+            cctx,
+            ccfg,
+            new_graph: StableDiGraph::new(),
+        }
+    }
+
+    fn run(mut self) -> Result<flstr::ControlFlowGraph<'cd, CCFG>, &'static str> {
+        let new_entry = self.new_graph.add_node(flstr::empty_node());
+        let mut converted = HashMap::new();
+
+        if let Some(first) = self.ccfg.next_action(self.ccfg.entry) {
+            let mut worklist = Vec::new();
+            worklist.push((new_entry, flstr::CfgEdge::True, first));
+
+            while let Some((f_pred_block, pred_edge_ty, cur_block)) = worklist.pop() {
+                let f_cur_block = match converted.entry(cur_block) {
+                    Entry::Occupied(oe) => *oe.into_mut(),
+                    Entry::Vacant(ve) => {
+                        let (block, opt_succs) = self.find_block(cur_block)?;
+
+                        let f_cur_block = self.new_graph.add_node(flstr::mk_code_node(block));
+                        ve.insert(f_cur_block);
+
+                        match opt_succs {
+                            None => (),
+                            Some(SuccInfo::Single(next_block)) => {
+                                worklist.push((f_cur_block, flstr::CfgEdge::True, next_block));
+                            }
+                            Some(SuccInfo::Branch(cond, then_block, else_block)) => {
+                                let f_cond_node = self
+                                    .new_graph
+                                    .add_node(flstr::mk_cond_node(self.cctx, cond));
+                                self.new_graph.add_edge(
+                                    f_cur_block,
+                                    f_cond_node,
+                                    flstr::CfgEdge::True,
+                                );
+                                worklist.push((f_cond_node, flstr::CfgEdge::True, then_block));
+                                worklist.push((f_cond_node, flstr::CfgEdge::False, else_block));
+                            }
+                        }
+
+                        f_cur_block
+                    }
+                };
+
+                self.new_graph
+                    .add_edge(f_pred_block, f_cur_block, pred_edge_ty);
+            }
         }
 
-        let (new_graph, node_index_map) = try_filter_map_to_stable(
-            &ccfg.g,
-            |n, nw| {
-                Some(if reachable_actions.is_visited(&n) {
-                    if let CCFGNode::Action(ActionNode::If) = nw {
-                        Some(flstr::mk_cond_node(cctx, ccfg.branch_condition(n)?))
+        Ok(flstr::ControlFlowGraph::new(
+            self.new_graph,
+            new_entry,
+            self.cctx,
+            self.ccfg,
+        ))
+    }
+
+    fn find_block(&self, block: CCFGRef) -> Result<(Vec<CCFGRef>, Option<SuccInfo>), &'static str> {
+        if self.ccfg.g[block] != CCFGNode::Action(ActionNode::BasicBlock) {
+            return Err("import: basic block doesn't begin with BasicBlock");
+        }
+
+        let mut ret = Vec::new();
+        let mut cur_node = if let Some(start) = self.ccfg.next_action(block) {
+            start
+        } else {
+            return Ok((Vec::new(), None));
+        };
+
+        loop {
+            match self.ccfg.g[cur_node] {
+                CCFGNode::Action(ActionNode::BasicBlock) => {
+                    return Ok((ret, Some(SuccInfo::Single(cur_node))));
+                }
+                CCFGNode::Action(ActionNode::If) => {
+                    let (condition, then_goto, else_goto) = if_info(&self.ccfg, cur_node)?;
+                    let then_block = goto_next(&self.ccfg, then_goto)?;
+                    let else_block = goto_next(&self.ccfg, else_goto)?;
+                    return Ok((
+                        ret,
+                        Some(SuccInfo::Branch(condition, then_block, else_block)),
+                    ));
+                }
+                CCFGNode::Action(ActionNode::Goto) => {
+                    let next_block = goto_next(&self.ccfg, cur_node)?;
+                    return Ok((ret, Some(SuccInfo::Single(next_block))));
+                }
+                CCFGNode::Action(_) => {
+                    ret.push(cur_node);
+                    if let Some(next) = self.ccfg.next_action(cur_node) {
+                        cur_node = next;
                     } else {
-                        Some(flstr::mk_code_node(n))
+                        return Ok((ret, None));
                     }
-                } else {
-                    None
-                })
-            },
-            |e| {
-                // `Some(_)`     <=> keep edge
-                // `None`        <=> ignore edge
-                // `return None` <=> error
-                Some(match (&ccfg.g[e.source()], e.weight()) {
-                    (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::IfThen)) => {
-                        Some(flstr::CfgEdge::True)
-                    }
-                    (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::IfElse)) => {
-                        Some(flstr::CfgEdge::False)
-                    }
-                    (CCFGNode::Action(ActionNode::If), CCFGEdge::Action(ActionEdge::Normal)) => {
-                        None
-                    }
-                    (CCFGNode::Action(ActionNode::Goto), CCFGEdge::Action(ActionEdge::GotoDst)) => {
-                        Some(flstr::CfgEdge::True)
-                    }
-                    (CCFGNode::Action(ActionNode::Goto), CCFGEdge::Action(ActionEdge::Normal)) => {
-                        None
-                    }
-                    (_, CCFGEdge::Action(ActionEdge::Normal)) => Some(flstr::CfgEdge::True),
-                    (_, CCFGEdge::Value(_)) => None,
-                    (_, CCFGEdge::Action(_)) => return None,
-                })
-            },
-        )?;
+                }
+                CCFGNode::Value(_) => return Err("import: found Value node"),
+                _ => return Err("import: unknown node type"),
+            }
+        }
+    }
+}
 
-        (new_graph, node_index_map[ccfg.entry.index()])
-    };
+fn goto_next(ccfg: &CCFG, goto_node: CCFGRef) -> Result<CCFGRef, &'static str> {
+    ccfg.goto(goto_node)
+        .ok_or("import: Goto node has no destination")
+}
 
-    Some(flstr::ControlFlowGraph::new(new_graph, entry, cctx, ccfg))
+fn if_info(ccfg: &CCFG, if_node: CCFGRef) -> Result<(CCFGRef, CCFGRef, CCFGRef), &'static str> {
+    let mut condition = None;
+    let mut then_dst = None;
+    let mut else_dst = None;
+    for e in ccfg.g.edges(if_node) {
+        match e.weight() {
+            CCFGEdge::Value(ValueEdge::Conditional) => condition = Some(e.target()),
+            CCFGEdge::Action(ActionEdge::IfThen) => then_dst = Some(e.target()),
+            CCFGEdge::Action(ActionEdge::IfElse) => else_dst = Some(e.target()),
+            _ => (),
+        }
+    }
+    match (condition, then_dst, else_dst) {
+        (Some(c), Some(t), Some(e)) => Ok((c, t, e)),
+        _ => Err("import: If node has no condition, then node, and/or else node"),
+    }
 }
 
 impl AstContext for CCFG {
-    type Block = NodeIndex;
-    type Variable = NodeIndex;
-    type BoolVariable = NodeIndex;
-    type Condition = NodeIndex;
+    type Block = Vec<CCFGRef>;
+    type Variable = CCFGRef;
+    type BoolVariable = CCFGRef;
+    type Condition = CCFGRef;
 }
 
 fn var_ty() -> c_ast::Ty {
@@ -137,7 +199,7 @@ impl AstContextMut for CCFG {
     fn mk_var_assign(&mut self, &var: &Self::Variable, val: u64) -> Self::Block {
         let val = self.constant(&format!("{}", val), Some(var_ty()));
         let unk = self.unknown;
-        self.assign(var, val, unk)
+        vec![self.assign(var, val, unk)]
     }
 
     fn mk_bool_var_assign(
@@ -146,44 +208,6 @@ impl AstContextMut for CCFG {
         &cond: &Self::Condition,
     ) -> Self::Block {
         let unk = self.unknown;
-        self.assign(var, cond, unk)
-    }
-}
-
-/// based on https://docs.rs/petgraph/0.4.12/src/petgraph/graph_impl/mod.rs.html#1293-1317
-fn try_filter_map_to_stable<'a, N, E, F, G, N2, E2>(
-    graph: &'a Graph<N, E>,
-    mut node_map: F,
-    mut edge_map: G,
-) -> Option<(StableGraph<N2, E2>, Vec<NodeIndex>)>
-where
-    F: FnMut(NodeIndex, &'a N) -> Option<Option<N2>>,
-    G: FnMut(EdgeReference<'a, E>) -> Option<Option<E2>>,
-{
-    let mut g = StableGraph::new();
-    // mapping from old node index to new node index, end represents removed.
-    let mut node_index_map = vec![NodeIndex::end(); graph.node_count()];
-    for (i, node) in graph.node_references() {
-        if let Some(nw) = node_map(i, node)? {
-            node_index_map[i.index()] = g.add_node(nw);
-        }
-    }
-    for edge in graph.edge_references() {
-        // skip edge if any endpoint was removed
-        let source = node_index_map[edge.source().index()];
-        let target = node_index_map[edge.target().index()];
-        if source != NodeIndex::end() && target != NodeIndex::end() {
-            if let Some(ew) = edge_map(edge)? {
-                g.add_edge(source, target, ew);
-            }
-        }
-    }
-    Some((g, node_index_map))
-}
-
-fn is_action_node(e: &CCFGNode) -> bool {
-    match e {
-        CCFGNode::Entry | CCFGNode::Action(_) => true,
-        _ => false,
+        vec![self.assign(var, cond, unk)]
     }
 }
