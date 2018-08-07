@@ -30,6 +30,7 @@ use radeco_lib::middle::ssa::verifier;
 use radeco_lib::backend::lang_c::c_ast::CAST;
 use radeco_lib::backend::lang_c::c_cfg_builder;
 use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
+use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
 
 //use radeco_lib::analysis::mark_refs;
 
@@ -272,7 +273,7 @@ fn main() {
                 ///////////////////////
                 println!("  [*] Generating psuedo code");
                 let mut df = File::create(format!("{}.c", fname.to_string_lossy())).expect("Unable to create .c file");
-                let code = c_cfg.to_c_ast().print();
+                let code = ctrl_flow_struct::structure_and_convert(c_cfg).unwrap().print();
                 writeln!(df, "{}", code).expect("Error writing to file");
             }
         }
