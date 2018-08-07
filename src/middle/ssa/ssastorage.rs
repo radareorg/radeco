@@ -308,6 +308,9 @@ impl Graph for SSAStorage {
         if self.entry_node == i {
             self.entry_node = j;
         }
+
+        // XXX This might cause bugs if more than two different nodes
+        // are replaced by `j`.
         if let Some(repl_i) = self.replaced_map.get(&i).cloned() {
             self.replaced_map.insert(j, repl_i);
         } else {
