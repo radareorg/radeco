@@ -21,13 +21,8 @@ use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_reader::parse_il;
 use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::ssa::verifier;
-use std::env;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::PathBuf;
-use std::process;
-use std::rc::Rc;
-use std::str;
+use radeco_lib::backend::lang_c::c_cfg_builder;
+use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 
 const USAGE: &'static str = "
 Usage:
@@ -73,7 +68,7 @@ fn main() {
                 let bytes = base64::decode(&_s).unwrap_or(Vec::new());
                 let ret_string = match str::from_utf8(bytes.as_slice()) {
                     Ok(v) => v.to_string(),
-                    Err(e) => _s,
+                    Err(_e) => _s,
                 };
                 (addr, ret_string)
             })
