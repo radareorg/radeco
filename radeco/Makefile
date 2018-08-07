@@ -2,7 +2,7 @@ all:
 	cargo build
 
 run:
-	target/debug/radeco --shell /bin/ls
+	cargo run
 
 clean:
 	cargo clean
