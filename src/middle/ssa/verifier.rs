@@ -191,7 +191,9 @@ impl Verify for SSAStorage {
                         MArity::Ternary => 3,
                     };
 
-                    if opcode != MOpcode::OpCall {
+                    if opcode != MOpcode::OpCall
+                        && opcode.idx() != MOpcode::OpCustom(String::new()).idx()
+                    {
                         check!(op_len == n, SSAErr::WrongNumOperands(*exi, n, op_len));
                     }
 
