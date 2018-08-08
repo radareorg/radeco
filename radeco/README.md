@@ -6,10 +6,38 @@ Radeco is the radare decompiler tool using the [radeco-lib](https://github.com/r
 
 ## Usage
 
-```
-Usage:
-  radeco [-f <names>...] [--filesource] <target>
-  radeco (-h | --help)
+```shell
+$ echo '#include<stdio.h>\nint main() {printf("Hello, world.\\n"); return 0;}' | gcc -xc -
+$ cargo run
+>> load a.out
+Cannot find function here
+[*] Fixing Callee Information
+>> fn_list
+sym._init
+sym.imp.puts
+entry0
+sym.deregister_tm_clones
+sym.register_tm_clones
+sym.__do_global_dtors_aux
+entry1.init
+sym.main
+sym.__libc_csu_init
+sym.__libc_csu_fini
+sym._fini
+>> analyze sym.main
+[+] Analyzing: sym.main @ 0x1139
+  [*] Eliminating Dead Code
+  [*] Propagating Constants
+  [*] Eliminating More DeadCode
+  [*] Eliminating Common SubExpressions
+  [*] Verifying SSA's Validity
+>> decompile sym.main
+fn sym.main () {
+    unsigned int tmp;
+    *((rsp - 8)) = rbp
+    tmp = sym.imp.puts("Hello, world.", rsi, rdx, rcx, r8, r9)
+}
+>>
 ```
 
 ## License
