@@ -7,6 +7,7 @@ extern crate r2api;
 extern crate base64;
 extern crate rustyline;
 
+use r2pipe::{R2, R2Pipe};
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::analysis::sccp;
@@ -22,9 +23,11 @@ use rustyline::Editor;
 
 
 use rustyline::error::ReadlineError;
+use std::cell::RefCell;
 
 use std::collections::HashMap;
 use std::process;
+use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
 
@@ -61,6 +64,7 @@ fn main() {
 
 mod command {
     pub const LOAD: &'static str = "load";
+    pub const CONNECT: &'static str = "connect";
     pub const FNLIST: &'static str = "fn_list";
     pub const ANALYZE: &'static str = "analyze";
     pub const DOT: &'static str = "dot";
@@ -70,13 +74,15 @@ mod command {
 
 fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject>) {
     match (op1, op2) {
-        (Some(command::LOAD), Some(s)) => {
-            let mut p = ProjectLoader::new().path(s).load();
-            let regfile = p.regfile().clone();
-            for mut xy in p.iter_mut() {
-                analyze_mod(regfile.clone(), xy.module);
+        (Some(command::LOAD), Some(path)) => {
+            *proj_opt = Some(load_proj_by_path(path));
+            return;
+        }
+        (Some(command::CONNECT), Some(port)) => {
+            match load_proj_by_tcp(port) {
+                Ok(proj) => *proj_opt = Some(proj),
+                Err(msg) => println!("{}", msg),
             }
-            *proj_opt = Some(p);
             return;
         }
         _ => {}
@@ -152,6 +158,27 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
         }
         _ => {}
     }
+}
+
+fn load_proj_by_path(path: &str) -> RadecoProject {
+    let mut p = ProjectLoader::new().path(path).load();
+    let regfile = p.regfile().clone();
+    for mut xy in p.iter_mut() {
+        analyze_mod(regfile.clone(), xy.module);
+    }
+    p
+}
+
+fn load_proj_by_tcp(port: &str) -> Result<RadecoProject, &'static str> {
+    let r2p = R2Pipe::tcp(&format!("localhost:{}", port))?;
+    let r2 = R2::from(r2p);
+    let r2w = Rc::new(RefCell::new(r2));
+    let mut p = ProjectLoader::new().source(Rc::new(r2w)).load();
+    let regfile = p.regfile().clone();
+    for mut xy in p.iter_mut() {
+        analyze_mod(regfile.clone(), xy.module);
+    }
+    Ok(p)
 }
 
 fn fn_list(proj: &RadecoProject) -> Vec<String> {
