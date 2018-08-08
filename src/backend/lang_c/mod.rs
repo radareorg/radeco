@@ -8,3 +8,6 @@
 pub mod c_ast;
 pub mod c_cfg;
 pub mod c_cfg_builder;
+
+#[cfg(test)]
+mod test;
