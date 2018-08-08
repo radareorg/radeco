@@ -18,7 +18,7 @@ base64 = "0.9.2"
 rustyline = "1.0.0"
 
 [dependencies.r2pipe]
-git = "https://github.com/radare/r2pipe.rs"
+git = "https://github.com/radareorg/r2pipe.rs"
 
 [dependencies.r2api]
 git = "https://github.com/radare/radare2-r2pipe-api"
