@@ -101,6 +101,8 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
             let funcs = fn_list(&proj);
             println!("{}", funcs.join("\n"));
         }
+        // TODO Show list of dependency information of analyses
+        // TODO Add command for individual analyses
         (Some(command::ANALYZE), Some(f)) => {
             if let Some(rfn) = get_function_mut(f, &mut proj) {
                 analyze(rfn);
