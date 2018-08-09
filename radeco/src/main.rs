@@ -12,6 +12,7 @@ use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::analysis::sccp;
 use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
+use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
 use radeco_lib::backend::lang_c::c_cfg_builder;
 use radeco_lib::frontend::radeco_containers::*;
 use radeco_lib::middle::{dce, dot};
@@ -282,5 +283,7 @@ fn decompile(
         println!("CCFG verification failed");
         println!("{}", err);
     }
-    c_cfg.to_c_ast().print()
+    ctrl_flow_struct::structure_and_convert(c_cfg)
+        .unwrap()
+        .print()
 }
