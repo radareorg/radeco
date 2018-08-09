@@ -287,11 +287,21 @@ impl<'a> CCFGBuilder<'a> {
         }
     }
 
+    fn handle_return(&mut self, block: SSARef) {
+        let prev = self.action_map.get(&block)
+            .and_then(|&n| self.cfg.preds_of(n).first().cloned())
+            .expect("This should not be `None`");
+        // TODO specify return value if it exists
+        self.cfg.add_return(None, prev);
+    }
+
     fn insert_jump(&mut self, cur_block: SSARef, prev_block: SSARef) {
         if let Some(succ) = self.ssa.unconditional_block(prev_block) {
             if let Some(_) = self.ssa.selector_in(prev_block) {
                 // TODO
                 radeco_trace!("CCFGBuilder::insert_jump INDIRET JMP");
+            } else if self.ssa.exit_node().map_or(false, |en| en == succ) {
+                self.handle_return(cur_block);
             } else {
                 self.handle_goto(cur_block, succ);
             }
