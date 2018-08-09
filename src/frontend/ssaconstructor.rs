@@ -591,6 +591,7 @@ impl<'a, T> SSAConstruct<'a, T>
 
             // Handle returns separately
             if op.optype.as_ref().map_or(false, |ty| ty == "ret") {
+                self.phiplacer.add_return(current_address, UNCOND_EDGE);
                 self.needs_new_block = true;
                 continue;
             }

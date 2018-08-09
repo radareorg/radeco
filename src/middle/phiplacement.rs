@@ -383,6 +383,15 @@ impl<'a, T> PhiPlacer<'a, T>
         self.op_use(&op_node, 0, selector);
     }
 
+    pub fn add_return(&mut self, current_addr: MAddress, edge_type: u8) {
+        let source_block = self.block_of(current_addr).unwrap_or_else(|| {
+            radeco_err!("Block not found @ {:?}", current_addr);
+            self.ssa.invalid_action().unwrap()
+        });
+        let exit_node = exit_node_err!(self.ssa);
+        self.ssa.insert_control_edge(source_block, exit_node, edge_type);
+    }
+
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
         let source_block = self.block_of(source).unwrap_or_else(|| {
             radeco_err!("Block not found @ {:?}", source);
