@@ -1,8 +1,8 @@
 # radeco
 
-Radeco is the radare decompiler tool using the [radeco-lib](https://github.com/radare/radeco-lib) rust crate.
+Radeco is the radare decompiler tool using the [radeco-lib](https://github.com/radareorg/radeco-lib) rust crate.
 
-[![Build Status](https://travis-ci.org/radare/radeco.svg)](https://travis-ci.org/radare/radeco)
+[![Build Status](https://travis-ci.org/radareorg/radeco.svg)](https://travis-ci.org/radareorg/radeco)
 
 ## Usage
 
