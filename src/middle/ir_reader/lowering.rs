@@ -149,6 +149,9 @@ impl<'a> LowerSsa<'a> {
         }
 
         match sbb.term {
+            sast::Terminator::Return => {
+                self.ssa.insert_control_edge(bb, self.exit_node, UNCOND_EDGE);
+            }
             sast::Terminator::JmpUncond(tgt) => {
                 let tgt_bb = self.block_at(tgt)?;
                 self.ssa.insert_control_edge(bb, tgt_bb, UNCOND_EDGE);

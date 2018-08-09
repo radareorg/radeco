@@ -335,9 +335,14 @@ impl<'a, O: Write> IRWriter<'a, O> {
                 write!(self.output, "JMP TO ")?;
                 self.emit_operand(selector)?;
             } else {
-                // unconditional jump
-                write!(self.output, "JMP ")?;
-                self.emit_jump_tgt(successor_blk)?;
+                if self.ssa.exit_node().map_or(false, |en| en == successor_blk) {
+                    // return
+                    write!(self.output, "RETURN")?;
+                } else {
+                    // unconditional jump
+                    write!(self.output, "JMP ")?;
+                    self.emit_jump_tgt(successor_blk)?;
+                }
             }
         } else {
             if let Some(blk_cond_info) = self.ssa.conditional_blocks(blk) {

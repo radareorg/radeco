@@ -45,6 +45,7 @@ ExitNode: ExitNode =
     "exit-node:" <ops:Operation*>                           => ExitNode { <> };
 
 Terminator: Terminator = {
+    "RETURN"                                                => Terminator::Return,
     "JMP" <MAddress>                                        => Terminator::JmpUncond(<>),
     "JMP" "IF" <Operand> <MAddress> "ELSE" <MAddress>       => Terminator::JmpCond(<>),
     "JMP" "TO" <Operand>                                    => Terminator::JmpIndirect(<>),

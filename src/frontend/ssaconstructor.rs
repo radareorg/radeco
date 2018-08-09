@@ -589,6 +589,12 @@ impl<'a, T> SSAConstruct<'a, T>
                 }
             }
 
+            // Handle returns separately
+            if op.optype.as_ref().map_or(false, |ty| ty == "ret") {
+                self.needs_new_block = true;
+                continue;
+            }
+
             /*
             // Some overrides as we do not support all esil and don't want to panic.
             let overrides = &["GOTO", "TRAP", "$", "TODO", "REPEAT"];

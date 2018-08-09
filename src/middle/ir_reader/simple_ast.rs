@@ -31,6 +31,7 @@ pub struct ExitNode {
 
 #[derive(Debug)]
 pub enum Terminator {
+    Return,
     JmpUncond(ir::MAddress),
     JmpCond(Operand, ir::MAddress, ir::MAddress),
     JmpIndirect(Operand),

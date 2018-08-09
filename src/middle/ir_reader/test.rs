@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 const SSA_TXT: &str = "\
-define-fun main(unknown) -> unknown {
+define-fun sym.foo(unknown) -> unknown {
     entry-register-state:
         %1: $Unknown64(*?) = $r15;
         %2: $Unknown64(*?) = $r14;
@@ -44,11 +44,9 @@ define-fun main(unknown) -> unknown {
         %32: $Unknown64(*?) = $fs;
         %33: $Unknown64(*?) = $gs;
         %34: $Unknown0 = $mem;
-    bb_0x0005B5.0000(sz 0x0):
-        [@0x0005B5.0001] %35: $Unknown64(*?) = #x1 + %14;
-        [@0x0005B9.0002] %36: $Unknown64(*?) = Load(%34, %26);
-        [@0x0005B9.0006] %37: $Unknown64(*?) = #x8 + %26;
-        JMP TO %36
+    bb_0x000610.0000(sz 0x0):
+        [@0x000610.0001] %35: $Unknown64(*?) = #x1 + %14;
+        RETURN
     exit-node:
     final-register-state:
         $r15 = %1;
@@ -77,7 +75,7 @@ define-fun main(unknown) -> unknown {
         $if = %23;
         $df = %24;
         $of = %25;
-        $rsp = %37;
+        $rsp = %26;
         $ss = %27;
         $fs_base = %28;
         $gs_base = %29;
@@ -150,7 +148,7 @@ fn check_ssa_parse() {
 
 #[test]
 fn roundtrip_basic_ssa() {
-    roundtrip("main".to_owned(), SSA_TXT);
+    roundtrip("sym.foo".to_owned(), SSA_TXT);
 }
 
 #[test]
