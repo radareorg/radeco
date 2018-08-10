@@ -31,6 +31,7 @@ use std::process;
 use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 // On unix platforms you can use ANSI escape sequences
 #[cfg(unix)]
@@ -51,6 +52,7 @@ fn main() {
                 let mut terms = line.split_whitespace();
                 let o1 = terms.next();
                 let o2 = terms.next();
+                println!("radeco input: {}", line);
                 cmd(o1, o2, &mut proj);
             }
             Err(ReadlineError::Interrupted) |
@@ -171,7 +173,7 @@ fn load_proj_by_path(path: &str) -> RadecoProject {
 }
 
 fn load_proj_by_tcp(port: &str) -> Result<RadecoProject, &'static str> {
-    let r2p = R2Pipe::tcp(&format!("localhost:{}", port))?;
+    let r2p = R2Pipe::http(&format!("localhost:{}", port))?;
     let r2 = R2::from(r2p);
     let r2w = Rc::new(RefCell::new(r2));
     let mut p = ProjectLoader::new().source(Rc::new(r2w)).load();
