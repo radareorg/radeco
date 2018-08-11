@@ -39,7 +39,7 @@ void usage() {
     eprintf("| pdda <func>  analyze current function with radeco\n");
     eprintf("| pddc         send information to radeco\n");
     eprintf("| pddr <cmd>   send <cmd> to radeco directly\n");
-    eprintf("| pdds <cmd>   respawn radeco subprocess\n");
+    eprintf("| pdds         respawn radeco subprocess\n");
 }
 
 int cmd_pdd(const char *input) {
