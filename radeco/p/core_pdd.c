@@ -9,6 +9,14 @@ const int PORT = 11111;
 static char *radeco_path = "radeco";
 static FILE *radeco_p = NULL;
 
+void spawn_radeco() {
+    if (radeco_p) {
+        pclose(radeco_p);
+    }
+    radeco_p = popen(radeco_path, "w");
+    setbuf(radeco_p, NULL);
+}
+
 void spawn_http_srv(RCore *core) {
     static bool is_called = false;
     if (core == NULL) {
@@ -17,6 +25,7 @@ void spawn_http_srv(RCore *core) {
     if (!is_called) {
         char port_str[10];
         SETPREF("http.log", "false", "Show HTTP requests processed");
+        SETPREF("http.sandbox", "false", "Show HTTP requests processed");
         snprintf(port_str, 9, " %d", PORT);
         r_core_rtr_http(core, '&', '\0', port_str);
     }
@@ -30,6 +39,7 @@ void usage() {
     eprintf("| pdda <func>  analyze current function with radeco\n");
     eprintf("| pddc         send information to radeco\n");
     eprintf("| pddr <cmd>   send <cmd> to radeco directly\n");
+    eprintf("| pdds <cmd>   respawn radeco subprocess\n");
 }
 
 int cmd_pdd(const char *input) {
@@ -50,6 +60,9 @@ int cmd_pdd(const char *input) {
         case 'r':
             fprintf(radeco_p, "%s\n", query);
             break;
+        case 's':
+            spawn_radeco();
+            break;
         case '\0':
         case '?':
         default:
@@ -68,8 +81,7 @@ int cmd(void *user, const char *input) {
 }
 
 int init(void *user, const char *_input) {
-    radeco_p = popen(radeco_path, "w");
-    setbuf(radeco_p, NULL);
+    spawn_radeco();
     return true;
 };
 
