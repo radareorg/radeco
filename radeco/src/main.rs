@@ -79,8 +79,13 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
             *proj_opt = Some(load_proj_by_path(path));
             return;
         }
-        (Some(command::CONNECT), Some(port)) => {
-            match load_proj_by_tcp(port) {
+        (Some(command::CONNECT), Some(url)) => {
+            let p_opt = if url.starts_with("http://") {
+                load_proj_http(&url[7..])
+            } else {
+                load_proj_tcp(&url[6..])
+            };
+            match p_opt {
                 Ok(proj) => *proj_opt = Some(proj),
                 Err(msg) => println!("{}", msg),
             }
@@ -170,8 +175,17 @@ fn load_proj_by_path(path: &str) -> RadecoProject {
     p
 }
 
-fn load_proj_by_tcp(port: &str) -> Result<RadecoProject, &'static str> {
-    let r2p = R2Pipe::http(&format!("localhost:{}", port))?;
+fn load_proj_tcp(url: &str) -> Result<RadecoProject, &'static str> {
+    let r2p = R2Pipe::tcp(url)?;
+    Ok(load_project_by_r2pipe(r2p))
+}
+
+fn load_proj_http(url: &str) -> Result<RadecoProject, &'static str> {
+    let r2p = R2Pipe::http(url)?;
+    Ok(load_project_by_r2pipe(r2p))
+}
+
+fn load_project_by_r2pipe(r2p: R2Pipe) -> RadecoProject {
     let r2 = R2::from(r2p);
     let r2w = Rc::new(RefCell::new(r2));
     let mut p = ProjectLoader::new().source(Rc::new(r2w)).load();
@@ -179,7 +193,7 @@ fn load_proj_by_tcp(port: &str) -> Result<RadecoProject, &'static str> {
     for mut xy in p.iter_mut() {
         analyze_mod(regfile.clone(), xy.module);
     }
-    Ok(p)
+    p
 }
 
 fn fn_list(proj: &RadecoProject) -> Vec<String> {
