@@ -954,7 +954,7 @@ mod test {
     use std::sync::Arc;
 
     fn register_profile() -> Result<LRegInfo, SourceErr> {
-        let regfile_path = "./test_files/x86_register_profile.json";
+        let regfile_path = "./reg_files/x86_register_profile.json";
         let path = PathBuf::from(regfile_path);
         let mut f = File::open(path).expect("Failed to open file");
         let mut json_str = String::new();

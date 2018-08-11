@@ -446,7 +446,8 @@ impl<'a> ProjectLoader<'a> {
         // XXX: Do when needed!
         // self.mod_loader = None;
         let reg_p = source.register_profile().unwrap_or({
-            let s = fs::read_to_string("x86_register_profile.json").unwrap();
+            // XXX This should load other profile in case of other architecture
+            let s = include_str!("../../regfiles/x86_register_profile.json");
             serde_json::from_str(&*s).unwrap()
         });
         let regfile = SubRegisterFile::new(&reg_p);
@@ -798,10 +799,11 @@ impl<'a> ModuleLoader<'a> {
 
         // Optionally construct the SSA.
         let reg_p = if let Ok(reg_p) = source.register_profile() {
-            radeco_err!("Unable to load register profile");
             reg_p
         } else {
-            let s = fs::read_to_string("x86_register_profile.json").unwrap();
+            radeco_err!("Unable to load register profile");
+            // XXX This should load other profile in case of other architecture
+            let s = include_str!("../../regfiles/x86_register_profile.json");
             serde_json::from_str(&*s).unwrap()
         };
         let sub_reg_f = SubRegisterFile::new(&reg_p);

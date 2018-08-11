@@ -10,7 +10,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+const REGISTER_PROFILE: &'static str = "reg_files/x86_register_profile.json";
 
 lazy_static! {
     static ref REGISTER_FILE: Arc<SubRegisterFile> = {
