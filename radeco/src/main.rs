@@ -31,7 +31,6 @@ use std::process;
 use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 // On unix platforms you can use ANSI escape sequences
 #[cfg(unix)]
@@ -52,7 +51,6 @@ fn main() {
                 let mut terms = line.split_whitespace();
                 let o1 = terms.next();
                 let o2 = terms.next();
-                println!("radeco input: {}", line);
                 cmd(o1, o2, &mut proj);
             }
             Err(ReadlineError::Interrupted) |
