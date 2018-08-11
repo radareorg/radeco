@@ -8,7 +8,7 @@ all:
 	$(MAKE) install
 
 build:
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fPIC core_pdd.c -o $(TARGET)
+	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fPIC radeco_pdd.c -o $(TARGET)
 
 install:
 	mkdir -p $(PLUGDIR)

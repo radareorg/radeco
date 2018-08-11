@@ -55,7 +55,7 @@ int cmd_pdd(const char *input) {
             fprintf(radeco_p, "analyze %s\n", query);
             break;
         case 'c':
-            fprintf(radeco_p, "connect %d\n", PORT);
+            fprintf(radeco_p, "connect http://localhost:%d\n", PORT);
             break;
         case 'r':
             fprintf(radeco_p, "%s\n", query);
