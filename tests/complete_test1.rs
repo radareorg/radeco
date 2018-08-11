@@ -74,7 +74,7 @@
 //use radeco_lib::analysis::matcher::gmatch;
 //use radeco_lib::backend::x86::x86_idioms;
 
-//const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+//const REGISTER_PROFILE: &'static str = "reg_files/x86_register_profile.json";
 //const INSTRUCTIONS: &'static str = "test_files/ct1_instructions.json";
 
 //fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {

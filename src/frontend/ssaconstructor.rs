@@ -807,7 +807,7 @@ mod test {
     use super::*;
 
 
-    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+    const REGISTER_PROFILE: &'static str = "reg_files/x86_register_profile.json";
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
         // Enable for debugging only.

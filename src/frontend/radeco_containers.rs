@@ -30,6 +30,7 @@
 //!
 //! For more examples of loading, check the `examples/` directory of this project.
 
+use serde_json;
 
 use frontend::llanalyzer;
 use frontend::radeco_source::Source;
@@ -46,8 +47,7 @@ use petgraph::Direction;
 use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
-use r2api::structs::{LVarInfo, LOpInfo, LSymbolInfo, LRelocInfo, LExportInfo,
-                     LStringInfo, LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
+use r2api::structs::*;
 
 use r2pipe::r2::R2;
 use rayon::prelude::*;
@@ -60,6 +60,7 @@ use std::collections::{HashSet, btree_map};
 use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
+use std::fs;
 
 // use cpuprofiler::PROFILER;
 
@@ -444,8 +445,12 @@ impl<'a> ProjectLoader<'a> {
         // Clear out irrelevant fields in self and move it into project loader
         // XXX: Do when needed!
         // self.mod_loader = None;
-        let regfile = SubRegisterFile::new(&source.register_profile()
-            .expect("Unable to load register profile"));
+        let reg_p = source.register_profile().unwrap_or({
+            // XXX This should load other profile in case of other architecture
+            let s = include_str!("../../regfiles/x86_register_profile.json");
+            serde_json::from_str(&*s).unwrap()
+        });
+        let regfile = SubRegisterFile::new(&reg_p);
 
         RadecoProject {
             modules: mod_map,
@@ -793,7 +798,14 @@ impl<'a> ModuleLoader<'a> {
         }
 
         // Optionally construct the SSA.
-        let reg_p = source.register_profile().expect("Unable to load register profile");
+        let reg_p = if let Ok(reg_p) = source.register_profile() {
+            reg_p
+        } else {
+            radeco_err!("Unable to load register profile");
+            // XXX This should load other profile in case of other architecture
+            let s = include_str!("../../regfiles/x86_register_profile.json");
+            serde_json::from_str(&*s).unwrap()
+        };
         let sub_reg_f = SubRegisterFile::new(&reg_p);
         if self.build_ssa {
             if self.parallel {
