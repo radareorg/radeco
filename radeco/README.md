@@ -40,6 +40,12 @@ fn sym.main () {
 >>
 ```
 
+## Installation
+
+```shell
+make install
+```
+
 ## License
 Licensed under The BSD 3-Clause License. Please check [COPYING](https://github.com/radare/radeco/blob/master/COPYING) file for
 complete license.
