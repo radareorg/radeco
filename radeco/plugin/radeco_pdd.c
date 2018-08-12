@@ -72,7 +72,7 @@ int cmd_pdd(const char *input) {
 }
 
 int cmd(void *user, const char *input) {
-    if (strncmp("pdd", input, 3)) {
+    if (strncmp("pde", input, 3)) {
         return false;
     }
     spawn_http_srv((RCore *)user);
