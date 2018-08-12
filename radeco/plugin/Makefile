@@ -1,14 +1,15 @@
 CFLAGS=$(shell pkg-config --cflags r_core)
 PLUGDIR=$(shell r2 -H R2_USER_PLUGINS)
 LIBEXT=$(shell r2 -H LIBEXT)
-TARGET=radeco_pdd.$(LIBEXT)
+PLUGNAME=radeco_pde
+TARGET=$(PLUGNAME).$(LIBEXT)
 
 all:
 	$(MAKE) build
 	$(MAKE) install
 
 build:
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fPIC radeco_pdd.c -o $(TARGET)
+	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fPIC $(PLUGNAME).c -o $(TARGET)
 
 install:
 	mkdir -p $(PLUGDIR)
