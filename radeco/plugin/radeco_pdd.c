@@ -33,13 +33,13 @@ void spawn_http_srv(RCore *core) {
 }
 
 void usage() {
-    eprintf("Usage: pdd[ ?ac] <func> plugin for radeco\n");
-    eprintf("| pdd <func>   decompile current function\n");
-    eprintf("| pdd?         show this help\n");
-    eprintf("| pdda <func>  analyze current function with radeco\n");
-    eprintf("| pddc         send information to radeco\n");
-    eprintf("| pddr <cmd>   send <cmd> to radeco directly\n");
-    eprintf("| pdds         respawn radeco subprocess\n");
+    eprintf("Usage: pde[ ?ac] <func> plugin for radeco\n");
+    eprintf("| pde <func>   decompile current function\n");
+    eprintf("| pde?         show this help\n");
+    eprintf("| pdea <func>  analyze current function with radeco\n");
+    eprintf("| pdec         send information to radeco\n");
+    eprintf("| pder <cmd>   send <cmd> to radeco directly\n");
+    eprintf("| pdes         respawn radeco subprocess\n");
 }
 
 int cmd_pdd(const char *input) {
