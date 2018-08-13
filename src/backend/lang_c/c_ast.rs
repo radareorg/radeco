@@ -432,9 +432,9 @@ impl CAST {
         arg_nodes
     }
 
-    fn emit_c(&self, node: &NodeIndex, indent: usize) -> String {
+    fn emit_c(&self, node: &NodeIndex, indent: usize, is_nested_expr: bool) -> String {
         let comment = self.comments.get(&node).cloned();
-        let result = match self.ast[*node] {
+        let mut result = match self.ast[*node] {
             CASTNode::FunctionHeader(_) => unimplemented!(),
             CASTNode::If => {
                 // Get the arguments -> condition, body, else branch.
@@ -444,10 +444,10 @@ impl CAST {
                 let arg3 = args.get(2).cloned();
                 let condition = format!("{} {} {{\n",
                                         format_with_indent("if", indent),
-                                        self.emit_c(&arg1, 0));
-                let true_body = self.emit_c(&arg2, indent + 1);
+                                        self.emit_c(&arg1, 0, true));
+                let true_body = self.emit_c(&arg2, indent + 1, false);
                 let false_body = if let Some(arg3) = arg3 {
-                    let fbody = self.emit_c(&arg3, indent + 1);
+                    let fbody = self.emit_c(&arg3, indent + 1, false);
                     if let CASTNode::If = self.ast[arg3] {
                         // Else-If case
                         format_with_indent("} else ", indent) + &fbody
@@ -477,13 +477,13 @@ impl CAST {
                         }
                     }
                 }
-                format!("{} {};", ty, vars)
+                format!("{} {}", ty, vars)
             }
             CASTNode::While => {
                 // Get the arguments -> while header/check condition, while body.
                 let args = self.get_args_ordered(node);
-                let condition = self.emit_c(&args[0], 0);
-                let while_body = self.emit_c(&args[1], indent + 1);
+                let condition = self.emit_c(&args[0], 0, true);
+                let while_body = self.emit_c(&args[1], indent + 1, false);
                 format!("{} ({}) {{\n{}\n{}",
                         format_with_indent("while", indent),
                         condition,
@@ -493,9 +493,9 @@ impl CAST {
             CASTNode::DoWhile => {
                 // Get the arguments -> while header/check condition, while body.
                 let args = self.get_args_ordered(node);
-                let condition = self.emit_c(&args[0], 0);
-                let while_body = self.emit_c(&args[1], indent + 1);
-                format!("{} {{\n{}\n{}}} while ({});",
+                let condition = self.emit_c(&args[0], 0, true);
+                let while_body = self.emit_c(&args[1], indent + 1, false);
+                format!("{} {{\n{}\n{}}} while ({})",
                         format_with_indent("do", indent),
                         while_body,
                         format_with_indent("", indent),
@@ -508,11 +508,11 @@ impl CAST {
                 format!("{}:", label)
             }
             CASTNode::Break => {
-                format_with_indent("break;", indent)
+                format_with_indent("break", indent)
             }
             CASTNode::ExpressionNode(ref expr) => {
                 let operands = self.get_args_ordered(node);
-                let op_str = operands.iter().map(|x| self.emit_c(x, 0)).collect::<Vec<_>>();
+                let op_str = operands.iter().map(|x| self.emit_c(x, 0, true)).collect::<Vec<_>>();
                 match *expr {
                     Expr::Assign => format!("{} = {}",
                                         format_with_indent(&op_str[0], indent),
@@ -593,11 +593,19 @@ impl CAST {
                     }).collect::<Vec<_>>();
                 ns.sort_by_key(|k| k.0);
                 ns.into_iter()
-                    .map(|(_, n)| self.emit_c(&n, indent))
+                    .map(|(_, n)| self.emit_c(&n, indent, false))
                     .collect::<Vec<_>>()
                     .join("\n")
             }
         };
+
+        let semicolon = self.ast
+            .node_weight(*node)
+            .map_or(false, |n| Self::has_semicolon(&n, is_nested_expr));
+        if semicolon {
+            result = format!("{};", result);
+        }
+
         if comment.is_some() {
             format!("{}\t//{}", result, &comment.unwrap())
         } else {
@@ -607,6 +615,23 @@ impl CAST {
 
     pub fn comment_at(&mut self, node: NodeIndex, comment: &str) {
         self.comments.insert(node, comment.to_string());
+    }
+
+    fn has_semicolon(node: &CASTNode, is_nested_expr: bool) -> bool {
+        match node {
+            &CASTNode::FunctionHeader(_)
+            | &CASTNode::While
+            | &CASTNode::DoWhile
+            | &CASTNode::If
+            | &CASTNode::Label(_)
+            | &CASTNode::Var(_)
+            | &CASTNode::Constant(_, _)
+            | &CASTNode::Block => false,
+            &CASTNode::ExpressionNode(_)
+            | &CASTNode::Call(_, _)
+                if is_nested_expr => false,
+            _ => true,
+        }
     }
 
     pub fn print(&self) -> String {
@@ -658,7 +683,8 @@ impl CAST {
         });
 
         for edge in &edges {
-            result.push_str(&(self.emit_c(&edge.target(), 1) + "\n"));
+            let line = self.emit_c(&edge.target(), 1, false);
+            result.push_str(&(format!("{}\n", line)));
         }
 
         result.push_str("}");
