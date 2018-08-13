@@ -93,14 +93,21 @@ mod command {
 fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject>) {
     match (op1, op2) {
         (Some(command::LOAD), Some(path)) => {
-            *proj_opt = Some(load_proj_by_path(path));
-            return;
+            if is_file(path) {
+                *proj_opt = Some(load_proj_by_path(path));
+                return;
+            } else {
+                println!("{} is not found.", path);
+                return;
+            }
         }
         (Some(command::CONNECT), Some(url)) => {
-            let p_opt = if url.starts_with("http://") {
+            let p_opt = if is_http(&url) {
                 load_proj_http(&url[7..])
-            } else {
+            } else if is_tcp(&url) {
                 load_proj_tcp(&url[6..])
+            } else {
+                Err("Invalid url")
             };
             match p_opt {
                 Ok(proj) => *proj_opt = Some(proj),
