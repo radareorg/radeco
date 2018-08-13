@@ -40,39 +40,56 @@ impl<'cd> Importer<'cd> {
         let new_entry = self.new_graph.add_node(flstr::empty_node());
         let mut converted = HashMap::new();
 
+        // do a DFS over CCFG, inserting nodes and edges into `new_graph` as we
+        // discover them
         if let Some(first) = self.ccfg.next_action(self.ccfg.entry) {
+            // list of edges to process
             let mut worklist = Vec::new();
             worklist.push((new_entry, flstr::CfgEdge::True, first));
 
             while let Some((f_pred_block, pred_edge_ty, cur_block)) = worklist.pop() {
+                // find the node in `new_graph` corresponding to `cur_block` in
+                // CCFG, adding a new node if necessary
                 let f_cur_block = match converted.entry(cur_block) {
                     Entry::Occupied(oe) => *oe.into_mut(),
                     Entry::Vacant(ve) => {
                         let (block, opt_succs) = self.find_block(cur_block)?;
 
-                        let f_cur_block = self.new_graph.add_node(flstr::mk_code_node(block));
-                        ve.insert(f_cur_block);
-
-                        match opt_succs {
-                            None => (),
+                        let f_cur_block = match opt_succs {
+                            None => {
+                                self.new_graph.add_node(flstr::mk_code_node(block))
+                            }
                             Some(SuccInfo::Single(next_block)) => {
+                                let f_cur_block =
+                                    self.new_graph.add_node(flstr::mk_code_node(block));
                                 worklist.push((f_cur_block, flstr::CfgEdge::True, next_block));
+                                f_cur_block
                             }
                             Some(SuccInfo::Branch(cond, then_block, else_block)) => {
+                                // make the cond node
                                 let f_cond_node = self
                                     .new_graph
                                     .add_node(flstr::mk_cond_node(self.cctx, cond));
-                                self.new_graph.add_edge(
-                                    f_cur_block,
-                                    f_cond_node,
-                                    flstr::CfgEdge::True,
-                                );
                                 worklist.push((f_cond_node, flstr::CfgEdge::True, then_block));
                                 worklist.push((f_cond_node, flstr::CfgEdge::False, else_block));
-                            }
-                        }
 
-                        f_cur_block
+                                // only insert a preceding code node if needed
+                                if block.is_empty() {
+                                    f_cond_node
+                                } else {
+                                    let f_cur_block =
+                                        self.new_graph.add_node(flstr::mk_code_node(block));
+                                    self.new_graph.add_edge(
+                                        f_cur_block,
+                                        f_cond_node,
+                                        flstr::CfgEdge::True,
+                                    );
+                                    f_cur_block
+                                }
+                            }
+                        };
+
+                        *ve.insert(f_cur_block)
                     }
                 };
 
