@@ -25,12 +25,19 @@ use rustyline::Editor;
 
 use rustyline::error::ReadlineError;
 use std::cell::RefCell;
-
 use std::collections::HashMap;
+use std::env;
+
+use std::fs;
 use std::process;
 use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
+
+mod scheme {
+    pub const HTTP: &'static str = "http://";
+    pub const TCP: &'static str = "tcp://";
+}
 
 // On unix platforms you can use ANSI escape sequences
 #[cfg(unix)]
@@ -43,7 +50,17 @@ const PROMPT: &'static str = ">> ";
 
 fn main() {
     let mut rl = Editor::<()>::new();
-    let mut proj = None;
+    let mut proj = env::args().nth(1).and_then(|ref s| {
+        if is_http(s) {
+            load_proj_http(&s[scheme::HTTP.len()..])
+        } else if is_tcp(s) {
+            load_proj_tcp(&s[scheme::TCP.len()..])
+        } else if is_file(s) {
+            Ok(load_proj_by_path(s))
+        } else {
+            Err("Invalid argument")
+        }.ok()
+    });
     loop {
         let readline = rl.readline(PROMPT);
         match readline {
@@ -300,4 +317,16 @@ fn decompile(
     ctrl_flow_struct::structure_and_convert(c_cfg)
         .unwrap()
         .print()
+}
+
+fn is_file(path: &str) -> bool {
+    fs::metadata(path).map(|f| f.is_file()).unwrap_or(false)
+}
+
+fn is_http(url: &str) -> bool {
+    url.starts_with(scheme::HTTP)
+}
+
+fn is_tcp(url: &str) -> bool {
+    url.starts_with(scheme::TCP)
 }
