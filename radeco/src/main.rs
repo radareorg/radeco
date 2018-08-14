@@ -163,24 +163,8 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
         (Some(command::DECOMPILE), Some(f)) => {
             if let Some(rfn) = get_function(f, &proj) {
                 let rmod = proj.iter().map(|i| i.module).next().unwrap();
-                let func_name_map = rmod.functions
-                    .iter()
-                    .map(|(&addr, f)| (addr, f.name.to_string()))
-                    .collect();
-                let strings = rmod.strings()
-                    .iter()
-                    .filter(|ref s| s.paddr.is_some() && s.string.is_some())
-                    .cloned()
-                    .map(|s| {
-                        let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());
-                        let bytes = base64::decode(&_s).unwrap_or(Vec::new());
-                        let ret_string = match str::from_utf8(bytes.as_slice()) {
-                            Ok(v) => v.to_string(),
-                            Err(_e) => _s,
-                        };
-                        (addr, ret_string)
-                    })
-                    .collect();
+                let func_name_map = func_names(&rmod);
+                let strings = strings(&rmod);
                 println!("{}", decompile(rfn, &func_name_map, &strings));
             } else {
                 println!("{} is not found", f);
@@ -336,4 +320,28 @@ fn is_http(url: &str) -> bool {
 
 fn is_tcp(url: &str) -> bool {
     url.starts_with(scheme::TCP)
+}
+
+fn func_names(rmod: &RadecoModule) -> HashMap<u64, String> {
+    rmod.functions
+        .iter()
+        .map(|(&addr, f)| (addr, f.name.to_string()))
+        .collect()
+}
+
+fn strings(rmod: &RadecoModule) -> HashMap<u64, String> {
+    rmod.strings()
+        .iter()
+        .filter(|ref s| s.paddr.is_some() && s.string.is_some())
+        .cloned()
+        .map(|s| {
+            let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());
+            let bytes = base64::decode(&_s).unwrap_or(Vec::new());
+            let ret_string = match str::from_utf8(bytes.as_slice()) {
+                Ok(v) => v.to_string(),
+                Err(_e) => _s,
+            };
+            (addr, ret_string)
+        })
+        .collect()
 }
