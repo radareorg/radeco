@@ -169,7 +169,7 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
                     .collect();
                 let strings = rmod.strings()
                     .iter()
-                    .filter(|ref s| s.vaddr.is_some() && s.string.is_some())
+                    .filter(|ref s| s.paddr.is_some() && s.string.is_some())
                     .cloned()
                     .map(|s| {
                         let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());
