@@ -412,6 +412,7 @@ impl<'a> ProjectLoader<'a> {
         if self.source.is_none() {
             // Load r2 source.
             let mut r2 = R2::new(Some(&self.path)).expect("Unable to open r2");
+            let _ = r2.raw("e bin.minstr=1".to_string());
             //New r2 process is launched thus it needs to analyze
             r2.analyze_all();
             let r2w = Rc::new(RefCell::new(r2));
