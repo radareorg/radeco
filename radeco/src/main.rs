@@ -148,9 +148,9 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
         }
         (Some(command::CONNECT), Some(url)) => {
             let p_opt = if is_http(&url) {
-                load_proj_http(&url[7..])
+                load_proj_http(&url[scheme::HTTP.len()..])
             } else if is_tcp(&url) {
-                load_proj_tcp(&url[6..])
+                load_proj_tcp(&url[scheme::TCP.len()..])
             } else {
                 Err("Invalid url")
             };
