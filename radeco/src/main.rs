@@ -20,9 +20,9 @@ use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::regfile::SubRegisterFile;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
 use radeco_lib::middle::ssa::verifier;
-use rustyline::Editor;
-
-
+use rustyline::{CompletionType, Config, EditMode, Editor};
+use rustyline::completion::Completer;
+use rustyline::completion::FilenameCompleter;
 use rustyline::error::ReadlineError;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -48,8 +48,49 @@ const PROMPT: &'static str = "\x1b[1;32m>>\x1b[0m ";
 #[cfg(windows)]
 const PROMPT: &'static str = ">> ";
 
+#[derive(Default)]
+struct Completes {
+    file_completer: FilenameCompleter,
+}
+
+impl Completer for Completes {
+    fn complete(&self, line: &str, _pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
+        // TODO Completion for function names
+        let cmds = vec![
+            command::HELP,
+            command::LOAD,
+            command::CONNECT,
+            command::FNLIST,
+            command::ANALYZE,
+            command::DOT,
+            command::IR,
+            command::DECOMPILE,
+        ];
+        let mut ret: Vec<String> = cmds.into_iter()
+            .filter(|s| s.starts_with(line))
+            .map(|s| s.to_string())
+            .collect();
+        match self.file_completer.complete(line, _pos) {
+            Ok((n, mut ss)) => {
+                let mut completed_lines = ss.into_iter()
+                    .map(|s| format!("{}{}", &line[..n], s))
+                    .collect();
+                ret.append(&mut completed_lines);
+            }
+            Err(_) => {}
+        }
+        Ok((0, ret))
+    }
+}
+
 fn main() {
-    let mut rl = Editor::<()>::new();
+    let config = Config::builder()
+        .history_ignore_space(true)
+        .completion_type(CompletionType::List)
+        .edit_mode(EditMode::Emacs)
+        .build();
+    let mut rl = Editor::with_config(config);
+    rl.set_helper(Some((Completes::default(), ())));
     let mut proj = env::args().nth(1).and_then(|ref s| {
         if is_http(s) {
             load_proj_http(&s[scheme::HTTP.len()..])
