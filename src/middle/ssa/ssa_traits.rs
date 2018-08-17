@@ -50,7 +50,7 @@ macro_rules! exit_node_err {
 #[macro_export]
 macro_rules! registers_in_err {
     ($ssa:expr, $node:expr) => {
-            registers_in_err!($ssa, $node, $ssa.invalid_action().unwrap())
+            registers_in_err!($ssa, $node, $ssa.invalid_value().unwrap())
     };
     ($ssa:expr, $node:expr, $default:expr) => {
         $ssa.registers_in($node).unwrap_or_else(|| {

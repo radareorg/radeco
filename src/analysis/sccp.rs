@@ -379,6 +379,9 @@ impl<T> Analyzer<T>
             for &(ref next, _) in &edges {
                 self.cfgwl_push(next);
             }
+            for arg in self.g.operands_of(registers_in_err!(self.g, entry_node)) {
+                self.set_value(&arg, LatticeValue::Bottom);
+            }
         }
 
         while !self.ssa_worklist.is_empty() || !self.cfg_worklist.is_empty() {
