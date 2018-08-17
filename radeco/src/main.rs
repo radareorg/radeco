@@ -170,7 +170,13 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject
                 println!("{} is not found", f);
             }
         }
-        _ => {}
+        _ => {
+            println!(
+                "Invalid command {} {}",
+                op1.unwrap_or(""),
+                op2.unwrap_or("")
+            );
+        }
     }
 }
 
