@@ -81,6 +81,7 @@ fn main() {
 }
 
 mod command {
+    pub const HELP: &'static str = "help";
     pub const LOAD: &'static str = "load";
     pub const CONNECT: &'static str = "connect";
     pub const FNLIST: &'static str = "fn_list";
@@ -90,8 +91,52 @@ mod command {
     pub const DECOMPILE: &'static str = "decompile";
 }
 
+fn help() {
+    let width = 30;
+    println!("{:width$}    Show this help", command::HELP, width = width);
+    println!(
+        "{:width$}    Load binary",
+        format!("{} path", command::LOAD),
+        width = width
+    );
+    println!(
+        "{:width$}    Connect to radare2 server",
+        format!("{} (http|tcp)://<url>", command::CONNECT),
+        width = width
+    );
+    println!(
+        "{:width$}    Show function list",
+        command::FNLIST,
+        width = width
+    );
+    println!(
+        "{:width$}    Analyze <func>",
+        format!("{} <func>", command::ANALYZE),
+        width = width
+    );
+    println!(
+        "{:width$}    Emit IR of <func>",
+        format!("{} <func>", command::IR),
+        width = width
+    );
+    println!(
+        "{:width$}    Emit graph of the IR in Graphviz dot",
+        format!("{} <func>", command::DOT),
+        width = width
+    );
+    println!(
+        "{:width$}    Decompile <func>",
+        format!("{} <func>", command::DECOMPILE),
+        width = width
+    );
+}
+
 fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject>) {
     match (op1, op2) {
+        (Some(command::HELP), _) => {
+            help();
+            return;
+        }
         (Some(command::LOAD), Some(path)) => {
             if is_file(path) {
                 *proj_opt = Some(load_proj_by_path(path));
