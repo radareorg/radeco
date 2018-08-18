@@ -85,6 +85,7 @@ impl Completer for Completes {
 
 fn main() {
     let config = Config::builder()
+        .auto_add_history(true)
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
         .edit_mode(EditMode::Emacs)
