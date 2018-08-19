@@ -34,6 +34,10 @@ use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
 
+thread_local!(
+    pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None);
+);
+
 mod scheme {
     pub const HTTP: &'static str = "http://";
     pub const TCP: &'static str = "tcp://";
@@ -71,7 +75,7 @@ impl Completer for Completes {
             .map(|s| s.to_string())
             .collect();
         match self.file_completer.complete(line, _pos) {
-            Ok((n, mut ss)) => {
+            Ok((n, ss)) => {
                 let mut completed_lines = ss.into_iter()
                     .map(|s| format!("{}{}", &line[..n], s))
                     .collect();
@@ -92,17 +96,20 @@ fn main() {
         .build();
     let mut rl = Editor::with_config(config);
     rl.set_helper(Some((Completes::default(), ())));
-    let mut proj = env::args().nth(1).and_then(|ref s| {
-        if is_http(s) {
-            load_proj_http(&s[scheme::HTTP.len()..])
-        } else if is_tcp(s) {
-            load_proj_tcp(&s[scheme::TCP.len()..])
-        } else if is_file(s) {
-            Ok(load_proj_by_path(s))
-        } else {
-            Err("Invalid argument")
-        }.ok()
+    PROJ.with(|proj| {
+        *proj.borrow_mut() = env::args().nth(1).and_then(|ref s| {
+            if is_http(s) {
+                load_proj_http(&s[scheme::HTTP.len()..])
+            } else if is_tcp(s) {
+                load_proj_tcp(&s[scheme::TCP.len()..])
+            } else if is_file(s) {
+                Ok(load_proj_by_path(s))
+            } else {
+                Err("Invalid argument")
+            }.ok()
+        });
     });
+
     loop {
         let readline = rl.readline(PROMPT);
         match readline {
@@ -110,7 +117,7 @@ fn main() {
                 let mut terms = line.split_whitespace();
                 let o1 = terms.next();
                 let o2 = terms.next();
-                cmd(o1, o2, &mut proj);
+                cmd(o1, o2);
             }
             Err(ReadlineError::Interrupted) |
             Err(ReadlineError::Eof) => break,
@@ -173,98 +180,99 @@ fn help() {
     );
 }
 
-fn cmd(op1: Option<&str>, op2: Option<&str>, proj_opt: &mut Option<RadecoProject>) {
-    match (op1, op2) {
-        (Some(command::HELP), _) => {
-            help();
-            return;
-        }
-        (Some(command::LOAD), Some(path)) => {
-            if is_file(path) {
-                *proj_opt = Some(load_proj_by_path(path));
-                return;
-            } else {
-                println!("{} is not found.", path);
+fn cmd(op1: Option<&str>, op2: Option<&str>) {
+    PROJ.with(|proj_opt| {
+        match (op1, op2) {
+            (Some(command::HELP), _) => {
+                help();
                 return;
             }
-        }
-        (Some(command::CONNECT), Some(url)) => {
-            let p_opt = if is_http(&url) {
-                load_proj_http(&url[scheme::HTTP.len()..])
-            } else if is_tcp(&url) {
-                load_proj_tcp(&url[scheme::TCP.len()..])
-            } else {
-                Err("Invalid url")
-            };
-            match p_opt {
-                Ok(proj) => *proj_opt = Some(proj),
-                Err(msg) => println!("{}", msg),
+            (Some(command::LOAD), Some(path)) => {
+                if is_file(path) {
+                    *proj_opt.borrow_mut() = Some(load_proj_by_path(path));
+                    return;
+                } else {
+                    println!("{} is not found.", path);
+                    return;
+                }
             }
-            return;
-        }
-        _ => {}
-    };
-    let mut proj = match proj_opt {
-        Some(proj) => proj,
-        None => {
+            (Some(command::CONNECT), Some(url)) => {
+                let p_opt = if is_http(&url) {
+                    load_proj_http(&url[scheme::HTTP.len()..])
+                } else if is_tcp(&url) {
+                    load_proj_tcp(&url[scheme::TCP.len()..])
+                } else {
+                    Err("Invalid url")
+                };
+                match p_opt {
+                    Ok(p) => *proj_opt.borrow_mut() = Some(p),
+                    Err(msg) => println!("{}", msg),
+                }
+                return;
+            }
+            _ => {}
+        };
+        if proj_opt.borrow().is_none() {
             println!("Load a project first");
             return;
         }
-    };
-    match (op1, op2) {
-        (Some(command::ANALYZE), Some("*")) => {
-            let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
-                rmod.functions.values_mut()
-            });
-            for rfn in rfns {
-                analyze(rfn);
+        let mut proj_ = proj_opt.borrow_mut();
+        let proj = proj_.as_mut().unwrap();
+        match (op1, op2) {
+            (Some(command::ANALYZE), Some("*")) => {
+                let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
+                    rmod.functions.values_mut()
+                });
+                for rfn in rfns {
+                    analyze(rfn);
+                }
+            }
+            (Some(command::FNLIST), _) => {
+                let funcs = fn_list(&proj);
+                println!("{}", funcs.join("\n"));
+            }
+            // TODO Show list of dependency information of analyses
+            // TODO Add command for individual analyses
+            (Some(command::ANALYZE), Some(f)) => {
+                if let Some(rfn) = get_function_mut(f, proj) {
+                    analyze(rfn);
+                } else {
+                    println!("{} is not found", f);
+                }
+            }
+            (Some(command::DOT), Some(f)) => {
+                if let Some(rfn) = get_function(f, &proj) {
+                    println!("{}", emit_dot(rfn.ssa()));
+                } else {
+                    println!("{} is not found", f);
+                }
+            }
+            (Some(command::IR), Some(f)) => {
+                if let Some(rfn) = get_function(f, &proj) {
+                    println!("{}", emit_ir(rfn));
+                } else {
+                    println!("{} is not found", f);
+                }
+            }
+            (Some(command::DECOMPILE), Some(f)) => {
+                if let Some(rfn) = get_function(f, &proj) {
+                    let rmod = proj.iter().map(|i| i.module).next().unwrap();
+                    let func_name_map = func_names(&rmod);
+                    let strings = strings(&rmod);
+                    println!("{}", decompile(rfn, &func_name_map, &strings));
+                } else {
+                    println!("{} is not found", f);
+                }
+            }
+            _ => {
+                println!(
+                    "Invalid command {} {}",
+                    op1.unwrap_or(""),
+                    op2.unwrap_or("")
+                );
             }
         }
-        (Some(command::FNLIST), _) => {
-            let funcs = fn_list(&proj);
-            println!("{}", funcs.join("\n"));
-        }
-        // TODO Show list of dependency information of analyses
-        // TODO Add command for individual analyses
-        (Some(command::ANALYZE), Some(f)) => {
-            if let Some(rfn) = get_function_mut(f, &mut proj) {
-                analyze(rfn);
-            } else {
-                println!("{} is not found", f);
-            }
-        }
-        (Some(command::DOT), Some(f)) => {
-            if let Some(rfn) = get_function(f, &proj) {
-                println!("{}", emit_dot(rfn.ssa()));
-            } else {
-                println!("{} is not found", f);
-            }
-        }
-        (Some(command::IR), Some(f)) => {
-            if let Some(rfn) = get_function(f, &proj) {
-                println!("{}", emit_ir(rfn));
-            } else {
-                println!("{} is not found", f);
-            }
-        }
-        (Some(command::DECOMPILE), Some(f)) => {
-            if let Some(rfn) = get_function(f, &proj) {
-                let rmod = proj.iter().map(|i| i.module).next().unwrap();
-                let func_name_map = func_names(&rmod);
-                let strings = strings(&rmod);
-                println!("{}", decompile(rfn, &func_name_map, &strings));
-            } else {
-                println!("{} is not found", f);
-            }
-        }
-        _ => {
-            println!(
-                "Invalid command {} {}",
-                op1.unwrap_or(""),
-                op2.unwrap_or("")
-            );
-        }
-    }
+    })
 }
 
 fn load_proj_by_path(path: &str) -> RadecoProject {
