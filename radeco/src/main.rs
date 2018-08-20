@@ -7,40 +7,26 @@ extern crate r2api;
 extern crate base64;
 extern crate rustyline;
 
-use r2pipe::{R2, R2Pipe};
-use radeco_lib::analysis::cse::cse::CSE;
-use radeco_lib::analysis::interproc::fixcall::CallFixer;
-use radeco_lib::analysis::sccp;
-use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
-use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
-use radeco_lib::backend::lang_c::c_cfg_builder;
-use radeco_lib::frontend::radeco_containers::*;
-use radeco_lib::middle::{dce, dot};
-use radeco_lib::middle::ir_writer;
-use radeco_lib::middle::regfile::SubRegisterFile;
-use radeco_lib::middle::ssa::ssastorage::SSAStorage;
-use radeco_lib::middle::ssa::verifier;
+mod core;
+
 use rustyline::{CompletionType, Config, EditMode, Editor};
 use rustyline::completion::Completer;
 use rustyline::completion::FilenameCompleter;
 use rustyline::error::ReadlineError;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::env;
-
 use std::fs;
-use std::process;
-use std::rc::Rc;
-use std::str;
-use std::sync::Arc;
-
-thread_local!(
-    pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None);
-);
 
 mod scheme {
     pub const HTTP: &'static str = "http://";
     pub const TCP: &'static str = "tcp://";
+
+    pub fn is_http(url: &str) -> bool {
+        url.starts_with(HTTP)
+    }
+
+    pub fn is_tcp(url: &str) -> bool {
+        url.starts_with(TCP)
+    }
 }
 
 // On unix platforms you can use ANSI escape sequences
@@ -96,14 +82,14 @@ fn main() {
         .build();
     let mut rl = Editor::with_config(config);
     rl.set_helper(Some((Completes::default(), ())));
-    PROJ.with(|proj| {
+    core::PROJ.with(|proj| {
         *proj.borrow_mut() = env::args().nth(1).and_then(|ref s| {
-            if is_http(s) {
-                load_proj_http(&s[scheme::HTTP.len()..])
-            } else if is_tcp(s) {
-                load_proj_tcp(&s[scheme::TCP.len()..])
+            if scheme::is_http(s) {
+                core::load_proj_http(&s[scheme::HTTP.len()..])
+            } else if scheme::is_tcp(s) {
+                core::load_proj_tcp(&s[scheme::TCP.len()..])
             } else if is_file(s) {
-                Ok(load_proj_by_path(s))
+                Ok(core::load_proj_by_path(s))
             } else {
                 Err("Invalid argument")
             }.ok()
@@ -133,63 +119,64 @@ mod command {
     pub const HELP: &'static str = "help";
     pub const LOAD: &'static str = "load";
     pub const CONNECT: &'static str = "connect";
-    pub const FNLIST: &'static str = "fn_list";
+    pub const FNLIST: &'static str = "core::fn_list";
     pub const ANALYZE: &'static str = "analyze";
     pub const DOT: &'static str = "dot";
     pub const IR: &'static str = "ir";
     pub const DECOMPILE: &'static str = "decompile";
+
+    pub fn help() {
+        let width = 30;
+        println!("{:width$}    Show this help", HELP, width = width);
+        println!(
+            "{:width$}    Load binary",
+            format!("{} path", LOAD),
+            width = width
+        );
+        println!(
+            "{:width$}    Connect to radare2 server",
+            format!("{} (http|tcp)://<url>", CONNECT),
+            width = width
+        );
+        println!(
+            "{:width$}    Show function list",
+            FNLIST,
+            width = width
+        );
+        println!(
+            "{:width$}    Analyze <func>",
+            format!("{} <func>", ANALYZE),
+            width = width
+        );
+        println!(
+            "{:width$}    Emit IR of <func>",
+            format!("{} <func>", IR),
+            width = width
+        );
+        println!(
+            "{:width$}    Emit graph of the IR in Graphviz dot",
+            format!("{} <func>", DOT),
+            width = width
+        );
+        println!(
+            "{:width$}    Decompile <func>",
+            format!("{} <func>", DECOMPILE),
+            width = width
+        );
+    }
 }
 
-fn help() {
-    let width = 30;
-    println!("{:width$}    Show this help", command::HELP, width = width);
-    println!(
-        "{:width$}    Load binary",
-        format!("{} path", command::LOAD),
-        width = width
-    );
-    println!(
-        "{:width$}    Connect to radare2 server",
-        format!("{} (http|tcp)://<url>", command::CONNECT),
-        width = width
-    );
-    println!(
-        "{:width$}    Show function list",
-        command::FNLIST,
-        width = width
-    );
-    println!(
-        "{:width$}    Analyze <func>",
-        format!("{} <func>", command::ANALYZE),
-        width = width
-    );
-    println!(
-        "{:width$}    Emit IR of <func>",
-        format!("{} <func>", command::IR),
-        width = width
-    );
-    println!(
-        "{:width$}    Emit graph of the IR in Graphviz dot",
-        format!("{} <func>", command::DOT),
-        width = width
-    );
-    println!(
-        "{:width$}    Decompile <func>",
-        format!("{} <func>", command::DECOMPILE),
-        width = width
-    );
-}
 
 fn cmd(op1: Option<&str>, op2: Option<&str>) {
-    PROJ.with(|proj_opt| {
+    core::PROJ.with(|proj_opt| {
         match (op1, op2) {
             (Some(command::HELP), _) => {
-                help();
+                command::help();
                 return;
             }
             (Some(command::LOAD), Some(path)) => {
                 if is_file(path) {
-                    *proj_opt.borrow_mut() = Some(load_proj_by_path(path));
+                    *proj_opt.borrow_mut() = Some(core::load_proj_by_path(path));
                     return;
                 } else {
                     println!("{} is not found.", path);
@@ -197,10 +184,10 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                 }
             }
             (Some(command::CONNECT), Some(url)) => {
-                let p_opt = if is_http(&url) {
-                    load_proj_http(&url[scheme::HTTP.len()..])
-                } else if is_tcp(&url) {
-                    load_proj_tcp(&url[scheme::TCP.len()..])
+                let p_opt = if scheme::is_http(&url) {
+                    core::load_proj_http(&url[scheme::HTTP.len()..])
+                } else if scheme::is_tcp(&url) {
+                    core::load_proj_tcp(&url[scheme::TCP.len()..])
                 } else {
                     Err("Invalid url")
                 };
@@ -224,42 +211,45 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                     rmod.functions.values_mut()
                 });
                 for rfn in rfns {
-                    analyze(rfn);
+                    core::analyze(rfn);
                 }
             }
             (Some(command::FNLIST), _) => {
-                let funcs = fn_list(&proj);
+                let funcs = core::fn_list(&proj);
                 println!("{}", funcs.join("\n"));
             }
             // TODO Show list of dependency information of analyses
             // TODO Add command for individual analyses
             (Some(command::ANALYZE), Some(f)) => {
-                if let Some(rfn) = get_function_mut(f, proj) {
-                    analyze(rfn);
+                if let Some(rfn) = core::get_function_mut(f, proj) {
+                    core::analyze(rfn);
                 } else {
                     println!("{} is not found", f);
                 }
             }
             (Some(command::DOT), Some(f)) => {
-                if let Some(rfn) = get_function(f, &proj) {
-                    println!("{}", emit_dot(rfn.ssa()));
+                if let Some(rfn) = core::get_function(f, &proj) {
+                    println!("{}", core::emit_dot(rfn.ssa()));
                 } else {
                     println!("{} is not found", f);
                 }
             }
             (Some(command::IR), Some(f)) => {
-                if let Some(rfn) = get_function(f, &proj) {
-                    println!("{}", emit_ir(rfn));
+                if let Some(rfn) = core::get_function(f, &proj) {
+                    println!("{}", core::emit_ir(rfn));
                 } else {
                     println!("{} is not found", f);
                 }
             }
             (Some(command::DECOMPILE), Some(f)) => {
-                if let Some(rfn) = get_function(f, &proj) {
+                if let Some(rfn) = core::get_function(f, &proj) {
                     let rmod = proj.iter().map(|i| i.module).next().unwrap();
-                    let func_name_map = func_names(&rmod);
-                    let strings = strings(&rmod);
-                    println!("{}", decompile(rfn, &func_name_map, &strings));
+                    let func_name_map = core::func_names(&rmod);
+                    let strings = core::strings(&rmod);
+                    match core::decompile(rfn, &func_name_map, &strings) {
+                        Ok(res) => println!("{}", res),
+                        Err(err) => println!("{}", err),
+                    }
                 } else {
                     println!("{} is not found", f);
                 }
@@ -275,174 +265,6 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
     })
 }
 
-fn load_proj_by_path(path: &str) -> RadecoProject {
-    let mut p = ProjectLoader::new().path(path).load();
-    let regfile = p.regfile().clone();
-    for mut xy in p.iter_mut() {
-        analyze_mod(regfile.clone(), xy.module);
-    }
-    p
-}
-
-fn load_proj_tcp(url: &str) -> Result<RadecoProject, &'static str> {
-    let r2p = R2Pipe::tcp(url)?;
-    Ok(load_project_by_r2pipe(r2p))
-}
-
-fn load_proj_http(url: &str) -> Result<RadecoProject, &'static str> {
-    let r2p = R2Pipe::http(url)?;
-    Ok(load_project_by_r2pipe(r2p))
-}
-
-fn load_project_by_r2pipe(r2p: R2Pipe) -> RadecoProject {
-    let r2 = R2::from(r2p);
-    let r2w = Rc::new(RefCell::new(r2));
-    let mut p = ProjectLoader::new().source(Rc::new(r2w)).load();
-    let regfile = p.regfile().clone();
-    for mut xy in p.iter_mut() {
-        analyze_mod(regfile.clone(), xy.module);
-    }
-    p
-}
-
-fn fn_list(proj: &RadecoProject) -> Vec<String> {
-    proj.iter()
-        .map(|i| i.module)
-        .flat_map(|rmod| rmod.functions.values())
-        .map(|s| s.name.to_string())
-        .collect()
-}
-
-fn get_function<'a>(name: &str, proj: &'a RadecoProject) -> Option<&'a RadecoFunction> {
-    proj.iter()
-        .map(|i| i.module)
-        .flat_map(|rmod| rmod.functions.values())
-        .filter(|rfn| rfn.name == name)
-        .next()
-}
-
-fn get_function_mut<'a>(name: &str, proj: &'a mut RadecoProject) -> Option<&'a mut RadecoFunction> {
-    proj.iter_mut()
-        .map(|i| i.module)
-        .flat_map(|rmod| rmod.functions.values_mut())
-        .filter(|rfn| rfn.name == name)
-        .next()
-}
-
-fn analyze_mod(regfile: Arc<SubRegisterFile>, rmod: &mut RadecoModule) {
-    // Analyze preserved for all functions.
-    {
-        println!("[*] Fixing Callee Information");
-        let bp_name = regfile.get_name_by_alias(&"BP".to_string());
-        let bp_name = bp_name.map(|s| s.to_owned());
-        let sp_name = regfile.get_name_by_alias(&"SP".to_string());
-        let sp_name = sp_name.map(|s| s.to_owned());
-        let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
-        callfixer.rounded_analysis();
-    }
-
-    // Fix call sites
-    radeco_lib::analysis::functions::fix_ssa_opcalls::go(rmod);
-
-    // Infer calling conventions
-    radeco_lib::analysis::functions::infer_regusage::run(rmod, &*regfile);
-}
-
-fn analyze(rfn: &mut RadecoFunction) {
-    println!("[+] Analyzing: {} @ {:#x}", rfn.name, rfn.offset);
-    {
-        println!("  [*] Eliminating Dead Code");
-        dce::collect(rfn.ssa_mut());
-    }
-    let mut ssa = {
-        // Constant Propagation (sccp)
-        println!("  [*] Propagating Constants");
-        let mut analyzer = sccp::Analyzer::new(rfn.ssa_mut());
-        analyzer.analyze();
-        analyzer.emit_ssa()
-    };
-    {
-        println!("  [*] Eliminating More DeadCode");
-        dce::collect(&mut ssa);
-    }
-    *rfn.ssa_mut() = ssa;
-    {
-        // Common SubExpression Elimination (cse)
-        println!("  [*] Eliminating Common SubExpressions");
-        let mut cse = CSE::new(rfn.ssa_mut());
-        cse.run();
-    }
-    {
-        // Verify SSA
-        println!("  [*] Verifying SSA's Validity");
-        match verifier::verify(rfn.ssa()) {
-            Err(e) => {
-                println!("  [*] Found Error: {}", e);
-                process::exit(255);
-            }
-            Ok(_) => {}
-        }
-    }
-}
-
-fn emit_ir(rfn: &RadecoFunction) -> String {
-    println!("  [*] Writing out IR");
-    let mut res = String::new();
-    ir_writer::emit_il(&mut res, Some(rfn.name.to_string()), rfn.ssa()).unwrap();
-    res
-}
-
-fn emit_dot(ssa: &SSAStorage) -> String {
-    dot::emit_dot(ssa)
-}
-
-fn decompile(
-    rfn: &RadecoFunction,
-    func_name_map: &HashMap<u64, String>,
-    strings: &HashMap<u64, String>,
-) -> String {
-    let c_cfg = c_cfg_builder::recover_c_cfg(rfn, func_name_map, strings);
-    if let Err(err) = CCFGVerifier::verify(&c_cfg) {
-        println!("CCFG verification failed");
-        println!("{}", err);
-    }
-    ctrl_flow_struct::structure_and_convert(c_cfg)
-        .unwrap()
-        .print()
-}
-
 fn is_file(path: &str) -> bool {
     fs::metadata(path).map(|f| f.is_file()).unwrap_or(false)
-}
-
-fn is_http(url: &str) -> bool {
-    url.starts_with(scheme::HTTP)
-}
-
-fn is_tcp(url: &str) -> bool {
-    url.starts_with(scheme::TCP)
-}
-
-fn func_names(rmod: &RadecoModule) -> HashMap<u64, String> {
-    rmod.functions
-        .iter()
-        .map(|(&addr, f)| (addr, f.name.to_string()))
-        .collect()
-}
-
-fn strings(rmod: &RadecoModule) -> HashMap<u64, String> {
-    rmod.strings()
-        .iter()
-        .filter(|ref s| s.paddr.is_some() && s.string.is_some())
-        .cloned()
-        .map(|s| {
-            let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());
-            let bytes = base64::decode(&_s).unwrap_or(Vec::new());
-            let ret_string = match str::from_utf8(bytes.as_slice()) {
-                Ok(v) => v.to_string(),
-                Err(_e) => _s,
-            };
-            (addr, ret_string)
-        })
-        .collect()
 }
