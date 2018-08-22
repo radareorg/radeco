@@ -125,7 +125,7 @@ pub fn decompile(
 ) -> Result<String, String> {
     let c_cfg = c_cfg_builder::recover_c_cfg(rfn, func_name_map, strings);
     if let Err(err) = CCFGVerifier::verify(&c_cfg) {
-        return Err(format!("CCFG verification failed {}", err));
+        println!("CCFG verification failed {}", err);
     }
     ctrl_flow_struct::structure_and_convert(c_cfg)
         .map(|s| s.print())
