@@ -104,6 +104,7 @@ fn main() {
                 let o1 = terms.next();
                 let o2 = terms.next();
                 cmd(o1, o2);
+                println!("END");
             }
             Err(ReadlineError::Interrupted) |
             Err(ReadlineError::Eof) => break,
@@ -262,7 +263,7 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                 );
             }
         }
-    })
+    });
 }
 
 fn is_file(path: &str) -> bool {
