@@ -1,3 +1,4 @@
+#![feature(box_patterns)]
 #[cfg(feature = "trace_log")]
 extern crate env_logger;
 
@@ -7,13 +8,13 @@ extern crate r2api;
 extern crate base64;
 extern crate rustyline;
 
+mod cli;
 mod core;
 
 use rustyline::{CompletionType, Config, EditMode, Editor};
 use rustyline::completion::Completer;
 use rustyline::completion::FilenameCompleter;
 use rustyline::error::ReadlineError;
-use std::env;
 use std::fs;
 
 mod scheme {
@@ -73,7 +74,18 @@ impl Completer for Completes {
     }
 }
 
+const USAGE: &'static str = "
+Usage:
+  radeco <bin>
+  radeco (--help | --version)
+
+  Options:
+  -h, --help      Show this screen.
+  --version       Show current version.
+";
+
 fn main() {
+    let arg = cli::parse_args(USAGE);
     let config = Config::builder()
         .auto_add_history(true)
         .history_ignore_space(true)
@@ -82,8 +94,8 @@ fn main() {
         .build();
     let mut rl = Editor::with_config(config);
     rl.set_helper(Some((Completes::default(), ())));
-    core::PROJ.with(|proj| {
-        *proj.borrow_mut() = env::args().nth(1).and_then(|ref s| {
+    core::PROJ.with(move |proj| {
+        *proj.borrow_mut() = arg.and_then(|ref s| {
             if scheme::is_http(s) {
                 core::load_proj_http(&s[scheme::HTTP.len()..])
             } else if scheme::is_tcp(s) {
