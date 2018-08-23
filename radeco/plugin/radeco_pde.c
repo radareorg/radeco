@@ -1,19 +1,18 @@
 #include <r_core.h>
+#include <r_socket.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define SETDESC(x, y) r_config_node_desc(x, y)
 #define SETPREF(x, y, z) SETDESC(r_config_set(core->config, x, y), z)
 
-const int PORT = 11111;
+const uint32_t PORT = 11111;
 static char *radeco_path = "radeco";
-static FILE *radeco_w = NULL;
-static FILE *radeco_r = NULL;
 
-void read_radeco_output() {
+void read_radeco_output(RSocketProc *proc) {
     char c, s[3];
-    s[0] = s[1] = s[2] = '\0';
-    while (c = fgetc(radeco_r)) {
+    memset(s, '\0', sizeof(s));
+    while (read(proc->fd1[0], &c, 1) != -1) {
         printf("%c", c);
         s[0] = s[1];
         s[1] = s[2];
@@ -22,37 +21,6 @@ void read_radeco_output() {
             break;
         }
     }
-    fgetc(radeco_r);
-}
-
-void spawn_radeco() {
-#ifdef __unix__
-    static int user_pipe[2];
-    static int radeco_pipe[2];
-    pipe(user_pipe);
-    pipe(radeco_pipe);
-    if (fork() > 0) {
-        close(user_pipe[1]);
-        close(radeco_pipe[0]);
-        radeco_w = fdopen(radeco_pipe[1], "w");
-        radeco_r = fdopen(user_pipe[0], "r");
-        setbuf(radeco_w, NULL);
-        return;
-    } else {
-        close(user_pipe[0]);
-        close(radeco_pipe[1]);
-        dup2(radeco_pipe[0], 0);
-        dup2(user_pipe[1], 1);
-        execvp(radeco_path, NULL);
-        exit(0);
-    }
-#else
-    if (radeco_w) {
-        pclose(radeco_w);
-    }
-    radeco_w = popen(radeco_path, "w");
-    setbuf(radeco_w, NULL);
-#endif
 }
 
 void spawn_http_srv(RCore *core) {
@@ -64,7 +32,7 @@ void spawn_http_srv(RCore *core) {
         char port_str[10];
         SETPREF("http.log", "false", "Show HTTP requests processed");
         SETPREF("http.sandbox", "false", "Show HTTP requests processed");
-        snprintf(port_str, 9, " %d", PORT);
+        snprintf(port_str, 9, " %u", PORT);
         r_core_rtr_http(core, '&', '\0', port_str);
     }
     is_called = true;
@@ -80,35 +48,81 @@ void usage() {
     eprintf("| pdes         respawn radeco subprocess\n");
 }
 
+// TODO Replace with `r_socket_proc_open`
+RSocketProc *open_proc(char *const argv[]) {
+    RSocketProc *proc = R_NEW(RSocketProc);
+    pipe(proc->fd0);
+    pipe(proc->fd1);
+    if ((proc->pid = r_sys_fork()) > 0) {
+        close(proc->fd0[0]);
+        close(proc->fd1[1]);
+        return proc;
+    } else {
+        close(proc->fd0[1]);
+        close(proc->fd1[0]);
+        dup2(proc->fd0[0], 0);
+        dup2(proc->fd1[1], 1);
+        execvp(argv[0], NULL);
+        exit(0);
+    }
+}
+
+RSocketProc *spawn_radeco() {
+    char *const argv[] = {radeco_path, NULL};
+    return open_proc(argv);
+}
+
+// TODO Replace with `r_socket_proc_printf`
+void proc_sendf(RSocketProc *sp, const char *fmt, ...) {
+    const uint32_t BUFFER_SIZE = 0x100;
+    char buf[BUFFER_SIZE + 1];
+    va_list ap;
+    va_start(ap, fmt);
+    const int n = vsnprintf(buf, BUFFER_SIZE, fmt, ap);
+    write(sp->fd0[1], buf, n);
+    va_end(ap);
+}
+
 int cmd_pdd(const char *input) {
-    if (input == NULL) {
+    static RSocketProc *radeco_proc = NULL;
+    if (!radeco_proc) {
+        radeco_proc = spawn_radeco();
+        if (!radeco_proc) {
+            eprintf("Spawning radeco process failed\n");
+            return true;
+        }
+    }
+
+    if (!input) {
         return true;
     }
     const char *query = input + 1;
     switch (input[0]) {
         case ' ':
-            fprintf(radeco_w, "decompile %s\n", query);
+            proc_sendf(radeco_proc, "decompile %s\n", query);
             break;
         case 'a':
-            fprintf(radeco_w, "analyze %s\n", query);
+            proc_sendf(radeco_proc, "analyze %s\n", query);
             break;
         case 'c':
-            fprintf(radeco_w, "connect http://localhost:%d\n", PORT);
+            proc_sendf(radeco_proc, "connect http://localhost:%u\n", PORT);
             break;
         case 'r':
-            fprintf(radeco_w, "%s\n", query);
+            proc_sendf(radeco_proc, "%s\n", query);
             break;
         case 's':
-            spawn_radeco();
+            radeco_proc = spawn_radeco();
+            if (!radeco_proc) {
+                eprintf("Spawning radeco process failed\n");
+                return true;
+            }
             break;
         case '\0':
         case '?':
         default:
             usage();
     }
-#ifdef __unix__
-    read_radeco_output();
-#endif
+    read_radeco_output(radeco_proc);
     return true;
 }
 
@@ -121,10 +135,7 @@ int cmd(void *user, const char *input) {
     return true;
 }
 
-int init(void *user, const char *_input) {
-    spawn_radeco();
-    return true;
-};
+int init(void *user, const char *_input) { return true; };
 
 RCorePlugin r_core_plugin_test = {.name = "radeco",
                                   .desc = "r2 interface for radeco",
