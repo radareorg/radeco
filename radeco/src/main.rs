@@ -74,18 +74,22 @@ impl Completer for Completes {
     }
 }
 
+const SEP: &'static str = "END";
 const USAGE: &'static str = "
 Usage:
   radeco <bin>
+  radeco [--append]
   radeco (--help | --version)
 
   Options:
-  -h, --help      Show this screen.
-  --version       Show current version.
+  -h, --help        Show this screen.
+  --version         Show current version.
+  --bin             Load a program.
+  --append          Append separator to the end of every output.
 ";
 
 fn main() {
-    let arg = cli::parse_args(USAGE);
+    let (arg, is_append_mode) = cli::parse_args(USAGE);
     let config = Config::builder()
         .auto_add_history(true)
         .history_ignore_space(true)
@@ -116,7 +120,9 @@ fn main() {
                 let o1 = terms.next();
                 let o2 = terms.next();
                 cmd(o1, o2);
-                println!("END");
+                if is_append_mode {
+                    println!("{}", SEP);
+                }
             }
             Err(ReadlineError::Interrupted) |
             Err(ReadlineError::Eof) => break,
