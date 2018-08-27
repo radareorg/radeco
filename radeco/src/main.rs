@@ -96,7 +96,7 @@ Usage:
 
   Options:
   -h, --help        Show this screen.
-  --version         Show current version.
+  -v, --version     Show current version.
   --bin             Load a program.
   --append          Append separator to the end of every output.
 ";
