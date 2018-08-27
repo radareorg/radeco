@@ -62,13 +62,13 @@ RSocketProc *open_proc(char *const argv[]) {
         close(proc->fd1[0]);
         dup2(proc->fd0[0], 0);
         dup2(proc->fd1[1], 1);
-        execvp(argv[0], NULL);
+        execvp(argv[0], argv);
         exit(0);
     }
 }
 
 RSocketProc *spawn_radeco() {
-    char *const argv[] = {radeco_path, NULL};
+    char *const argv[] = {radeco_path, "--append", NULL};
     return open_proc(argv);
 }
 
