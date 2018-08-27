@@ -11,9 +11,10 @@ extern crate rustyline;
 mod cli;
 mod core;
 
-use rustyline::{CompletionType, Config, EditMode, Editor};
-use rustyline::completion::Completer;
-use rustyline::completion::FilenameCompleter;
+use rustyline::{Helper, CompletionType, Config, EditMode, Editor};
+use rustyline::hint::Hinter;
+use rustyline::highlight::Highlighter;
+use rustyline::completion::{Completer, FilenameCompleter};
 use rustyline::error::ReadlineError;
 use std::fs;
 
@@ -44,7 +45,18 @@ struct Completes {
     file_completer: FilenameCompleter,
 }
 
+impl Helper for Completes {}
+
+impl Hinter for Completes {
+    fn hint(&self, _line: &str, _pos: usize) -> Option<String> {
+        None
+    }
+}
+
+impl Highlighter for Completes {}
+
 impl Completer for Completes {
+    type Candidate = String;
     fn complete(&self, line: &str, _pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
         // TODO Completion for function names
         let cmds = vec![
@@ -64,12 +76,13 @@ impl Completer for Completes {
         match self.file_completer.complete(line, _pos) {
             Ok((n, ss)) => {
                 let mut completed_lines = ss.into_iter()
-                    .map(|s| format!("{}{}", &line[..n], s))
+                    .map(|s| format!("{}{}", &line[..n], s.display))
                     .collect();
                 ret.append(&mut completed_lines);
             }
             Err(_) => {}
         }
+
         Ok((0, ret))
     }
 }
@@ -97,7 +110,7 @@ fn main() {
         .edit_mode(EditMode::Emacs)
         .build();
     let mut rl = Editor::with_config(config);
-    rl.set_helper(Some((Completes::default(), ())));
+    rl.set_helper(Some(Completes::default()));
     core::PROJ.with(move |proj| {
         *proj.borrow_mut() = arg.and_then(|ref s| {
             if scheme::is_http(s) {
@@ -138,7 +151,7 @@ mod command {
     pub const HELP: &'static str = "help";
     pub const LOAD: &'static str = "load";
     pub const CONNECT: &'static str = "connect";
-    pub const FNLIST: &'static str = "core::fn_list";
+    pub const FNLIST: &'static str = "fn_list";
     pub const ANALYZE: &'static str = "analyze";
     pub const DOT: &'static str = "dot";
     pub const IR: &'static str = "ir";
