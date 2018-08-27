@@ -15,10 +15,7 @@ docopt = "*"
 rustc-serialize = "*"
 log = "*"
 base64 = "0.9.2"
-
-[dependencies.rustyline]
-git = "https://github.com/kkawakam/rustyline"
-version = "2.0.0-alpha"
+rustyline = "2.0.0"
 
 [dependencies.r2pipe]
 # path = "../r2pipe.rs"
