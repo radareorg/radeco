@@ -2,7 +2,11 @@ language: rust
 # necessary for `travis-cargo coveralls --no-sudo`
 addons:
   apt:
+    sources:
+      - ubuntu-toolchain-r-test
     packages:
+      - gcc-7
+      - g++-7
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
@@ -15,7 +19,8 @@ notifications:
   irc: "chat.freenode.net#radare-rsoc"
   email: false
 
-before_install: ./scripts/install-dependencies.sh
+before_install:
+  - ./scripts/install-dependencies.sh
 
 # load travis-cargo
 before_script:
@@ -41,3 +46,4 @@ env:
   global:
     # override the default `--features unstable` used for the nightly branch (optional)
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
+
