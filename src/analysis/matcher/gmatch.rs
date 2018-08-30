@@ -13,11 +13,11 @@
 //!
 
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::fmt;
+use std::marker::PhantomData;
 
 use middle::ir::{MAddress, MOpcode, WidthSpec};
-use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk, ValueInfo};
+use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, ValueInfo, SSA};
 
 #[derive(Clone, Debug)]
 struct ParseToken {
@@ -55,8 +55,9 @@ pub struct Match<T: Clone + fmt::Debug> {
 }
 
 pub struct GraphMatcher<'a, I, S>
-    where I: Iterator<Item = S::ValueRef>,
-          S: 'a + SSA + SSAMod + SSAWalk<I>
+where
+    I: Iterator<Item = S::ValueRef>,
+    S: 'a + SSA + SSAMod + SSAWalk<I>,
 {
     ssa: &'a mut S,
     seen: HashMap<String, ParseToken>,
@@ -66,29 +67,26 @@ pub struct GraphMatcher<'a, I, S>
 
 #[macro_export]
 macro_rules! grep {
-    ($s: expr, $f: expr) => {
-        {
-            let mut matcher = gmatch::GraphMatcher::new($s);
-            matcher.grep($f.to_owned())
-        }
-    };
+    ($s: expr, $f: expr) => {{
+        let mut matcher = gmatch::GraphMatcher::new($s);
+        matcher.grep($f.to_owned())
+    }};
 }
 
 #[macro_export]
 macro_rules! grep_and_replace {
-    ($s: expr, $f: expr => $r: expr) => {
-        {
-            let mut matcher = gmatch::GraphMatcher::new($s);
-            for m in matcher.grep($f.to_owned()) {
-                matcher.replace_value(m, $r.to_owned());
-            }
+    ($s: expr, $f: expr => $r: expr) => {{
+        let mut matcher = gmatch::GraphMatcher::new($s);
+        for m in matcher.grep($f.to_owned()) {
+            matcher.replace_value(m, $r.to_owned());
         }
-    };
+    }};
 }
 
 impl<'a, I, S> GraphMatcher<'a, I, S>
-where I: Iterator<Item=S::ValueRef>,
-      S: 'a + SSA + SSAMod + SSAWalk<I>
+where
+    I: Iterator<Item = S::ValueRef>,
+    S: 'a + SSA + SSAMod + SSAWalk<I>,
 {
     pub fn new(ssa: &'a mut S) -> GraphMatcher<'a, I, S> {
         GraphMatcher {
@@ -107,54 +105,56 @@ where I: Iterator<Item=S::ValueRef>,
         for c in expr.chars() {
             match c {
                 ' ' if depth == 1 => sub_expr.push(String::new()),
-                ',' if depth == 1 => { },
+                ',' if depth == 1 => {}
                 ')' => {
                     depth -= 1;
                     if depth <= 0 {
-                        continue
+                        continue;
                     }
                     if let Some(s) = sub_expr.last_mut() {
                         s.push(c);
-                    }else {
+                    } else {
                         radeco_err!("parse error");
                     };
                 }
                 '(' => {
                     depth += 1;
                     if depth <= 1 {
-                        continue
+                        continue;
                     }
                     if let Some(s) = sub_expr.last_mut() {
                         s.push(c);
-                    }else {
+                    } else {
                         radeco_err!("parse error");
                     };
                 }
                 _ => {
                     if let Some(s) = sub_expr.last_mut() {
                         s.push(c);
-                    }else {
+                    } else {
                         radeco_err!("parse error");
                     };
                 }
             }
         }
-        ParseToken {
-            parsed: sub_expr
-        }
+        ParseToken { parsed: sub_expr }
     }
 
     // Warning: This function uses too much time when the fucntion is huge,
-    // especially when there are too many call statements. Because call 
+    // especially when there are too many call statements. Because call
     // statements use all the registers for safety.
     //
-    // Also, An important point is that this recursion should stop at Phi 
-    // nodes, otherwise, if a phi node uses a node after itself, it will 
+    // Also, An important point is that this recursion should stop at Phi
+    // nodes, otherwise, if a phi node uses a node after itself, it will
     // cause infinite loop.
     fn hash_subtree(&mut self, root: S::ValueRef) -> String {
         // Read Cache.
         if self.hash_subtrees.contains_key(&root) {
-            return self.hash_subtrees.get(&root).expect("No hash_subtree found!").clone();
+            return self
+                .hash_subtrees
+                .get(&root)
+                .expect("No hash_subtree found!")
+                .clone();
         }
 
         // Only Opcode should be considered its argument.
@@ -204,7 +204,7 @@ where I: Iterator<Item=S::ValueRef>,
                     MOpcode::OpLsl => "OpLsl".to_owned(),
                     MOpcode::OpLsr => "OpLsr".to_owned(),
                     MOpcode::OpLoad => "OpLoad".to_owned(),
-                    MOpcode::OpStore => "OpStore".to_owned(), 
+                    MOpcode::OpStore => "OpStore".to_owned(),
                     MOpcode::OpNarrow(w) => format!("OpNarrow{}", w),
                     MOpcode::OpZeroExt(w) => format!("OpZeroExt{}", w),
                     MOpcode::OpCall => "OpCall".to_owned(),
@@ -212,7 +212,7 @@ where I: Iterator<Item=S::ValueRef>,
                 });
             } else if let NodeType::Comment(s) = node_data.nt {
                 result.push_str(&s);
-            } 
+            }
         }
         result
     }
@@ -230,9 +230,10 @@ where I: Iterator<Item=S::ValueRef>,
             // First level of filtering.
             let nh = self.hash_data(node);
             if first_expr.current().as_ref().is_none()
-                || first_expr.current().as_ref().unwrap() != &nh {
-                    continue;
-                }
+                || first_expr.current().as_ref().unwrap() != &nh
+            {
+                continue;
+            }
             {
                 let args = self.ssa.operands_of(node);
                 // All the cases which can cause a mismatch in the node and it's arguments.
@@ -274,8 +275,9 @@ where I: Iterator<Item=S::ValueRef>,
                     // Match the current subtree to the subtree bound by the variable before. If
                     // they do not match, then report as mismatch.
                     let subtreeh = self.hash_subtree(inner_node);
-                    if let Some((old, _)) = bindings.insert(current.clone(),
-                                                            (subtreeh.clone(), inner_node)) {
+                    if let Some((old, _)) =
+                        bindings.insert(current.clone(), (subtreeh.clone(), inner_node))
+                    {
                         if old != subtreeh {
                             // Mismatch
                             viable = false;
@@ -299,7 +301,9 @@ where I: Iterator<Item=S::ValueRef>,
                 }
 
                 for (i, argn) in args.iter().enumerate() {
-                    if i >= t.len() { break; };
+                    if i >= t.len() {
+                        break;
+                    };
                     worklist.push((*argn, t.op(i + 1)));
                 }
             }
@@ -319,19 +323,24 @@ where I: Iterator<Item=S::ValueRef>,
         found
     }
 
-    fn map_token_to_node(&mut self,
-                         t: &str,
-                         block: &S::ActionRef,
-                         addr: &mut MAddress)
-                         -> S::ValueRef {
+    fn map_token_to_node(
+        &mut self,
+        t: &str,
+        block: &S::ActionRef,
+        addr: &mut MAddress,
+    ) -> S::ValueRef {
         let opcode = if t.starts_with("#x") {
-            Some(MOpcode::OpConst(u64::from_str_radix(&t[2..], 16).expect("Invalid hex integer")))
+            Some(MOpcode::OpConst(
+                u64::from_str_radix(&t[2..], 16).expect("Invalid hex integer"),
+            ))
         } else if t.starts_with("OpNarrow") {
-            Some(MOpcode::OpNarrow(u16::from_str_radix(&t[8..], 10)
-                                       .expect("Invalid decimal integer")))
+            Some(MOpcode::OpNarrow(
+                u16::from_str_radix(&t[8..], 10).expect("Invalid decimal integer"),
+            ))
         } else if t.starts_with("OpZeroExt") {
-            Some(MOpcode::OpZeroExt(u16::from_str_radix(&t[7..], 10)
-                                      .expect("Invalid decimal integer")))
+            Some(MOpcode::OpZeroExt(
+                u16::from_str_radix(&t[7..], 10).expect("Invalid decimal integer"),
+            ))
         } else {
             match t {
                 "OpAdd" => Some(MOpcode::OpAdd),
@@ -355,8 +364,13 @@ where I: Iterator<Item=S::ValueRef>,
             }
         };
         if let Some(ref op) = opcode {
-            let node = self.ssa.insert_op(op.clone(), ValueInfo::new_unresolved(WidthSpec::from(64)), None)
-                                .expect("Cannot insert new values");
+            let node = self
+                .ssa
+                .insert_op(
+                    op.clone(),
+                    ValueInfo::new_unresolved(WidthSpec::from(64)),
+                    None,
+                ).expect("Cannot insert new values");
             match *op {
                 MOpcode::OpConst(_) => {}
                 _ => {
@@ -366,8 +380,10 @@ where I: Iterator<Item=S::ValueRef>,
             }
             node
         } else {
-            let node = self.ssa.insert_comment(ValueInfo::new_unresolved(WidthSpec::from(64)), t.to_owned())
-                                .expect("Cannot insert new comments");
+            let node = self
+                .ssa
+                .insert_comment(ValueInfo::new_unresolved(WidthSpec::from(64)), t.to_owned())
+                .expect("Cannot insert new comments");
             addr.offset += 1;
             self.ssa.insert_into_block(node, *block, *addr);
             node
@@ -382,8 +398,14 @@ where I: Iterator<Item=S::ValueRef>,
         let mut worklist = Vec::new();
         // Remove operands to the root node and prepare for replace.
         let root = found.root;
-        let mut address = self.ssa.address(root).expect("No address information found");
-        let block = self.ssa.block_for(root).expect("Value node doesn't belong to any block");
+        let mut address = self
+            .ssa
+            .address(root)
+            .expect("No address information found");
+        let block = self
+            .ssa
+            .block_for(root)
+            .expect("Value node doesn't belong to any block");
 
         // Now we have a root node with no args, but retaining its uses.
         // Replace this node with the root node in the replace expression.
@@ -400,18 +422,18 @@ where I: Iterator<Item=S::ValueRef>,
         };
 
         let replace_root = if r.current().as_ref().map_or(false, |x| x.starts_with('%')) {
-                                *bindings.get(r.current().as_ref().unwrap()).unwrap_or_else(|| {
-                                    radeco_err!("Unknown Binding");
-                                    &found.root
-                                })
-                            } else if r.current().as_ref().is_some() {
-                                self.map_token_to_node(r.current().as_ref().unwrap(),
-                                   &block,
-                                   &mut address)
-                            } else {
-                                radeco_err!("r.current().as_ref() == None");
-                                found.root
-                            };
+            *bindings
+                .get(r.current().as_ref().unwrap())
+                .unwrap_or_else(|| {
+                    radeco_err!("Unknown Binding");
+                    &found.root
+                })
+        } else if r.current().as_ref().is_some() {
+            self.map_token_to_node(r.current().as_ref().unwrap(), &block, &mut address)
+        } else {
+            radeco_err!("r.current().as_ref() == None");
+            found.root
+        };
 
         self.ssa.replace_value(root, replace_root);
         for i in 0..r.len() {
@@ -463,10 +485,10 @@ where I: Iterator<Item=S::ValueRef>,
 mod test {
     use super::*;
     use analysis::matcher::gmatch;
-    use middle::ssa::ssastorage::{SSAStorage, NodeData};
-    use middle::ssa::ssa_traits::{SSA, SSAMod, ValueType, SSAWalk};
+    use middle::ir::{MAddress, MOpcode};
     use middle::ssa::cfg_traits::CFGMod;
-    use middle::ir::{MOpcode, MAddress};
+    use middle::ssa::ssa_traits::{SSAMod, SSAWalk, ValueType, SSA};
+    use middle::ssa::ssastorage::{NodeData, SSAStorage};
 
     #[test]
     fn parse_expr() {
@@ -528,17 +550,17 @@ mod test {
     fn simple_grep_test() {
         let mut ssa = SSAStorage::new();
         let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
-        let add = ssa.insert_op(MOpcode::OpAdd, vt, None)
-                            .expect("Cannot insert new expressions");
-        let const_1 = ssa.insert_const(1)
-                                .expect("Cannot insert new constants");
-        let const_2 = ssa.insert_const(2)
-                                .expect("Cannot insert new constants");
+        let add = ssa
+            .insert_op(MOpcode::OpAdd, vt, None)
+            .expect("Cannot insert new expressions");
+        let const_1 = ssa.insert_const(1).expect("Cannot insert new constants");
+        let const_2 = ssa.insert_const(2).expect("Cannot insert new constants");
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_2);
         ssa.set_entry_node(add);
-        let _ = ssa.insert_op(MOpcode::OpAdd, vt, None)
-                            .expect("Cannot insert new expressions");
+        let _ = ssa
+            .insert_op(MOpcode::OpAdd, vt, None)
+            .expect("Cannot insert new expressions");
         let m = grep!(&mut ssa, "(OpAdd #x1, #x2)");
         assert_eq!(m[0].root.index(), 0);
     }
@@ -547,10 +569,10 @@ mod test {
     fn simple_grep_test2() {
         let mut ssa = SSAStorage::new();
         let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
-        let add = ssa.insert_op(MOpcode::OpXor, vt, None)
-                            .expect("Cannot insert new expressions");
-        let const_1 = ssa.insert_const(1)
-                                .expect("Cannot insert new constants");
+        let add = ssa
+            .insert_op(MOpcode::OpXor, vt, None)
+            .expect("Cannot insert new expressions");
+        let const_1 = ssa.insert_const(1).expect("Cannot insert new constants");
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_1);
         ssa.set_entry_node(add);
@@ -566,12 +588,11 @@ mod test {
         {
             let blk = ssa.insert_dynamic().expect("Cannot insert new dynamics");
             let vt = ValueInfo::new_unresolved(WidthSpec::from(64));
-            let add = ssa.insert_op(MOpcode::OpAdd, vt, None)
-                            .expect("Cannot insert new expressions");
-            let const_1 = ssa.insert_const(1)
-                                .expect("Cannot insert new constants");
-            let const_2 = ssa.insert_const(2)
-                                .expect("Cannot insert new constants");
+            let add = ssa
+                .insert_op(MOpcode::OpAdd, vt, None)
+                .expect("Cannot insert new expressions");
+            let const_1 = ssa.insert_const(1).expect("Cannot insert new constants");
+            let const_2 = ssa.insert_const(2).expect("Cannot insert new constants");
             let addr = MAddress::new(0, 0);
             ssa.insert_into_block(add, blk, addr);
             ssa.insert_into_block(const_1, blk, addr);

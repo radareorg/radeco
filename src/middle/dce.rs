@@ -8,7 +8,7 @@
 //! Dead code elimination
 
 use middle::ssa::graph_traits::Graph;
-use middle::ssa::ssa_traits::{SSAExtra, SSAMod, NodeType};
+use middle::ssa::ssa_traits::{NodeType, SSAExtra, SSAMod};
 use std::collections::VecDeque;
 
 /// Removes SSA nodes that are not used by any other node.
@@ -16,8 +16,10 @@ use std::collections::VecDeque;
 /// are in code that is actually executed or not. For a better analysis
 /// look at `analysis::constant_propagation`.
 pub fn collect<T>(ssa: &mut T)
-    where T: Clone + SSAExtra +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
+where
+    T: Clone
+        + SSAExtra
+        + SSAMod<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>,
 {
     mark(ssa);
     sweep(ssa);
@@ -25,12 +27,13 @@ pub fn collect<T>(ssa: &mut T)
 
 /// Marks node for removal. This method does not remove nodes.
 pub fn mark<T>(ssa: &mut T)
-    where T: Clone + SSAExtra +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
+where
+    T: Clone
+        + SSAExtra
+        + SSAMod<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>,
 {
     let nodes = ssa.values();
-    let roots = registers_in_err!(ssa, exit_node_err!(ssa),
-        ssa.invalid_value().unwrap());
+    let roots = registers_in_err!(ssa, exit_node_err!(ssa), ssa.invalid_value().unwrap());
     let mut queue = VecDeque::<T::ValueRef>::new();
     for node in &nodes {
         if let Ok(ref result) = ssa.node_data(*node) {
@@ -56,8 +59,10 @@ pub fn mark<T>(ssa: &mut T)
 
 /// Sweeps away the un-marked nodes
 pub fn sweep<T>(ssa: &mut T)
-    where T: Clone + SSAExtra +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, CFEdgeRef=<T as Graph>::GraphEdgeRef>
+where
+    T: Clone
+        + SSAExtra
+        + SSAMod<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>,
 {
     for node in &ssa.values() {
         if !ssa.is_marked(node) {
@@ -70,8 +75,7 @@ pub fn sweep<T>(ssa: &mut T)
     let blocks = ssa.blocks();
     for block in &blocks {
         // Do not touch start or exit nodes
-        if *block == entry_node_err!(ssa) ||
-           *block == exit_node_err!(ssa) {
+        if *block == entry_node_err!(ssa) || *block == exit_node_err!(ssa) {
             continue;
         }
 
@@ -80,7 +84,10 @@ pub fn sweep<T>(ssa: &mut T)
             let outgoing = ssa.outgoing_edges(*block);
             // Two cases.
             if outgoing.len() == 1 {
-                let new_target = ssa.edge_info(outgoing[0].0).expect("Less-endpoints edge").target;
+                let new_target = ssa
+                    .edge_info(outgoing[0].0)
+                    .expect("Less-endpoints edge")
+                    .target;
                 for &(ie, ref i) in &incoming {
                     let new_src = ssa.edge_info(ie).expect("Less-endpoints edge").source;
                     ssa.remove_control_edge(ie);

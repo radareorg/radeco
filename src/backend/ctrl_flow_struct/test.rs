@@ -796,10 +796,7 @@ fn ast_single_node() {
     println!("{:#?}", ast);
 
     use self::AstNodeC::*;
-    assert_eq!(
-        BasicBlock("stuff".to_owned()),
-        ast
-    );
+    assert_eq!(BasicBlock("stuff".to_owned()), ast);
 }
 
 #[test]

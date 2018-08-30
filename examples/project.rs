@@ -1,19 +1,18 @@
 // Examples to illustrate project loading
 
-extern crate radeco_lib;
-extern crate r2pipe;
 extern crate r2api;
+extern crate r2pipe;
+extern crate radeco_lib;
 
 use r2api::api_trait::R2Api;
 use r2pipe::R2;
-use radeco_lib::frontend::radeco_containers::{ProjectLoader, ModuleLoader, FunctionLoader};
+use radeco_lib::frontend::radeco_containers::{FunctionLoader, ModuleLoader, ProjectLoader};
 use radeco_lib::frontend::radeco_source::Source;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 fn main() {
-
     {
         let mut r2 = R2::new(Some("/bin/ls")).expect("Failed to load r2");
         r2.analyze();
@@ -21,13 +20,14 @@ fn main() {
         let p = ProjectLoader::default()
             .path("/bin/ls")
             .source(Rc::clone(&src))
-            .module_loader(ModuleLoader::default()
-                           .parallel()
-                           .build_ssa()
-                           .build_callgraph()
-                           .load_datarefs()
-                           .function_loader(FunctionLoader::default().include_defaults()))
-            .load();
+            .module_loader(
+                ModuleLoader::default()
+                    .parallel()
+                    .build_ssa()
+                    .build_callgraph()
+                    .load_datarefs()
+                    .function_loader(FunctionLoader::default().include_defaults()),
+            ).load();
 
         for m in p.iter() {
             for rfn in m.module.iter() {
@@ -35,7 +35,4 @@ fn main() {
             }
         }
     }
-
-
-
 }

@@ -1,12 +1,13 @@
 //! Fills out the call summary information for `RFunction`
 
-use std::collections::HashSet;
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::radeco_containers::RadecoModule;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct InterProcAnalyzer<'a, T>
-    where T: InterProcAnalysis
+where
+    T: InterProcAnalysis,
 {
     analyzed: HashSet<u64>,
     rmod: &'a mut RadecoModule,
@@ -14,7 +15,9 @@ pub struct InterProcAnalyzer<'a, T>
 }
 
 pub fn analyze_module<'a, A>(ssa: &'a mut RadecoModule)
-    where A: InterProcAnalysis {
+where
+    A: InterProcAnalysis,
+{
     let mut ipa = InterProcAnalyzer::<'a, A>::new(ssa);
     let fs = ipa.rmod.functions.clone();
     for (_, f) in fs {
@@ -23,7 +26,8 @@ pub fn analyze_module<'a, A>(ssa: &'a mut RadecoModule)
 }
 
 impl<'a, T> InterProcAnalyzer<'a, T>
-    where T: InterProcAnalysis
+where
+    T: InterProcAnalysis,
 {
     pub fn new(rmod: &'a mut RadecoModule) -> InterProcAnalyzer<'a, T> {
         InterProcAnalyzer {
@@ -39,9 +43,11 @@ impl<'a, T> InterProcAnalyzer<'a, T>
             return;
         }
         // Analyze all children of the present node in call graph.
-        let callees = self.rmod.function(func_addr).map(|rfn| {
-            self.rmod.callees_of(rfn)
-        }).unwrap_or(Vec::new());
+        let callees = self
+            .rmod
+            .function(func_addr)
+            .map(|rfn| self.rmod.callees_of(rfn))
+            .unwrap_or(Vec::new());
 
         for (call, _) in callees {
             self.analyze_function(call);
@@ -65,11 +71,11 @@ impl<'a, T> InterProcAnalyzer<'a, T>
 #[cfg(test)]
 mod test {
     use super::*;
-    use frontend::radeco_source::FileSource;
-    use frontend::radeco_containers::{ProjectLoader, RadecoModule};
-    use middle::ir_writer;
-    use middle::dce;
     use analysis::interproc::summary;
+    use frontend::radeco_containers::{ProjectLoader, RadecoModule};
+    use frontend::radeco_source::FileSource;
+    use middle::dce;
+    use middle::ir_writer;
     use std::rc::Rc;
 
     #[test]

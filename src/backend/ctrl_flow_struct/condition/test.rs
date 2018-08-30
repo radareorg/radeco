@@ -294,7 +294,13 @@ fn nested_complementation() {
     let nc = cctx.mk_not(c);
 
     let a_or_b = cctx.mk_or(a, b);
-    assert_eq!(cctx.mk_or(cctx.mk_and(a_or_b, c), cctx.mk_and(a_or_b, nc)), a_or_b);
+    assert_eq!(
+        cctx.mk_or(cctx.mk_and(a_or_b, c), cctx.mk_and(a_or_b, nc)),
+        a_or_b
+    );
     let a_and_b = cctx.mk_and(a, b);
-    assert_eq!(cctx.mk_and(cctx.mk_or(a_and_b, c), cctx.mk_or(a_and_b, nc)), a_and_b);
+    assert_eq!(
+        cctx.mk_and(cctx.mk_or(a_and_b, c), cctx.mk_or(a_and_b, nc)),
+        a_and_b
+    );
 }

@@ -23,10 +23,10 @@ pub mod matcher {
     pub mod gmatch;
 }
 
-pub mod vsa;
-pub mod interproc;
-pub mod tie;
-pub mod reference_marking;
 pub mod constraint_set;
 pub mod functions;
 pub mod inst_combine;
+pub mod interproc;
+pub mod reference_marking;
+pub mod tie;
+pub mod vsa;

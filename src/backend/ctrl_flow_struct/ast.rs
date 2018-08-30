@@ -5,18 +5,10 @@
 pub enum AstNode<B, C, V> {
     BasicBlock(B),
     Seq(Vec<AstNode<B, C, V>>),
-    Cond(
-        C,
-        Box<AstNode<B, C, V>>,
-        Option<Box<AstNode<B, C, V>>>,
-    ),
+    Cond(C, Box<AstNode<B, C, V>>, Option<Box<AstNode<B, C, V>>>),
     Loop(LoopType<C>, Box<AstNode<B, C, V>>),
     Break,
-    Switch(
-        V,
-        Vec<(ValueSet, AstNode<B, C, V>)>,
-        Box<AstNode<B, C, V>>,
-    ),
+    Switch(V, Vec<(ValueSet, AstNode<B, C, V>)>, Box<AstNode<B, C, V>>),
 }
 
 #[derive(Debug, Eq, PartialEq)]

@@ -13,11 +13,10 @@
 //   R = op1 U op2 => (op1 = R /\ op2 = C) \/ (op1 = C /\ op2 = R)
 //
 
-
 use middle::ssa::ssa_traits::ValueType;
-use std::collections::{HashMap, VecDeque};
 use std::collections::hash_map;
-use std::fmt::{Debug, Display, Formatter, Error};
+use std::collections::{HashMap, VecDeque};
+use std::fmt::{Debug, Display, Error, Formatter};
 use std::hash::Hash;
 
 #[derive(Debug, Clone)]
@@ -58,9 +57,10 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         } else {
             let iter_limit = n - 1;
             for i in 0..iter_limit {
-                self.add_constraint(Constraint::Equality(lhs,
-                                        Box::new(Constraint::Union(ops[i],
-                                                    ops[i + 1]))));
+                self.add_constraint(Constraint::Equality(
+                    lhs,
+                    Box::new(Constraint::Union(ops[i], ops[i + 1])),
+                ));
             }
         }
     }
@@ -148,11 +148,27 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                             ValueType::Reference => {
                                 // Assert some facts
                                 let cons = Constraint::Or(
-                                    Box::new(Constraint::And(Box::new(Constraint::Equality(op1, Box::new(Constraint::Value(ValueType::Reference)))),
-                                                             Box::new(Constraint::Equality(op2, Box::new(Constraint::Value(ValueType::Scalar)))))),
-                                    Box::new(Constraint::And(Box::new(Constraint::Equality(op2, Box::new(Constraint::Value(ValueType::Reference)))),
-                                                             Box::new(Constraint::Equality(op1, Box::new(Constraint::Value(ValueType::Scalar))))))
-                                    );
+                                    Box::new(Constraint::And(
+                                        Box::new(Constraint::Equality(
+                                            op1,
+                                            Box::new(Constraint::Value(ValueType::Reference)),
+                                        )),
+                                        Box::new(Constraint::Equality(
+                                            op2,
+                                            Box::new(Constraint::Value(ValueType::Scalar)),
+                                        )),
+                                    )),
+                                    Box::new(Constraint::And(
+                                        Box::new(Constraint::Equality(
+                                            op2,
+                                            Box::new(Constraint::Value(ValueType::Reference)),
+                                        )),
+                                        Box::new(Constraint::Equality(
+                                            op1,
+                                            Box::new(Constraint::Value(ValueType::Scalar)),
+                                        )),
+                                    )),
+                                );
                                 self.set.push_back(Constraint::Assertion(Box::new(cons)));
                                 true
                             }
@@ -161,9 +177,9 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                                 let op1_vt = self.bvalue(op1);
                                 let op2_vt = self.bvalue(op2);
                                 let (vt, retval) = match (op1_vt, op2_vt) {
-                                    (ValueType::Invalid, _) |
-                                    (_, ValueType::Invalid) |
-                                    (ValueType::Reference, ValueType::Reference) => {
+                                    (ValueType::Invalid, _)
+                                    | (_, ValueType::Invalid)
+                                    | (ValueType::Reference, ValueType::Reference) => {
                                         (ValueType::Invalid, true)
                                     }
 
@@ -201,10 +217,11 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         if let &Constraint::Assertion(box Constraint::Or(box ref c1, box ref c2)) = constraint {
             // c1, c2 will be of the form And(Eq(ci1), Eq(ci2))
             [c1, c2].iter().any(|&ci| {
-                if let Constraint::And(box Constraint::Equality(op1,
-                                                                box Constraint::Value(vt1)),
-                                       box Constraint::Equality(op2,
-                                                                box Constraint::Value(vt2))) = *ci {
+                if let Constraint::And(
+                    box Constraint::Equality(op1, box Constraint::Value(vt1)),
+                    box Constraint::Equality(op2, box Constraint::Value(vt2)),
+                ) = *ci
+                {
                     if self.bvalue(op1) == vt1 {
                         self.bindings.insert(op2, vt2);
                         true
@@ -269,15 +286,21 @@ impl<T: Clone + Debug + Hash + Eq + Copy> Display for ConstraintSet<T> {
 
 #[cfg(test)]
 mod test {
-    use middle::ssa::ssa_traits::ValueType;
     use super::*;
+    use middle::ssa::ssa_traits::ValueType;
 
     #[test]
     fn scalar_union_reference_is_reference() {
         let mut cs = ConstraintSet::<u64>::default();
 
-        cs.add_constraint(Constraint::Equality(1, Box::new(Constraint::Value(ValueType::Scalar))));
-        cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Reference))));
+        cs.add_constraint(Constraint::Equality(
+            1,
+            Box::new(Constraint::Value(ValueType::Scalar)),
+        ));
+        cs.add_constraint(Constraint::Equality(
+            2,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
@@ -288,8 +311,14 @@ mod test {
     fn reference_union_reference_is_invalid() {
         let mut cs = ConstraintSet::<u64>::default();
 
-        cs.add_constraint(Constraint::Equality(1, Box::new(Constraint::Value(ValueType::Reference))));
-        cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Reference))));
+        cs.add_constraint(Constraint::Equality(
+            1,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
+        cs.add_constraint(Constraint::Equality(
+            2,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
@@ -301,8 +330,14 @@ mod test {
         let mut cs = ConstraintSet::<u64>::default();
 
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
-        cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));
-        cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Scalar))));
+        cs.add_constraint(Constraint::Equality(
+            0,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
+        cs.add_constraint(Constraint::Equality(
+            2,
+            Box::new(Constraint::Value(ValueType::Scalar)),
+        ));
 
         cs.solve();
 
@@ -313,8 +348,14 @@ mod test {
     fn know_reference_and_reference_infer_scalar() {
         let mut cs = ConstraintSet::<u64>::default();
 
-        cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));
-        cs.add_constraint(Constraint::Equality(2, Box::new(Constraint::Value(ValueType::Reference))));
+        cs.add_constraint(Constraint::Equality(
+            0,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
+        cs.add_constraint(Constraint::Equality(
+            2,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
@@ -325,7 +366,10 @@ mod test {
     fn know_scalar_infer_scalar_scalar() {
         let mut cs = ConstraintSet::<u64>::default();
 
-        cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Scalar))));
+        cs.add_constraint(Constraint::Equality(
+            0,
+            Box::new(Constraint::Value(ValueType::Scalar)),
+        ));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
         cs.solve();
 
@@ -337,8 +381,14 @@ mod test {
     fn disjoint_tree_infer_references() {
         let mut cs = ConstraintSet::<u64>::default();
 
-        cs.add_constraint(Constraint::Equality(4, Box::new(Constraint::Value(ValueType::Reference))));
-        cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Value(ValueType::Reference))));
+        cs.add_constraint(Constraint::Equality(
+            4,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
+        cs.add_constraint(Constraint::Equality(
+            0,
+            Box::new(Constraint::Value(ValueType::Reference)),
+        ));
 
         cs.add_constraint(Constraint::Equality(7, Box::new(Constraint::Union(4, 8))));
         cs.add_constraint(Constraint::Equality(0, Box::new(Constraint::Union(1, 2))));
@@ -350,7 +400,6 @@ mod test {
         assert_eq!(cs.bindings[&7], ValueType::Reference);
         assert_eq!(cs.bindings[&8], ValueType::Scalar);
     }
-
 
     #[test]
     fn unsolvable_constraints_remain_in_set() {

@@ -10,14 +10,14 @@ use frontend::ssaconstructor::SSAConstruct;
 use middle::ir::MOpcode;
 use middle::regfile::SubRegisterFile;
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
+use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, SSA};
 use middle::ssa::ssastorage::{SSAStorage, Walker};
 
 use petgraph::graph::NodeIndex;
 
 use r2api::structs::{FunctionInfo, LOpInfo, LRegInfo, LVarInfo, LVarRef};
-use std::{thread, fmt, sync, hash};
 use std::collections::{BTreeSet, HashMap};
+use std::{fmt, hash, sync, thread};
 
 pub struct RadecoModule<'a, F: RFunction> {
     pub functions: HashMap<u64, F>,
@@ -30,10 +30,11 @@ pub type DefaultFnTy = RadecoFunction<RadecoBindings<Binding<NodeIndex>>>;
 
 impl<'a, F: RFunction + fmt::Debug> fmt::Debug for RadecoModule<'a, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "RadecoModule {{ functions: {:?}, fname: {:?} }}",
-               self.functions,
-               self.fname)
+        write!(
+            f,
+            "RadecoModule {{ functions: {:?}, fname: {:?} }}",
+            self.functions, self.fname
+        )
     }
 }
 
@@ -64,9 +65,10 @@ pub struct RadecoFunction<B: RBindings> {
 }
 
 #[derive(Clone, Debug)]
-pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>,
-                       S: fmt::Debug + Clone>
-{
+pub struct CallContext<
+    Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>,
+    S: fmt::Debug + Clone,
+> {
     /// Start offset of caller (uniquely identifies a function).
     pub caller: Option<u64>,
     /// Start offset of callee (uniquely identifies a function).
@@ -79,14 +81,16 @@ pub struct CallContext<Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<us
 }
 
 impl<Idx, S> CallContext<Idx, S>
-    where Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>,
-          S: fmt::Debug + Clone
+where
+    Idx: Clone + fmt::Debug + Eq + Ord + hash::Hash + From<usize>,
+    S: fmt::Debug + Clone,
 {
-    pub fn new(caller: Option<u64>,
-               callee: Option<u64>,
-               call_site: Option<u64>,
-               ctx: &[(Idx, Idx)])
-               -> CallContext<Idx, S> {
+    pub fn new(
+        caller: Option<u64>,
+        callee: Option<u64>,
+        call_site: Option<u64>,
+        ctx: &[(Idx, Idx)],
+    ) -> CallContext<Idx, S> {
         CallContext {
             caller: caller,
             callee: callee,
@@ -126,11 +130,12 @@ impl<B: RBindings> RadecoFunction<B> {
 
 // Private function to construct SSA for a single function and fill in the basic
 // information. Note: This function is threaded in module-ssa construction.
-fn ssa_single_fn(f: &FunctionInfo,
-                 reg_info: &LRegInfo,
-                 instructions: Vec<LOpInfo>,
-                 offset: u64)
-                 -> DefaultFnTy {
+fn ssa_single_fn(
+    f: &FunctionInfo,
+    reg_info: &LRegInfo,
+    instructions: Vec<LOpInfo>,
+    offset: u64,
+) -> DefaultFnTy {
     radeco_trace!("Construction SSA for: {:?}", f.name);
     let mut rfn = RadecoFunction::construct(reg_info, instructions);
     rfn.name = if let Some(name) = f.name.as_ref() {
@@ -140,31 +145,26 @@ fn ssa_single_fn(f: &FunctionInfo,
         "Unknown".to_string()
     };
     if let Some(ref callrefs) = f.callrefs {
-        rfn.call_ctx = callrefs.iter()
-            .filter(|x| {
-                match x.call_type {
-                    Some(ref c) if c == "C" => true,
-                    _ => false,
-                }
-            })
-            .map(|x| {
+        rfn.call_ctx = callrefs
+            .iter()
+            .filter(|x| match x.call_type {
+                Some(ref c) if c == "C" => true,
+                _ => false,
+            }).map(|x| {
                 let call_site = x.source;
                 let callee = x.target;
                 let caller = Some(offset);
                 CallContext::<usize, NodeIndex>::new(caller, callee, call_site, &[])
-            })
-            .collect();
+            }).collect();
     }
 
     if let Some(ref callxrefs) = f.codexrefs {
-        rfn.callxrefs = callxrefs.iter()
-            .filter(|x| {
-                match x.call_type {
-                    Some(ref c) if c == "C" => true,
-                    _ => false,
-                }
-            })
-            .map(|x| x.source.expect("Invalid address"))
+        rfn.callxrefs = callxrefs
+            .iter()
+            .filter(|x| match x.call_type {
+                Some(ref c) if c == "C" => true,
+                _ => false,
+            }).map(|x| x.source.expect("Invalid address"))
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
@@ -180,31 +180,39 @@ fn ssa_single_fn(f: &FunctionInfo,
 // as an argument rather than an integer constant (address of the callee). This function iterates
 // through all such call sites and fixes this information.
 fn fix_call_info(rfn: &mut DefaultFnTy) {
-    let mut call_info = rfn.call_ctx
-                           .iter()
-                           .cloned()
-                           .map(|x| (x.call_site.unwrap_or_else(|| {
-                               radeco_err!("call_site not found");
-                               0
-                           }), x))
-                           .collect::<HashMap<_, _>>();
+    let mut call_info = rfn
+        .call_ctx
+        .iter()
+        .cloned()
+        .map(|x| {
+            (
+                x.call_site.unwrap_or_else(|| {
+                    radeco_err!("call_site not found");
+                    0
+                }),
+                x,
+            )
+        }).collect::<HashMap<_, _>>();
     {
         let ssa = rfn.ssa_mut();
         for node in ssa.inorder_walk() {
             if let Ok(NodeType::Op(MOpcode::OpCall)) = ssa.node_data(node).map(|x| x.nt) {
                 // Fixup the call by converting a comment to a proper argument.
                 let call_node = &node;
-                let call_site =
-                    ssa.address(*call_node).expect("No address information found").address;
+                let call_site = ssa
+                    .address(*call_node)
+                    .expect("No address information found")
+                    .address;
                 if let Some(info) = call_info.get_mut(&call_site) {
                     if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
-                        let target_node = ssa.insert_const(info.callee.unwrap_or_else(|| {
-                            radeco_err!("info.callee is None");
-                            0
-                        })).unwrap_or_else(|| {
-                            radeco_err!("Cannot insert new constants");
-                            ssa.invalid_value().unwrap()
-                        });
+                        let target_node = ssa
+                            .insert_const(info.callee.unwrap_or_else(|| {
+                                radeco_err!("info.callee is None");
+                                0
+                            })).unwrap_or_else(|| {
+                                radeco_err!("Cannot insert new constants");
+                                ssa.invalid_value().unwrap()
+                            });
                         ssa.op_unuse(*call_node, *arg_node);
                         ssa.op_use(*call_node, 0, target_node);
                         info.ssa_ref = Some(*call_node);
@@ -264,7 +272,9 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
         let ssa = rfn.ssa_mut();
         let mem = {
             let start = ssa.entry_node().expect("Incomplete CFG graph");
-            let rs = ssa.registers_in(start).expect("No register state node found");
+            let rs = ssa
+                .registers_in(start)
+                .expect("No register state node found");
             // mem is the first argument for the register state.
             // NOTE: If something changes in the future, the above assumption may no longer be
             // true. In that case, look here!
@@ -276,15 +286,15 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
             while let Some(node) = wl.pop() {
                 let data = ssa.node_data(node).map(|x| x.nt);
                 match data {
-                    Ok(NodeType::Op(MOpcode::OpLoad)) |
-                    Ok(NodeType::Op(MOpcode::OpStore)) => {
+                    Ok(NodeType::Op(MOpcode::OpLoad)) | Ok(NodeType::Op(MOpcode::OpStore)) => {
                         let args = ssa.operands_of(node);
                         // If operation is a store it will produce a new memory instance. Hence,
                         // push all uses of new memory to the worklist.
                         if let Ok(NodeType::Op(MOpcode::OpStore)) = data {
                             wl.extend(&ssa.uses_of(node));
                         }
-                        let mem_loc = args.get(1)
+                        let mem_loc = args
+                            .get(1)
                             .expect("Load/Store has to have source/destination");
                         let mut bind = if seen_l.contains_key(mem_loc) {
                             seen_l.get_mut(mem_loc).expect("This can never panic")
@@ -395,46 +405,48 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
             let tx = tx.clone();
             let reg_info = reg_info.clone();
 
-            let handle = thread::Builder::new().name(f.name.as_ref().unwrap().to_owned()).spawn(move || {
-                let mut rfn = ssa_single_fn(&f, &reg_info, instructions, offset);
-                // Attach additional information as necessay from `FunctionInfo`.
-                // {
-                //     // Add all defined registers to bindings.
-                //     let regs = {
-                //         let ssa = rfn.ssa_mut();
-                //         let start = ssa.entry_node().expect("Incomplete CFG graph");
-                //         let rs = ssa.registers_in(start).expect("No registers state node found");
-                //         ssa.operands_of(rs)
-                //     };
-                //     for (i, reg) in regs.iter().enumerate() {
-                //         let mut bind = Binding::default();
-                //         bind.mark_register(rfn.ssa
-                //             .regnames
-                //             .get(i)
-                //             .cloned()
-                //             .unwrap_or_else(String::new));
-                //         bind.add_refs(vec![*reg]);
-                //         // Set the initial bind as register name, which may be
-                //         // changed after analyzed.
-                //         bind.set_name(rfn.ssa.regnames.get(i).cloned().unwrap_or_else(String::new));
-                //         rfn.bindings.insert(bind);
-                //     }
-                // }
-                rfn.offset = offset;
-                fix_call_info(&mut rfn);
-                load_datarefs(&mut rfn, f.datarefs);
-                load_locals(&mut rfn, f.locals);
-                // Actually, analyze_memory should be done after VSA
-                // analyze_memory(&mut rfn);
-                radeco_trace!("Finished analysis of {:?}.", f.name);
-                let func_name = f.name.unwrap_or_else(|| {
-                    radeco_err!("function name not found");
-                    "Unknown".to_string()
+            let handle = thread::Builder::new()
+                .name(f.name.as_ref().unwrap().to_owned())
+                .spawn(move || {
+                    let mut rfn = ssa_single_fn(&f, &reg_info, instructions, offset);
+                    // Attach additional information as necessay from `FunctionInfo`.
+                    // {
+                    //     // Add all defined registers to bindings.
+                    //     let regs = {
+                    //         let ssa = rfn.ssa_mut();
+                    //         let start = ssa.entry_node().expect("Incomplete CFG graph");
+                    //         let rs = ssa.registers_in(start).expect("No registers state node found");
+                    //         ssa.operands_of(rs)
+                    //     };
+                    //     for (i, reg) in regs.iter().enumerate() {
+                    //         let mut bind = Binding::default();
+                    //         bind.mark_register(rfn.ssa
+                    //             .regnames
+                    //             .get(i)
+                    //             .cloned()
+                    //             .unwrap_or_else(String::new));
+                    //         bind.add_refs(vec![*reg]);
+                    //         // Set the initial bind as register name, which may be
+                    //         // changed after analyzed.
+                    //         bind.set_name(rfn.ssa.regnames.get(i).cloned().unwrap_or_else(String::new));
+                    //         rfn.bindings.insert(bind);
+                    //     }
+                    // }
+                    rfn.offset = offset;
+                    fix_call_info(&mut rfn);
+                    load_datarefs(&mut rfn, f.datarefs);
+                    load_locals(&mut rfn, f.locals);
+                    // Actually, analyze_memory should be done after VSA
+                    // analyze_memory(&mut rfn);
+                    radeco_trace!("Finished analysis of {:?}.", f.name);
+                    let func_name = f.name.unwrap_or_else(|| {
+                        radeco_err!("function name not found");
+                        "Unknown".to_string()
+                    });
+                    if tx.send((offset, func_name, rfn)).is_err() {
+                        radeco_err!("send failed");
+                    };
                 });
-                if tx.send((offset, func_name, rfn)).is_err() {
-                    radeco_err!("send failed");
-                };
-            });
             handles.push(handle.expect(""));
         }
 
@@ -490,9 +502,9 @@ pub trait RFunction {
     fn set_modifides(&mut self, &[<Self::B as RBindings>::Idx]);
     fn set_preserved(&mut self, &[<Self::B as RBindings>::Idx]);
 
-    fn call_sites
-        (&self)
-         -> Vec<CallContext<<Self::B as RBindings>::Idx, <Self::SSA as SSA>::ValueRef>>;
+    fn call_sites(
+        &self,
+    ) -> Vec<CallContext<<Self::B as RBindings>::Idx, <Self::SSA as SSA>::ValueRef>>;
     fn callrefs(&self) -> Vec<u64>;
     fn callxrefs(&self) -> Vec<u64>;
 
@@ -568,9 +580,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({
-                |x| x.1.is_argument()
-            })
+            .filter({ |x| x.1.is_argument() })
             .collect()
     }
 
@@ -578,9 +588,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({
-                |x| x.1.is_local()
-            })
+            .filter({ |x| x.1.is_local() })
             .collect()
     }
 
@@ -588,9 +596,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({
-                |x| x.1.is_return()
-            })
+            .filter({ |x| x.1.is_return() })
             .collect()
     }
 
@@ -598,9 +604,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({
-                |x| x.1.is_modified()
-            })
+            .filter({ |x| x.1.is_modified() })
             .collect()
     }
 
@@ -663,7 +667,12 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
     }
 
     fn callrefs(&self) -> Vec<u64> {
-        self.call_ctx.iter().map(|x| x.callee).filter(|x| x.is_some()).map(|x| x.unwrap()).collect()
+        self.call_ctx
+            .iter()
+            .map(|x| x.callee)
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect()
     }
 
     fn callxrefs(&self) -> Vec<u64> {

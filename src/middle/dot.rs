@@ -7,13 +7,12 @@
 
 //! Graph visualization traits and functions to emit dot code.
 
-use std::collections::HashMap;
-use std::hash::Hash;
 use std::cmp::Eq;
+use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::Hash;
 
 use petgraph::graph::NodeIndex;
-
 
 #[allow(unused_macros)]
 macro_rules! add_strings {
@@ -140,9 +139,10 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
                 radeco_err!("Block not found");
                 0
             });
-            clustermap.entry(T::node_index_new(block))
-                      .or_insert_with(Vec::new)
-                      .push(i.clone());
+            clustermap
+                .entry(T::node_index_new(block))
+                .or_insert_with(Vec::new)
+                .push(i.clone());
         }
 
         for (k, v) in &clustermap {

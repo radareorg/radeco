@@ -1,23 +1,24 @@
 //! Common Subexpression Elimination (CSE)
 //!
 //! This module implements methods and structs to perform CSE.
-//! However, this implement doesn't consider much about commutative 
+//! However, this implement doesn't consider much about commutative
 //! opcodes. On the other hand, considering too much will cause
-//! a huge memory consume. Thus, a balanced solution should be 
+//! a huge memory consume. Thus, a balanced solution should be
 //! improved.
 
-use std::fmt::Display;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::marker::PhantomData;
 
-use middle::ssa::ssa_traits::{NodeType, SSA, SSAMod, SSAWalk};
-use middle::ir::MOpcode;
 use super::ssasort::Sorter;
+use middle::ir::MOpcode;
+use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, SSA};
 
 #[derive(Debug)]
 pub struct CSE<'a, I, S>
-    where I: Iterator<Item = S::ValueRef>,
-          S: 'a + SSAMod + SSA + SSAWalk<I>
+where
+    I: Iterator<Item = S::ValueRef>,
+    S: 'a + SSAMod + SSA + SSAWalk<I>,
 {
     exprs: HashMap<String, Vec<S::ValueRef>>,
     hashed: HashMap<S::ValueRef, String>,
@@ -26,8 +27,9 @@ pub struct CSE<'a, I, S>
 }
 
 impl<'a, I, S> CSE<'a, I, S>
-where I: Iterator<Item = S::ValueRef>,
-      S: 'a + SSAMod + SSA + SSAWalk<I>
+where
+    I: Iterator<Item = S::ValueRef>,
+    S: 'a + SSAMod + SSA + SSAWalk<I>,
 {
     pub fn new(ssa: &'a mut S) -> CSE<'a, I, S> {
         CSE {
@@ -43,24 +45,22 @@ where I: Iterator<Item = S::ValueRef>,
         for arg in args {
             if let Ok(node_data) = self.ssa.node_data(*arg) {
                 match node_data.nt {
-                    NodeType::Op(opc) => {
-                        match opc {
-                            MOpcode::OpConst(val) => result.push_str(&format!("{}", val)),
-                            _ => {
-                                if let Some(hash) = self.hashed.get(arg) {
-                                    result.push_str(hash);
-                                } else {
-                                    radeco_err!("Hash value not found!");
-                                    result.push_str(&format!("{:?}", arg));
-                                }
-                            },
+                    NodeType::Op(opc) => match opc {
+                        MOpcode::OpConst(val) => result.push_str(&format!("{}", val)),
+                        _ => {
+                            if let Some(hash) = self.hashed.get(arg) {
+                                result.push_str(hash);
+                            } else {
+                                radeco_err!("Hash value not found!");
+                                result.push_str(&format!("{:?}", arg));
+                            }
                         }
-                    }
+                    },
                     _ => {
-                        // NOTE: Phi functions and Comment node should be considered, otherwise, 
-                        // CSE will replace different op nodes, which only use phi/comment as 
-                        // operands, causing wrong analysis. Meanwhile, we take Invalid node 
-                        // into account, for it may not influence the answer. Actually, till 
+                        // NOTE: Phi functions and Comment node should be considered, otherwise,
+                        // CSE will replace different op nodes, which only use phi/comment as
+                        // operands, causing wrong analysis. Meanwhile, we take Invalid node
+                        // into account, for it may not influence the answer. Actually, till
                         // now, there is no possibility to have an Invalid node.
                         // Attantion: any call node will cause a lot of Comment nodes as it return,
                         // to symbolize every register.
@@ -115,7 +115,10 @@ where I: Iterator<Item = S::ValueRef>,
             }
 
             if !replaced {
-                self.exprs.entry(hs.clone()).or_insert_with(Vec::new).push(expr);
+                self.exprs
+                    .entry(hs.clone())
+                    .or_insert_with(Vec::new)
+                    .push(expr);
                 self.hashed.insert(expr, hs.clone());
             }
         }

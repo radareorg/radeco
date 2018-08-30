@@ -12,12 +12,12 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
+use middle::ir::{MAddress, MArity, MOpcode, WidthSpec};
+use middle::ssa::graph_traits::{ConditionInfo, Graph};
+use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
+use middle::ssa::ssa_traits::{SSAMod, SSA};
 use std::collections::{HashMap, VecDeque};
 use std::u64;
-use middle::ssa::ssa_traits::{SSA, SSAMod};
-use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
-use middle::ssa::graph_traits::{Graph, ConditionInfo};
-use middle::ir::{MArity, MOpcode, WidthSpec, MAddress};
 
 #[macro_export]
 macro_rules! node_data_from_g {
@@ -79,12 +79,11 @@ fn meet(v1: &LatticeValue, v2: &LatticeValue) -> LatticeValue {
     *v1
 }
 
-pub struct Analyzer<T> 
-    where T: Clone +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, 
-                    CFEdgeRef=<T as Graph>::GraphEdgeRef> +
-        SSA<ActionRef=<T as Graph>::GraphNodeRef, 
-                    CFEdgeRef=<T as Graph>::GraphEdgeRef> 
+pub struct Analyzer<T>
+where
+    T: Clone
+        + SSAMod<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>
+        + SSA<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>,
 {
     ssa_worklist: VecDeque<T::ValueRef>,
     cfg_worklist: VecDeque<T::CFEdgeRef>,
@@ -93,12 +92,11 @@ pub struct Analyzer<T>
     g: T,
 }
 
-impl<T> Analyzer<T> 
-    where T: Clone +
-        SSAMod<ActionRef=<T as Graph>::GraphNodeRef, 
-                    CFEdgeRef=<T as Graph>::GraphEdgeRef> +
-        SSA<ActionRef=<T as Graph>::GraphNodeRef, 
-                    CFEdgeRef=<T as Graph>::GraphEdgeRef> 
+impl<T> Analyzer<T>
+where
+    T: Clone
+        + SSAMod<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>
+        + SSA<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>,
 {
     pub fn new(g: &mut T) -> Analyzer<T> {
         Analyzer {
@@ -123,7 +121,10 @@ impl<T> Analyzer<T>
             return LatticeValue::Bottom;
         }
 
-        let invalid_block = self.g.invalid_action().expect("Invalid Action is not defind");
+        let invalid_block = self
+            .g
+            .invalid_action()
+            .expect("Invalid Action is not defind");
         let parent_block = self.g.block_for(*i).unwrap_or(invalid_block);
         for op in &operands {
             let operand_block = self.g.block_for(*op).unwrap_or(invalid_block);
@@ -144,8 +145,9 @@ impl<T> Analyzer<T>
                 continue;
             }
             assert_eq!(edge.len(), 1);
-            if !self.is_executable(&edge[0]) && 
-                edge[0] != self.g.invalid_edge().expect("Invalid Edge is not defined") {
+            if !self.is_executable(&edge[0])
+                && edge[0] != self.g.invalid_edge().expect("Invalid Edge is not defined")
+            {
                 continue;
             }
             //TODO: Not sure what to do when the edge is invalid
@@ -160,16 +162,15 @@ impl<T> Analyzer<T>
 
         let cond_val = self.get_value(i);
         let block = self.g.selector_for(*i).unwrap_or_else(|| {
-                        radeco_err!("Victim value is not a selector");
-                        self.g.invalid_action().unwrap()
+            radeco_err!("Victim value is not a selector");
+            self.g.invalid_action().unwrap()
         });
         let invalid_edge = self.g.invalid_edge().expect("Invalid Edge is not defined");
-        let conditional_branches = 
-            if let Some(branches) = self.g.conditional_edges(block) {
-                branches
-            } else {
-                ConditionInfo::new(invalid_edge, invalid_edge)
-            };
+        let conditional_branches = if let Some(branches) = self.g.conditional_edges(block) {
+            branches
+        } else {
+            ConditionInfo::new(invalid_edge, invalid_edge)
+        };
         let true_branch = conditional_branches.true_side;
         let false_branch = conditional_branches.false_side;
         match cond_val {
@@ -205,7 +206,6 @@ impl<T> Analyzer<T>
             return val;
         };
 
-
         let mut val: u64 = match opcode {
             MOpcode::OpZeroExt(_) | MOpcode::OpSignExt(_) => {
                 // Nothing to do in case of widen as the value cannot change.
@@ -217,9 +217,7 @@ impl<T> Analyzer<T>
                 let mask = (1 << (size)) - 1;
                 const_val & mask
             }
-            MOpcode::OpNot => {
-                !const_val as u64
-            }
+            MOpcode::OpNot => !const_val as u64,
             MOpcode::OpCall => {
                 return LatticeValue::Bottom;
             }
@@ -240,10 +238,15 @@ impl<T> Analyzer<T>
         // Do not reason about load/stores.
         match opcode {
             MOpcode::OpLoad | MOpcode::OpStore => return LatticeValue::Bottom,
-            _ => { },
+            _ => {}
         }
 
-        let operands = self.g.operands_of(*i).iter().map(|x| self.get_value(x)).collect::<Vec<_>>();
+        let operands = self
+            .g
+            .operands_of(*i)
+            .iter()
+            .map(|x| self.get_value(x))
+            .collect::<Vec<_>>();
 
         let lhs = operands[0];
         let rhs = operands[1];
@@ -275,7 +278,7 @@ impl<T> Analyzer<T>
                     lhs_val - rhs_val
                 } else {
                     // rhs_val - lhs_val
-                    // This will never integer overflow 
+                    // This will never integer overflow
                     (u64::MAX - rhs_val + lhs_val + 1) as u64
                 }
             }
@@ -283,36 +286,16 @@ impl<T> Analyzer<T>
                 // TODO: how to handle integer overflow.
                 lhs_val * rhs_val
             }
-            MOpcode::OpDiv => {
-                lhs_val / rhs_val
-            }
-            MOpcode::OpMod => {
-                lhs_val % rhs_val
-            }
-            MOpcode::OpAnd => {
-                lhs_val & rhs_val
-            }
-            MOpcode::OpOr => {
-                lhs_val | rhs_val
-            }
-            MOpcode::OpXor => {
-                lhs_val ^ rhs_val
-            }
-            MOpcode::OpEq => {
-                (lhs_val == rhs_val) as u64
-            }
-            MOpcode::OpGt => {
-                (lhs_val > rhs_val) as u64
-            }
-            MOpcode::OpLt => {
-                (lhs_val < rhs_val) as u64
-            }
-            MOpcode::OpLsl => {
-                lhs_val << rhs_val
-            }
-            MOpcode::OpLsr => {
-                lhs_val >> rhs_val
-            }
+            MOpcode::OpDiv => lhs_val / rhs_val,
+            MOpcode::OpMod => lhs_val % rhs_val,
+            MOpcode::OpAnd => lhs_val & rhs_val,
+            MOpcode::OpOr => lhs_val | rhs_val,
+            MOpcode::OpXor => lhs_val ^ rhs_val,
+            MOpcode::OpEq => (lhs_val == rhs_val) as u64,
+            MOpcode::OpGt => (lhs_val > rhs_val) as u64,
+            MOpcode::OpLt => (lhs_val < rhs_val) as u64,
+            MOpcode::OpLsl => lhs_val << rhs_val,
+            MOpcode::OpLsr => lhs_val >> rhs_val,
             _ => unreachable!(),
         };
 
@@ -372,7 +355,6 @@ impl<T> Analyzer<T>
     }
 
     pub fn analyze(&mut self) {
-
         {
             let entry_node = entry_node_err!(self.g);
             let edges = self.g.outgoing_edges(entry_node);
@@ -388,9 +370,12 @@ impl<T> Analyzer<T>
             while let Some(edge) = self.cfg_worklist.pop_front() {
                 if !self.is_executable(&edge) {
                     self.mark_executable(&edge);
-                    let block = self.g.edge_info(edge).unwrap_or_else(|| {
-                        self.g.edge_info(self.g.invalid_edge().unwrap()).unwrap()
-                    }).target;
+                    let block = self
+                        .g
+                        .edge_info(edge)
+                        .unwrap_or_else(|| {
+                            self.g.edge_info(self.g.invalid_edge().unwrap()).unwrap()
+                        }).target;
                     let phis = self.g.phis_in(block);
                     for phi in &phis {
                         let v = self.visit_phi(phi);
@@ -424,10 +409,9 @@ impl<T> Analyzer<T>
 
             while let Some(e) = self.ssa_worklist.pop_front() {
                 let t = if self.g.is_expr(e) {
-                    let block_of = self.g.block_for(e)
-                                            .unwrap_or_else(|| {
-                                            radeco_err!("Value node doesn't belong to any block");
-                                            self.g.invalid_action().unwrap()
+                    let block_of = self.g.block_for(e).unwrap_or_else(|| {
+                        radeco_err!("Value node doesn't belong to any block");
+                        self.g.invalid_action().unwrap()
                     });
                     if self.is_block_executable(&block_of) {
                         self.visit_expression(&e)
@@ -454,37 +438,37 @@ impl<T> Analyzer<T>
                 continue;
             }
             if let LatticeValue::Const(val) = *v {
-                radeco_trace!("{:?} with {:?} --> Const {:#}", 
-                              k, self.g.node_data(*k), val);
+                radeco_trace!(
+                    "{:?} with {:?} --> Const {:#}",
+                    k,
+                    self.g.node_data(*k),
+                    val
+                );
                 // BUG: Width may be changed just using a simple replace.
-                let const_node = self.g.insert_const(val)
-                                    .unwrap_or_else(|| {
-                                        radeco_err!("Cannot insert new constants");
-                                        self.g.invalid_value().unwrap()
-                                    });
+                let const_node = self.g.insert_const(val).unwrap_or_else(|| {
+                    radeco_err!("Cannot insert new constants");
+                    self.g.invalid_value().unwrap()
+                });
                 let ndata = node_data_from_g!(self, k);
                 let w = ndata.vt.width().get_width().unwrap_or(64);
                 let new_node = if w == 64 {
                     const_node
                 } else {
-                    // val should not be larger than the k node could be.  
+                    // val should not be larger than the k node could be.
                     assert!(w < 64 && val < (1 << (w)));
-                    let block = self.g.block_for(*k)
-                                        .unwrap_or_else(|| {
-                                            radeco_err!("No block information found");
-                                            self.g.invalid_action().unwrap()
-                                        });
-                    let address = self.g.address(*k)
-                                        .unwrap_or_else(|| {
-                                            radeco_err!("No address information found");
-                                            MAddress::invalid_address()
-                                        });
+                    let block = self.g.block_for(*k).unwrap_or_else(|| {
+                        radeco_err!("No block information found");
+                        self.g.invalid_action().unwrap()
+                    });
+                    let address = self.g.address(*k).unwrap_or_else(|| {
+                        radeco_err!("No address information found");
+                        MAddress::invalid_address()
+                    });
                     let opcode = MOpcode::OpNarrow(w as u16);
-                    let new_node = self.g.insert_op(opcode, ndata.vt, None)
-                                        .unwrap_or_else(|| {
-                                            radeco_err!("Cannot insert new values");
-                                            self.g.invalid_value().unwrap()
-                                        });
+                    let new_node = self.g.insert_op(opcode, ndata.vt, None).unwrap_or_else(|| {
+                        radeco_err!("Cannot insert new values");
+                        self.g.invalid_value().unwrap()
+                    });
                     self.g.insert_into_block(new_node, block, address);
                     self.g.op_use(new_node, 0, const_node);
                     new_node
@@ -573,11 +557,10 @@ impl<T> Analyzer<T>
         if !self.g.is_expr(*i) {
             return;
         }
-        let owner_block = self.g.block_for(*i)
-                                .unwrap_or_else(|| {
-                                    radeco_err!("Value node doesn't belong to any block");
-                                    self.g.invalid_action().unwrap()
-                                });
+        let owner_block = self.g.block_for(*i).unwrap_or_else(|| {
+            radeco_err!("Value node doesn't belong to any block");
+            self.g.invalid_action().unwrap()
+        });
         if self.is_block_executable(&owner_block) {
             self.ssa_worklist.push_back(*i);
         }
@@ -590,7 +573,7 @@ impl<T> Analyzer<T>
 
 #[cfg(test)]
 mod test {
-    use super::{LatticeValue, meet};
+    use super::{meet, LatticeValue};
 
     #[test]
     fn test_meet() {

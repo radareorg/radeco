@@ -6,15 +6,15 @@
 
 use super::c_ast;
 use super::c_ast::Ty;
-use super::c_cfg::{CCFG, CCFGRef};
+use super::c_cfg::{CCFGRef, CCFG};
 use frontend::radeco_containers::RadecoFunction;
-use middle::ir::{MOpcode, MAddress};
+use middle::ir::{MAddress, MOpcode};
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, SSAWalk};
+use middle::ssa::ssa_traits::{SSAWalk, SSA};
 use middle::ssa::ssastorage::{NodeData, SSAStorage};
 use middle::ssa::utils;
-use std::collections::{HashMap, HashSet};
 use petgraph::graph::NodeIndex;
+use std::collections::{HashMap, HashSet};
 
 fn is_debug() -> bool {
     cfg!(feature = "trace_log")
@@ -102,7 +102,8 @@ impl<'a> CCFGBuilder<'a> {
         if self.rfn.callconv.is_none() {
             return Vec::new();
         }
-        let regs_order = self.rfn
+        let regs_order = self
+            .rfn
             .callconv
             .clone()
             .unwrap()
@@ -130,35 +131,36 @@ impl<'a> CCFGBuilder<'a> {
         let func_name = {
             if self.datamap.const_nodes.contains(&callee_node) {
                 let addr = self.ssa.constant_value(callee_node).unwrap_or(0);
-                self.fname_map.get(&addr).cloned().unwrap_or(
-                    "invalid".to_string(),
-                )
+                self.fname_map
+                    .get(&addr)
+                    .cloned()
+                    .unwrap_or("invalid".to_string())
             } else {
                 "unknown".to_string()
             }
         };
-        let args = self.args_inorder(call_node)
+        let args = self
+            .args_inorder(call_node)
             .into_iter()
             .map(|n| {
-                self.datamap.var_map.get(&n).cloned().unwrap_or(
-                    self.cfg.unknown,
-                )
-            })
-            .collect::<Vec<_>>();
+                self.datamap
+                    .var_map
+                    .get(&n)
+                    .cloned()
+                    .unwrap_or(self.cfg.unknown)
+            }).collect::<Vec<_>>();
         let ret_val_node = self.return_node(call_node);
-        self.last_action = self.cfg.call_func(
-            &func_name,
-            args.as_slice(),
-            self.last_action,
-            ret_val_node,
-        );
+        self.last_action =
+            self.cfg
+                .call_func(&func_name, args.as_slice(), self.last_action, ret_val_node);
         self.last_action
     }
 
     fn addr_str(&self, node: SSARef) -> String {
-        self.ssa.address(node).map(|a| format!("{}", a)).unwrap_or(
-            "unknown".to_string(),
-        )
+        self.ssa
+            .address(node)
+            .map(|a| format!("{}", a))
+            .unwrap_or("unknown".to_string())
     }
 
     fn recover_action(&mut self, node: SSARef) -> CCFGRef {
@@ -171,30 +173,30 @@ impl<'a> CCFGBuilder<'a> {
                 if is_debug() {
                     let addr = self.addr_str(node);
                     let ops_dbg = self.ssa.operands_of(node);
-                    self.cfg.debug_info_at(
-                        ret,
-                        format!("Call {:?} @ {}", ops_dbg, addr),
-                    );
+                    self.cfg
+                        .debug_info_at(ret, format!("Call {:?} @ {}", ops_dbg, addr));
                 }
                 ret
             }
             MOpcode::OpStore => {
                 let ops = self.ssa.operands_of(node);
-                let dst = self.datamap
+                let dst = self
+                    .datamap
                     .var_map
                     .get(&ops[1])
                     .map(|&x| self.cfg.derefed_node(x).unwrap_or(x))
                     .unwrap_or(self.cfg.unknown);
-                let src = self.datamap.var_map.get(&ops[2]).cloned().unwrap_or(
-                    self.cfg.unknown,
-                );
+                let src = self
+                    .datamap
+                    .var_map
+                    .get(&ops[2])
+                    .cloned()
+                    .unwrap_or(self.cfg.unknown);
                 let ret = self.assign(dst, src);
                 if is_debug() {
                     let addr = self.addr_str(node);
-                    self.cfg.debug_info_at(
-                        ret,
-                        format!("*({:?}) = {:?} @ {}", dst, src, addr),
-                    );
+                    self.cfg
+                        .debug_info_at(ret, format!("*({:?}) = {:?} @ {}", dst, src, addr));
                 }
                 ret
             }
@@ -227,36 +229,45 @@ impl<'a> CCFGBuilder<'a> {
 
     fn handle_goto(&mut self, _next: SSARef, succ: SSARef) {
         radeco_trace!("CCFGBuilder::handle goto");
-        let next = self.action_map.get(&_next).cloned().expect(
-            "The node should be \
-             added to action_map",
-        );
-        let succ_node = self.action_map.get(&succ).cloned().expect(
-            "This should not be None",
-        );
+        let next = self
+            .action_map
+            .get(&_next)
+            .cloned()
+            .expect("The node should be added to action_map");
+        let succ_node = self
+            .action_map
+            .get(&succ)
+            .cloned()
+            .expect("This should not be None");
         let label = self.gen_label(succ);
         let goto_node = self.cfg.insert_goto_before(next, succ_node, &label);
         if is_debug() {
             let addr = self.addr_str(_next);
-            self.cfg.debug_info_at(
-                goto_node,
-                format!("JMP {:?} @ {}", succ_node, addr),
-            );
+            self.cfg
+                .debug_info_at(goto_node, format!("JMP {:?} @ {}", succ_node, addr));
         }
     }
 
-    fn handle_if(&mut self, _prev: SSARef, selector: SSARef, true_node: SSARef,
-                 false_node: SSARef) {
+    fn handle_if(
+        &mut self,
+        _prev: SSARef,
+        selector: SSARef,
+        true_node: SSARef,
+        false_node: SSARef,
+    ) {
         radeco_trace!("CCFGBuilder::handle_if");
-        let prev = self.action_map.get(&_prev)
+        let prev = self
+            .action_map
+            .get(&_prev)
             .and_then(|&n| self.cfg.preds_of(n).first().cloned())
             .expect("This should not be `None`");
         // Add goto statement as `if then` node
         let goto_then = {
-            let dst_node = self.action_map.get(&true_node).cloned().expect(
-                "This should not \
-                 be None",
-            );
+            let dst_node = self
+                .action_map
+                .get(&true_node)
+                .cloned()
+                .expect("This should not be None");
             // Edge from `unknown` will be removed later.
             let unknown = self.cfg.unknown;
             let label = self.gen_label(true_node);
@@ -264,31 +275,37 @@ impl<'a> CCFGBuilder<'a> {
         };
         // Add goto statement as `if else` node
         let goto_else = {
-            let dst_node = self.action_map.get(&false_node).cloned().expect(
-                "This should not \
-                 be None",
-            );
+            let dst_node = self
+                .action_map
+                .get(&false_node)
+                .cloned()
+                .expect("This should not be None");
             // Edge from `unknown` will be removed later.
             let unknown = self.cfg.unknown;
             let label = self.gen_label(false_node);
             self.cfg.add_goto(dst_node, &label, unknown)
         };
         // Add condition node to if statement
-        let cond = self.datamap.var_map.get(&selector).cloned().unwrap_or(
-            self.cfg.unknown,
-        );
-        let if_node = self.cfg.insert_conditional(cond, goto_then, Some(goto_else), prev);
+        let cond = self
+            .datamap
+            .var_map
+            .get(&selector)
+            .cloned()
+            .unwrap_or(self.cfg.unknown);
+        let if_node = self
+            .cfg
+            .insert_conditional(cond, goto_then, Some(goto_else), prev);
         if is_debug() {
             let addr = self.addr_str(prev);
-            self.cfg.debug_info_at(
-                goto_then,
-                format!("IF JMP {:?} @ {}", if_node, addr),
-            );
+            self.cfg
+                .debug_info_at(goto_then, format!("IF JMP {:?} @ {}", if_node, addr));
         }
     }
 
     fn handle_return(&mut self, block: SSARef) {
-        let prev = self.action_map.get(&block)
+        let prev = self
+            .action_map
+            .get(&block)
             .and_then(|&n| self.cfg.preds_of(n).first().cloned())
             .expect("This should not be `None`");
         // TODO specify return value if it exists
@@ -307,8 +324,12 @@ impl<'a> CCFGBuilder<'a> {
             }
         } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(prev_block) {
             if let Some(selector) = self.ssa.selector_in(prev_block) {
-                self.handle_if(cur_block, selector, blk_cond_info.true_side,
-                               blk_cond_info.false_side);
+                self.handle_if(
+                    cur_block,
+                    selector,
+                    blk_cond_info.true_side,
+                    blk_cond_info.false_side,
+                );
             } else {
                 radeco_warn!(
                     "block with conditional successors has no selector {:?}",
@@ -406,7 +427,8 @@ impl<'a> CCFGDataMap<'a> {
         ast: &mut CCFG,
     ) {
         debug_assert!(ops.len() == 2);
-        let ops_mapped = ops.iter()
+        let ops_mapped = ops
+            .iter()
             .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(ast.unknown))
             .collect::<Vec<_>>();
         let expr_node = ast.expr(ops_mapped.as_slice(), expr.clone());
@@ -419,13 +441,7 @@ impl<'a> CCFGDataMap<'a> {
         self.var_map.insert(ret_node, expr_node);
     }
 
-    fn handle_uniop(
-        &mut self,
-        ret_node: SSARef,
-        op: SSARef,
-        expr: c_ast::Expr,
-        ast: &mut CCFG,
-    ) {
+    fn handle_uniop(&mut self, ret_node: SSARef, op: SSARef, expr: c_ast::Expr, ast: &mut CCFG) {
         if let Some(&n) = self.var_map.get(&op) {
             let expr_node = ast.expr(&[n], expr);
             self.var_map.insert(ret_node, expr_node);
@@ -434,13 +450,7 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    fn handle_cast(
-        &mut self,
-        ret_node: SSARef,
-        op: SSARef,
-        expr: c_ast::Expr,
-        ast: &mut CCFG,
-    ) {
+    fn handle_cast(&mut self, ret_node: SSARef, op: SSARef, expr: c_ast::Expr, ast: &mut CCFG) {
         if self.const_nodes.contains(&op) {
             let cfg_node = self.var_map.get(&op).cloned().unwrap_or(ast.unknown);
             self.var_map.insert(ret_node, cfg_node);
@@ -659,9 +669,11 @@ impl CCFGBuilderVerifier {
     // Verify `assign` made `CCFG::Action(ActionNode::Assignment)` node.
     fn verify_assign_at(builder: &mut CCFGBuilder, node: SSARef) -> Result<(), String> {
         let ops = builder.ssa.operands_of(node);
-        let dst = builder.datamap.var_map.get(&ops[1]).map(|&x| {
-            builder.cfg.derefed_node(x).unwrap_or(x)
-        });
+        let dst = builder
+            .datamap
+            .var_map
+            .get(&ops[1])
+            .map(|&x| builder.cfg.derefed_node(x).unwrap_or(x));
         let src = builder.datamap.var_map.get(&ops[2]).cloned();
         if src.is_none() {
             return Err("Failed to get src operand node from CCFG".to_string());
@@ -679,10 +691,7 @@ impl CCFGBuilderVerifier {
     }
 
     // Verify `call_action` made `CCFG::Action(ActionNode::Call(_))` node.
-    fn verify_call_action_at(
-        builder: &mut CCFGBuilder,
-        call_node: SSARef,
-    ) -> Result<(), String> {
+    fn verify_call_action_at(builder: &mut CCFGBuilder, call_node: SSARef) -> Result<(), String> {
         let call_node = builder.call_action(call_node);
         let is_err = builder.last_action != call_node || !builder.cfg.is_call_node(call_node);
         if is_err {
@@ -949,8 +958,9 @@ impl CCFGDataMapVerifier {
 #[cfg(test)]
 mod test {
     use backend::lang_c::c_cfg;
-    use backend::lang_c::c_cfg_builder::{CCFGBuilder, CCFGDataMap, CCFGBuilderVerifier,
-                                                CCFGDataMapVerifier};
+    use backend::lang_c::c_cfg_builder::{
+        CCFGBuilder, CCFGBuilderVerifier, CCFGDataMap, CCFGDataMapVerifier,
+    };
     use frontend::radeco_containers::RadecoFunction;
     use frontend::radeco_source::SourceErr;
     use middle::ir_reader;
@@ -968,23 +978,21 @@ mod test {
         let path = PathBuf::from(regfile_path);
         let mut f = File::open(path).expect("Failed to open file");
         let mut json_str = String::new();
-        let _ = f.read_to_string(&mut json_str).expect(
-            "Failed to read file",
-        );
+        let _ = f
+            .read_to_string(&mut json_str)
+            .expect("Failed to read file");
         Ok(serde_json::from_str(&json_str)?)
     }
 
     fn load(name: &str) -> RadecoFunction {
         let ssa = {
-            let regfile = Arc::new(SubRegisterFile::new(&register_profile().expect(
-                "Unable to load register profile",
-            )));
+            let regfile = Arc::new(SubRegisterFile::new(
+                &register_profile().expect("Unable to load register profile"),
+            ));
             let mut f = File::open(name).expect("file not found");
             let mut ir_str = String::new();
-            f.read_to_string(&mut ir_str).expect(
-                "something went wrong reading \
-                 the file",
-            );
+            f.read_to_string(&mut ir_str)
+                .expect("something went wrong reading the file");
             ir_reader::parse_il(&ir_str, regfile)
         };
         let mut rfn = RadecoFunction::default();
@@ -1013,12 +1021,8 @@ mod test {
             let mut builder = CCFGBuilder::new(&rfn, &dummy_map);
             let data_graph = CCFGDataMap::recover_data(&rfn, &mut builder.cfg, &dummy_map);
             builder.datamap = data_graph;
-            CCFGBuilderVerifier::verify(&mut builder).expect(&format!(
-                "CCFGBuilder \
-                 verification \
-                 failed {}",
-                file
-            ));
+            CCFGBuilderVerifier::verify(&mut builder)
+                .expect(&format!("CCFGBuilder verification failed {}", file));
         }
     }
 }

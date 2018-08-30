@@ -2,16 +2,16 @@
 
 #![deprecated(since="0.2.0", note="Replace with `radeco_source`")]
 
-use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::process;
 
 use serde_json;
 
 use r2api::api_trait::R2Api;
-use r2pipe::r2::R2;
 use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
+use r2pipe::r2::R2;
 
 pub trait Source {
     fn functions(&mut self) -> Result<Vec<FunctionInfo>, &'static str>;
@@ -20,11 +20,11 @@ pub trait Source {
     fn flags(&mut self) -> Result<Vec<LFlagInfo>, &'static str>;
     fn section_map(&mut self) -> Result<Vec<LSectionInfo>, &'static str>;
 
-    fn send(&mut self, _: &str) { }
+    fn send(&mut self, _: &str) {}
 
     // Non essential / functions with default implementation.
     fn function_at(&mut self, address: u64) -> Option<FunctionInfo> {
-        let fs = self.functions().unwrap_or_else(|e|{
+        let fs = self.functions().unwrap_or_else(|e| {
             radeco_err!("Error: {:?}", e);
             Vec::new()
         });
@@ -38,7 +38,7 @@ pub trait Source {
     }
 
     fn function_named(&mut self, fn_name: &str) -> Option<FunctionInfo> {
-        let fs = self.functions().unwrap_or_else(|e|{
+        let fs = self.functions().unwrap_or_else(|e| {
             radeco_err!("Error: {:?}", e);
             Vec::new()
         });
@@ -61,7 +61,7 @@ pub trait Source {
     }
 
     fn flag_at(&mut self, address: u64) -> Option<LFlagInfo> {
-        let flags = self.flags().unwrap_or_else(|e|{
+        let flags = self.flags().unwrap_or_else(|e| {
             radeco_err!("Error: {:?}", e);
             Vec::new()
         });
@@ -96,14 +96,17 @@ pub trait Source {
 }
 
 // Implementation of `Source` trait for R2.
-impl Source for R2 where R2: R2Api {
+impl Source for R2
+where
+    R2: R2Api,
+{
     fn functions(&mut self) -> Result<Vec<FunctionInfo>, &'static str> {
         match self.fn_list() {
             Ok(f) => Ok(f),
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to load funtion info from r2")
-            },
+            }
         }
     }
 
@@ -118,10 +121,10 @@ impl Source for R2 where R2: R2Api {
     fn register_profile(&mut self) -> Result<LRegInfo, &'static str> {
         match self.reg_info() {
             Ok(r) => Ok(r),
-            Err(e) =>  {
+            Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to load register profile")
-            },
+            }
         }
     }
 
@@ -131,7 +134,7 @@ impl Source for R2 where R2: R2Api {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to load flags from r2")
-            },
+            }
         }
     }
 
@@ -141,7 +144,7 @@ impl Source for R2 where R2: R2Api {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to get section info from r2")
-            },
+            }
         }
     }
 
@@ -191,11 +194,11 @@ impl FileSource {
             radeco_err!("Error: {:?}", e);
             process::abort()
         });
-        f.write_all(data.to_string()
-                        .as_bytes()).unwrap_or_else(|e| {
-            radeco_err!("Failed to write file");
-            radeco_err!("Error: {:?}", e);
-        });
+        f.write_all(data.to_string().as_bytes())
+            .unwrap_or_else(|e| {
+                radeco_err!("Failed to write file");
+                radeco_err!("Error: {:?}", e);
+            });
     }
 }
 
@@ -215,13 +218,11 @@ impl FileSource {
             process::abort();
         };
         let path = Path::new(f.unwrap());
-        if path.parent().is_none()
-        || path.parent().unwrap().to_str().is_none() {
+        if path.parent().is_none() || path.parent().unwrap().to_str().is_none() {
             radeco_err!("Invaild path");
             process::abort();
         }
-        if path.file_name().is_none()
-        || path.file_name().unwrap().to_str().is_none() {
+        if path.file_name().is_none() || path.file_name().unwrap().to_str().is_none() {
             radeco_err!("Invaild path");
             process::abort();
         }
@@ -248,7 +249,7 @@ impl Source for FileSource {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to decode json")
-            },
+            }
         }
     }
 
@@ -259,7 +260,7 @@ impl Source for FileSource {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to decode json")
-            },
+            }
         }
     }
 
@@ -269,7 +270,7 @@ impl Source for FileSource {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to decode json")
-            },
+            }
         }
     }
 
@@ -279,7 +280,7 @@ impl Source for FileSource {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to decode json")
-            },
+            }
         }
     }
 
@@ -289,7 +290,7 @@ impl Source for FileSource {
             Err(e) => {
                 radeco_err!("{:?}", e);
                 Err("Failed to decode json")
-            },
+            }
         }
     }
 }
@@ -301,9 +302,7 @@ impl From<R2> for FileSource {
             process::abort();
         }
         let bin_info = r2.bin_info().unwrap();
-        let fname = bin_info.core.and_then(|c| {
-            c.file
-        }).unwrap_or_else(|| {
+        let fname = bin_info.core.and_then(|c| c.file).unwrap_or_else(|| {
             radeco_err!("Failed to load bin_info.core");
             process::abort();
         });
@@ -317,8 +316,7 @@ impl From<R2> for FileSource {
             radeco_err!("Error {:?}", e);
             process::abort();
         });
-        if dir.to_str().is_none()
-        || fname.to_str().is_none() {
+        if dir.to_str().is_none() || fname.to_str().is_none() {
             radeco_err!("No such Directory or filename");
             process::abort();
         }
@@ -332,7 +330,7 @@ impl From<R2> for FileSource {
                 radeco_err!("{:?}", e);
                 Vec::new()
             });
-            { 
+            {
                 let json_str = serde_json::to_string(&fns).unwrap_or_else(|e| {
                     radeco_err!("Error: {:?}", e);
                     "Invalid json".to_string()
@@ -359,7 +357,7 @@ impl From<R2> for FileSource {
                 let json_str = serde_json::to_string(&reg).expect("Failed to encode to json");
                 fsource.write_file(suffix::REGISTER, &json_str);
             }
-            
+
             {
                 let flags = r2.flags();
                 let json_str = serde_json::to_string(&flags).expect("Failed to encode to json");
@@ -373,7 +371,9 @@ impl From<R2> for FileSource {
             }
 
             {
-                let strings = r2.strings(false).expect("Unable to load String info from r2");
+                let strings = r2
+                    .strings(false)
+                    .expect("Unable to load String info from r2");
                 let json_str = serde_json::to_string(&strings).expect("Failed to encode to json");
                 fsource.write_file(suffix::STRING, &json_str);
             }
