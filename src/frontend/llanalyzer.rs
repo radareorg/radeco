@@ -1,10 +1,10 @@
 //! Implements some low-level analysis as a part of frontend
 
-use frontend::radeco_containers::{RadecoModule, CallGraph, CallContextInfo, RadecoFunction};
+use frontend::radeco_containers::{CallContextInfo, CallGraph, RadecoFunction, RadecoModule};
 use middle::ir::MOpcode;
-use middle::ssa::ssa_traits::{SSAWalk, SSA, NodeType};
-use petgraph::Direction;
+use middle::ssa::ssa_traits::{NodeType, SSAWalk, SSA};
 use petgraph::graph::NodeIndex;
+use petgraph::Direction;
 use r2api::structs::FunctionInfo;
 
 use std::collections::HashMap;
@@ -12,12 +12,12 @@ use std::collections::HashMap;
 /// into an actual graph with links.
 pub fn load_call_graph(finfos: &[FunctionInfo], rmod: &RadecoModule) -> CallGraph {
     let mut cg = CallGraph::new();
-    let node_map = finfos.iter()
+    let node_map = finfos
+        .iter()
         .map(|x| {
             let offset = x.offset.unwrap();
             (offset, cg.add_node(offset))
-        })
-        .collect::<HashMap<_, _>>();
+        }).collect::<HashMap<_, _>>();
 
     for x in finfos {
         let offset = x.offset.unwrap();
@@ -74,7 +74,10 @@ fn analyze_callsite_initial(rfn: &RadecoFunction) -> HashMap<u64, CallContextInf
                     // Map operands/arguments to call in the caller context to invalid nodes in
                     // the callee context. These will be resolved later (hopefully)
                     // to be the argument nodes in the callee.
-                    cctx.map = args_to_call.iter().map(|&x| (x, NodeIndex::end())).collect();
+                    cctx.map = args_to_call
+                        .iter()
+                        .map(|&x| (x, NodeIndex::end()))
+                        .collect();
                     // One mapping for the return value
                     cctx.map.push((node, NodeIndex::end()));
                     cctx.csite_node = node;
@@ -95,37 +98,38 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
         let rfn = wrapper.1;
         let mut csites: HashMap<u64, CallContextInfo> = analyze_callsite_initial(rfn);
         // Iterate through callsites
-        let mut cgwalker =
-            rmod.callgraph.neighbors_directed(rfn.cgid(), Direction::Outgoing).detach();
+        let mut cgwalker = rmod
+            .callgraph
+            .neighbors_directed(rfn.cgid(), Direction::Outgoing)
+            .detach();
         for (csi, callee) in cgwalker.next(&rmod.callgraph) {
             let csite = rmod.callgraph[csi].csite;
             // Get args of callee
             let callee_off = rmod.callgraph[callee];
 
             let callee_info = if let Some(calleefn) = rmod.functions.get(&callee_off) {
-                let mut args = calleefn.bindings()
+                let mut args = calleefn
+                    .bindings()
                     .into_iter()
                     .filter(|x| x.btype.is_argument() || x.btype.is_return())
                     .cloned()
                     .collect::<Vec<_>>();
-                args.sort_by(|x, y| {
-                    match (x.ridx, y.ridx) {
-                        (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
-                        (_, _) => unreachable!(),
-                    }
+                args.sort_by(|x, y| match (x.ridx, y.ridx) {
+                    (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
+                    (_, _) => unreachable!(),
                 });
                 Some((calleefn.cgid(), args))
-            } else if let Some(calleefn) = rmod.imports.get(&callee_off).map(|ifn| ifn.rfn.borrow()) {
-                let mut args = calleefn.bindings()
+            } else if let Some(calleefn) = rmod.imports.get(&callee_off).map(|ifn| ifn.rfn.borrow())
+            {
+                let mut args = calleefn
+                    .bindings()
                     .into_iter()
                     .filter(|x| x.btype.is_argument() || x.btype.is_return())
                     .cloned()
                     .collect::<Vec<_>>();
-                args.sort_by(|x, y| {
-                    match (x.ridx, y.ridx) {
-                        (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
-                        (_, _) => unreachable!(),
-                    }
+                args.sort_by(|x, y| match (x.ridx, y.ridx) {
+                    (Some(xidx), Some(ref yidx)) => xidx.cmp(yidx),
+                    (_, _) => unreachable!(),
                 });
                 Some((calleefn.cgid(), args))
             } else {
@@ -135,7 +139,8 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
             if let Some((callee_cgid, args)) = callee_info {
                 // Access the actual callsite in rfn.
                 if let Some(mut cctx) = csites.remove(&csite) {
-                    cctx.map = cctx.map
+                    cctx.map = cctx
+                        .map
                         .iter()
                         .map(|&(k, _)| k)
                         .zip(args.into_iter().map(|v| v.idx))

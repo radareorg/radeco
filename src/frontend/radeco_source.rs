@@ -2,17 +2,19 @@
 
 use serde_json;
 
-use std::path::{Path, PathBuf};
-use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use r2api::api_trait::R2Api;
-use r2api::structs::{LFunctionInfo, FunctionInfo, LCCInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo, LSymbolInfo,
-LImportInfo, LExportInfo, LRelocInfo, LEntryInfo, LVarInfo};
+use r2api::structs::{
+    FunctionInfo, LCCInfo, LEntryInfo, LExportInfo, LFlagInfo, LFunctionInfo, LImportInfo, LOpInfo,
+    LRegInfo, LRelocInfo, LSectionInfo, LStringInfo, LSymbolInfo, LVarInfo,
+};
 
 #[derive(Debug)]
 pub enum SourceErr {
@@ -43,21 +45,49 @@ pub trait Source {
     fn register_profile(&self) -> Result<LRegInfo, SourceErr>;
     fn flags(&self) -> Result<Vec<LFlagInfo>, SourceErr>;
     fn sections(&self) -> Result<Vec<LSectionInfo>, SourceErr>;
-    fn symbols(&self) -> Result<Vec<LSymbolInfo>, SourceErr> { unimplemented!() }
-    fn imports(&self) -> Result<Vec<LImportInfo>, SourceErr> { unimplemented!() }
-    fn exports(&self) -> Result<Vec<LExportInfo>, SourceErr> { unimplemented!() }
-    fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> { unimplemented!() }
-    fn libraries(&self) -> Result<Vec<String>, SourceErr> { unimplemented!() }
-    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> { unimplemented!() }
-    fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
-    fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
-    fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> { unimplemented!() }
-    fn locals_of(&self, _start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> { unimplemented!() }
-    fn cc_info_of(&self, _start_addr: u64) -> Result<LCCInfo, SourceErr> { unimplemented!() }
-    fn strings(&self, data_only: bool) -> Result<Vec<LStringInfo>, SourceErr> { unimplemented!() }
-    fn raw(&self, _cmd: String) -> Result<String, SourceErr> { unimplemented!() }
+    fn symbols(&self) -> Result<Vec<LSymbolInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn imports(&self) -> Result<Vec<LImportInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn exports(&self) -> Result<Vec<LExportInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn relocs(&self) -> Result<Vec<LRelocInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn libraries(&self) -> Result<Vec<String>, SourceErr> {
+        unimplemented!()
+    }
+    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn locals_of(&self, _start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn cc_info_of(&self, _start_addr: u64) -> Result<LCCInfo, SourceErr> {
+        unimplemented!()
+    }
+    fn strings(&self, data_only: bool) -> Result<Vec<LStringInfo>, SourceErr> {
+        unimplemented!()
+    }
+    fn raw(&self, _cmd: String) -> Result<String, SourceErr> {
+        unimplemented!()
+    }
 
-    fn send(&self, _: String) -> Result<(), SourceErr> { Ok(()) }
+    fn send(&self, _: String) -> Result<(), SourceErr> {
+        Ok(())
+    }
 
     // Non essential / functions with default implementation.
     fn function_at(&self, address: u64) -> Result<FunctionInfo, SourceErr> {
@@ -112,7 +142,7 @@ pub trait Source {
 
 // Cause R2Api requires borrowing mutably, while `Source` takes self which
 // is immutable.
-// The only problem with this is that r2pipe is not thread safe, therefore 
+// The only problem with this is that r2pipe is not thread safe, therefore
 // using `r2` from multiple threads will cause results to be inconsistent.
 // However, this should not be a problem as `Rc` prevents concurrent accesses from multiple
 // threads.
@@ -123,7 +153,7 @@ pub trait Source {
 // the performance when compared to Mutex as every function takes `self` mutably (as it has to
 // communicate with r2 which amounts to writing out to process pipe). Therefore, it'd make
 // sense to have some sort of cached information so that concurrent reads can occur. This should
-// be invalidated whenever some information is exported back to radare or some analysis is run on 
+// be invalidated whenever some information is exported back to radare or some analysis is run on
 // r2.
 pub type WrappedR2Api<R> = Rc<RefCell<R>>;
 
@@ -135,7 +165,9 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
 
     fn instructions_at(&self, address: u64) -> Result<Vec<LOpInfo>, SourceErr> {
         if let Ok(fn_info) = self.try_borrow_mut()?.function(&format!("{}", address)) {
-            fn_info.ops.ok_or(SourceErr::SrcErr("No Instructions found"))
+            fn_info
+                .ops
+                .ok_or(SourceErr::SrcErr("No Instructions found"))
         } else {
             Err(SourceErr::SrcErr("No Instructions found"))
         }
@@ -186,7 +218,11 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
     }
 
     fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
-        Ok(self.try_borrow_mut()?.function(name)?.ops.unwrap_or(Vec::new()))
+        Ok(self
+            .try_borrow_mut()?
+            .function(name)?
+            .ops
+            .unwrap_or(Vec::new()))
     }
 
     fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
@@ -240,8 +276,8 @@ impl FileSource {
         let mut path = PathBuf::from(&self.dir);
         path.push(&format!("{}_{}.json", self.base_name, suffix));
         let mut f = File::create(path).expect("Failed to open file");
-        f.write_all(data.to_string()
-                        .as_bytes()).expect("Failed to read file");
+        f.write_all(data.to_string().as_bytes())
+            .expect("Failed to read file");
     }
 }
 
@@ -273,12 +309,13 @@ impl FileSource {
             base_name: base_name.to_owned(),
         }
     }
-
 }
 
 impl Source for FileSource {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr> {
-        Ok(serde_json::from_str(&self.read_file(suffix::FUNCTION_INFO)?)?)
+        Ok(serde_json::from_str(
+            &self.read_file(suffix::FUNCTION_INFO)?,
+        )?)
     }
 
     fn instructions_at(&self, address: u64) -> Result<Vec<LOpInfo>, SourceErr> {
@@ -323,17 +360,23 @@ impl Source for FileSource {
     }
 
     fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
-        Err(SourceErr::SrcErr("`Source::disassemble_n_bytes` is not implemented"))
+        Err(SourceErr::SrcErr(
+            "`Source::disassemble_n_bytes` is not implemented",
+        ))
     }
 
     fn disassemble_n_insts(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
-        Err(SourceErr::SrcErr("`Source::disassemble_n_insts` is not implemented"))
+        Err(SourceErr::SrcErr(
+            "`Source::disassemble_n_insts` is not implemented",
+        ))
     }
 
     fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
         let suffix = format!("{}_{}", suffix::FUNCTION, name);
         let function_info: LFunctionInfo = serde_json::from_str(&self.read_file(&suffix)?)?;
-        function_info.ops.ok_or(SourceErr::SrcErr("LFunctionInfo::ops is `None`"))
+        function_info
+            .ops
+            .ok_or(SourceErr::SrcErr("LFunctionInfo::ops is `None`"))
     }
 
     fn locals_of(&self, start_addr: u64) -> Result<Vec<LVarInfo>, SourceErr> {
@@ -370,47 +413,54 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
 
         {
             let fns = r2.functions().expect("Failed to load function info");
-            { 
+            {
                 let json_str = serde_json::to_string(&fns).expect("Failed to encode to json");
                 fsource.write_file(suffix::FUNCTION_INFO, &json_str);
             }
 
             for f in fns {
                 {
-                    let result = r2.instructions_at(f.offset.unwrap()).expect("Failed to load instructions");
-                    let json_str = serde_json::to_string(&result).expect("Failed to encode to json");
+                    let result = r2
+                        .instructions_at(f.offset.unwrap())
+                        .expect("Failed to load instructions");
+                    let json_str =
+                        serde_json::to_string(&result).expect("Failed to encode to json");
                     let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, f.offset.unwrap());
                     fsource.write_file(&suffix, &json_str)
                 }
 
                 {
                     let name = f.name.clone().unwrap();
-                    let result = r2.disassemble_function(&name).map(|ops| {
-                        LFunctionInfo {
+                    let result = r2
+                        .disassemble_function(&name)
+                        .map(|ops| LFunctionInfo {
                             addr: f.offset,
                             name: f.name.clone(),
                             ops: Some(ops),
                             size: f.size,
-                        }}).expect(&format!("Failed to load instructions @ {}", name));
-                    let json_str = serde_json::to_string(&result).expect("Failed to encode to json");
+                        }).expect(&format!("Failed to load instructions @ {}", name));
+                    let json_str =
+                        serde_json::to_string(&result).expect("Failed to encode to json");
                     let suffix = format!("{}_{}", suffix::FUNCTION, name);
                     fsource.write_file(&suffix, &json_str)
                 }
 
                 {
-                    let result = r2.locals_of(f.offset.unwrap())
+                    let result = r2
+                        .locals_of(f.offset.unwrap())
                         .expect("Failed to load locals");
-                    let json_str = serde_json::to_string(&result)
-                        .expect("Failed to encode to json");
+                    let json_str =
+                        serde_json::to_string(&result).expect("Failed to encode to json");
                     let suffix = format!("{}_{}", suffix::LOCAL, f.offset.unwrap());
                     fsource.write_file(&suffix, &json_str)
                 }
 
                 {
-                    let result = r2.cc_info_of(f.offset.unwrap())
+                    let result = r2
+                        .cc_info_of(f.offset.unwrap())
                         .expect("Failed to load cc info");
-                    let json_str = serde_json::to_string(&result)
-                        .expect("Failed to encode to json");
+                    let json_str =
+                        serde_json::to_string(&result).expect("Failed to encode to json");
                     let suffix = format!("{}_{}", suffix::CCINFO, f.offset.unwrap());
                     fsource.write_file(&suffix, &json_str)
                 }
@@ -421,7 +471,7 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
                 let json_str = serde_json::to_string(&reg).expect("Failed to encode to json");
                 fsource.write_file(suffix::REGISTER, &json_str);
             }
-            
+
             {
                 let flags = r2.flags().expect("Failed to load flag info");
                 let json_str = serde_json::to_string(&flags).expect("Failed to encode to json");
@@ -435,13 +485,19 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
             }
 
             {
-                let strings = r2.borrow_mut().strings(true).expect("Unable to load String info from r2");
+                let strings = r2
+                    .borrow_mut()
+                    .strings(true)
+                    .expect("Unable to load String info from r2");
                 let json_str = serde_json::to_string(&strings).expect("Failed to encode to json");
                 fsource.write_file(suffix::STRING, &json_str);
             }
 
             {
-                let imports = r2.borrow_mut().imports().expect("Unable to load import info from r2");
+                let imports = r2
+                    .borrow_mut()
+                    .imports()
+                    .expect("Unable to load import info from r2");
                 let json_str = serde_json::to_string(&imports).expect("Failed to encode to json");
                 fsource.write_file(suffix::IMPORT, &json_str);
             }
@@ -454,19 +510,28 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
             // }
 
             {
-                let relocs = r2.borrow_mut().relocs().expect("Unable to load reloc info from r2");
+                let relocs = r2
+                    .borrow_mut()
+                    .relocs()
+                    .expect("Unable to load reloc info from r2");
                 let json_str = serde_json::to_string(&relocs).expect("Failed to encode to json");
                 fsource.write_file(suffix::RELOC, &json_str);
             }
 
             {
-                let libraries = r2.borrow_mut().libraries().expect("Unable to load library info from r2");
+                let libraries = r2
+                    .borrow_mut()
+                    .libraries()
+                    .expect("Unable to load library info from r2");
                 let json_str = serde_json::to_string(&libraries).expect("Failed to encode to json");
                 fsource.write_file(suffix::LIBRARY, &json_str);
             }
 
             {
-                let entry = r2.borrow_mut().entrypoint().expect("Unable to load entry info from r2");
+                let entry = r2
+                    .borrow_mut()
+                    .entrypoint()
+                    .expect("Unable to load entry info from r2");
                 let json_str = serde_json::to_string(&entry).expect("Failed to encode to json");
                 fsource.write_file(suffix::ENTRY, &json_str);
             }
@@ -479,10 +544,10 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
 #[cfg(test)]
 mod test {
 
-    use std::rc::Rc;
-    use r2pipe::r2::R2;
     use frontend::radeco_containers::*;
     use frontend::radeco_source::*;
+    use r2pipe::r2::R2;
+    use std::rc::Rc;
 
     #[test]
     fn file_source_test() {

@@ -6,7 +6,6 @@ use std::cell::RefCell;
 
 use std::sync::Arc;
 
-
 #[derive(Debug)]
 pub struct ImportInfo {
     pub plt: u64,
@@ -16,7 +15,7 @@ pub struct ImportInfo {
 
 impl ImportInfo {
     pub fn new_stub(plt: u64, name: Cow<'static, str>) -> ImportInfo {
-        let mut rfn = RadecoFunction::default() ;
+        let mut rfn = RadecoFunction::default();
         rfn.name = name.clone();
         ImportInfo {
             plt: plt,

@@ -10,7 +10,6 @@
 //! A polynomial abstract set goes like:
 //!     base + [a1]x1 + [a2]x2 + ... + [an]xn
 //! which means:
-//!     {base + k1 * x1 + k2 * x2 + ... + kn * xn | 0 <= ki <= ai}     
-
+//!     {base + k1 * x1 + k2 * x2 + ... + kn * xn | 0 <= ki <= ai}
 
 // TODO

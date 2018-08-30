@@ -391,8 +391,7 @@ pub fn simplify_ast_node<'cd, A: AstContext>(
                     Some(Seq(s)) => s,
                     Some(a) => vec![a],
                     None => Vec::new(),
-                })
-                .collect();
+                }).collect();
             match new_seq.len() {
                 0 => None,
                 1 => Some(new_seq.pop().unwrap()),

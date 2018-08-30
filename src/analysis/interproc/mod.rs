@@ -6,7 +6,7 @@
 // except according to those terms.
 
 mod digstack;
-pub mod summary;
-pub mod interproc;
-pub mod transfer;
 pub mod fixcall;
+pub mod interproc;
+pub mod summary;
+pub mod transfer;

@@ -8,12 +8,15 @@ use middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
 
 #[allow(dead_code)]
 mod patterns {
-    pub const OF: &'static str = "(OpNarrow1 (OpEq (OpAnd (OpLsr (OpAnd (OpXor (OpNot %2), %3), (OpXor %1, %2)), #x3f), #x1), #x1))";
-    pub const PF: &'static str = "(OpNarrow1 (OpAnd (OpMod (OpAnd (OpMul (OpAnd %1, #xff), #x101010101010101), #x8040201008040201), #x1ff), #x1))";
+    pub const OF: &'static str = "(OpNarrow1 (OpEq (OpAnd (OpLsr (OpAnd (OpXor (OpNot %2), %3), \
+                                  (OpXor %1, %2)), #x3f), #x1), #x1))";
+    pub const PF: &'static str = "(OpNarrow1 (OpAnd (OpMod (OpAnd (OpMul (OpAnd %1, #xff), \
+                                  #x101010101010101), #x8040201008040201), #x1ff), #x1))";
     pub const SF: &'static str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x40, #x1)))";
     pub const SF_32: &'static str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x20, #x1)))";
     pub const CF: &'static str = "(OpNarrow1 (OpGt %2, %1))";
-    pub const ZF: &'static str = "(OpNarrow1 (OpXor #x1, (OpAnd (OpSub %2, %3), #xffffffffffffffff)))";
+    pub const ZF: &'static str =
+        "(OpNarrow1 (OpXor #x1, (OpAnd (OpSub %2, %3), #xffffffffffffffff)))";
     pub const ZF_32: &'static str = "(OpNarrow1 (OpXor #x1, (OpAnd (OpSub %2, %3), #xffffffff)))";
     pub const BF: &'static str = "(OpNarrow1 (OpLt %2, %1))";
 
@@ -40,8 +43,10 @@ mod patterns {
 }
 
 pub fn replace<I, S>(ssa: &mut S)
-where I: Iterator<Item=S::ValueRef>,
-      S: SSA + SSAMod + SSAWalk<I> {
+where
+    I: Iterator<Item = S::ValueRef>,
+    S: SSA + SSAMod + SSAWalk<I>,
+{
     for pat in patterns::PATTERNS {
         grep_and_replace!(ssa, pat.0 => pat.1)
     }

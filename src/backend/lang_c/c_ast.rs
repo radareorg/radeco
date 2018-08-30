@@ -4,15 +4,15 @@
 //! stages maybe added to
 //! make the decompiled output easier to read and add more sugaring.
 
-use std::{default, iter, fmt};
 use std::collections::HashMap;
+use std::{default, fmt, iter};
 
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{Direction, EdgeDirection};
 
-use frontend::radeco_containers::RadecoFunction;
 use super::c_cfg_builder;
+use frontend::radeco_containers::RadecoFunction;
 
 //////////////////////////////////////////////////////////////////////////////
 //// Declaration and implementation for basic C data types.
@@ -177,7 +177,9 @@ impl default::Default for CAST {
             fn_head: NodeIndex::end(),
             comments: HashMap::new(),
         };
-        ast.fn_head = ast.ast.add_node(CASTNode::FunctionHeader("unknown".to_owned()));
+        ast.fn_head = ast
+            .ast
+            .add_node(CASTNode::FunctionHeader("unknown".to_owned()));
         ast
     }
 }
@@ -187,7 +189,10 @@ impl default::Default for CAST {
 const INDENT_UNIT: char = ' ';
 const INDENT_SHIFT: u8 = 4;
 fn format_with_indent(string: &str, depth: usize) -> String {
-    iter::repeat(INDENT_UNIT).take(depth * INDENT_SHIFT as usize).collect::<String>() + string
+    iter::repeat(INDENT_UNIT)
+        .take(depth * INDENT_SHIFT as usize)
+        .collect::<String>()
+        + string
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -203,12 +208,17 @@ impl CAST {
             fn_head: NodeIndex::end(),
             comments: HashMap::new(),
         };
-        ast.fn_head = ast.ast.add_node(CASTNode::FunctionHeader(fn_name.to_owned()));
+        ast.fn_head = ast
+            .ast
+            .add_node(CASTNode::FunctionHeader(fn_name.to_owned()));
         ast
     }
 
-    pub fn construct(rfn: &RadecoFunction, fname_map: &HashMap<u64, String>,
-                strings: &HashMap<u64, String>) -> CAST {
+    pub fn construct(
+        rfn: &RadecoFunction,
+        fname_map: &HashMap<u64, String>,
+        strings: &HashMap<u64, String>,
+    ) -> CAST {
         let cfg = c_cfg_builder::recover_c_cfg(&rfn, &fname_map, &strings);
         cfg.to_c_ast()
     }
@@ -227,14 +237,16 @@ impl CAST {
     }
 
     fn get_args_ordered(&self, node: &NodeIndex) -> Vec<NodeIndex> {
-        let mut args = self.ast
+        let mut args = self
+            .ast
             .edges_directed(*node, EdgeDirection::Outgoing)
-            .filter(|x| if let CASTEdge::OpOrd(_) = *x.weight() {
-                true
-            } else {
-                false
-            })
-            .collect::<Vec<_>>();
+            .filter(|x| {
+                if let CASTEdge::OpOrd(_) = *x.weight() {
+                    true
+                } else {
+                    false
+                }
+            }).collect::<Vec<_>>();
         args.sort_by(|a, b| {
             let idx1 = if let CASTEdge::OpOrd(idx) = *a.weight() {
                 idx
@@ -258,7 +270,8 @@ impl CAST {
         let operator = self.ast.add_node(CASTNode::ExpressionNode(operator));
         let idx = self.next_edge_idx();
         if !is_implicit {
-            self.ast.add_edge(self.fn_head, operator, CASTEdge::StatementOrd(idx));
+            self.ast
+                .add_edge(self.fn_head, operator, CASTEdge::StatementOrd(idx));
         }
         for (i, n) in operands.iter().enumerate() {
             if let Some(edx) = self.ast.find_edge(self.fn_head, *n) {
@@ -278,12 +291,16 @@ impl CAST {
             self.next_edge_idx()
         };
         let while_h = self.ast.add_node(CASTNode::While);
-        self.ast.add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
         self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
         let node = self.ast.add_node(CASTNode::Block);
         self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
         for (i, n) in body.iter().enumerate() {
-            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            let e = self
+                .ast
+                .find_edge(self.fn_head, *n)
+                .expect("This cannot be `None`");
             self.ast.remove_edge(e);
             self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
         }
@@ -299,23 +316,28 @@ impl CAST {
             self.next_edge_idx()
         };
         let while_h = self.ast.add_node(CASTNode::DoWhile);
-        self.ast.add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
         self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
         let node = self.ast.add_node(CASTNode::Block);
         self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
         for (i, n) in body.iter().enumerate() {
-            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            let e = self
+                .ast
+                .find_edge(self.fn_head, *n)
+                .expect("This cannot be `None`");
             self.ast.remove_edge(e);
             self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
         }
         while_h
     }
 
-    pub fn new_if(&mut self,
-                           condition: NodeIndex,
-                           body: Vec<NodeIndex>,
-                           else_condition: Option<Vec<NodeIndex>>)
-                           -> NodeIndex {
+    pub fn new_if(
+        &mut self,
+        condition: NodeIndex,
+        body: Vec<NodeIndex>,
+        else_condition: Option<Vec<NodeIndex>>,
+    ) -> NodeIndex {
         let idx = if let Some(e1) = self.ast.find_edge(self.fn_head, condition) {
             let idx = self.get_statement_ord(e1);
             self.ast.remove_edge(e1);
@@ -324,13 +346,17 @@ impl CAST {
             self.next_edge_idx()
         };
         let if_h = self.ast.add_node(CASTNode::If);
-        self.ast.add_edge(self.fn_head, if_h, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, if_h, CASTEdge::StatementOrd(idx));
         self.ast.add_edge(if_h, condition, CASTEdge::OpOrd(0));
 
         let node = self.ast.add_node(CASTNode::Block);
         self.ast.add_edge(if_h, node, CASTEdge::OpOrd(1));
         for (i, n) in body.iter().enumerate() {
-            let e = self.ast.find_edge(self.fn_head, *n).expect("This cannot be `None`");
+            let e = self
+                .ast
+                .find_edge(self.fn_head, *n)
+                .expect("This cannot be `None`");
             self.ast.remove_edge(e);
             self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
         }
@@ -339,9 +365,13 @@ impl CAST {
             let else_node = self.ast.add_node(CASTNode::Block);
             self.ast.add_edge(if_h, else_node, CASTEdge::OpOrd(2));
             for (i, n) in elses.into_iter().enumerate() {
-                let e = self.ast.find_edge(self.fn_head, n).expect("This cannot be `None`");
+                let e = self
+                    .ast
+                    .find_edge(self.fn_head, n)
+                    .expect("This cannot be `None`");
                 self.ast.remove_edge(e);
-                self.ast.add_edge(else_node, n, CASTEdge::BlockOrd(i as u64));
+                self.ast
+                    .add_edge(else_node, n, CASTEdge::BlockOrd(i as u64));
             }
         }
         if_h
@@ -361,9 +391,12 @@ impl CAST {
                     "unknown".to_string()
                 }
             }).collect::<Vec<_>>();
-        let call_node = self.ast.add_node(CASTNode::Call(func_name.to_string(), args_str));
+        let call_node = self
+            .ast
+            .add_node(CASTNode::Call(func_name.to_string(), args_str));
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, call_node, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, call_node, CASTEdge::StatementOrd(idx));
         call_node
     }
 
@@ -372,35 +405,39 @@ impl CAST {
             match self.ast.node_weight(_value) {
                 Some(&CASTNode::Var(ref v)) => v.clone(),
                 Some(&CASTNode::Constant(_, ref c)) => c.clone(),
-            _ => "unknown".to_string(),
+                _ => "unknown".to_string(),
             }
         } else {
             "".to_string()
         };
         let ret_node = self.ast.add_node(CASTNode::Return(value_str));
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, ret_node, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, ret_node, CASTEdge::StatementOrd(idx));
         ret_node
     }
 
     pub fn goto(&mut self, label: &str) -> NodeIndex {
         let goto_n = self.ast.add_node(CASTNode::Goto(label.to_string()));
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
         goto_n
     }
 
     pub fn label(&mut self, label: &str) -> NodeIndex {
         let label = self.ast.add_node(CASTNode::Label(label.to_string()));
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, label, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, label, CASTEdge::StatementOrd(idx));
         label
     }
 
     pub fn insert_break(&mut self) -> NodeIndex {
         let break_n = self.ast.add_node(CASTNode::Break);
         let idx = self.next_edge_idx();
-        self.ast.add_edge(self.fn_head, break_n, CASTEdge::StatementOrd(idx));
+        self.ast
+            .add_edge(self.fn_head, break_n, CASTEdge::StatementOrd(idx));
         break_n
     }
 
@@ -415,7 +452,8 @@ impl CAST {
         }
         let idx = self.next_edge_idx();
         if !is_implicit {
-            self.ast.add_edge(self.fn_head, decl, CASTEdge::StatementOrd(idx));
+            self.ast
+                .add_edge(self.fn_head, decl, CASTEdge::StatementOrd(idx));
         }
         var_decls
     }
@@ -424,7 +462,8 @@ impl CAST {
         let mut arg_nodes = Vec::new();
         for (i, &(ref t, ref named)) in args.iter().enumerate() {
             let decl = self.ast.add_node(CASTNode::Declaration(t.clone()));
-            self.ast.add_edge(self.fn_head, decl, CASTEdge::OpOrd(i as u8));
+            self.ast
+                .add_edge(self.fn_head, decl, CASTEdge::OpOrd(i as u8));
             let arg_node = self.ast.add_node(CASTNode::Var(named.clone()));
             self.ast.add_edge(decl, arg_node, CASTEdge::OpOrd(0));
             arg_nodes.push(arg_node);
@@ -442,9 +481,11 @@ impl CAST {
                 let arg1 = args[0];
                 let arg2 = args[1];
                 let arg3 = args.get(2).cloned();
-                let condition = format!("{} {} {{\n",
-                                        format_with_indent("if", indent),
-                                        self.emit_c(&arg1, 0, true));
+                let condition = format!(
+                    "{} {} {{\n",
+                    format_with_indent("if", indent),
+                    self.emit_c(&arg1, 0, true)
+                );
                 let true_body = self.emit_c(&arg2, indent + 1, false);
                 let false_body = if let Some(arg3) = arg3 {
                     let fbody = self.emit_c(&arg3, indent + 1, false);
@@ -459,11 +500,13 @@ impl CAST {
                     "".to_owned()
                 };
 
-                format!("{}{}{}{}",
-                        condition,
-                        true_body,
-                        format!("\n{}", false_body),
-                        format_with_indent("}", indent))
+                format!(
+                    "{}{}{}{}",
+                    condition,
+                    true_body,
+                    format!("\n{}", false_body),
+                    format_with_indent("}", indent)
+                )
             }
             CASTNode::Declaration(ref ty) => {
                 let ty = format_with_indent(&ty.to_string(), indent);
@@ -484,98 +527,129 @@ impl CAST {
                 let args = self.get_args_ordered(node);
                 let condition = self.emit_c(&args[0], 0, true);
                 let while_body = self.emit_c(&args[1], indent + 1, false);
-                format!("{} ({}) {{\n{}\n{}",
-                        format_with_indent("while", indent),
-                        condition,
-                        while_body,
-                        format_with_indent("}", indent))
+                format!(
+                    "{} ({}) {{\n{}\n{}",
+                    format_with_indent("while", indent),
+                    condition,
+                    while_body,
+                    format_with_indent("}", indent)
+                )
             }
             CASTNode::DoWhile => {
                 // Get the arguments -> while header/check condition, while body.
                 let args = self.get_args_ordered(node);
                 let condition = self.emit_c(&args[0], 0, true);
                 let while_body = self.emit_c(&args[1], indent + 1, false);
-                format!("{} {{\n{}\n{}}} while ({})",
-                        format_with_indent("do", indent),
-                        while_body,
-                        format_with_indent("", indent),
-                        condition)
+                format!(
+                    "{} {{\n{}\n{}}} while ({})",
+                    format_with_indent("do", indent),
+                    while_body,
+                    format_with_indent("", indent),
+                    condition
+                )
             }
-            CASTNode::Goto(ref label) => {
-                format_with_indent(&format!("goto {}", label), indent)
-            }
-            CASTNode::Label(ref label) => {
-                format!("{}:", label)
-            }
-            CASTNode::Break => {
-                format_with_indent("break", indent)
-            }
+            CASTNode::Goto(ref label) => format_with_indent(&format!("goto {}", label), indent),
+            CASTNode::Label(ref label) => format!("{}:", label),
+            CASTNode::Break => format_with_indent("break", indent),
             CASTNode::ExpressionNode(ref expr) => {
                 let operands = self.get_args_ordered(node);
-                let op_str = operands.iter().map(|x| self.emit_c(x, 0, true)).collect::<Vec<_>>();
+                let op_str = operands
+                    .iter()
+                    .map(|x| self.emit_c(x, 0, true))
+                    .collect::<Vec<_>>();
                 match *expr {
-                    Expr::Assign => format!("{} = {}",
-                                        format_with_indent(&op_str[0], indent),
-                                        &op_str[1]),
-                    Expr::Add => format!("({} + {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
-                    Expr::Cast(size) => format!("({} as {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &size.to_string()),
-                    Expr::Sub => format!("({} - {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
-                    Expr::Mul => format!("({} * {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
+                    Expr::Assign => format!(
+                        "{} = {}",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Add => format!(
+                        "({} + {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Cast(size) => format!(
+                        "({} as {})",
+                        format_with_indent(&op_str[0], indent),
+                        &size.to_string()
+                    ),
+                    Expr::Sub => format!(
+                        "({} - {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Mul => format!(
+                        "({} * {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
                     Expr::DeRef => format!("{}*({})", format_with_indent("", indent), &op_str[0]),
-                    Expr::Div => format!("({} / {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
-                    Expr::Mod => format!("({} % {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
-                    Expr::Shr => format!("({} >> {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
-                    Expr::Shl => format!("({} << {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
-                    Expr::Xor => format!("({} ^ {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
-                    Expr::Or => format!("({} | {})",
-                                        format_with_indent(&op_str[0], indent),
-                                        &op_str[1]),
-                    Expr::And => format!("({} & {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
+                    Expr::Div => format!(
+                        "({} / {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Mod => format!(
+                        "({} % {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Shr => format!(
+                        "({} >> {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Shl => format!(
+                        "({} << {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Xor => format!(
+                        "({} ^ {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Or => format!(
+                        "({} | {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::And => format!(
+                        "({} & {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
                     Expr::Not => format!("(!{})", format_with_indent(&op_str[0], indent)),
                     Expr::Neg => format!("(~{})", format_with_indent(&op_str[0], indent)),
-                    Expr::Gt => format!("({} > {})",
-                                        format_with_indent(&op_str[0], indent),
-                                        &op_str[1]),
-                    Expr::GtEq => format!("({} >= {})",
-                                          format_with_indent(&op_str[0], indent),
-                                          &op_str[1]),
-                    Expr::Lt => format!("({} < {})",
-                                        format_with_indent(&op_str[0], indent),
-                                        &op_str[1]),
-                    Expr::LtEq => format!("({} <= {})",
-                                          format_with_indent(&op_str[0], indent),
-                                          &op_str[1]),
-                    Expr::Eq => format!("({} == {})",
-                                         format_with_indent(&op_str[0], indent),
-                                         &op_str[1]),
+                    Expr::Gt => format!(
+                        "({} > {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::GtEq => format!(
+                        "({} >= {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Lt => format!(
+                        "({} < {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::LtEq => format!(
+                        "({} <= {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
+                    Expr::Eq => format!(
+                        "({} == {})",
+                        format_with_indent(&op_str[0], indent),
+                        &op_str[1]
+                    ),
                 }
             }
-            CASTNode::Var(ref ident) => {
-                ident.clone()
-            }
-            CASTNode::Constant(_, ref value) => {
-                value.clone()
-            }
+            CASTNode::Var(ref ident) => ident.clone(),
+            CASTNode::Constant(_, ref value) => value.clone(),
             CASTNode::Return(ref value) => {
                 format!("{}return {}", format_with_indent("", indent), &value)
             }
@@ -583,13 +657,13 @@ impl CAST {
                 format!("{}({})", format_with_indent(&func, indent), args.join(", "))
             }
             CASTNode::Block => {
-                let mut ns = self.ast.edges_directed(*node, Direction::Outgoing)
+                let mut ns = self
+                    .ast
+                    .edges_directed(*node, Direction::Outgoing)
                     .into_iter()
-                    .filter_map(|x| {
-                        match x.weight() {
-                            CASTEdge::BlockOrd(i) => Some((i, x.target())),
-                            _ => None
-                        }
+                    .filter_map(|x| match x.weight() {
+                        CASTEdge::BlockOrd(i) => Some((i, x.target())),
+                        _ => None,
                     }).collect::<Vec<_>>();
                 ns.sort_by_key(|k| k.0);
                 ns.into_iter()
@@ -599,7 +673,8 @@ impl CAST {
             }
         };
 
-        let semicolon = self.ast
+        let semicolon = self
+            .ast
             .node_weight(*node)
             .map_or(false, |n| Self::has_semicolon(&n, is_nested_expr));
         if semicolon {
@@ -627,9 +702,7 @@ impl CAST {
             | &CASTNode::Var(_)
             | &CASTNode::Constant(_, _)
             | &CASTNode::Block => false,
-            &CASTNode::ExpressionNode(_)
-            | &CASTNode::Call(_, _)
-                if is_nested_expr => false,
+            &CASTNode::ExpressionNode(_) | &CASTNode::Call(_, _) if is_nested_expr => false,
             _ => true,
         }
     }
@@ -658,14 +731,16 @@ impl CAST {
             }
             result.push_str(&format!("fn {} ({}) {{\n", named, args_string));
         }
-        let mut edges = self.ast
-                            .edges_directed(self.fn_head, EdgeDirection::Outgoing)
-                            .filter(|x| if let CASTEdge::StatementOrd(_) = *x.weight() {
-                                true
-                            } else {
-                                false
-                            })
-                            .collect::<Vec<_>>();
+        let mut edges = self
+            .ast
+            .edges_directed(self.fn_head, EdgeDirection::Outgoing)
+            .filter(|x| {
+                if let CASTEdge::StatementOrd(_) = *x.weight() {
+                    true
+                } else {
+                    false
+                }
+            }).collect::<Vec<_>>();
         edges.sort_by(|a, b| {
             let idx1 = if let CASTEdge::StatementOrd(idx) = *a.weight() {
                 idx
@@ -701,7 +776,11 @@ mod test {
     fn c_ast_basic_test() {
         let mut c_ast = CAST::new("main");
         c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
-        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let vars = c_ast.declare_vars(
+            Ty::new(BTy::Int, false, 0),
+            &["i".to_owned(), "j".to_owned()],
+            false,
+        );
         let eq = c_ast.expr(Expr::Eq, &vars, false);
         let increment = c_ast.expr(Expr::Add, &vars, false);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
@@ -714,8 +793,16 @@ mod test {
     fn c_ast_call_test() {
         let mut c_ast = CAST::new("main");
         let args = c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
-        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
-        let test_args = args.iter().chain(vars.iter()).map(|n| Some(n.clone())).collect::<Vec<_>>();
+        let vars = c_ast.declare_vars(
+            Ty::new(BTy::Int, false, 0),
+            &["i".to_owned(), "j".to_owned()],
+            false,
+        );
+        let test_args = args
+            .iter()
+            .chain(vars.iter())
+            .map(|n| Some(n.clone()))
+            .collect::<Vec<_>>();
         let _ = c_ast.call_func("test_func", test_args);
         let _ = c_ast.ret(None);
         println!("{}", c_ast.print());
@@ -724,7 +811,11 @@ mod test {
     #[test]
     fn c_ast_goto_test() {
         let mut c_ast = CAST::new("main");
-        let _ = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let _ = c_ast.declare_vars(
+            Ty::new(BTy::Int, false, 0),
+            &["i".to_owned(), "j".to_owned()],
+            false,
+        );
         let lbl_str = "L1";
         let _ = c_ast.label(lbl_str);
         let _ = c_ast.goto(lbl_str);
@@ -735,7 +826,11 @@ mod test {
     fn c_ast_while_test() {
         let mut c_ast = CAST::new("main");
         c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
-        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let vars = c_ast.declare_vars(
+            Ty::new(BTy::Int, false, 0),
+            &["i".to_owned(), "j".to_owned()],
+            false,
+        );
         let eq = c_ast.expr(Expr::Eq, &vars, false);
         let increment = c_ast.expr(Expr::Add, &vars, false);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);
@@ -748,7 +843,11 @@ mod test {
     fn c_ast_do_while_test() {
         let mut c_ast = CAST::new("main");
         c_ast.function_args(&[(Ty::new(BTy::Int, false, 0), "x".to_owned())]);
-        let vars = c_ast.declare_vars(Ty::new(BTy::Int, false, 0), &["i".to_owned(), "j".to_owned()], false);
+        let vars = c_ast.declare_vars(
+            Ty::new(BTy::Int, false, 0),
+            &["i".to_owned(), "j".to_owned()],
+            false,
+        );
         let eq = c_ast.expr(Expr::Eq, &vars, false);
         let increment = c_ast.expr(Expr::Add, &vars, false);
         let assignment = c_ast.expr(Expr::Assign, &[vars[0], increment], false);

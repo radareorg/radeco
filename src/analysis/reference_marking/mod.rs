@@ -11,26 +11,27 @@
 //!
 //! This process repeats until a cap of `n` iterations is hit, or we reach a fixpoint.
 
-pub mod reference_marking_intra;
 pub mod reference_marking_inter;
+pub mod reference_marking_intra;
 
-use frontend::radeco_containers::{RadecoFunction, CallContextInfo};
+use frontend::radeco_containers::{CallContextInfo, RadecoFunction};
 use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{SSA, ValueType};
+use middle::ssa::ssa_traits::{ValueType, SSA};
 use petgraph::graph::NodeIndex;
 use r2api::structs::LSectionInfo;
 // XXX: This will move out sometime in the future
-pub use self::reference_marking_inter::{Transfer, Propagate, Eval};
+pub use self::reference_marking_inter::{Eval, Propagate, Transfer};
 pub use self::reference_marking_intra::ReferenceMarker;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 // Implement interfunction reference marking for `reference_marking_intra::ReferenceMarker`
 impl Transfer for ReferenceMarker {
-    fn transfer(rfn: &mut RadecoFunction,
-                regfile: Arc<SubRegisterFile>,
-                sections: Arc<Vec<LSectionInfo>>)
-                -> ReferenceMarker {
+    fn transfer(
+        rfn: &mut RadecoFunction,
+        regfile: Arc<SubRegisterFile>,
+        sections: Arc<Vec<LSectionInfo>>,
+    ) -> ReferenceMarker {
         ReferenceMarker::resolve_references(rfn, regfile, sections)
     }
 
@@ -96,37 +97,49 @@ pub struct ReferenceMarkerInfo(HashMap<NodeIndex, ValueType>);
 impl Propagate for ReferenceMarker {
     type Info = ReferenceMarkerInfo;
 
-    fn pull(analyzer: &mut Option<&mut ReferenceMarker>,
-            rfn: &RadecoFunction,
-            callsite: &CallContextInfo)
-            -> Option<ReferenceMarkerInfo> {
+    fn pull(
+        analyzer: &mut Option<&mut ReferenceMarker>,
+        rfn: &RadecoFunction,
+        callsite: &CallContextInfo,
+    ) -> Option<ReferenceMarkerInfo> {
         if let &mut Some(ref mut ana) = analyzer {
-            Some(ReferenceMarkerInfo(callsite.map
-                .iter()
-                .map(|&(caller, callee)| (callee, ana.cs.bvalue(caller)))
-                .collect()))
+            Some(ReferenceMarkerInfo(
+                callsite
+                    .map
+                    .iter()
+                    .map(|&(caller, callee)| (callee, ana.cs.bvalue(caller)))
+                    .collect(),
+            ))
         } else {
             // Handle imports
-            Some(ReferenceMarkerInfo(callsite.map
-                .iter()
-                .filter_map(|&(caller, callee)| {
-                    rfn.ssa().node_data(caller).map(|n| (callee, n.vt.vty)).ok()
-                })
-                .collect()))
+            Some(ReferenceMarkerInfo(
+                callsite
+                    .map
+                    .iter()
+                    .filter_map(|&(caller, callee)| {
+                        rfn.ssa().node_data(caller).map(|n| (callee, n.vt.vty)).ok()
+                    }).collect(),
+            ))
         }
     }
 
-    fn summary(analyzer: &mut ReferenceMarker,
-               rfn: &RadecoFunction)
-               -> Option<ReferenceMarkerInfo> {
-        Some(ReferenceMarkerInfo(rfn.bindings()
-            .into_iter()
-            .filter(|x| x.btype.is_argument() || x.btype.is_return())
-            .map(|x| (x.idx, analyzer.cs.bvalue(x.idx)))
-            .collect()))
+    fn summary(
+        analyzer: &mut ReferenceMarker,
+        rfn: &RadecoFunction,
+    ) -> Option<ReferenceMarkerInfo> {
+        Some(ReferenceMarkerInfo(
+            rfn.bindings()
+                .into_iter()
+                .filter(|x| x.btype.is_argument() || x.btype.is_return())
+                .map(|x| (x.idx, analyzer.cs.bvalue(x.idx)))
+                .collect(),
+        ))
     }
 
-    fn union(_analyzer: &mut ReferenceMarker, _infov: &[ReferenceMarkerInfo]) -> Option<Self::Info> {
+    fn union(
+        _analyzer: &mut ReferenceMarker,
+        _infov: &[ReferenceMarkerInfo],
+    ) -> Option<Self::Info> {
         unimplemented!()
     }
 

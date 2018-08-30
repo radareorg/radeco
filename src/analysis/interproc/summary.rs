@@ -3,13 +3,13 @@
 use std::collections::HashSet;
 
 use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::radeco_containers::{RadecoModule, CGInfo};
-use middle::ssa::ssa_traits::{SSA, NodeType};
-use middle::ssa::cfg_traits::CFG;
+use frontend::radeco_containers::{CGInfo, RadecoModule};
 use middle::ir::MOpcode;
+use middle::ssa::cfg_traits::CFG;
+use middle::ssa::ssa_traits::{NodeType, SSA};
 
 #[derive(Clone, Debug, Default)]
-pub struct CallSummary { }
+pub struct CallSummary {}
 
 impl InterProcAnalysis for CallSummary {
     fn new() -> CallSummary {
@@ -35,15 +35,16 @@ impl InterProcAnalysis for CallSummary {
             }
             let rfn = rfn.unwrap();
             {
-                let locals = rfn.bindings().iter()
+                let locals = rfn
+                    .bindings()
+                    .iter()
                     .enumerate()
                     .filter(|&(_, l)| l.btype.is_local())
                     .map(|(i, _)| i)
                     .collect::<HashSet<_>>();
                 let ssa = rfn.ssa();
                 // Get register state at the start block.
-                let rs = registers_in_err!(ssa, entry_node_err!(ssa),
-                    ssa.invalid_value().unwrap());
+                let rs = registers_in_err!(ssa, entry_node_err!(ssa), ssa.invalid_value().unwrap());
                 // For every register in the starting block.
                 for (i, reg) in ssa.operands_of(rs).iter().enumerate() {
                     // Get the uses of the register
@@ -52,13 +53,13 @@ impl InterProcAnalysis for CallSummary {
                         let insert = uses.iter().any(|x| {
                             if let Ok(ref data) = ssa.node_data(*x) {
                                 match data.nt {
-                                    NodeType::Op(MOpcode::OpLoad) |
-                                    NodeType::Op(MOpcode::OpStore) => {
+                                    NodeType::Op(MOpcode::OpLoad)
+                                    | NodeType::Op(MOpcode::OpStore) => {
                                         // If the store is to a local variable, then it is still an
                                         // argument. Otherwise, it is part of preservation code and
                                         // must not be considered an argument to the function.
                                         locals.contains(&i)
-                                    },
+                                    }
                                     _ => true,
                                 }
                             } else {
@@ -70,15 +71,12 @@ impl InterProcAnalysis for CallSummary {
                         }
                     }
                 }
-                let rs = registers_in_err!(ssa, exit_node_err!(ssa),
-                    ssa.invalid_value().unwrap());
+                let rs = registers_in_err!(ssa, exit_node_err!(ssa), ssa.invalid_value().unwrap());
                 for (i, r) in ssa.operands_of(rs).iter().enumerate() {
                     let (insert_r, insert_m) = if let Ok(ref data) = ssa.node_data(*r) {
                         match data.nt {
                             NodeType::Comment(_) => (false, false),
-                            NodeType::Op(MOpcode::OpLoad) => {
-                                (locals.contains(&i), true)
-                            }
+                            NodeType::Op(MOpcode::OpLoad) => (locals.contains(&i), true),
                             _ => (true, true),
                         }
                     } else {
@@ -106,8 +104,12 @@ impl InterProcAnalysis for CallSummary {
     fn propagate(&mut self, rmod: &mut RadecoModule, fn_ref: u64) {
         if let Some(rfn) = rmod.functions.get(&fn_ref) {
             for context in rfn.call_sites(&rmod.callgraph) {
-                let callee = rmod.callgraph.callees(context.csite_node).next()
-                    .map(|x| x.0).unwrap_or_else(|| {
+                let callee = rmod
+                    .callgraph
+                    .callees(context.csite_node)
+                    .next()
+                    .map(|x| x.0)
+                    .unwrap_or_else(|| {
                         radeco_err!("Call site cannot have callee as `None`");
                         0
                     });

@@ -30,33 +30,34 @@
 //!
 //! For more examples of loading, check the `examples/` directory of this project.
 
-
+use frontend::imports::ImportInfo;
 use frontend::llanalyzer;
 use frontend::radeco_source::Source;
 use frontend::ssaconstructor::SSAConstruct;
-use frontend::imports::ImportInfo;
 
-use middle::regfile::{SubRegisterFile, RegisterUsage};
+use middle::regfile::{RegisterUsage, SubRegisterFile};
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, NodeType};
+use middle::ssa::ssa_traits::{NodeType, SSA};
 
 use middle::ssa::ssastorage::SSAStorage;
 use petgraph::Direction;
 
-use petgraph::graph::{NodeIndex, Graph};
+use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use r2api::api_trait::R2Api;
-use r2api::structs::{LVarInfo, LOpInfo, LSymbolInfo, LRelocInfo, LExportInfo,
-                     LStringInfo, LSectionInfo, LEntryInfo, LSymbolType, LCCInfo};
+use r2api::structs::{
+    LCCInfo, LEntryInfo, LExportInfo, LOpInfo, LRelocInfo, LSectionInfo, LStringInfo, LSymbolInfo,
+    LSymbolType, LVarInfo,
+};
 
 use r2pipe::r2::R2;
 use rayon::prelude::*;
-use std::fmt;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::collections::{btree_map, HashSet};
 use std::collections::{BTreeMap, HashMap};
-use std::collections::{HashSet, btree_map};
+use std::fmt;
 use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
@@ -65,26 +66,28 @@ use std::sync::Arc;
 
 /// Defines sane defaults for the loading process.
 pub mod loader_defaults {
+    use super::FLResult;
+    use super::{RadecoFunction, RadecoModule};
     use frontend::radeco_source::Source;
     use r2api::structs::LSymbolType;
     use std::borrow::Cow;
     use std::rc::Rc;
-    use super::FLResult;
-    use super::{RadecoModule, RadecoFunction};
 
     /// Use symbol information to identify functions
-    pub fn strat_use_symbols(_source: Option<&Rc<Source>>,
-                             _fl: &FLResult,
-                             rmod: &RadecoModule)
-                             -> FLResult {
+    pub fn strat_use_symbols(
+        _source: Option<&Rc<Source>>,
+        _fl: &FLResult,
+        rmod: &RadecoModule,
+    ) -> FLResult {
         rmod.symbols
             .iter()
-            .filter(|f| if let Some(LSymbolType::Func) = f.stype {
-                true
-            } else {
-                false
-            })
-            .fold(FLResult::default(), |mut acc, s| {
+            .filter(|f| {
+                if let Some(LSymbolType::Func) = f.stype {
+                    true
+                } else {
+                    false
+                }
+            }).fold(FLResult::default(), |mut acc, s| {
                 let mut rfn = RadecoFunction::default();
                 rfn.name = Cow::from(s.name.as_ref().unwrap().to_owned());
                 rfn.offset = s.vaddr.unwrap();
@@ -97,10 +100,11 @@ pub mod loader_defaults {
     }
 
     /// Use analysis that `Source` provides to identify functions
-    pub fn strat_use_source(source: Option<&Rc<Source>>,
-                            fl: &FLResult,
-                            _rmod: &RadecoModule)
-                            -> FLResult {
+    pub fn strat_use_source(
+        source: Option<&Rc<Source>>,
+        fl: &FLResult,
+        _rmod: &RadecoModule,
+    ) -> FLResult {
         // Load function information fom `Source`
         if let Some(ref src) = source {
             let mut new_fl = FLResult::default();
@@ -143,12 +147,16 @@ pub trait CGInfo {
 impl CGInfo for CallGraph {
     // Return a list of callers to function at offset, along with their callsites
     fn callers<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a> {
-        box self.edges_directed(idx, Direction::Incoming).map(|er| (er.weight().csite, er.target()))
+        box self
+            .edges_directed(idx, Direction::Incoming)
+            .map(|er| (er.weight().csite, er.target()))
     }
 
     // Return (callsite, call target)
     fn callees<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a> {
-        box self.edges_directed(idx, Direction::Outgoing).map(|er| (er.weight().csite, er.target()))
+        box self
+            .edges_directed(idx, Direction::Outgoing)
+            .map(|er| (er.weight().csite, er.target()))
     }
 }
 
@@ -215,16 +223,14 @@ impl Default for BindingType {
 impl BindingType {
     pub fn is_argument(&self) -> bool {
         match *self {
-            BindingType::RegisterArgument(_) |
-            BindingType::StackArgument(_) => true,
+            BindingType::RegisterArgument(_) | BindingType::StackArgument(_) => true,
             _ => false,
         }
     }
 
     pub fn is_local(&self) -> bool {
         match *self {
-            BindingType::RegisterLocal(_, _) |
-            BindingType::StackLocal(_) => true,
+            BindingType::RegisterLocal(_, _) | BindingType::StackLocal(_) => true,
             _ => false,
         }
     }
@@ -249,8 +255,13 @@ pub struct VarBinding {
 }
 
 impl VarBinding {
-    pub fn new(btype: BindingType, ty_str: String, name: Option<String>,
-               idx: NodeIndex, ridx: Option<u64>) -> VarBinding {
+    pub fn new(
+        btype: BindingType,
+        ty_str: String,
+        name: Option<String>,
+        idx: NodeIndex,
+        ridx: Option<u64>,
+    ) -> VarBinding {
         let name = Cow::from(name.unwrap_or_default());
         VarBinding {
             name: name,
@@ -265,12 +276,20 @@ impl VarBinding {
     fn local(local: LVarInfo) -> VarBinding {
         let r = local.reference.unwrap();
         let btype = BindingType::RegisterLocal(r.base.unwrap(), r.offset.unwrap());
-        VarBinding::new(btype, local.vtype.unwrap(), local.name, NodeIndex::end(), None)
+        VarBinding::new(
+            btype,
+            local.vtype.unwrap(),
+            local.name,
+            NodeIndex::end(),
+            None,
+        )
     }
 
     fn is_matched_reg_local(binding: &VarBinding, reg_name: String, offset: i64) -> bool {
         match binding.btype {
-            BindingType::RegisterLocal(ref reg, n) if reg.clone() == reg_name && n == offset => true,
+            BindingType::RegisterLocal(ref reg, n) if reg.clone() == reg_name && n == offset => {
+                true
+            }
             _ => false,
         }
     }
@@ -351,7 +370,6 @@ pub struct ProjectLoader<'a> {
 }
 
 impl<'a> ProjectLoader<'a> {
-
     pub fn new() -> ProjectLoader<'a> {
         ProjectLoader {
             load_libs: false,
@@ -424,14 +442,16 @@ impl<'a> ProjectLoader<'a> {
         // TODO: Load more arch specific information from the source
 
         if self.mloader.is_none() {
-            self.mloader = Some(ModuleLoader::default().source(Rc::clone(source))
+            self.mloader = Some(
+                ModuleLoader::default().source(Rc::clone(source))
                 .build_ssa()
                 .build_callgraph()
                 .load_datarefs()
                 .load_locals()
                 .parallel()
                 // .assume_cc()
-                .stub_imports());
+                .stub_imports(),
+            );
         }
 
         let mut mod_map = Vec::new();
@@ -445,8 +465,11 @@ impl<'a> ProjectLoader<'a> {
         // Clear out irrelevant fields in self and move it into project loader
         // XXX: Do when needed!
         // self.mod_loader = None;
-        let regfile = SubRegisterFile::new(&source.register_profile()
-            .expect("Unable to load register profile"));
+        let regfile = SubRegisterFile::new(
+            &source
+                .register_profile()
+                .expect("Unable to load register profile"),
+        );
 
         RadecoProject {
             modules: mod_map,
@@ -520,7 +543,6 @@ pub struct ZippedFunctionMut<'f> {
 pub struct FunctionIterMut<'f> {
     iter: btree_map::IterMut<'f, u64, RadecoFunction>,
 }
-
 
 impl<'f> Iterator for FunctionIter<'f> {
     type Item = ZippedFunction<'f>;
@@ -634,61 +656,72 @@ impl<'a> ModuleLoader<'a> {
             let entry = ssa.entry_node().expect("No entry node found for function!");
             let exit = ssa.exit_node().expect("No exit node found for function!");
 
-            let entry_state = ssa.registers_in(entry).expect("No registers found in entry");
+            let entry_state = ssa
+                .registers_in(entry)
+                .expect("No registers found in entry");
             let exit_state = ssa.registers_in(exit).expect("No registers found in entry");
             (ssa.operands_of(entry_state), ssa.operands_of(exit_state))
         };
 
-        let mut tbindings: Vec<VarBinding> = sub_reg_f.alias_info
+        let mut tbindings: Vec<VarBinding> = sub_reg_f
+            .alias_info
             .iter()
             .filter_map(|reg| {
                 let alias = reg.0;
                 if let &Some(idx) = &["A0", "A1", "A2", "A3", "A4", "A5", "SN"]
                     .iter()
-                    .position(|f| f == alias) {
+                    .position(|f| f == alias)
+                {
                     let mut vb = VarBinding::default();
                     if idx < 6 {
                         vb.btype = BindingType::RegisterArgument(idx);
-                        vb.idx = *entry_state.iter()
+                        vb.idx = *entry_state
+                            .iter()
                             .find(|&&ridx| {
                                 if let Ok(NodeType::Comment(ref s)) =
-                                    rfn.ssa().node_data(ridx).map(|n| n.nt) {
-                                    if s == reg.1 { true } else { false }
+                                    rfn.ssa().node_data(ridx).map(|n| n.nt)
+                                {
+                                    if s == reg.1 {
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 } else {
                                     false
                                 }
-                            })
-                            .unwrap_or(&NodeIndex::end());
+                            }).unwrap_or(&NodeIndex::end());
                     } else {
                         vb.btype = BindingType::Return;
-                        vb.idx = *exit_state.iter()
+                        vb.idx = *exit_state
+                            .iter()
                             .find(|&&ridx| {
                                 if let Ok(NodeType::Comment(ref s)) =
-                                    rfn.ssa().node_data(ridx).map(|n| n.nt) {
-                                    if s == reg.1 { true } else { false }
+                                    rfn.ssa().node_data(ridx).map(|n| n.nt)
+                                {
+                                    if s == reg.1 {
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 } else {
                                     false
                                 }
-                            })
-                            .unwrap_or(&NodeIndex::end());
+                            }).unwrap_or(&NodeIndex::end());
                     }
-                    vb.ridx = sub_reg_f.register_id_by_alias(alias).map(|rid| rid.to_u8() as u64);
+                    vb.ridx = sub_reg_f
+                        .register_id_by_alias(alias)
+                        .map(|rid| rid.to_u8() as u64);
                     Some(vb)
                 } else {
                     None
                 }
-            })
-            .collect();
+            }).collect();
 
-        tbindings.sort_by(|x, y| {
-            match (&x.btype, &y.btype) {
-                (BindingType::RegisterArgument(i), BindingType::RegisterArgument(ref j)) => {
-                    i.cmp(j)
-                }
-                (BindingType::RegisterArgument(_), _) => Ordering::Less,
-                (_, BindingType::RegisterArgument(_)) => Ordering::Greater, 
-                (_, _) => Ordering::Equal,
-            }
+        tbindings.sort_by(|x, y| match (&x.btype, &y.btype) {
+            (BindingType::RegisterArgument(i), BindingType::RegisterArgument(ref j)) => i.cmp(j),
+            (BindingType::RegisterArgument(_), _) => Ordering::Less,
+            (_, BindingType::RegisterArgument(_)) => Ordering::Greater,
+            (_, _) => Ordering::Equal,
         });
 
         rfn.bindings = tbindings;
@@ -725,18 +758,26 @@ impl<'a> ModuleLoader<'a> {
         match source.imports() {
             // TODO: Set the node in callgraph, either now or later.
             Ok(import_info) => {
-                rmod.imports = import_info.iter().filter_map(|ii| {
-                    if let Some(plt) = ii.plt {
-                        if let Some(LSymbolType::Func) = ii.itype {
-                            Some((plt, ImportInfo::new_stub(plt, Cow::from(ii.name.as_ref().unwrap().clone()))))
+                rmod.imports = import_info
+                    .iter()
+                    .filter_map(|ii| {
+                        if let Some(plt) = ii.plt {
+                            if let Some(LSymbolType::Func) = ii.itype {
+                                Some((
+                                    plt,
+                                    ImportInfo::new_stub(
+                                        plt,
+                                        Cow::from(ii.name.as_ref().unwrap().clone()),
+                                    ),
+                                ))
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
-                    } else {
-                        None
-                    }
-                }).collect();
-            },
+                    }).collect();
+            }
             Err(e) => radeco_warn!(e),
         }
 
@@ -768,7 +809,11 @@ impl<'a> ModuleLoader<'a> {
         let mut flresult = floader.load(&rmod);
         flresult.functions = if self.filter.is_some() {
             let filter_fn = self.filter.as_ref().unwrap();
-            flresult.functions.into_iter().filter(|&(_, ref v)| filter_fn(v)).collect()
+            flresult
+                .functions
+                .into_iter()
+                .filter(|&(_, ref v)| filter_fn(v))
+                .collect()
         } else {
             flresult.functions
         };
@@ -777,8 +822,7 @@ impl<'a> ModuleLoader<'a> {
 
         // Load instructions into functions
         for rfn in rmod.functions.values_mut() {
-            rfn.instructions = source.disassemble_function(&rfn.name)
-                .unwrap_or(Vec::new());
+            rfn.instructions = source.disassemble_function(&rfn.name).unwrap_or(Vec::new());
         }
 
         // Load calling conventions for all functions and imports
@@ -794,7 +838,9 @@ impl<'a> ModuleLoader<'a> {
         }
 
         // Optionally construct the SSA.
-        let reg_p = source.register_profile().expect("Unable to load register profile");
+        let reg_p = source
+            .register_profile()
+            .expect("Unable to load register profile");
         let sub_reg_f = SubRegisterFile::new(&reg_p);
         if self.build_ssa {
             if self.parallel {
@@ -811,7 +857,12 @@ impl<'a> ModuleLoader<'a> {
 
         if self.stub_imports {
             for ifn in rmod.imports.values_mut() {
-                SSAConstruct::<SSAStorage>::construct(&mut ifn.rfn.borrow_mut(), &reg_p, self.assume_cc, true);
+                SSAConstruct::<SSAStorage>::construct(
+                    &mut ifn.rfn.borrow_mut(),
+                    &reg_p,
+                    self.assume_cc,
+                    true,
+                );
             }
         }
 
@@ -853,22 +904,20 @@ impl<'a> ModuleLoader<'a> {
             if self.load_locals {
                 for info in &aux_info {
                     if let Some(mut rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
-                        let locals_res = self.source.as_ref()
-                            .map(|s| s.locals_of(rfn.offset));
+                        let locals_res = self.source.as_ref().map(|s| s.locals_of(rfn.offset));
                         let mut locals = match locals_res {
-                            Some(Ok(_locals)) => {
-                                _locals.into_iter()
-                                    .map(|l| VarBinding::local(l))
-                                    .collect::<Vec<_>>()
-                            },
+                            Some(Ok(_locals)) => _locals
+                                .into_iter()
+                                .map(|l| VarBinding::local(l))
+                                .collect::<Vec<_>>(),
                             Some(Err(e)) => {
                                 radeco_warn!("{:?}", e);
                                 Vec::new()
-                            },
+                            }
                             None => {
                                 radeco_warn!("Source is not found");
                                 Vec::new()
-                            },
+                            }
                         };
                         rfn.bindings_mut().append(&mut locals);
                     }
@@ -927,21 +976,24 @@ pub trait PredicatedLoader {
         true
     }
     /// Function to execute to breakdown the `RadecoModule`
-    fn strategy(&self,
-                source: Option<&Rc<Source>>,
-                last: &FLResult,
-                rmod: &RadecoModule)
-                -> FLResult;
+    fn strategy(
+        &self,
+        source: Option<&Rc<Source>>,
+        last: &FLResult,
+        rmod: &RadecoModule,
+    ) -> FLResult;
 }
 
 impl<T> PredicatedLoader for T
-    where T: Fn(Option<&Rc<Source>>, &FLResult, &RadecoModule) -> FLResult
+where
+    T: Fn(Option<&Rc<Source>>, &FLResult, &RadecoModule) -> FLResult,
 {
-    fn strategy(&self,
-                source: Option<&Rc<Source>>,
-                last: &FLResult,
-                rmod: &RadecoModule)
-                -> FLResult {
+    fn strategy(
+        &self,
+        source: Option<&Rc<Source>>,
+        last: &FLResult,
+        rmod: &RadecoModule,
+    ) -> FLResult {
         self(source, last, rmod)
     }
 }
@@ -964,14 +1016,16 @@ impl<'a> FunctionLoader<'a> {
 
     /// Kick everything off and breakdown a radeco module into functions
     pub fn load(&mut self, rmod: &RadecoModule) -> FLResult {
-        self.strategies.iter().fold(FLResult::default(), |mut acc, f| {
-            if f.predicate(&acc) {
-                let fl = f.strategy(self.source.as_ref(), &acc, rmod);
-                acc.new += fl.new;
-                acc.functions.extend(fl.functions.into_iter());
-            }
-            acc
-        })
+        self.strategies
+            .iter()
+            .fold(FLResult::default(), |mut acc, f| {
+                if f.predicate(&acc) {
+                    let fl = f.strategy(self.source.as_ref(), &acc, rmod);
+                    acc.new += fl.new;
+                    acc.functions.extend(fl.functions.into_iter());
+                }
+                acc
+            })
     }
 
     /// Include default strategies to identify functions in the loaded binary
@@ -1019,7 +1073,9 @@ impl RadecoProject {
     }
 
     pub fn iter_mut<'a>(&'a mut self) -> ModuleIterMut<'a> {
-        ModuleIterMut { iter: self.modules.iter_mut() }
+        ModuleIterMut {
+            iter: self.modules.iter_mut(),
+        }
     }
 }
 
@@ -1050,7 +1106,9 @@ impl RadecoModule {
     }
 
     pub fn iter_mut<'a>(&'a mut self) -> FunctionIterMut<'a> {
-        FunctionIterMut { iter: self.functions.iter_mut() }
+        FunctionIterMut {
+            iter: self.functions.iter_mut(),
+        }
     }
 
     pub fn sections(&self) -> &Arc<Vec<LSectionInfo>> {
@@ -1063,12 +1121,13 @@ impl RadecoModule {
 
     pub fn callees_of(&self, rfn: &RadecoFunction) -> Vec<(u64, NodeIndex)> {
         // TODO More efficient implementation
-        let csite_nodes = rfn.call_sites(&self.callgraph)
+        let csite_nodes = rfn
+            .call_sites(&self.callgraph)
             .into_iter()
             .map(|c| c.csite_node);
-        csite_nodes.flat_map(|cn| {
-            self.callgraph.callees(cn).collect::<Vec<_>>()
-        }).collect::<Vec<_>>()
+        csite_nodes
+            .flat_map(|cn| self.callgraph.callees(cn).collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }
 
@@ -1103,7 +1162,8 @@ impl RadecoFunction {
     }
 
     pub fn call_sites(&self, call_graph: &CallGraph) -> Vec<CallContextInfo> {
-        call_graph.edges_directed(self.cgid, Direction::Outgoing)
+        call_graph
+            .edges_directed(self.cgid, Direction::Outgoing)
             .into_iter()
             .map(|e| e.weight().clone())
             .collect()
@@ -1118,7 +1178,8 @@ impl RadecoFunction {
     }
 
     pub fn locals(&self) -> VarBindings {
-        self.bindings.iter()
+        self.bindings
+            .iter()
             .filter(|vb| vb.btype.is_local())
             .map(|vb| vb.clone())
             .collect::<Vec<_>>()
@@ -1163,17 +1224,21 @@ impl RadecoFunction {
                 if let Some(val) = self.ssa.constant_value(ops[1]) {
                     let left_regs = self.ssa.registers(ops[0]);
                     for left_reg in left_regs {
-                        let mut bindings = self.bindings.iter().filter(|binding| {
-                            let offset = sign * (val as i64);
-                            VarBinding::is_matched_reg_local(binding, left_reg.clone(), offset)
-                        }).cloned().collect::<Vec<_>>();
+                        let mut bindings = self
+                            .bindings
+                            .iter()
+                            .filter(|binding| {
+                                let offset = sign * (val as i64);
+                                VarBinding::is_matched_reg_local(binding, left_reg.clone(), offset)
+                            }).cloned()
+                            .collect::<Vec<_>>();
                         ret_bindings.append(&mut bindings);
                     }
                 }
                 // TODO
                 // let right_regs = self.ssa.registers(ops[1]);
                 ret_bindings
-            },
+            }
             _ => Vec::new(),
         }
     }
@@ -1194,8 +1259,8 @@ impl RadecoFunction {
                     if bindings.len() > 0 {
                         self.binding_map.insert(dst, bindings);
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
     }

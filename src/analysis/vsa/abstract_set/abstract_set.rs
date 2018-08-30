@@ -6,10 +6,10 @@
 // except according to those terms.
 
 //! Module that implements trait to abstract set of integers.
-//! This Trait allows us to use other abstract domains for integer set, not 
+//! This Trait allows us to use other abstract domains for integer set, not
 //! only strided interval.
 //!
-//! As for Gogul Balakrishnan's Ph.D. Thesis, the abstract set of integers is 
+//! As for Gogul Balakrishnan's Ph.D. Thesis, the abstract set of integers is
 //! strided interval.
 //! Please refer here:
 //!     * https://research.cs.wisc.edu/wpis/papers/balakrishnan_thesis.pdf
@@ -20,11 +20,10 @@
 //!     * https://tubdok.tub.tuhh.de/bitstream/11420/1510/1/dis.pdf
 //!
 
-
-use std::ops::{Neg, Add, Sub, Div, Rem, Mul};
-use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
+use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
 // XXX: Try to support 128-bit registers in the future
 // type inum = i128; <-- this one do influence performance
@@ -45,7 +44,7 @@ pub trait Container<T: Clone> {
     }
 }
 
-/// Type of abstract set. 
+/// Type of abstract set.
 /// According to demand, users could choose which kind of abstract set they wanna
 /// use in their VSA.
 pub enum AbstractSetType {
@@ -54,11 +53,31 @@ pub enum AbstractSetType {
     Polynomial,
 }
 
-pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
-                        Neg + Add + Sub + Div + Rem + Mul +
-                        BitAnd + BitOr + BitXor + Not + Shl + Shr +
-                        Container<inum> + Container<Self> + Container<Vec<inum>> +
-                        From<inum> + From<(u8, inum)> + Default
+pub trait AbstractSet:
+    Copy
+    + Clone
+    + Debug
+    + PartialEq
+    + Eq
+    + Hash
+    + Neg
+    + Add
+    + Sub
+    + Div
+    + Rem
+    + Mul
+    + BitAnd
+    + BitOr
+    + BitXor
+    + Not
+    + Shl
+    + Shr
+    + Container<inum>
+    + Container<Self>
+    + Container<Vec<inum>>
+    + From<inum>
+    + From<(u8, inum)>
+    + Default
 {
     /// Returns the meet (intersection) of AbstractSet `self` and `other`.
     fn meet(&self, other: &Self) -> Self {
@@ -114,13 +133,13 @@ pub trait AbstractSet: Copy + Clone + Debug + PartialEq + Eq + Hash +
     fn constant(&self) -> Option<inum> {
         unimplemented!()
     }
-     
-    /// Returns capacity of AbstractSet. 
+
+    /// Returns capacity of AbstractSet.
     fn capacity(&self) -> inum {
         unimplemented!()
     }
-     
-    /// Returns whether the AbstractSet is empty. 
+
+    /// Returns whether the AbstractSet is empty.
     fn is_empty(&self) -> bool {
         unimplemented!()
     }

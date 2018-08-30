@@ -24,7 +24,7 @@ use analysis::constraint_set::ConstraintSet;
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{ValueType, SSA, SSAWalk, NodeType};
+use middle::ssa::ssa_traits::{NodeType, SSAWalk, ValueType, SSA};
 use middle::ssa::ssastorage::SSAStorage;
 use petgraph::graph::NodeIndex;
 use r2api::structs::LSectionInfo;
@@ -65,26 +65,34 @@ impl ReferenceMarker {
                 NodeType::Op(ref opc) => {
                     // Generate constraints based on the type of opcode
                     match opc {
-                        &MOpcode::OpAdd |
-                        &MOpcode::OpGt |
-                        &MOpcode::OpLt |
-                        &MOpcode::OpNot |
-                        &MOpcode::OpOr |
-                        &MOpcode::OpNarrow(_) |
-                        &MOpcode::OpSignExt(_) |
-                        &MOpcode::OpZeroExt(_) |
-                        &MOpcode::OpAnd | &MOpcode::OpDiv | &MOpcode::OpLsl | &MOpcode::OpLsr |
-                        &MOpcode::OpMod | &MOpcode::OpMul | &MOpcode::OpRol | &MOpcode::OpRor |
-                        &MOpcode::OpSub |
-                        &MOpcode::OpXor => {
+                        &MOpcode::OpAdd
+                        | &MOpcode::OpGt
+                        | &MOpcode::OpLt
+                        | &MOpcode::OpNot
+                        | &MOpcode::OpOr
+                        | &MOpcode::OpNarrow(_)
+                        | &MOpcode::OpSignExt(_)
+                        | &MOpcode::OpZeroExt(_)
+                        | &MOpcode::OpAnd
+                        | &MOpcode::OpDiv
+                        | &MOpcode::OpLsl
+                        | &MOpcode::OpLsr
+                        | &MOpcode::OpMod
+                        | &MOpcode::OpMul
+                        | &MOpcode::OpRol
+                        | &MOpcode::OpRor
+                        | &MOpcode::OpSub
+                        | &MOpcode::OpXor => {
                             // All operands are allowed to be references
                             let operands = ssa.operands_of(idx);
                             // Setup a union constraint
                             self.cs.add_union(idx, operands.as_slice());
                             // Check if they of the operands are comments
                             comment_nodes.extend(operands.iter().filter(|&&x| ssa.is_comment(x)));
-                            for (cidx, cval) in operands.iter()
-                                .filter_map(|&x| ssa.constant_value(x).map(|v| (x, v))) {
+                            for (cidx, cval) in operands
+                                .iter()
+                                .filter_map(|&x| ssa.constant_value(x).map(|v| (x, v)))
+                            {
                                 if self.is_constant_scalar(cval) {
                                     self.cs.add_eq(cidx, ValueType::Scalar);
                                 }
@@ -111,17 +119,16 @@ impl ReferenceMarker {
                         //&MOpcode::OpAnd | &MOpcode::OpDiv | &MOpcode::OpLsl | &MOpcode::OpLsr |
                         //&MOpcode::OpMod | &MOpcode::OpMul | &MOpcode::OpRol | &MOpcode::OpRor |
                         //&MOpcode::OpSub => {
-                            //// op2 is not allowed to be a reference
-                            //let operands = ssa.operands_of(idx);
-                            //self.cs.add_union(idx, operands.as_slice());
-                            //comment_nodes.extend(operands.iter().filter(|&&x| ssa.is_comment(x)));
-                            //// Add additional constraint that the second operands is a scalar
-                            //if let Some(op2) = operands.get(1) {
-                                //self.cs.add_eq(*op2, ValueType::Scalar);
-                            //}
+                        //// op2 is not allowed to be a reference
+                        //let operands = ssa.operands_of(idx);
+                        //self.cs.add_union(idx, operands.as_slice());
+                        //comment_nodes.extend(operands.iter().filter(|&&x| ssa.is_comment(x)));
+                        //// Add additional constraint that the second operands is a scalar
+                        //if let Some(op2) = operands.get(1) {
+                        //self.cs.add_eq(*op2, ValueType::Scalar);
                         //}
-                        &MOpcode::OpLoad |
-                        &MOpcode::OpStore => {
+                        //}
+                        &MOpcode::OpLoad | &MOpcode::OpStore => {
                             // Special case for load/store
                             let operands = ssa.operands_of(idx);
                             // Operand 0 is "mem", this is not a reference
@@ -138,9 +145,7 @@ impl ReferenceMarker {
                             // later on.
                             // In case of load, nothing can be said about the returned value.
                         }
-                        &MOpcode::OpCustom(_) |
-                        &MOpcode::OpInvalid |
-                        &MOpcode::OpNop => {
+                        &MOpcode::OpCustom(_) | &MOpcode::OpInvalid | &MOpcode::OpNop => {
                             // Can't say anything about these operands
                             let operands = ssa.operands_of(idx);
                             self.cs.add_union(idx, operands.as_slice());
@@ -206,10 +211,11 @@ impl ReferenceMarker {
 
     // Used for calling to resolve references the first time. Future calls should call
     // `resolve_references_iterative`.
-    pub fn resolve_references(rfn: &mut RadecoFunction,
-                              regfile: Arc<SubRegisterFile>,
-                              sections: Arc<Vec<LSectionInfo>>)
-                              -> ReferenceMarker {
+    pub fn resolve_references(
+        rfn: &mut RadecoFunction,
+        regfile: Arc<SubRegisterFile>,
+        sections: Arc<Vec<LSectionInfo>>,
+    ) -> ReferenceMarker {
         let mut refmarker = ReferenceMarker {
             regfile: regfile,
             sections: sections,

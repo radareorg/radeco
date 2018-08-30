@@ -47,7 +47,8 @@ fn fix_call_site(
 ) -> Option<()> {
     let call_site_addr = ssa.address(call_node)?.address;
     if let Some(&call_target_addr) = fn_call_map.get(&call_site_addr) {
-        let old_opcall_tgt_node = ssa.sparse_operands_of(call_node)
+        let old_opcall_tgt_node = ssa
+            .sparse_operands_of(call_node)
             .iter()
             .find(|x| x.0 == 0)?
             .1;

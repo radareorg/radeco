@@ -1,7 +1,7 @@
 //! Defines valid types.
 
-use std::fmt;
 use std::collections::HashMap;
+use std::fmt;
 
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -197,11 +197,10 @@ pub struct ConstraintSet {
 }
 
 impl ConstraintSet {
-
     pub fn operands(&self, n: &NodeIndex) -> Vec<NodeIndex> {
         let mut result = Vec::new();
         for edge in self.g.edges_directed(*n, EdgeDirection::Outgoing) {
-            result.push ((edge.id(), n));
+            result.push((edge.id(), n));
         }
         result.sort_by(|a, b| a.0.cmp(&b.0));
         result.iter().map(|a| *a.1).collect()
@@ -233,7 +232,8 @@ impl ConstraintSet {
     pub fn disjunctive_join(&mut self, operands: &[NodeIndex]) -> NodeIndex {
         let disjunction = self.g.add_node(ConstraintNode::DisjunctiveJoin);
         for (i, idx) in operands.iter().enumerate() {
-            self.g.update_edge(disjunction, *idx, ConstraintEdge::EdgeIdx(i as u8));
+            self.g
+                .update_edge(disjunction, *idx, ConstraintEdge::EdgeIdx(i as u8));
         }
         disjunction
     }
@@ -241,7 +241,8 @@ impl ConstraintSet {
     pub fn conjunctive_join(&mut self, operands: &[NodeIndex]) -> NodeIndex {
         let conjunction = self.g.add_node(ConstraintNode::ConjunctiveJoin);
         for (i, idx) in operands.iter().enumerate() {
-            self.g.update_edge(conjunction, *idx, ConstraintEdge::EdgeIdx(i as u8));
+            self.g
+                .update_edge(conjunction, *idx, ConstraintEdge::EdgeIdx(i as u8));
         }
         conjunction
     }
@@ -253,7 +254,8 @@ impl ConstraintSet {
     pub fn union(&mut self, operands: &[NodeIndex]) -> NodeIndex {
         let union = self.g.add_node(ConstraintNode::Union);
         for (i, idx) in operands.iter().enumerate() {
-            self.g.update_edge(union, *idx, ConstraintEdge::EdgeIdx(i as u8));
+            self.g
+                .update_edge(union, *idx, ConstraintEdge::EdgeIdx(i as u8));
         }
         union
     }
@@ -261,7 +263,8 @@ impl ConstraintSet {
     pub fn intersect(&mut self, operands: &[NodeIndex]) -> NodeIndex {
         let intersection = self.g.add_node(ConstraintNode::Intersect);
         for (i, idx) in operands.iter().enumerate() {
-            self.g.update_edge(intersection, *idx, ConstraintEdge::EdgeIdx(i as u8));
+            self.g
+                .update_edge(intersection, *idx, ConstraintEdge::EdgeIdx(i as u8));
         }
         intersection
     }
@@ -281,13 +284,10 @@ impl ConstraintSet {
     fn inner_type(&self, ptr_node: NodeIndex) -> NodeIndex {
         self.g
             .edges_directed(ptr_node, EdgeDirection::Outgoing)
-            .find(|x| {
-                match *x.weight() {
-                    ConstraintEdge::Ptr => true,
-                    _ => false,
-                }
-            })
-            .expect("Inner type of `Ptr` cannot be `None`")
+            .find(|x| match *x.weight() {
+                ConstraintEdge::Ptr => true,
+                _ => false,
+            }).expect("Inner type of `Ptr` cannot be `None`")
             .source() // TODO .source() or .target() ?
     }
 
@@ -310,7 +310,10 @@ impl ConstraintSet {
             ConstraintNode::Union => {
                 let lhs_operands = self.operands(&lhs);
                 let mut subtype_relations = Vec::new();
-                let mut edges = self.g.neighbors_directed(lhs, EdgeDirection::Incoming).detach();
+                let mut edges = self
+                    .g
+                    .neighbors_directed(lhs, EdgeDirection::Incoming)
+                    .detach();
                 while let Some(edge) = edges.next_edge(&self.g) {
                     if let ConstraintEdge::SubType = self.g[edge] {
                         let (_, target) = self.g.edge_endpoints(edge).expect("");
@@ -332,13 +335,17 @@ impl ConstraintSet {
         if lhs_is_ptr && rhs_is_ptr {
             let lhs_inner = self.inner_type(lhs);
             let rhs_inner = self.inner_type(rhs);
-            self.g.update_edge(lhs_inner, rhs_inner, ConstraintEdge::SubType);
+            self.g
+                .update_edge(lhs_inner, rhs_inner, ConstraintEdge::SubType);
         }
     }
 
     fn decompose_subtype_relation(&mut self, subtype_edge: EdgeIndex) {
         // According to section 6.3.2 - Decomposition Rules.
-        let (lhs, rhs) = self.g.edge_endpoints(subtype_edge).expect("This cannot be None");
+        let (lhs, rhs) = self
+            .g
+            .edge_endpoints(subtype_edge)
+            .expect("This cannot be None");
         self.decompose_constraint_node(lhs, rhs);
     }
 

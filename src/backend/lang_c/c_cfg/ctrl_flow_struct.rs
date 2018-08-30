@@ -56,9 +56,7 @@ impl<'cd> Importer<'cd> {
                         let (block, opt_succs) = self.find_block(cur_block)?;
 
                         let f_cur_block = match opt_succs {
-                            None => {
-                                self.new_graph.add_node(flstr::mk_code_node(block))
-                            }
+                            None => self.new_graph.add_node(flstr::mk_code_node(block)),
                             Some(SuccInfo::Single(next_block)) => {
                                 let f_cur_block =
                                     self.new_graph.add_node(flstr::mk_code_node(block));

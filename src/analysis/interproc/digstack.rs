@@ -8,20 +8,18 @@
 //! This Module provides information about stack offset with variable,
 //! which will help other modules analyze.
 
-use std::collections::{HashMap, HashSet, VecDeque};
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSA, SSAWalk};
+use middle::ssa::ssa_traits::{SSAWalk, SSA};
 use middle::ssa::ssastorage::SSAStorage;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 type LValueRef = <SSAStorage as SSA>::ValueRef;
 
-
-/// Analyze stack offset backward, by assuming the stack of last 
-/// SP register is ZERO. 
+/// Analyze stack offset backward, by assuming the stack of last
+/// SP register is ZERO.
 /// You have to offer RadecoIL SSA and SP register name into analyzer.
-pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
-        -> HashMap<LValueRef, i64> {
+pub fn backward_analysis(ssa: &SSAStorage, sp_name: String) -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     let mut worklist: VecDeque<LValueRef> = VecDeque::new();
     let mut visited: HashSet<LValueRef> = HashSet::new();
@@ -35,7 +33,7 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
             worklist.push_back(*node);
         }
     }
-    
+
     while let Some(node) = worklist.pop_front() {
         if !visited.contains(&node) {
             visited.insert(node);
@@ -43,7 +41,9 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
             continue;
         }
 
-        let base = stack_offset.get(&node).map(|x| x.clone())
+        let base = stack_offset
+            .get(&node)
+            .map(|x| x.clone())
             .unwrap_or_else(|| {
                 radeco_err!("node not found from stack_offset");
                 0
@@ -53,12 +53,11 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
         let users = ssa.uses_of(node);
         for user in users {
             match ssa.opcode(user) {
-                Some(MOpcode::OpZeroExt(_)) |
-                Some(MOpcode::OpNarrow(_)) => {
+                Some(MOpcode::OpZeroExt(_)) | Some(MOpcode::OpNarrow(_)) => {
                     stack_offset.insert(user, base);
                     worklist.push_back(user);
                 }
-                _ => { }
+                _ => {}
             }
         }
 
@@ -75,7 +74,7 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
             }
             continue;
         }
-        
+
         // Consider exprission.
         if ssa.opcode(node).is_none() {
             continue;
@@ -83,8 +82,7 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
 
         let opc = ssa.opcode(node).unwrap();
         match opc {
-            MOpcode::OpZeroExt(_) | 
-            MOpcode::OpNarrow(_) => {
+            MOpcode::OpZeroExt(_) | MOpcode::OpNarrow(_) => {
                 stack_offset.insert(args[0], base);
                 worklist.push_back(args[0]);
             }
@@ -100,40 +98,41 @@ pub fn backward_analysis(ssa:&SSAStorage, sp_name: String)
                     worklist.push_back(args[1]);
                 }
             }
-            _ => { }
+            _ => {}
         }
-    }        
+    }
 
     radeco_trace!("CallFixer|Stack_offset: {:?}", stack_offset);
     stack_offset
 }
 
-
 /// Analyze stack offset frontward, only for first basic block.
 /// You have to offer RadecoIL SSA and SP & BP register name into analyzer.
-pub fn frontward_analysis(ssa: &SSAStorage,
-                       sp_name: String,
-                       bp_name: String)
-        -> HashMap<LValueRef, i64> {
-   generic_frontward_analysis(ssa, sp_name, bp_name, false)  
+pub fn frontward_analysis(
+    ssa: &SSAStorage,
+    sp_name: String,
+    bp_name: String,
+) -> HashMap<LValueRef, i64> {
+    generic_frontward_analysis(ssa, sp_name, bp_name, false)
 }
-
 
 /// Analyze stack offset frontward, for the whole SSA.
 /// You have to offer RadecoIL SSA and SP & BP register name into analyzer.
-pub fn rounded_analysis(ssa: &SSAStorage,
-                       sp_name: String,
-                       bp_name: String)
-        -> HashMap<LValueRef, i64> {
-   generic_frontward_analysis(ssa, sp_name, bp_name, true)  
+pub fn rounded_analysis(
+    ssa: &SSAStorage,
+    sp_name: String,
+    bp_name: String,
+) -> HashMap<LValueRef, i64> {
+    generic_frontward_analysis(ssa, sp_name, bp_name, true)
 }
 
 // Analyze stack offset frontward, for the first block or whole SSA.
-fn generic_frontward_analysis(ssa: &SSAStorage, 
-                         sp_name: String,
-                         bp_name: String,
-                         is_global: bool) 
-        -> HashMap<LValueRef, i64> {
+fn generic_frontward_analysis(
+    ssa: &SSAStorage,
+    sp_name: String,
+    bp_name: String,
+    is_global: bool,
+) -> HashMap<LValueRef, i64> {
     let mut stack_offset: HashMap<LValueRef, i64> = HashMap::new();
     {
         let reg_state = registers_in_err!(ssa, entry_node_err!(ssa));
@@ -150,7 +149,7 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
 
     let nodes = if is_global {
         let mut nodes: Vec<LValueRef> = Vec::new();
-        let mut walker = ssa.bfs_walk().nodes;    
+        let mut walker = ssa.bfs_walk().nodes;
         while let Some(node) = walker.pop_front() {
             nodes.push(node);
         }
@@ -173,16 +172,17 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
                 MOpcode::OpZeroExt(_) | MOpcode::OpNarrow(_) => {
                     let args = ssa.operands_of(*node);
                     if stack_offset.contains_key(&args[0]) {
-                        let num = stack_offset.get(&args[0])
-                                                .unwrap_or_else(|| {
-                                                    radeco_err!("Stack offset not found");
-                                                    &0
-                                                }).clone();
+                        let num = stack_offset
+                            .get(&args[0])
+                            .unwrap_or_else(|| {
+                                radeco_err!("Stack offset not found");
+                                &0
+                            }).clone();
                         stack_offset.insert(*node, num);
                         continue;
                     }
                 }
-                _ => {  }
+                _ => {}
             }
 
             // We only consider SP/BP.
@@ -190,10 +190,9 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
                 continue;
             }
             let regnames = ssa.registers(*node);
-            if !regnames.contains(&sp_name) && 
-                !regnames.contains(&bp_name) { 
-                    continue;
-                }
+            if !regnames.contains(&sp_name) && !regnames.contains(&bp_name) {
+                continue;
+            }
 
             let args = ssa.operands_of(*node);
             if args.len() != 2 {
@@ -221,22 +220,22 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
                     continue;
                 }
             }
-            if ssa.opcode(args[opcode_arg as usize]).is_some() || 
-                ssa.comment(args[opcode_arg as usize]).is_some() ||
-                (ssa.is_phi(args[opcode_arg as usize]) && is_global) {
-                if let Some(MOpcode::OpConst(num)) = 
-                            ssa.opcode(args[const_arg as usize]) {
+            if ssa.opcode(args[opcode_arg as usize]).is_some()
+                || ssa.comment(args[opcode_arg as usize]).is_some()
+                || (ssa.is_phi(args[opcode_arg as usize]) && is_global)
+            {
+                if let Some(MOpcode::OpConst(num)) = ssa.opcode(args[const_arg as usize]) {
                     // TODO: Some special cases may by not consided
                     if !stack_offset.contains_key(&args[opcode_arg as usize]) {
                         continue;
                     }
-                    let base = stack_offset.get(&args[opcode_arg as usize])
-                                                            .unwrap_or_else(|| {
-                                                                radeco_err!("Stack offset not found");
-                                                                &0
-                                                            }).clone() as i64;
-                    stack_offset.insert(*node, 
-                                base + (opcode_arg - const_arg) * (num as i64));
+                    let base = stack_offset
+                        .get(&args[opcode_arg as usize])
+                        .unwrap_or_else(|| {
+                            radeco_err!("Stack offset not found");
+                            &0
+                        }).clone() as i64;
+                    stack_offset.insert(*node, base + (opcode_arg - const_arg) * (num as i64));
                     continue;
                 }
             }
@@ -249,7 +248,9 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
             let mut nums: Vec<i64> = Vec::new();
             for arg in &args {
                 if stack_offset.contains_key(arg) {
-                    let num = stack_offset.get(arg).unwrap_or_else(|| {
+                    let num = stack_offset
+                        .get(arg)
+                        .unwrap_or_else(|| {
                             radeco_err!("Stack offset not found");
                             &0
                         }).clone();
@@ -260,26 +261,25 @@ fn generic_frontward_analysis(ssa: &SSAStorage,
             }
             if nums.len() == 1 {
                 stack_offset.insert(*node, nums[0]);
-            } 
+            }
         }
     }
     radeco_trace!("CallFixer|Stack_offset: {:?}", stack_offset);
     stack_offset
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use serde_json;
     use r2api::structs::LFunctionInfo;
+    use serde_json;
     use std::fs::File;
     use std::io::prelude::*;
 
-    use middle::regfile::SubRegisterFile;
     use frontend::ssaconstructor::SSAConstruct;
-    use middle::ssa::ssastorage::SSAStorage;
     use middle::dce;
+    use middle::regfile::SubRegisterFile;
+    use middle::ssa::ssastorage::SSAStorage;
 
     const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
     const BIN_LS_INSTRUCTIONS: &'static str = "test_files/bin_ls_instructions.json";
@@ -305,7 +305,7 @@ mod test {
         {
             dce::collect(&mut ssa);
         }
-        
+
         frontward_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
         backward_analysis(&ssa, "rsp".to_string());
         rounded_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
@@ -331,7 +331,7 @@ mod test {
         {
             dce::collect(&mut ssa);
         }
-        
+
         frontward_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
         backward_analysis(&ssa, "rsp".to_string());
         rounded_analysis(&ssa, "rsp".to_string(), "rbp".to_string());

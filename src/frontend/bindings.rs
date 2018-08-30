@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 use std::fmt;
-use std::process;
-use std::ops::{Index, IndexMut};
 use std::hash::Hash;
+use std::ops::{Index, IndexMut};
+use std::process;
 
 pub trait RBind {
     type SSARef: fmt::Debug + Clone;
@@ -126,11 +126,15 @@ impl<BTy: RBind> RBindings for RadecoBindings<BTy> {
     }
 
     fn bindings(&self) -> RBinds<BTy> {
-        RBinds { binds: self.binds.iter() }
+        RBinds {
+            binds: self.binds.iter(),
+        }
     }
 
     fn bindings_mut(&mut self) -> RBindsMut<BTy> {
-        RBindsMut { binds: self.binds.iter_mut() }
+        RBindsMut {
+            binds: self.binds.iter_mut(),
+        }
     }
 }
 
@@ -155,9 +159,7 @@ impl<'a, T: 'a + RBind> Iterator for RBindsMut<'a, T> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum VarLocation {
-    Register {
-        name: String,
-    },
+    Register { name: String },
     Memory(MemoryRegion),
     Unknown,
 }
@@ -165,14 +167,9 @@ pub enum VarLocation {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MemoryRegion {
     // Base, offset for function local.
-    FunctionLocal {
-        base: usize,
-        offset: i64,
-    },
+    FunctionLocal { base: usize, offset: i64 },
     Stack,
-    Global {
-        offset: u64,
-    },
+    Global { offset: u64 },
     Heap,
     Unknown,
 }

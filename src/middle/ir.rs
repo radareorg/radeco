@@ -9,8 +9,8 @@
 //! Shared by the SSA representation and the intermediate representation of the
 //! ESIL parser.
 
-use std::fmt;
 use std::borrow::Cow;
+use std::fmt;
 
 pub type Address = u64;
 
@@ -158,34 +158,34 @@ impl MOpcode {
 
     pub fn is_commutative(&self) -> bool {
         match *self {
-            MOpcode::OpAdd |
-            MOpcode::OpMul |
-            MOpcode::OpAnd |
-            MOpcode::OpOr |
-            MOpcode::OpXor |
-            MOpcode::OpEq => true,
+            MOpcode::OpAdd
+            | MOpcode::OpMul
+            | MOpcode::OpAnd
+            | MOpcode::OpOr
+            | MOpcode::OpXor
+            | MOpcode::OpEq => true,
             _ => false,
         }
     }
 
     pub fn has_sideeffects(&self) -> bool {
         match *self {
-            MOpcode::OpStore |
-            MOpcode::OpJmp |
-            MOpcode::OpCJmp |
-            MOpcode::OpCall |
-            MOpcode::OpITE => true,
+            MOpcode::OpStore
+            | MOpcode::OpJmp
+            | MOpcode::OpCJmp
+            | MOpcode::OpCall
+            | MOpcode::OpITE => true,
             _ => false,
         }
     }
 
     pub fn allowed_in_ssa(&self) -> bool {
         match *self {
-            MOpcode::OpCJmp |
-            MOpcode::OpITE |
-            MOpcode::OpInvalid |
-            MOpcode::OpJmp |
-            MOpcode::OpNop => false,
+            MOpcode::OpCJmp
+            | MOpcode::OpITE
+            | MOpcode::OpInvalid
+            | MOpcode::OpJmp
+            | MOpcode::OpNop => false,
             _ => true,
         }
     }
@@ -226,7 +226,7 @@ impl MOpcode {
     }
 
     pub fn idx(&self) -> u16 {
-        match * self {
+        match *self {
             MOpcode::OpAdd => 0,
             MOpcode::OpAnd => 1,
             MOpcode::OpCJmp => 2,

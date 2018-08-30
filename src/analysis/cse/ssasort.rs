@@ -8,14 +8,13 @@
 //! Module that implements operands' sort for SSA, which could help futher
 //! analysis.
 
-use middle::ssa::ssa_traits::{NodeType, NodeData};
+use middle::ssa::ssa_traits::{NodeData, NodeType};
 
-use middle::ssa::ssa_traits::{SSA, SSAMod, SSAWalk};
+use middle::ir::{MAddress, MOpcode};
+use middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use middle::ir::{MOpcode, MAddress};
-
 
 // NOTE: I am not sure where to put this file, in analysis or in middle End.
 // If we add this into middle/ssa/ssastorage.rs, it seems there are too much
@@ -28,8 +27,9 @@ const PPHI: u16 = 2;
 const OP_BASE: u16 = 3;
 
 pub struct Sorter<'a, I, T>
-    where I: Iterator<Item = T::ValueRef>,
-          T: 'a + SSAMod + SSA + SSAWalk<I>
+where
+    I: Iterator<Item = T::ValueRef>,
+    T: 'a + SSAMod + SSA + SSAWalk<I>,
 {
     sorted: HashMap<T::ValueRef, bool>,
     record: HashMap<(T::ValueRef, T::ValueRef), Ordering>,
@@ -38,8 +38,9 @@ pub struct Sorter<'a, I, T>
 }
 
 impl<'a, I, T> Sorter<'a, I, T>
-    where I: Iterator<Item = T::ValueRef>,
-          T: 'a + SSA + SSAMod + SSAWalk<I>
+where
+    I: Iterator<Item = T::ValueRef>,
+    T: 'a + SSA + SSAMod + SSAWalk<I>,
 {
     pub fn new(ssa: &'a mut T) -> Sorter<'a, I, T> {
         Sorter {
@@ -55,16 +56,16 @@ impl<'a, I, T> Sorter<'a, I, T>
             NodeType::Undefined => (PUNDEFINED, 0),
             NodeType::Comment(_) => (PCOMMENT, 0),
             NodeType::Phi => (PPHI, 0),
-            NodeType::Op(opc) => {
-                (opc.idx() + OP_BASE,
-                 match opc {
-                     MOpcode::OpConst(num) => num,
-                     MOpcode::OpNarrow(num) |
-                     MOpcode::OpZeroExt(num) |
-                     MOpcode::OpSignExt(num) => num as u64,
-                     _ => 0,
-                 })
-            }
+            NodeType::Op(opc) => (
+                opc.idx() + OP_BASE,
+                match opc {
+                    MOpcode::OpConst(num) => num,
+                    MOpcode::OpNarrow(num) | MOpcode::OpZeroExt(num) | MOpcode::OpSignExt(num) => {
+                        num as u64
+                    }
+                    _ => 0,
+                },
+            ),
         }
     }
 
@@ -104,8 +105,7 @@ impl<'a, I, T> Sorter<'a, I, T>
         if !self.sorted.contains_key(&op2) {
             self.sort_operands(op2);
         }
-        if self.ssa.node_data(op1).is_err()
-        || self.ssa.node_data(op2).is_err() {
+        if self.ssa.node_data(op1).is_err() || self.ssa.node_data(op2).is_err() {
             radeco_err!("Operand node not found");
             return Ordering::Equal;
         };
@@ -132,9 +132,7 @@ impl<'a, I, T> Sorter<'a, I, T>
                 MOpcode::OpConst(_) => {
                     return self.return_value(priority1.1.cmp(&priority2.1), op1, op2);
                 }
-                MOpcode::OpSignExt(_) |
-                MOpcode::OpZeroExt(_) |
-                MOpcode::OpNarrow(_) => {
+                MOpcode::OpSignExt(_) | MOpcode::OpZeroExt(_) | MOpcode::OpNarrow(_) => {
                     if priority1.1.cmp(&priority2.1) != Ordering::Equal {
                         return self.return_value(priority1.1.cmp(&priority2.1), op1, op2);
                     } else {
@@ -152,28 +150,25 @@ impl<'a, I, T> Sorter<'a, I, T>
                 return self.return_value(Ordering::Equal, op1, op2);
             }
             PPHI | PCOMMENT => {
-                let addr1 = self.ssa.address(op1)
-                                        .unwrap_or_else(|| {
-                                            radeco_err!("No address information found");
-                                            MAddress::new(0, 0)
-                                        });
-                let addr2 = self.ssa.address(op2)
-                                        .unwrap_or_else(|| {
-                                            radeco_err!("No address information found");
-                                            MAddress::new(0, 0)
-                                        });
+                let addr1 = self.ssa.address(op1).unwrap_or_else(|| {
+                    radeco_err!("No address information found");
+                    MAddress::new(0, 0)
+                });
+                let addr2 = self.ssa.address(op2).unwrap_or_else(|| {
+                    radeco_err!("No address information found");
+                    MAddress::new(0, 0)
+                });
                 return self.return_value(addr1.cmp(&addr2), op1, op2);
             }
             _ => {
                 let order = self.compare_operands(op1, op2);
                 return self.return_value(order, op1, op2);
-            } 
-            // Opcode:
-            //  For zero, opc could only be OpConst or OpInvalid.
-            //  For Unary and Binary, we should consider their operands. Because
-            //      they must be sorted before, we could compare them in order.
-            //  For ternary, opc could only be OpITE. Is there any posibility
-            //      that OpITE becomes an operand?
+            } // Opcode:
+              //  For zero, opc could only be OpConst or OpInvalid.
+              //  For Unary and Binary, we should consider their operands. Because
+              //      they must be sorted before, we could compare them in order.
+              //  For ternary, opc could only be OpITE. Is there any posibility
+              //      that OpITE becomes an operand?
         }
     }
 

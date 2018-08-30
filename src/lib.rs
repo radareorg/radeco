@@ -38,50 +38,53 @@
 
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
-
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(slice_patterns)]
 #![feature(try_trait)]
-
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
-extern crate regex;
 extern crate petgraph;
+extern crate regex;
 extern crate serde_json;
-#[macro_use] extern crate lazy_static;
-extern crate fixedbitset;
-extern crate either;
-extern crate vec_map;
-extern crate typed_arena;
+#[macro_use]
+extern crate lazy_static;
 extern crate bit_set;
-extern crate num;
+extern crate either;
+extern crate fixedbitset;
 extern crate linear_map;
+extern crate num;
+extern crate typed_arena;
+extern crate vec_map;
 
 #[cfg(test)]
 extern crate quickcheck;
 
-#[cfg(feature="trace_log")]
-#[macro_use] extern crate log;
-#[cfg(feature="trace_log")]
+#[cfg(feature = "trace_log")]
+#[macro_use]
+extern crate log;
+#[cfg(feature = "trace_log")]
 extern crate env_logger;
 
-extern crate r2pipe;
 extern crate r2api;
+extern crate r2pipe;
 
 extern crate esil;
 // extern crate capstone_rust;
 extern crate rayon;
 
-#[cfg(feature="profile")]
+#[cfg(feature = "profile")]
 extern crate cpuprofiler;
 
 extern crate lalrpop_util;
 
-#[macro_use] pub mod utils;
-#[macro_use] pub mod middle;
-#[macro_use] pub mod analysis;
+#[macro_use]
+pub mod utils;
+#[macro_use]
+pub mod middle;
+#[macro_use]
+pub mod analysis;
 
-pub mod frontend;
 pub mod backend;
+pub mod frontend;

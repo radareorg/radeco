@@ -7,10 +7,10 @@
 
 //! Implements `InternalIndex` used for `DomTree`.
 
-use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use std::ops::Index;
-use std::hash::{Hash, Hasher};
 use petgraph::graph::NodeIndex;
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+use std::hash::{Hash, Hasher};
+use std::ops::Index;
 
 #[derive(Clone, Copy, Debug)]
 pub struct InternalIndex {
@@ -52,7 +52,7 @@ impl Hash for InternalIndex {
     }
 }
 
-impl Eq for InternalIndex { }
+impl Eq for InternalIndex {}
 
 impl Index<InternalIndex> for Vec<InternalIndex> {
     type Output = InternalIndex;
@@ -66,7 +66,6 @@ impl PartialOrd for InternalIndex {
         self.index.partial_cmp(&other.index)
     }
 }
-
 
 impl Ord for InternalIndex {
     fn cmp(&self, other: &Self) -> Ordering {
