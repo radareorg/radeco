@@ -1,6 +1,7 @@
 all:
-	cargo build
-	make -C plugin build
+	make -C . uninstall
+	make -C . install
+	make -C plugin all
 
 run:
 	cargo run
