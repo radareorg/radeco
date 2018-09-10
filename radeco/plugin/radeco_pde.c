@@ -83,7 +83,7 @@ void proc_sendf(RSocketProc *sp, const char *fmt, ...) {
     va_end(ap);
 }
 
-int cmd_pdd(const char *input) {
+int cmd_pde(const char *input) {
     static RSocketProc *radeco_proc = NULL;
     if (!radeco_proc) {
         radeco_proc = spawn_radeco();
@@ -100,15 +100,19 @@ int cmd_pdd(const char *input) {
     switch (input[0]) {
         case ' ':
             proc_sendf(radeco_proc, "decompile %s\n", query);
+            read_radeco_output(radeco_proc);
             break;
         case 'a':
             proc_sendf(radeco_proc, "analyze %s\n", query);
+            read_radeco_output(radeco_proc);
             break;
         case 'c':
             proc_sendf(radeco_proc, "connect http://localhost:%u\n", PORT);
+            read_radeco_output(radeco_proc);
             break;
         case 'r':
             proc_sendf(radeco_proc, "%s\n", query);
+            read_radeco_output(radeco_proc);
             break;
         case 's':
             radeco_proc = spawn_radeco();
@@ -122,7 +126,6 @@ int cmd_pdd(const char *input) {
         default:
             usage();
     }
-    read_radeco_output(radeco_proc);
     return true;
 }
 
@@ -131,7 +134,7 @@ int cmd(void *user, const char *input) {
         return false;
     }
     spawn_http_srv((RCore *)user);
-    cmd_pdd(input + 3);
+    cmd_pde(input + 3);
     return true;
 }
 
