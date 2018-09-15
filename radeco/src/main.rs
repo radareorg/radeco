@@ -34,11 +34,17 @@ mod scheme {
 // On unix platforms you can use ANSI escape sequences
 #[cfg(unix)]
 const PROMPT: &'static str = "\x1b[1;32m>>\x1b[0m ";
+// File seperator for *nix based platforms
+#[cfg(unix)]
+const FILE_SP: char = '/';
 
 // Windows consoles typically don't support ANSI escape sequences out
 // of the box
 #[cfg(windows)]
 const PROMPT: &'static str = ">> ";
+#[cfg(windows)]
+// File seperator for Windows
+const FILE_SP: char = '\\';
 
 #[derive(Default)]
 struct Completes {
@@ -76,7 +82,13 @@ impl Completer for Completes {
         match self.file_completer.complete(line, _pos) {
             Ok((n, ss)) => {
                 let mut completed_lines = ss.into_iter()
-                    .map(|s| format!("{}{}", &line[..n], s.display))
+                    .map(|s| {
+                        if let Some (sep_loc) = line.rfind (FILE_SP) {
+                            format! ("{}{}", &line[..sep_loc + 1], s.display)
+                        } else {
+                            format! ("{}{}", &line[..n], s.display)
+                        }
+                    })
                     .collect();
                 ret.append(&mut completed_lines);
             }
@@ -129,15 +141,17 @@ fn main() {
         let readline = rl.readline(PROMPT);
         match readline {
             Ok(line) => {
-                let mut terms = line.split_whitespace();
-                let o1 = terms.next();
-                let o2 = terms.next();
-                cmd(o1, o2);
-                if is_append_mode {
-                    println!("{}", SEP);
+                if !line.is_empty () {
+                    let mut terms = line.split_whitespace();
+                    let o1 = terms.next();
+                    let o2 = terms.next();
+                    cmd(o1, o2);
+                    if is_append_mode {
+                        println!("{}", SEP);
+                    }
                 }
             }
-            Err(ReadlineError::Interrupted) |
+            Err(ReadlineError::Interrupted) => {},
             Err(ReadlineError::Eof) => break,
             Err(err) => {
                 println!("Error: {:?}", err);
