@@ -15,8 +15,8 @@ default = []
 trace_log = ["log", "env_logger"]
 
 [dev-dependencies]
-quickcheck = "0.4.0"
-quickcheck_macros = "0.6.0"
+quickcheck = "0.7.1"
+quickcheck_macros = "0.7.0"
 
 [build-dependencies]
 lalrpop = "0.15.0"
