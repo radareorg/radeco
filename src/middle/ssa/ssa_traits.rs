@@ -9,7 +9,7 @@
 //!
 //! These traits extend upon the ones provided in `cfg_traits`
 //!
-//! # Design 
+//! # Design
 //!  * `SSA` - Analogous to `CFG` this trait provides __accessors__ to
 //!  the data: Methods to enumerate operations, discovered connected operations,
 //!  determine which operation a basic block is in. etc.
@@ -21,11 +21,11 @@
 //! The associated type `SSA::ValueRef` is used by the methods to refer to
 //! nodes.
 
-use std::hash::Hash;
 use std::fmt::{self, Debug};
+use std::hash::Hash;
 
+use super::cfg_traits::{CFGMod, CFG};
 use middle::ir;
-use super::cfg_traits::{CFG, CFGMod};
 
 #[macro_export]
 macro_rules! entry_node_err {
@@ -34,7 +34,7 @@ macro_rules! entry_node_err {
             radeco_err!("Incomplete CFG graph");
             $ssa.invalid_action().unwrap()
         })
-    }
+    };
 }
 
 #[macro_export]
@@ -44,20 +44,20 @@ macro_rules! exit_node_err {
             radeco_err!("Incomplete CFG graph");
             $ssa.invalid_action().unwrap()
         })
-    }
+    };
 }
 
 #[macro_export]
 macro_rules! registers_in_err {
     ($ssa:expr, $node:expr) => {
-            registers_in_err!($ssa, $node, $ssa.invalid_value().unwrap())
+        registers_in_err!($ssa, $node, $ssa.invalid_value().unwrap())
     };
     ($ssa:expr, $node:expr, $default:expr) => {
         $ssa.registers_in($node).unwrap_or_else(|| {
             radeco_err!("No register state node found");
             $default
         })
-    }
+    };
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,17 +85,26 @@ pub struct ValueInfo {
 
 macro_rules! scalar {
     ($w:expr) => {
-        ValueInfo::new($crate::middle::ssa::ssa_traits::ValueType::Scalar, ir::WidthSpec::new_known($w))
-    }
+        ValueInfo::new(
+            $crate::middle::ssa::ssa_traits::ValueType::Scalar,
+            ir::WidthSpec::new_known($w),
+        )
+    };
 }
 
 macro_rules! reference {
     () => {
-        ValueInfo::new($crate::middle::ssa::ssa_traits::ValueType::Reference, ir::WidthSpec::Unknown)
+        ValueInfo::new(
+            $crate::middle::ssa::ssa_traits::ValueType::Reference,
+            ir::WidthSpec::Unknown,
+        )
     };
     ($w:expr) => {
-        ValueInfo::new($crate::middle::ssa::ssa_traits::ValueType::Reference, ir::WidthSpec::new_known($w))
-    }
+        ValueInfo::new(
+            $crate::middle::ssa::ssa_traits::ValueType::Reference,
+            ir::WidthSpec::new_known($w),
+        )
+    };
 }
 
 impl ValueInfo {
@@ -267,7 +276,6 @@ pub trait SSA: CFG {
 
 /// Trait for modifying SSA data
 pub trait SSAMod: SSA + CFGMod {
-
     /// Set the address of a value
     fn set_address(&mut self, i: Self::ValueRef, addr: ir::MAddress);
 
@@ -278,7 +286,12 @@ pub trait SSAMod: SSA + CFGMod {
     fn set_selector(&mut self, node: Self::ValueRef, block: Self::ActionRef);
 
     /// Insert a new operation node.
-    fn insert_op(&mut self, opc: ir::MOpcode, vt: ValueInfo, addr: Option<u64>) -> Option<Self::ValueRef>;
+    fn insert_op(
+        &mut self,
+        opc: ir::MOpcode,
+        vt: ValueInfo,
+        addr: Option<u64>,
+    ) -> Option<Self::ValueRef>;
 
     /// Add a new constant node.
     fn insert_const(&mut self, value: u64) -> Option<Self::ValueRef>;
@@ -291,7 +304,7 @@ pub trait SSAMod: SSA + CFGMod {
 
     /// Add a new comment node
     fn insert_comment(&mut self, vt: ValueInfo, msg: String) -> Option<Self::ValueRef>;
-    
+
     /// Associate a node with index n with a block
     fn insert_into_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, ir::MAddress);
 
@@ -325,11 +338,11 @@ pub trait SSAMod: SSA + CFGMod {
 /// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
 
 pub trait SSAExtra: SSA {
-    fn mark(&mut self, _: &Self::ValueRef) { }
-    fn clear_mark(&mut self, &Self::ValueRef) { }
-    fn set_color(&mut self, _: &Self::ValueRef, _: u8) { }
-    fn set_comment(&mut self, _: &Self::ValueRef, _: String) { }
-    fn add_flag(&mut self, _: &Self::ValueRef, _: String) { }
+    fn mark(&mut self, _: &Self::ValueRef) {}
+    fn clear_mark(&mut self, &Self::ValueRef) {}
+    fn set_color(&mut self, _: &Self::ValueRef, _: u8) {}
+    fn set_comment(&mut self, _: &Self::ValueRef, _: String) {}
+    fn add_flag(&mut self, _: &Self::ValueRef, _: String) {}
     fn is_marked(&self, _: &Self::ValueRef) -> bool {
         false
     }
@@ -351,7 +364,7 @@ pub trait SSAExtra: SSA {
     }
 }
 
-pub trait SSAWalk<I: Iterator<Item=<Self as SSA>::ValueRef>>: SSA {
+pub trait SSAWalk<I: Iterator<Item = <Self as SSA>::ValueRef>>: SSA {
     fn bfs_walk(&self) -> I;
     fn inorder_walk(&self) -> I;
     fn dfs_walk(&self) -> I;
