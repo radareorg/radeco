@@ -483,6 +483,50 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
+    fn op_to_expr(op: &MOpcode) -> Option<c_ast::Expr> {
+        match op {
+            MOpcode::OpAdd => c_ast::Expr::Add,
+            MOpcode::OpAnd => c_ast::Expr::And,
+            MOpcode::OpDiv => c_ast::Expr::Div,
+            MOpcode::OpEq => c_ast::Expr::Eq,
+            MOpcode::OpGt => c_ast::Expr::Gt,
+            MOpcode::OpLsl => c_ast::Expr::Shl,
+            MOpcode::OpLsr => c_ast::Expr::Shr,
+            MOpcode::OpLt => c_ast::Expr::Lt,
+            MOpcode::OpMod => c_ast::Expr::Mod,
+            MOpcode::OpMul => c_ast::Expr::Mul,
+            MOpcode::OpNot => c_ast::Expr::Not,
+            MOpcode::OpOr => c_ast::Expr::Or,
+            MOpcode::OpRol => unimplemented!(),
+            MOpcode::OpRor => unimplemented!(),
+            MOpcode::OpSub => c_ast::Expr::Sub,
+            MOpcode::OpXor => c_ast::Expr::Xor,
+            // TODO Add `Narrow` info
+            MOpcode::OpNarrow(size) => c_ast::Expr::Cast(size as usize),
+            // TODO Add `SignExt`
+            MOpcode::OpSignExt(size) => c_ast::Expr::Cast(size as usize),
+            // TODO Add `ZeroExt`
+            MOpcode::OpZeroExt(size) => c_ast::Expr::Cast(size as usize),
+            _ => None,
+        }
+    }
+
+    fn def_of(&self, node: SSARef) -> (c_ast::Expr, Vec<SSARef>) {
+        let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
+        match (&op, op_to_expr(&op)) {
+            (MOpcode::OpStore, None) => unimplemented!(),
+            (MOpcode::OpLoad, None) => unimplemented!(),
+            (MOpcode::OpNarrow(size), exp)
+            | (MOpcode::OpSignExt(size), exp)
+            | (MOpcode::OpZeroExt(size), exp) => unimplemented!(),
+            (_, exp) if op.is_ternary() => unimplemented!(),
+            (_, exp) if op.is_binary() => unimplemented!(),
+            (_, exp) if op.is_unary() => unimplemented!(),
+            (MOpcode::OpCall, None) => unimplemented!(),
+            _ => unimplemented!(),
+        }
+    }
+
     fn update_values(&mut self, ret_node: SSARef, ast: &mut CCFG) {
         debug_assert!(self.ssa.is_expr(ret_node));
         radeco_trace!("CCFGBuilder::update_values {:?}", ret_node);
