@@ -719,25 +719,7 @@ impl CCFGDataMapVerifier {
     }
 
     fn verify_ops(ast: &mut CCFG, datamap: &mut CCFGDataMap) -> Result<(), String> {
-        Self::verify_handler_each_node(
-            ast,
-            datamap,
-            &Self::verify_handle_uniop,
-            "Handle unary operator",
-        )?;
-
-        Self::verify_handler_each_node(
-            ast,
-            datamap,
-            &Self::verify_handle_binop,
-            "Handle binary operator",
-        )?;
-        Self::verify_handler_each_node(
-            ast,
-            datamap,
-            &Self::verify_handle_cast,
-            "Handle casting operator",
-        )?;
+        Self::verify_handler_each_node(ast, datamap, &Self::verify_handle, "Handle operator")?;
         Ok(())
     }
 
@@ -866,32 +848,7 @@ impl CCFGDataMapVerifier {
         }
     }
 
-    fn verify_handle_uniop(
-        node: SSARef,
-        ast: &mut CCFG,
-        datamap: &mut CCFGDataMap,
-    ) -> Result<(), String> {
-        // Ensure `handle_uniop` insert node as key into var_map.
-        let expr = c_ast::Expr::Not;
-        let operand_node = datamap
-            .var_map
-            .iter()
-            .map(|(n, _)| *n)
-            .filter(|n| *n != node)
-            .next()
-            .unwrap();
-        // Erase the key so as to ensure whether the key will be correctly inserted
-        // by handle_uniop
-        datamap.var_map.remove(&node);
-        datamap.handle_uniop(node, operand_node, expr, ast);
-        if datamap.var_map.get(&node).is_none() {
-            Err(format!("Failed to handle unary operator: {:?}", node))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_handle_binop(
+    fn verify_handle(
         node: SSARef,
         ast: &mut CCFG,
         datamap: &mut CCFGDataMap,
@@ -908,35 +865,9 @@ impl CCFGDataMapVerifier {
         // Erase the key so as to ensure whether the key will be correctly inserted
         // by handle_binop
         datamap.var_map.remove(&node);
-        datamap.handle_binop(node, operand_nodes, expr, ast);
+        datamap.handle(node, operand_nodes, expr, ast);
         if datamap.var_map.get(&node).is_none() {
             Err(format!("Failed to handle binary operator: {:?}", node))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_handle_cast(
-        node: SSARef,
-        ast: &mut CCFG,
-        datamap: &mut CCFGDataMap,
-    ) -> Result<(), String> {
-        // Ensure `handle_cast` insert node as key into var_map.
-        let expr = c_ast::Expr::Cast(8);
-        let operand_node = datamap
-            .var_map
-            .iter()
-            .map(|(n, _)| *n)
-            .filter(|n| *n != node)
-            .next()
-            .unwrap()
-            .clone();
-        // Erase the key so as to ensure whether the key will be correctly inserted
-        // by handle_uniop
-        datamap.var_map.remove(&node);
-        datamap.handle_cast(node, operand_node, expr, ast);
-        if datamap.var_map.get(&node).is_none() {
-            Err(format!("Failed to handle cast operator: {:?}", node))
         } else {
             Ok(())
         }
