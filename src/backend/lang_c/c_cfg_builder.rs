@@ -419,14 +419,7 @@ impl<'a> CCFGDataMap<'a> {
         s
     }
 
-    fn handle_binop(
-        &mut self,
-        ret_node: SSARef,
-        ops: Vec<SSARef>,
-        expr: c_ast::Expr,
-        ast: &mut CCFG,
-    ) {
-        debug_assert!(ops.len() == 2);
+    fn handle(&mut self, ret_node: SSARef, ops: Vec<SSARef>, expr: c_ast::Expr, ast: &mut CCFG) {
         let ops_mapped = ops
             .iter()
             .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(ast.unknown))
@@ -439,24 +432,6 @@ impl<'a> CCFGDataMap<'a> {
             expr
         );
         self.var_map.insert(ret_node, expr_node);
-    }
-
-    fn handle_uniop(&mut self, ret_node: SSARef, op: SSARef, expr: c_ast::Expr, ast: &mut CCFG) {
-        if let Some(&n) = self.var_map.get(&op) {
-            let expr_node = ast.expr(&[n], expr);
-            self.var_map.insert(ret_node, expr_node);
-        } else {
-            radeco_warn!("Operand not found: {:?}", op);
-        }
-    }
-
-    fn handle_cast(&mut self, ret_node: SSARef, op: SSARef, expr: c_ast::Expr, ast: &mut CCFG) {
-        if self.const_nodes.contains(&op) {
-            let cfg_node = self.var_map.get(&op).cloned().unwrap_or(ast.unknown);
-            self.var_map.insert(ret_node, cfg_node);
-        } else {
-            self.handle_uniop(ret_node, op, expr, ast);
-        }
     }
 
     fn deref(&self, node: SSARef, ast: &mut CCFG) -> CCFGRef {
@@ -485,44 +460,40 @@ impl<'a> CCFGDataMap<'a> {
 
     fn op_to_expr(op: &MOpcode) -> Option<c_ast::Expr> {
         match op {
-            MOpcode::OpAdd => c_ast::Expr::Add,
-            MOpcode::OpAnd => c_ast::Expr::And,
-            MOpcode::OpDiv => c_ast::Expr::Div,
-            MOpcode::OpEq => c_ast::Expr::Eq,
-            MOpcode::OpGt => c_ast::Expr::Gt,
-            MOpcode::OpLsl => c_ast::Expr::Shl,
-            MOpcode::OpLsr => c_ast::Expr::Shr,
-            MOpcode::OpLt => c_ast::Expr::Lt,
-            MOpcode::OpMod => c_ast::Expr::Mod,
-            MOpcode::OpMul => c_ast::Expr::Mul,
-            MOpcode::OpNot => c_ast::Expr::Not,
-            MOpcode::OpOr => c_ast::Expr::Or,
+            MOpcode::OpAdd => Some(c_ast::Expr::Add),
+            MOpcode::OpAnd => Some(c_ast::Expr::And),
+            MOpcode::OpDiv => Some(c_ast::Expr::Div),
+            MOpcode::OpEq => Some(c_ast::Expr::Eq),
+            MOpcode::OpGt => Some(c_ast::Expr::Gt),
+            MOpcode::OpLsl => Some(c_ast::Expr::Shl),
+            MOpcode::OpLsr => Some(c_ast::Expr::Shr),
+            MOpcode::OpLt => Some(c_ast::Expr::Lt),
+            MOpcode::OpMod => Some(c_ast::Expr::Mod),
+            MOpcode::OpMul => Some(c_ast::Expr::Mul),
+            MOpcode::OpNot => Some(c_ast::Expr::Not),
+            MOpcode::OpOr => Some(c_ast::Expr::Or),
             MOpcode::OpRol => unimplemented!(),
             MOpcode::OpRor => unimplemented!(),
-            MOpcode::OpSub => c_ast::Expr::Sub,
-            MOpcode::OpXor => c_ast::Expr::Xor,
+            MOpcode::OpSub => Some(c_ast::Expr::Sub),
+            MOpcode::OpXor => Some(c_ast::Expr::Xor),
             // TODO Add `Narrow` info
-            MOpcode::OpNarrow(size) => c_ast::Expr::Cast(size as usize),
+            MOpcode::OpNarrow(size) => Some(c_ast::Expr::Cast(*size as usize)),
             // TODO Add `SignExt`
-            MOpcode::OpSignExt(size) => c_ast::Expr::Cast(size as usize),
+            MOpcode::OpSignExt(size) => Some(c_ast::Expr::Cast(*size as usize)),
             // TODO Add `ZeroExt`
-            MOpcode::OpZeroExt(size) => c_ast::Expr::Cast(size as usize),
+            MOpcode::OpZeroExt(size) => Some(c_ast::Expr::Cast(*size as usize)),
             _ => None,
         }
     }
 
-    fn def_of(&self, node: SSARef) -> (c_ast::Expr, Vec<SSARef>) {
+    fn def_of(&self, node: SSARef) -> (Option<c_ast::Expr>, Vec<SSARef>) {
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
-        match (&op, op_to_expr(&op)) {
-            (MOpcode::OpStore, None) => unimplemented!(),
-            (MOpcode::OpLoad, None) => unimplemented!(),
-            (MOpcode::OpNarrow(size), exp)
-            | (MOpcode::OpSignExt(size), exp)
-            | (MOpcode::OpZeroExt(size), exp) => unimplemented!(),
-            (_, exp) if op.is_ternary() => unimplemented!(),
-            (_, exp) if op.is_binary() => unimplemented!(),
-            (_, exp) if op.is_unary() => unimplemented!(),
-            (MOpcode::OpCall, None) => unimplemented!(),
+        let operands = self.ssa.operands_of(node);
+        match (op.clone(), Self::op_to_expr(&op)) {
+            (MOpcode::OpStore, None) => (None, operands),
+            (MOpcode::OpLoad, None) => (None, operands),
+            (MOpcode::OpCall, None) => (None, operands),
+            (_, exp) => (exp, operands),
             _ => unimplemented!(),
         }
     }
@@ -548,58 +519,31 @@ impl<'a> CCFGDataMap<'a> {
             "CCFGBuilder::update_values opcode: {:?}",
             self.ssa.opcode(ret_node)
         );
-        match self.ssa.opcode(ret_node).unwrap_or(MOpcode::OpInvalid) {
-            MOpcode::OpStore => {
-                debug_assert!(ops.len() == 3);
-                // Variables do not need Deref
-                if self.rfn.local_at(ops[1], true).is_none() {
-                    self.deref(ops[1], ast);
+        let (exp_opt, def_ops) = self.def_of(ret_node);
+        if let Some(exp) = exp_opt {
+            self.handle(ret_node, def_ops, exp, ast);
+        } else {
+            match self.ssa.opcode(ret_node).unwrap_or(MOpcode::OpInvalid) {
+                MOpcode::OpStore => {
+                    debug_assert!(ops.len() == 3);
+                    // Variables do not need Deref
+                    if self.rfn.local_at(ops[1], true).is_none() {
+                        self.deref(ops[1], ast);
+                    }
                 }
-            }
-            MOpcode::OpLoad => {
-                // Variables do not need Deref
-                if self.rfn.local_at(ops[1], true).is_none() {
-                    let deref_node = self.deref(ops[1], ast);
-                    self.var_map.insert(ret_node, deref_node);
-                } else {
-                    let cfg_node = *self.var_map.get(&ops[1]).expect("This can not be `None`");
-                    self.var_map.insert(ret_node, cfg_node);
+                MOpcode::OpLoad => {
+                    // Variables do not need Deref
+                    if self.rfn.local_at(ops[1], true).is_none() {
+                        let deref_node = self.deref(ops[1], ast);
+                        self.var_map.insert(ret_node, deref_node);
+                    } else {
+                        let cfg_node = *self.var_map.get(&ops[1]).expect("This can not be `None`");
+                        self.var_map.insert(ret_node, cfg_node);
+                    }
                 }
+                MOpcode::OpCall => self.update_data_graph_by_call(ret_node, ast),
+                _ => unreachable!(),
             }
-            MOpcode::OpAdd => self.handle_binop(ret_node, ops, c_ast::Expr::Add, ast),
-            MOpcode::OpAnd => self.handle_binop(ret_node, ops, c_ast::Expr::And, ast),
-            MOpcode::OpDiv => self.handle_binop(ret_node, ops, c_ast::Expr::Div, ast),
-            MOpcode::OpEq => self.handle_binop(ret_node, ops, c_ast::Expr::Eq, ast),
-            MOpcode::OpGt => self.handle_binop(ret_node, ops, c_ast::Expr::Gt, ast),
-            // XXX Shl might be wrong operator
-            MOpcode::OpLsl => self.handle_binop(ret_node, ops, c_ast::Expr::Shl, ast),
-            // XXX Shr might be wrong operator
-            MOpcode::OpLsr => self.handle_binop(ret_node, ops, c_ast::Expr::Shr, ast),
-            MOpcode::OpLt => self.handle_binop(ret_node, ops, c_ast::Expr::Lt, ast),
-            MOpcode::OpMod => self.handle_binop(ret_node, ops, c_ast::Expr::Mod, ast),
-            MOpcode::OpMul => self.handle_binop(ret_node, ops, c_ast::Expr::Mul, ast),
-            // TODO Add `Narrow` info
-            MOpcode::OpNarrow(size) => {
-                self.handle_cast(ret_node, ops[0], c_ast::Expr::Cast(size as usize), ast)
-            }
-            MOpcode::OpNot => self.handle_uniop(ret_node, ops[0], c_ast::Expr::Not, ast),
-            MOpcode::OpOr => self.handle_binop(ret_node, ops, c_ast::Expr::Or, ast),
-            MOpcode::OpRol => unimplemented!(),
-            MOpcode::OpRor => unimplemented!(),
-            // TODO Add `SignExt`
-            MOpcode::OpSignExt(size) => {
-                self.handle_cast(ret_node, ops[0], c_ast::Expr::Cast(size as usize), ast)
-            }
-            MOpcode::OpSub => self.handle_binop(ret_node, ops, c_ast::Expr::Sub, ast),
-            MOpcode::OpXor => self.handle_binop(ret_node, ops, c_ast::Expr::Xor, ast),
-            // TODO Add `ZeroExt`
-            MOpcode::OpZeroExt(size) => {
-                self.handle_cast(ret_node, ops[0], c_ast::Expr::Cast(size as usize), ast)
-            }
-            MOpcode::OpCall => {
-                self.update_data_graph_by_call(ret_node, ast);
-            }
-            _ => {}
         }
     }
 
