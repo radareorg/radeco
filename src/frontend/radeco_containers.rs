@@ -1031,7 +1031,6 @@ impl<'a> FunctionLoader<'a> {
     /// Include default strategies to identify functions in the loaded binary
     pub fn include_defaults(mut self) -> FunctionLoader<'a> {
         // TODO: Append these to the front
-        self.strategies.push(&loader_defaults::strat_use_symbols);
         self.strategies.push(&loader_defaults::strat_use_source);
         self
     }
