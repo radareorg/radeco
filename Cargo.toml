@@ -1,9 +1,10 @@
 [package]
 name = "radeco-lib"
-version = "0.1.0"
+version = "0.1.0-dev"
 authors = [
-	"David Kreuter <dkreuter@gmail.com>",
-	"Sushant Dinesh <sushant.dinesh94@gmail.com>"
+    "David Kreuter <dkreuter@gmail.com>",
+    "Sushant Dinesh <sushant.dinesh94@gmail.com>",
+    "Shohei Kuroiwa <kotarou777775@gmail.com>"
 ]
 build = "build.rs"
 
