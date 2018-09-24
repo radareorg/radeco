@@ -662,7 +662,6 @@ impl<'a> CCFGDataMap<'a> {
 
 struct CCFGBuilderVerifier {}
 
-// type Verifier = Fn(SSARef, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
 impl CCFGBuilderVerifier {
     const DELIM: &'static str = "; ";
 
@@ -799,7 +798,7 @@ impl CCFGDataMapVerifier {
                 let ret = if let Some(s) = strings.get(&tmp_val) {
                     format!("\"{}\"", s)
                 } else {
-                    tmp_val.to_string()
+                    format!("0x{:x}", tmp_val)
                 };
                 Some(ret)
             } else {
@@ -920,7 +919,7 @@ impl CCFGDataMapVerifier {
             .take(2)
             .collect();
         // Erase the key so as to ensure whether the key will be correctly inserted
-        // by handle_binop
+        // by handle
         datamap.var_map.remove(&node);
         datamap.handle(node, operand_nodes, expr, cfg);
         if datamap.var_map.get(&node).is_none() {
