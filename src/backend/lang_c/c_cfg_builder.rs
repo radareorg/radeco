@@ -383,10 +383,11 @@ struct CCFGDataMap<'a> {
     // Hashmap from node of SSAStorage to one of self.data_graph
     // a map from node of data_graph to one of CCFG's value
     pub var_map: HashMap<SSARef, CCFGRef>,
-    // a map from node of data_graph to one of CCFG's register
+    // a map from the name of register to node data
     pub reg_map: HashMap<String, CCFGRef>,
     pub const_nodes: HashSet<SSARef>,
     seen: HashSet<SSARef>,
+    regvar_version: u32,
 }
 
 impl<'a> CCFGDataMap<'a> {
@@ -398,6 +399,7 @@ impl<'a> CCFGDataMap<'a> {
             reg_map: HashMap::new(),
             const_nodes: HashSet::new(),
             seen: HashSet::new(),
+            regvar_version: 0,
         }
     }
 
@@ -419,7 +421,24 @@ impl<'a> CCFGDataMap<'a> {
         s
     }
 
+    fn add_regvar(&mut self, node: SSARef, ast: &mut CCFG) -> Option<CCFGRef> {
+        let name = format!("v{}", self.regvar_version);
+        self.regvar_version += 1;
+        if self.var_map.get(&node).cloned().is_none() {
+            let n = ast.constant(&name, None);
+            self.var_map.insert(node, n);
+            Some(n)
+        } else {
+            None
+        }
+    }
+
     fn handle(&mut self, ret_node: SSARef, ops: Vec<SSARef>, expr: c_ast::Expr, ast: &mut CCFG) {
+        for op in ops.iter() {
+            if self.var_map.get(&op).cloned().is_none() {
+                self.add_regvar(*op, ast);
+            }
+        }
         let ops_mapped = ops
             .iter()
             .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(ast.unknown))
@@ -573,7 +592,7 @@ impl<'a> CCFGDataMap<'a> {
                 let cfg_node = if let Some(s) = strings.get(&val) {
                     ast.constant(&format!("\"{}\"", s), None)
                 } else {
-                    ast.constant(&val.to_string(), None)
+                    ast.constant(&format!("0x{:x}", val), None)
                 };
                 self.const_nodes.insert(node);
                 self.var_map.insert(node, cfg_node);
