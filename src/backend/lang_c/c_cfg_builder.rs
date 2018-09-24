@@ -1,6 +1,6 @@
 //! This module is for recovering CCFG from RadecoFunction.
 //!
-//! Usage of this module is to call `c_cfg_builder::recover_simple_ast(rfn)`
+//! Usage of this module is to call `c_cfg_builder::recover_simple_cfg(rfn)`
 //! where `rfn` is an instance of `RadecoFunction`, the function returns an instance of
 //! CCFG and we can obtain higher level representation than Radeco IR.
 
@@ -405,27 +405,27 @@ impl<'a> CCFGDataMap<'a> {
 
     fn recover_data(
         rfn: &'a RadecoFunction,
-        ast: &mut CCFG,
+        cfg: &mut CCFG,
         strings: &'a HashMap<u64, String>,
     ) -> Self {
         let mut s = Self::new(rfn);
-        s.prepare_consts(ast, strings);
-        s.prepare_regs(ast);
+        s.prepare_consts(cfg, strings);
+        s.prepare_regs(cfg);
         for node in s.ssa.inorder_walk() {
             if s.ssa.is_phi(node) {
                 s.handle_phi(node);
             } else if s.ssa.is_expr(node) {
-                s.update_values(node, ast);
+                s.update_values(node, cfg);
             }
         }
         s
     }
 
-    fn add_regvar(&mut self, node: SSARef, ast: &mut CCFG) -> Option<CCFGRef> {
+    fn add_regvar(&mut self, node: SSARef, cfg: &mut CCFG) -> Option<CCFGRef> {
         let name = format!("v{}", self.regvar_version);
         self.regvar_version += 1;
         if self.var_map.get(&node).cloned().is_none() {
-            let n = ast.constant(&name, None);
+            let n = cfg.constant(&name, None);
             self.var_map.insert(node, n);
             Some(n)
         } else {
@@ -433,17 +433,17 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    fn handle(&mut self, ret_node: SSARef, ops: Vec<SSARef>, expr: c_ast::Expr, ast: &mut CCFG) {
+    fn handle(&mut self, ret_node: SSARef, ops: Vec<SSARef>, expr: c_ast::Expr, cfg: &mut CCFG) {
         for op in ops.iter() {
             if self.var_map.get(&op).cloned().is_none() {
-                self.add_regvar(*op, ast);
+                self.add_regvar(*op, cfg);
             }
         }
         let ops_mapped = ops
             .iter()
-            .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(ast.unknown))
+            .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(cfg.unknown))
             .collect::<Vec<_>>();
-        let expr_node = ast.expr(ops_mapped.as_slice(), expr.clone());
+        let expr_node = cfg.expr(ops_mapped.as_slice(), expr.clone());
         radeco_trace!(
             "Add {:?} to {:?}, Operator: {:?}",
             ret_node,
@@ -453,10 +453,10 @@ impl<'a> CCFGDataMap<'a> {
         self.var_map.insert(ret_node, expr_node);
     }
 
-    fn deref(&self, node: SSARef, ast: &mut CCFG) -> CCFGRef {
+    fn deref(&self, node: SSARef, cfg: &mut CCFG) -> CCFGRef {
         radeco_trace!("DeRef {:?}", node);
-        let n = self.var_map.get(&node).cloned().unwrap_or(ast.unknown);
-        ast.deref(n)
+        let n = self.var_map.get(&node).cloned().unwrap_or(cfg.unknown);
+        cfg.deref(n)
     }
 
     fn handle_phi(&mut self, node: SSARef) {
@@ -517,7 +517,7 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    fn update_values(&mut self, ret_node: SSARef, ast: &mut CCFG) {
+    fn update_values(&mut self, ret_node: SSARef, cfg: &mut CCFG) {
         debug_assert!(self.ssa.is_expr(ret_node));
         radeco_trace!("CCFGBuilder::update_values {:?}", ret_node);
         if self.seen.contains(&ret_node) {
@@ -528,7 +528,7 @@ impl<'a> CCFGDataMap<'a> {
         if let Some(bindings) = self.rfn.local_at(ret_node, true) {
             // TODO add type
             let type_info = Self::type_from_str(&bindings[0].type_str);
-            let cfg_node = ast.var(bindings[0].name(), type_info);
+            let cfg_node = cfg.var(bindings[0].name(), type_info);
             self.var_map.insert(ret_node, cfg_node);
             return;
         }
@@ -540,33 +540,33 @@ impl<'a> CCFGDataMap<'a> {
         );
         let (exp_opt, def_ops) = self.def_of(ret_node);
         if let Some(exp) = exp_opt {
-            self.handle(ret_node, def_ops, exp, ast);
+            self.handle(ret_node, def_ops, exp, cfg);
         } else {
             match self.ssa.opcode(ret_node).unwrap_or(MOpcode::OpInvalid) {
                 MOpcode::OpStore => {
                     debug_assert!(ops.len() == 3);
                     // Variables do not need Deref
                     if self.rfn.local_at(ops[1], true).is_none() {
-                        self.deref(ops[1], ast);
+                        self.deref(ops[1], cfg);
                     }
                 }
                 MOpcode::OpLoad => {
                     // Variables do not need Deref
                     if self.rfn.local_at(ops[1], true).is_none() {
-                        let deref_node = self.deref(ops[1], ast);
+                        let deref_node = self.deref(ops[1], cfg);
                         self.var_map.insert(ret_node, deref_node);
                     } else {
                         let cfg_node = *self.var_map.get(&ops[1]).expect("This can not be `None`");
                         self.var_map.insert(ret_node, cfg_node);
                     }
                 }
-                MOpcode::OpCall => self.update_data_graph_by_call(ret_node, ast),
+                MOpcode::OpCall => self.update_data_graph_by_call(ret_node, cfg),
                 _ => unreachable!(),
             }
         }
     }
 
-    fn update_data_graph_by_call(&mut self, call_node: SSARef, ast: &mut CCFG) {
+    fn update_data_graph_by_call(&mut self, call_node: SSARef, cfg: &mut CCFG) {
         radeco_trace!("CCFGBuilder::update_data_graph_by_call {:?}", call_node);
         let ret_reg_name_opt = ret_value_string(self.rfn);
         if ret_reg_name_opt.is_none() {
@@ -579,20 +579,20 @@ impl<'a> CCFGDataMap<'a> {
             let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
             if name == ret_reg_name {
                 // TODO add type
-                let cfg_node = ast.var("tmp", None);
+                let cfg_node = cfg.var("tmp", None);
                 self.var_map.insert(node, cfg_node);
             }
         }
     }
 
-    fn prepare_consts(&mut self, ast: &mut CCFG, strings: &HashMap<u64, String>) {
+    fn prepare_consts(&mut self, cfg: &mut CCFG, strings: &HashMap<u64, String>) {
         for (&val, &node) in self.ssa.constants.iter() {
             if self.ssa.node_data(node).is_ok() {
                 // TODO add type
                 let cfg_node = if let Some(s) = strings.get(&val) {
-                    ast.constant(&format!("\"{}\"", s), None)
+                    cfg.constant(&format!("\"{}\"", s), None)
                 } else {
-                    ast.constant(&format!("0x{:x}", val), None)
+                    cfg.constant(&format!("0x{:x}", val), None)
                 };
                 self.const_nodes.insert(node);
                 self.var_map.insert(node, cfg_node);
@@ -602,7 +602,7 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
-    fn prepare_regs(&mut self, ast: &mut CCFG) {
+    fn prepare_regs(&mut self, cfg: &mut CCFG) {
         for walk_node in self.ssa.inorder_walk() {
             let reg_state = self.ssa.registers_in(walk_node);
             if reg_state.is_none() {
@@ -612,7 +612,7 @@ impl<'a> CCFGDataMap<'a> {
             for (idx, (node, _)) in reg_map.into_iter() {
                 let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
                 // XXX CCFG::constant may not be proper method for registering regs.
-                let cfg_node = ast.constant(&name, None);
+                let cfg_node = cfg.constant(&name, None);
                 radeco_trace!("Add register {:?}", node);
                 self.var_map.insert(node, cfg_node);
                 // XXX Maybe not needed
@@ -717,33 +717,33 @@ impl CCFGDataMapVerifier {
 
     fn verify_datamap(
         datamap: &mut CCFGDataMap,
-        ast: &mut CCFG,
+        cfg: &mut CCFG,
         strings: &HashMap<u64, String>,
     ) -> Result<(), String> {
-        Self::verify_prepare(ast, datamap, strings)?;
-        Self::verify_ops(ast, datamap)?;
+        Self::verify_prepare(cfg, datamap, strings)?;
+        Self::verify_ops(cfg, datamap)?;
         Ok(())
     }
 
     fn verify_prepare(
-        ast: &mut CCFG,
+        cfg: &mut CCFG,
         datamap: &mut CCFGDataMap,
         strings: &HashMap<u64, String>,
     ) -> Result<(), String> {
-        datamap.prepare_consts(ast, strings);
-        Self::verify_prepare_consts(ast, datamap, strings)?;
-        datamap.prepare_regs(ast);
+        datamap.prepare_consts(cfg, strings);
+        Self::verify_prepare_consts(cfg, datamap, strings)?;
+        datamap.prepare_regs(cfg);
         Self::verify_prepare_regs(datamap)?;
         Ok(())
     }
 
-    fn verify_ops(ast: &mut CCFG, datamap: &mut CCFGDataMap) -> Result<(), String> {
-        Self::verify_handler_each_node(ast, datamap, &Self::verify_handle, "Handle operator")?;
+    fn verify_ops(cfg: &mut CCFG, datamap: &mut CCFGDataMap) -> Result<(), String> {
+        Self::verify_handler_each_node(cfg, datamap, &Self::verify_handle, "Handle operator")?;
         Ok(())
     }
 
     fn verify_prepare_consts(
-        ast: &CCFG,
+        cfg: &CCFG,
         datamap: &CCFGDataMap,
         strings: &HashMap<u64, String>,
     ) -> Result<(), String> {
@@ -769,7 +769,7 @@ impl CCFGDataMapVerifier {
                 errors.push(err);
                 None
             };
-            let const_opt = ast.constant_of(cfg_node);
+            let const_opt = cfg.constant_of(cfg_node);
             if const_opt.is_none() {
                 let err = format!("No ValueNode::Constant({:?}) is found", cfg_node);
                 errors.push(err);
@@ -845,14 +845,14 @@ impl CCFGDataMapVerifier {
     }
 
     fn verify_handler_each_node(
-        ast: &mut CCFG,
+        cfg: &mut CCFG,
         datamap: &mut CCFGDataMap,
         verifier: &Verifier,
         name: &str,
     ) -> Result<(), String> {
         let mut errors = Vec::new();
         for node in datamap.ssa.inorder_walk() {
-            if let Err(err) = verifier(node, ast, datamap) {
+            if let Err(err) = verifier(node, cfg, datamap) {
                 errors.push(err);
             }
         }
@@ -869,7 +869,7 @@ impl CCFGDataMapVerifier {
 
     fn verify_handle(
         node: SSARef,
-        ast: &mut CCFG,
+        cfg: &mut CCFG,
         datamap: &mut CCFGDataMap,
     ) -> Result<(), String> {
         // Ensure `handle_binop` insert node as key into var_map.
@@ -884,7 +884,7 @@ impl CCFGDataMapVerifier {
         // Erase the key so as to ensure whether the key will be correctly inserted
         // by handle_binop
         datamap.var_map.remove(&node);
-        datamap.handle(node, operand_nodes, expr, ast);
+        datamap.handle(node, operand_nodes, expr, cfg);
         if datamap.var_map.get(&node).is_none() {
             Err(format!("Failed to handle binary operator: {:?}", node))
         } else {
@@ -941,18 +941,18 @@ mod test {
     const FILES: [&'static str; 2] = ["./test_files/bin1_main_ssa", "./test_files/loopy_main_ssa"];
 
     #[test]
-    fn c_ast_data_map_test() {
+    fn c_cfg_data_map_test() {
         for file in FILES.iter() {
             let mut rfn = load("./test_files/bin1_main_ssa");
             let mut datamap = CCFGDataMap::new(&rfn);
-            let mut cast = c_cfg::CCFG::new(rfn.name.as_ref());
-            CCFGDataMapVerifier::verify_datamap(&mut datamap, &mut cast, &HashMap::new())
+            let mut ccfg = c_cfg::CCFG::new(rfn.name.as_ref());
+            CCFGDataMapVerifier::verify_datamap(&mut datamap, &mut ccfg, &HashMap::new())
                 .expect(&format!("CASTBDataMap verification failed {}", file));
         }
     }
 
     #[test]
-    fn c_ast_builder_test() {
+    fn c_cfg_builder_test() {
         for file in FILES.iter() {
             let mut rfn = load("./test_files/bin1_main_ssa");
             let dummy_map = HashMap::new();
