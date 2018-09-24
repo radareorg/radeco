@@ -200,6 +200,28 @@ impl<'a> CCFGBuilder<'a> {
                 }
                 ret
             }
+            MOpcode::OpLoad => {
+                let ops = self.ssa.operands_of(node);
+                let dst = self
+                    .datamap
+                    .var_map
+                    .get(&node)
+                    .cloned()
+                    .unwrap_or(self.cfg.unknown);
+                let src = self
+                    .datamap
+                    .var_map
+                    .get(&ops[1])
+                    .map(|&x| self.cfg.derefed_node(x).unwrap_or(x))
+                    .unwrap_or(self.cfg.unknown);
+                let ret = self.assign(dst, src);
+                if is_debug() {
+                    let addr = self.addr_str(node);
+                    self.cfg
+                        .debug_info_at(ret, format!("*({:?}) = {:?} @ {}", dst, src, addr));
+                }
+                ret
+            }
             _ => unreachable!(),
         }
     }
@@ -208,6 +230,7 @@ impl<'a> CCFGBuilder<'a> {
         let op = self.ssa.opcode(node).unwrap_or(MOpcode::OpInvalid);
         match op {
             MOpcode::OpCall | MOpcode::OpStore => true,
+            MOpcode::OpLoad if self.datamap.is_used_by_call_store(node) => true,
             _ => false,
         }
     }
@@ -517,6 +540,18 @@ impl<'a> CCFGDataMap<'a> {
         }
     }
 
+    fn is_used_by_call_store(&self, node: SSARef) -> bool {
+        let opcodes = &[MOpcode::OpCall, MOpcode::OpStore];
+        self.ssa
+            .uses_of(node)
+            .iter()
+            .filter(|&n| {
+                let op = self.ssa.opcode(*n).unwrap_or(MOpcode::OpInvalid);
+                opcodes.contains(&op)
+            }).next()
+            .is_some()
+    }
+
     fn update_values(&mut self, ret_node: SSARef, cfg: &mut CCFG) {
         debug_assert!(self.ssa.is_expr(ret_node));
         radeco_trace!("CCFGBuilder::update_values {:?}", ret_node);
@@ -552,12 +587,14 @@ impl<'a> CCFGDataMap<'a> {
                 }
                 MOpcode::OpLoad => {
                     // Variables do not need Deref
-                    if self.rfn.local_at(ops[1], true).is_none() {
-                        let deref_node = self.deref(ops[1], cfg);
-                        self.var_map.insert(ret_node, deref_node);
-                    } else {
+                    if self.rfn.local_at(ops[1], true).is_some() {
                         let cfg_node = *self.var_map.get(&ops[1]).expect("This can not be `None`");
                         self.var_map.insert(ret_node, cfg_node);
+                    } else if self.is_used_by_call_store(ret_node) {
+                        self.add_regvar(ret_node, cfg);
+                    } else {
+                        let derefed = self.deref(ops[1], cfg);
+                        self.var_map.insert(ret_node, derefed);
                     }
                 }
                 MOpcode::OpCall => self.update_data_graph_by_call(ret_node, cfg),
@@ -575,12 +612,13 @@ impl<'a> CCFGDataMap<'a> {
         let ret_reg_name = ret_reg_name_opt.unwrap();
         let reg_map = utils::call_rets(call_node, self.ssa);
         for (idx, (node, _)) in reg_map.into_iter() {
-            // TODO Add data dependencies for registers
             let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
             if name == ret_reg_name {
                 // TODO add type
                 let cfg_node = cfg.var("tmp", None);
                 self.var_map.insert(node, cfg_node);
+            } else {
+                self.add_regvar(node, cfg);
             }
         }
     }
