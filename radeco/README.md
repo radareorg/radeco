@@ -42,6 +42,8 @@ fn sym.main () {
 
 ## Installation
 
+Note: Nightly Rust is required. You can install it using [rustup](https://rustup.rs/).
+
 ```shell
 make install
 ```

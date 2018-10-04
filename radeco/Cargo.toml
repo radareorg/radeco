@@ -25,8 +25,8 @@ git = "https://github.com/radareorg/r2pipe.rs"
 git = "https://github.com/radare/radare2-r2pipe-api"
 
 [dependencies.radeco-lib]
-# path = "../radeco-lib"
-git = "https://github.com/radare/radeco-lib"
+path = "../radeco-lib"
+# git = "https://github.com/radare/radeco-lib"
 
 [profile.release]
 lto = true
