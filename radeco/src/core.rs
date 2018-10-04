@@ -1,18 +1,18 @@
 use base64;
-use r2pipe::{R2, R2Pipe};
+use r2pipe::{R2Pipe, R2};
 use radeco_lib;
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::analysis::sccp;
-use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
+use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 use radeco_lib::backend::lang_c::c_cfg_builder;
 use radeco_lib::frontend::radeco_containers::*;
-use radeco_lib::middle::{dce, dot};
 use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::regfile::SubRegisterFile;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
 use radeco_lib::middle::ssa::verifier;
+use radeco_lib::middle::{dce, dot};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::process;
@@ -20,9 +20,7 @@ use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
 
-thread_local!(
-    pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None);
-);
+thread_local!(pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None););
 
 pub fn fn_list(proj: &RadecoProject) -> Vec<String> {
     proj.iter()
@@ -182,6 +180,5 @@ pub fn strings(rmod: &RadecoModule) -> HashMap<u64, String> {
                 Err(_e) => _s,
             };
             (addr, ret_string)
-        })
-        .collect()
+        }).collect()
 }
