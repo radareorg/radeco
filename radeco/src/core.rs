@@ -52,7 +52,7 @@ pub fn get_function_mut<'a>(
 pub fn analyze_mod(regfile: Arc<SubRegisterFile>, rmod: &mut RadecoModule) {
     // Analyze preserved for all functions.
     {
-        println!("[*] Fixing Callee Information");
+        eprintln!("[*] Fixing Callee Information");
         let bp_name = regfile.get_name_by_alias(&"BP".to_string());
         let bp_name = bp_name.map(|s| s.to_owned());
         let sp_name = regfile.get_name_by_alias(&"SP".to_string());
@@ -69,35 +69,35 @@ pub fn analyze_mod(regfile: Arc<SubRegisterFile>, rmod: &mut RadecoModule) {
 }
 
 pub fn analyze(rfn: &mut RadecoFunction) {
-    println!("[+] Analyzing: {} @ {:#x}", rfn.name, rfn.offset);
+    eprintln!("[+] Analyzing: {} @ {:#x}", rfn.name, rfn.offset);
     {
-        println!("  [*] Eliminating Dead Code");
+        eprintln!("  [*] Eliminating Dead Code");
         dce::collect(rfn.ssa_mut());
     }
     let mut ssa = {
         // Constant Propagation (sccp)
-        println!("  [*] Propagating Constants");
+        eprintln!("  [*] Propagating Constants");
         let mut analyzer = sccp::Analyzer::new(rfn.ssa_mut());
         analyzer.analyze();
         analyzer.emit_ssa()
     };
     {
-        println!("  [*] Eliminating More DeadCode");
+        eprintln!("  [*] Eliminating More DeadCode");
         dce::collect(&mut ssa);
     }
     *rfn.ssa_mut() = ssa;
     {
         // Common SubExpression Elimination (cse)
-        println!("  [*] Eliminating Common SubExpressions");
+        eprintln!("  [*] Eliminating Common SubExpressions");
         let mut cse = CSE::new(rfn.ssa_mut());
         cse.run();
     }
     {
         // Verify SSA
-        println!("  [*] Verifying SSA's Validity");
+        eprintln!("  [*] Verifying SSA's Validity");
         match verifier::verify(rfn.ssa()) {
             Err(e) => {
-                println!("  [*] Found Error: {}", e);
+                eprintln!("  [*] Found Error: {}", e);
                 process::exit(255);
             }
             Ok(_) => {}
@@ -115,7 +115,7 @@ pub fn analyze_all_functions<'a>(proj: &'a mut RadecoProject) {
 }
 
 pub fn emit_ir(rfn: &RadecoFunction) -> String {
-    println!("  [*] Writing out IR");
+    eprintln!("  [*] Writing out IR");
     let mut res = String::new();
     ir_writer::emit_il(&mut res, Some(rfn.name.to_string()), rfn.ssa()).unwrap();
     res
@@ -134,11 +134,11 @@ pub fn decompile_all_functions<'a>(proj: &'a RadecoProject) -> String {
                 decompiled_funcs.push(res);
             },
             Err(err) => {
-                println!("{}", err);
+                eprintln!("{}", err);
             },
         };
     }
-    decompiled_funcs.iter().fold("".to_string(), |a,b| a + b)
+    decompiled_funcs.join("\n")
 }
 
 pub fn decompile<'a>(name: &str, proj: &'a RadecoProject) -> Result<String, String> {
@@ -159,7 +159,7 @@ fn decompile_priv(
 ) -> Result<String, String> {
     let c_cfg = c_cfg_builder::recover_c_cfg(rfn, func_name_map, strings);
     if let Err(err) = CCFGVerifier::verify(&c_cfg) {
-        println!("CCFG verification failed {}", err);
+        eprintln!("CCFG verification failed {}", err);
     }
     ctrl_flow_struct::structure_and_convert(c_cfg)
         .map(|s| s.print())

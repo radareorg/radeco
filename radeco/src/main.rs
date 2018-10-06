@@ -144,7 +144,7 @@ fn main() {
     if is_batch_mode {
         core::PROJ.with(|proj_opt| {
             if proj_opt.borrow().is_none() {
-                println!("Project was not loaded!");
+                eprintln!("Project was not loaded!");
                 return;
             }
             let mut proj_ = proj_opt.borrow_mut();
