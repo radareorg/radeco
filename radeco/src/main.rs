@@ -17,6 +17,7 @@ use rustyline::highlight::Highlighter;
 use rustyline::completion::{Completer, FilenameCompleter};
 use rustyline::error::ReadlineError;
 use std::fs;
+use std::process;
 
 mod scheme {
     pub const HTTP: &'static str = "http://";
@@ -74,6 +75,7 @@ impl Completer for Completes {
             command::DOT,
             command::IR,
             command::DECOMPILE,
+            command::QUIT,
         ];
         let mut ret: Vec<String> = cmds.into_iter()
             .filter(|s| s.starts_with(line))
@@ -170,6 +172,7 @@ mod command {
     pub const DOT: &'static str = "dot";
     pub const IR: &'static str = "ir";
     pub const DECOMPILE: &'static str = "decompile";
+    pub const QUIT: &'static str = "quit";
 
     pub fn help() {
         let width = 30;
@@ -207,6 +210,11 @@ mod command {
         println!(
             "{:width$}    Decompile <func>",
             format!("{} <func>", DECOMPILE),
+            width = width
+        );
+        println!(
+            "{:width$}    Quit interactive prompt",
+            QUIT,
             width = width
         );
     }
@@ -299,6 +307,9 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                 } else {
                     println!("{} is not found", f);
                 }
+            }
+            (Some(command::QUIT), _) => {
+                process::exit(0);
             }
             _ => {
                 println!(
