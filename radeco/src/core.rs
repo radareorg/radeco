@@ -105,6 +105,15 @@ pub fn analyze(rfn: &mut RadecoFunction) {
     }
 }
 
+pub fn analyze_all_functions<'a>(proj: &'a mut RadecoProject) {
+    let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
+        rmod.functions.values_mut()
+    });
+    for rfn in rfns {
+        analyze(rfn);
+    }
+}
+
 pub fn emit_ir(rfn: &RadecoFunction) -> String {
     println!("  [*] Writing out IR");
     let mut res = String::new();
@@ -116,7 +125,18 @@ pub fn emit_dot(ssa: &SSAStorage) -> String {
     dot::emit_dot(ssa)
 }
 
-pub fn decompile(
+pub fn decompile<'a>(name: &str, proj: &'a RadecoProject) -> Result<String, String> {
+    if let Some(rfn) = get_function(name, &proj) {
+        let rmod = proj.iter().map(|i| i.module).next().unwrap();
+        let func_name_map = func_names(&rmod);
+        let strings = strings(&rmod);
+        decompile_priv(rfn, &func_name_map, &strings)
+    } else {
+        Err(format!("{} is not found.", name))
+    }
+}
+
+fn decompile_priv(
     rfn: &RadecoFunction,
     func_name_map: &HashMap<u64, String>,
     strings: &HashMap<u64, String>,

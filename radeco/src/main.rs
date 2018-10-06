@@ -264,12 +264,7 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
         let proj = proj_.as_mut().unwrap();
         match (op1, op2) {
             (Some(command::ANALYZE), Some("*")) => {
-                let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
-                    rmod.functions.values_mut()
-                });
-                for rfn in rfns {
-                    core::analyze(rfn);
-                }
+                core::analyze_all_functions(proj);
             }
             (Some(command::FNLIST), _) => {
                 let funcs = core::fn_list(&proj);
@@ -298,17 +293,19 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                     println!("{} is not found", f);
                 }
             }
-            (Some(command::DECOMPILE), Some(f)) => {
-                if let Some(rfn) = core::get_function(f, &proj) {
-                    let rmod = proj.iter().map(|i| i.module).next().unwrap();
-                    let func_name_map = core::func_names(&rmod);
-                    let strings = core::strings(&rmod);
-                    match core::decompile(rfn, &func_name_map, &strings) {
+            (Some(command::DECOMPILE), Some("*")) => {
+                let funcs = core::fn_list(&proj);
+                for f in &funcs {
+                    match core::decompile(f, &proj) {
                         Ok(res) => println!("{}", res),
                         Err(err) => println!("{}", err),
                     }
-                } else {
-                    println!("{} is not found", f);
+                }
+            }
+            (Some(command::DECOMPILE), Some(f)) => {
+                match core::decompile(f, &proj) {
+                    Ok(res) => println!("{}", res),
+                    Err(err) => println!("{}", err),
                 }
             }
             _ => {
