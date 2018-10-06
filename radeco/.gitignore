@@ -1,1 +1,4 @@
 target
+plugin/radeco_pde.dylib
+plugin/radeco_pde.so
+plugin/radeco_pde.dll
