@@ -1,4 +1,5 @@
 CFLAGS=$(shell pkg-config --cflags r_core)
+LDFLAGS=$(shell pkg-config --libs r_core)
 PLUGDIR=$(shell r2 -H R2_USER_PLUGINS)
 LIBEXT=$(shell r2 -H LIBEXT)
 PLUGNAME=radeco_pde
