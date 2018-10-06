@@ -107,16 +107,18 @@ Usage:
   radeco <bin>
   radeco [--append]
   radeco (--help | --version)
+  radeco [--batch BIN]
 
   Options:
   -h, --help        Show this screen.
   -v, --version     Show current version.
   --bin             Load a program.
   --append          Append separator to the end of every output.
+  --batch           Decompile the whole binary
 ";
 
 fn main() {
-    let (arg, is_append_mode) = cli::parse_args(USAGE);
+    let (arg, is_append_mode, is_batch_mode) = cli::parse_args(USAGE);
     let config = Config::builder()
         .auto_add_history(true)
         .history_ignore_space(true)
@@ -138,6 +140,21 @@ fn main() {
             }.ok()
         });
     });
+
+    if is_batch_mode {
+        core::PROJ.with(|proj_opt| {
+            if proj_opt.borrow().is_none() {
+                println!("Project was not loaded!");
+                return;
+            }
+            let mut proj_ = proj_opt.borrow_mut();
+            let proj = proj_.as_mut().unwrap();
+            core::analyze_all_functions(proj);
+            let decompiled = core::decompile_all_functions(proj);
+            println!("{}", decompiled);
+            process::exit(0);
+        });
+    }
 
     loop {
         let readline = rl.readline(PROMPT);
@@ -220,7 +237,6 @@ mod command {
     }
 }
 
-
 fn cmd(op1: Option<&str>, op2: Option<&str>) {
     core::PROJ.with(|proj_opt| {
         match (op1, op2) {
@@ -294,13 +310,8 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                 }
             }
             (Some(command::DECOMPILE), Some("*")) => {
-                let funcs = core::fn_list(&proj);
-                for f in &funcs {
-                    match core::decompile(f, &proj) {
-                        Ok(res) => println!("{}", res),
-                        Err(err) => println!("{}", err),
-                    }
-                }
+                let decompiled = core::decompile_all_functions(&proj);
+                println!("{}", decompiled);
             }
             (Some(command::DECOMPILE), Some(f)) => {
                 match core::decompile(f, &proj) {
