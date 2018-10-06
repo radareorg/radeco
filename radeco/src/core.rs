@@ -125,6 +125,22 @@ pub fn emit_dot(ssa: &SSAStorage) -> String {
     dot::emit_dot(ssa)
 }
 
+pub fn decompile_all_functions<'a>(proj: &'a RadecoProject) -> String {
+    let mut decompiled_funcs = Vec::new();
+    let funcs = fn_list(&proj);
+    for f in &funcs {
+        match decompile(f, &proj) {
+            Ok(res) =>  {
+                decompiled_funcs.push(res);
+            },
+            Err(err) => {
+                println!("{}", err);
+            },
+        };
+    }
+    decompiled_funcs.iter().fold("".to_string(), |a,b| a + b)
+}
+
 pub fn decompile<'a>(name: &str, proj: &'a RadecoProject) -> Result<String, String> {
     if let Some(rfn) = get_function(name, &proj) {
         let rmod = proj.iter().map(|i| i.module).next().unwrap();
