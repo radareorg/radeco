@@ -251,6 +251,9 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                 }
                 return;
             }
+            (Some(command::QUIT), _) => {
+                process::exit(0);
+            }
             _ => {}
         };
         if proj_opt.borrow().is_none() {
@@ -307,9 +310,6 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                 } else {
                     println!("{} is not found", f);
                 }
-            }
-            (Some(command::QUIT), _) => {
-                process::exit(0);
             }
             _ => {
                 println!(
