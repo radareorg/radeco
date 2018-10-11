@@ -5,7 +5,7 @@ use std::process;
 
 pub fn parse_args(usage: &str) -> (Option<String>, bool, bool) {
 
-    let s = Some(env!("CARGO_PKG_VERSION").to_string());
+    let s = Some(env!("VERSION_STR").to_string());
     let args = Docopt::new(usage).and_then(|d| d.help(true).version(s).parse());
     match args {
         Err(Error::WithProgramUsage(box Error::Help, ref msg)) |

@@ -5,6 +5,10 @@ authors = [
 	"pancake <pancake@nopcode.org>",
 	"Sushant <sushant.dinesh94@gmail.com>"
 ]
+build = "build.rs"
+
+[build-dependencies]
+toml = "*"
 
 [features]
 default = []
