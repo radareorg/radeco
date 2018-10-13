@@ -37,3 +37,7 @@ codegen-units = 4
 lto = false
 opt-level = 0
 codegen-units = 4
+
+# https://github.com/sfackler/rust-openssl/issues/994
+[replace]
+"openssl:0.9.24" = { git = "https://github.com/ishitatsuyuki/rust-openssl", branch = "0.9.x" }
