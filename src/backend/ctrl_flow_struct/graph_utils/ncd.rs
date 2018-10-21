@@ -93,7 +93,8 @@ where
                             // "else skip"
                             Some(stack)
                         }
-                    }).collect();
+                    })
+                    .collect();
                 // prevent infinite loop
                 assert!(!stacks.is_empty());
             };

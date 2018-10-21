@@ -8,28 +8,32 @@
 //! Implements the SSA construction algorithm described in
 //! "Simple and Efficient Construction of Static Single Assignment Form"
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::collections::Bound::Included;
 use std::cmp::Ordering;
+use std::collections::Bound::Included;
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::u64;
 
-use r2api::structs::{LOpInfo};
-use middle::ssa::ssa_traits::{SSAMod, SSAExtra, ValueInfo};
-use middle::ssa::graph_traits::{Graph, EdgeInfo, ConditionInfo};
 use middle::ir::{self, MAddress, MOpcode};
+use middle::ssa::graph_traits::{ConditionInfo, EdgeInfo, Graph};
+use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
+use r2api::structs::LOpInfo;
 
-use middle::ssa::ssa_traits::{NodeType, NodeData};
 use middle::regfile::{RegisterId, SubRegisterFile};
+use middle::ssa::ssa_traits::{NodeData, NodeType};
 
 pub type VarId = u64;
 
 const UNCOND_EDGE: u8 = 2;
 
-pub struct PhiPlacer<'a, T> 
-    where T: 'a + SSAExtra +
-        SSAMod<BBInfo = MAddress,
-               ActionRef = <T as Graph>::GraphNodeRef,
-               CFEdgeRef = <T as Graph>::GraphEdgeRef>
+pub struct PhiPlacer<'a, T>
+where
+    T: 'a
+        + SSAExtra
+        + SSAMod<
+            BBInfo = MAddress,
+            ActionRef = <T as Graph>::GraphNodeRef,
+            CFEdgeRef = <T as Graph>::GraphEdgeRef,
+        >,
 {
     current_def: Vec<BTreeMap<MAddress, T::ValueRef>>,
     incomplete_phis: HashMap<MAddress, HashMap<VarId, T::ValueRef>>,
@@ -44,13 +48,16 @@ pub struct PhiPlacer<'a, T>
     unexplored_addr: u64,
 }
 
-impl<'a, T> PhiPlacer<'a, T> 
-    where T: 'a + SSAExtra +
-        SSAMod<BBInfo = MAddress,
-               ActionRef = <T as Graph>::GraphNodeRef,
-               CFEdgeRef = <T as Graph>::GraphEdgeRef>
+impl<'a, T> PhiPlacer<'a, T>
+where
+    T: 'a
+        + SSAExtra
+        + SSAMod<
+            BBInfo = MAddress,
+            ActionRef = <T as Graph>::GraphNodeRef,
+            CFEdgeRef = <T as Graph>::GraphEdgeRef,
+        >,
 {
-
     /// Create a new instance of phiplacer
     pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) -> PhiPlacer<'a, T> {
         PhiPlacer {
@@ -69,7 +76,7 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     /// Add a new variable that the phiplacer should know of.
-    /// This information is required to place phi-s. Note that the 
+    /// This information is required to place phi-s. Note that the
     /// phis are generated only for variables defined in this list.
     ///
     /// This list typically should include all the registers that a part of the
@@ -81,17 +88,19 @@ impl<'a, T> PhiPlacer<'a, T>
         self.variable_types.extend(variable_types);
     }
 
-    /// Write/associate a value/node with a defined variable. Usually called when the 
+    /// Write/associate a value/node with a defined variable. Usually called when the
     /// expression has an assignment.
     ///
     /// It is up to the caller function to ensure that the sizes are compatible, and insert
     /// appropriate width operations if necessary.
     pub fn write_variable(&mut self, address: MAddress, variable: VarId, value: T::ValueRef) {
-        radeco_trace!("phip_write_var|{:?}|{} ({:?})|{}",
-                      value,
-                      variable,
-                      self.regfile.whole_names.get(variable as usize),
-                      address);
+        radeco_trace!(
+            "phip_write_var|{:?}|{} ({:?})|{}",
+            value,
+            variable,
+            self.regfile.whole_names.get(variable as usize),
+            address
+        );
 
         if let Some(rname) = self.regfile.whole_names.get(variable as usize) {
             // XXX
@@ -109,10 +118,11 @@ impl<'a, T> PhiPlacer<'a, T>
     // This method is different from current_def_in_block as this will return a
     // ValueRef even if
     // the definition is not within the same block.
-    fn current_def_at(&self,
-                      variable: VarId,
-                      address: MAddress)
-                      -> Option<(&MAddress, &T::ValueRef)> {
+    fn current_def_at(
+        &self,
+        variable: VarId,
+        address: MAddress,
+    ) -> Option<(&MAddress, &T::ValueRef)> {
         for (addr, idx) in self.current_def[variable as usize].iter().rev() {
             if self.block_of(*addr) != self.block_of(address) && *addr > address {
                 continue;
@@ -170,14 +180,19 @@ impl<'a, T> PhiPlacer<'a, T>
             let val_ = self.add_phi(address, valtype);
             if let Some(hash) = self.incomplete_phis.get_mut(&block_addr) {
                 match hash.get(&variable).cloned() {
-                    Some(v) => { radeco_trace!("Else Some() {:?}", v);  v },
+                    Some(v) => {
+                        radeco_trace!("Else Some() {:?}", v);
+                        v
+                    }
                     None => {
-                        radeco_trace!("phip_rvr|phi({:?})|{}({:?})|{}|{}",
-                                      val_,
-                                      variable,
-                                      self.regfile.whole_names.get(variable as usize),
-                                      address,
-                                      block_addr);
+                        radeco_trace!(
+                            "phip_rvr|phi({:?})|{}({:?})|{}|{}",
+                            val_,
+                            variable,
+                            self.regfile.whole_names.get(variable as usize),
+                            address,
+                            block_addr
+                        );
                         hash.insert(variable, val_);
                         radeco_trace!("Else None: {:?}", val_);
                         val_
@@ -186,7 +201,6 @@ impl<'a, T> PhiPlacer<'a, T>
             } else {
                 panic!()
             }
-
         };
         self.write_variable(*address, variable, val);
         radeco_trace!("Exiting read_variabel_recursive");
@@ -210,11 +224,12 @@ impl<'a, T> PhiPlacer<'a, T>
     // - edge_type is the type of edge to be added between the block which contains
     // the
     // current_addr and the new block being added into the CFG.
-    pub fn add_block(&mut self,
-                     at: MAddress,
-                     current_addr: Option<MAddress>,
-                     edge_type: Option<u8>)
-                     -> T::ActionRef {
+    pub fn add_block(
+        &mut self,
+        at: MAddress,
+        current_addr: Option<MAddress>,
+        edge_type: Option<u8>,
+    ) -> T::ActionRef {
         let seen = current_addr.map_or(false, |cur| {
             match cur.cmp(&at) {
                 Ordering::Less | Ordering::Equal => false,
@@ -229,7 +244,9 @@ impl<'a, T> PhiPlacer<'a, T>
                 self.ssa.invalid_action().unwrap()
             })
         } else {
-            self.ssa.invalid_action().expect("Invalid Action is not defined")
+            self.ssa
+                .invalid_action()
+                .expect("Invalid Action is not defined")
         };
 
         // Create a new block and add the required type of edge.
@@ -240,12 +257,16 @@ impl<'a, T> PhiPlacer<'a, T>
                     radeco_err!("Block not found @ {:?}", addr);
                     self.ssa.invalid_action().unwrap()
                 });
-                radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
-                              current_block, e, lower_block);
+                radeco_trace!(
+                    "ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}",
+                    current_block,
+                    e,
+                    lower_block
+                );
                 self.ssa.insert_control_edge(current_block, lower_block, e);
             }
         }
-        
+
         if upper_block == lower_block {
             return upper_block;
         }
@@ -260,40 +281,62 @@ impl<'a, T> PhiPlacer<'a, T>
             // phi) and
             //   this is used to provide the def for this use.
 
-
             // Copy all the outgoing CF edges.
-            let invalid_edge = self.ssa.invalid_edge()
-                                        .expect("Invalid Edge is not defined");
-            let conditional_branches = 
+            let invalid_edge = self
+                .ssa
+                .invalid_edge()
+                .expect("Invalid Edge is not defined");
+            let conditional_branches =
                 if let Some(branches) = self.ssa.conditional_edges(upper_block) {
                     branches
                 } else {
                     ConditionInfo::new(invalid_edge, invalid_edge)
                 };
-            let outgoing = [conditional_branches.false_side,
-                            conditional_branches.true_side,
-                            self.ssa.unconditional_edge(upper_block).unwrap_or(invalid_edge)
-                            ];
+            let outgoing = [
+                conditional_branches.false_side,
+                conditional_branches.true_side,
+                self.ssa
+                    .unconditional_edge(upper_block)
+                    .unwrap_or(invalid_edge),
+            ];
             for (i, edge) in outgoing.iter().enumerate() {
-                if *edge != self.ssa.invalid_edge()
-                                        .expect("Invalid Edge is not defined") {
-                    let target = self.ssa.edge_info(*edge).unwrap_or_else(|| {
-                        radeco_err!("Less-endpoints edge");
-                        EdgeInfo::new(self.ssa.invalid_action().unwrap(),
-                            self.ssa.invalid_action().unwrap())
-                    }).target;
+                if *edge != self
+                    .ssa
+                    .invalid_edge()
+                    .expect("Invalid Edge is not defined")
+                {
+                    let target = self
+                        .ssa
+                        .edge_info(*edge)
+                        .unwrap_or_else(|| {
+                            radeco_err!("Less-endpoints edge");
+                            EdgeInfo::new(
+                                self.ssa.invalid_action().unwrap(),
+                                self.ssa.invalid_action().unwrap(),
+                            )
+                        })
+                        .target;
                     if lower_block != target {
-                        radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", 
-                                      lower_block, i, target);
+                        radeco_trace!(
+                            "ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}",
+                            lower_block,
+                            i,
+                            target
+                        );
                         self.ssa.insert_control_edge(lower_block, target, i as u8);
                         self.ssa.remove_control_edge(*edge);
                     }
                 }
             }
 
-            radeco_trace!("ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}", upper_block, 
-                          UNCOND_EDGE, lower_block);
-            self.ssa.insert_control_edge(upper_block, lower_block, UNCOND_EDGE);
+            radeco_trace!(
+                "ADD BLOCK: phip_add_edge|{:?} --{}--> {:?}",
+                upper_block,
+                UNCOND_EDGE,
+                lower_block
+            );
+            self.ssa
+                .insert_control_edge(upper_block, lower_block, UNCOND_EDGE);
             self.blocks.insert(at, lower_block);
 
             // For there is no assignment to addr_to_index, the original code will
@@ -315,8 +358,10 @@ impl<'a, T> PhiPlacer<'a, T>
                     let (i, operand) = *operand_;
                     // If operand is const, it cannot belong to any block.
                     match self.ssa.opcode(operand) {
-                        Some(MOpcode::OpConst(_)) => { continue; }
-                        _ => {  }
+                        Some(MOpcode::OpConst(_)) => {
+                            continue;
+                        }
+                        _ => {}
                     }
                     let operand_addr = self.index_to_addr[&operand];
                     let operand_block = self.block_of(operand_addr).unwrap_or_else(|| {
@@ -337,7 +382,7 @@ impl<'a, T> PhiPlacer<'a, T>
                         // For example, OpZeroExt for 32-bit register. If we want to add a 32-bit register
                         // with a constant, our algorithm will add an Opwiden(64) node for the register,
                         // then add the OpZeroExt node with an Opconst. In this situation, OpZeroExt
-                        // node isn't a residence for any register. 
+                        // node isn't a residence for any register.
                         if !self.outputs.contains_key(&operand) {
                             continue;
                         }
@@ -360,7 +405,12 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     // Function to add an indirect control flow transfer
-    pub fn add_indirect_cf(&mut self, selector: &T::ValueRef, current_addr: &mut MAddress, edge_type: u8) {
+    pub fn add_indirect_cf(
+        &mut self,
+        selector: &T::ValueRef,
+        current_addr: &mut MAddress,
+        edge_type: u8,
+    ) {
         let source_block = self.block_of(*current_addr).unwrap_or_else(|| {
             radeco_err!("Block not found @ {:?}", current_addr);
             self.ssa.invalid_action().unwrap()
@@ -373,12 +423,15 @@ impl<'a, T> PhiPlacer<'a, T>
         let unexplored_block = self.new_block(unexplored_addr);
 
         self.blocks.insert(unexplored_addr, unexplored_block);
-        self.ssa.insert_control_edge(source_block, unexplored_block, edge_type);
+        self.ssa
+            .insert_control_edge(source_block, unexplored_block, edge_type);
 
         // Add a dummy ITE to mark the selector.
-        let op_node = self.add_op(&MOpcode::OpITE,
-                                  current_addr,
-                                  ValueInfo::new_scalar(ir::WidthSpec::Known(1)));
+        let op_node = self.add_op(
+            &MOpcode::OpITE,
+            current_addr,
+            ValueInfo::new_scalar(ir::WidthSpec::Known(1)),
+        );
 
         self.op_use(&op_node, 0, selector);
     }
@@ -389,7 +442,8 @@ impl<'a, T> PhiPlacer<'a, T>
             self.ssa.invalid_action().unwrap()
         });
         let exit_node = exit_node_err!(self.ssa);
-        self.ssa.insert_control_edge(source_block, exit_node, edge_type);
+        self.ssa
+            .insert_control_edge(source_block, exit_node, edge_type);
     }
 
     pub fn add_edge(&mut self, source: MAddress, target: MAddress, cftype: u8) {
@@ -401,9 +455,15 @@ impl<'a, T> PhiPlacer<'a, T>
             radeco_err!("Block not fonud @ {:?}", target);
             self.ssa.invalid_action().unwrap()
         });
-        radeco_trace!("phip_add_edge|{:?} --{}--> {:?}", source_block, cftype, target_block);
+        radeco_trace!(
+            "phip_add_edge|{:?} --{}--> {:?}",
+            source_block,
+            cftype,
+            target_block
+        );
         radeco_trace!("phip_add_edge|{} --{}--> {}", source, cftype, target);
-        self.ssa.insert_control_edge(source_block, target_block, cftype);
+        self.ssa
+            .insert_control_edge(source_block, target_block, cftype);
     }
 
     // Adds an unconditional edge the the next block if there are no edges for the current block.
@@ -419,18 +479,27 @@ impl<'a, T> PhiPlacer<'a, T>
             });
             if target_block != source_block {
                 radeco_trace!("phip_add_edge|{} --{}--> {}", source, UNCOND_EDGE, target);
-                self.ssa.insert_control_edge(source_block, target_block, UNCOND_EDGE);
+                self.ssa
+                    .insert_control_edge(source_block, target_block, UNCOND_EDGE);
             }
         }
     }
 
     pub fn seal_block(&mut self, block: T::ActionRef) {
         let block_addr = self.addr_of(&block);
-        let keys = self.incomplete_phis[&block_addr].keys().cloned().collect::<Vec<_>>();
-        let invalid_value = self.ssa.invalid_value().expect("No invalid value for this ssa!");
+        let keys = self.incomplete_phis[&block_addr]
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let invalid_value = self
+            .ssa
+            .invalid_value()
+            .expect("No invalid value for this ssa!");
 
         for variable in keys {
-            let node = *self.incomplete_phis[&block_addr].get(&variable).unwrap_or(&invalid_value);
+            let node = *self.incomplete_phis[&block_addr]
+                .get(&variable)
+                .unwrap_or(&invalid_value);
             if self.ssa.node_data(node).is_err() {
                 continue;
             }
@@ -454,11 +523,12 @@ impl<'a, T> PhiPlacer<'a, T>
         self.sealed_blocks.insert(block);
     }
 
-    fn add_phi_operands(&mut self,
-                        block: T::ActionRef,
-                        variable: VarId,
-                        phi: T::ValueRef)
-                        -> T::ValueRef {
+    fn add_phi_operands(
+        &mut self,
+        block: T::ActionRef,
+        variable: VarId,
+        phi: T::ValueRef,
+    ) -> T::ValueRef {
         radeco_trace!("Entering add_phi_operands, phi: {:?}", phi);
         // Determine operands from predecessors
         let baddr = self.addr_of(&block);
@@ -481,7 +551,10 @@ impl<'a, T> PhiPlacer<'a, T>
 
     fn try_remove_trivial_phi(&mut self, phi: T::ValueRef) -> T::ValueRef {
         radeco_trace!("Entering try_remove_trivial_phi, phi: {:?}", phi);
-        let undef = self.ssa.invalid_value().expect("Invalid Value is not defined");
+        let undef = self
+            .ssa
+            .invalid_value()
+            .expect("Invalid Value is not defined");
         // The phi is unreachable or in the start block
         let mut same: T::ValueRef = undef;
         for op in self.ssa.operands_of(phi) {
@@ -497,25 +570,36 @@ impl<'a, T> PhiPlacer<'a, T>
             same = op
         }
 
-        let phi_addr = self.index_to_addr.get(&phi).cloned().expect("No address for phi");
+        let phi_addr = self
+            .index_to_addr
+            .get(&phi)
+            .cloned()
+            .expect("No address for phi");
         let block = self.block_of(phi_addr).expect("No block for address");
         let block_addr = self.addr_of(&block);
 
         if same == undef {
             radeco_trace!("undef: {:?}", undef);
-            let valtype = self.ssa
-                              .node_data(phi)
-                              .expect("No Data associated with this node!")
-                              .vt;
+            let valtype = self
+                .ssa
+                .node_data(phi)
+                .expect("No Data associated with this node!")
+                .vt;
             same = self.add_undefined(block_addr, valtype);
         }
 
         radeco_trace!("Replacing: {:?}, {:?}", phi, same);
         // Reroute all uses of phi to same and remove phi
-        let users = self.ssa.uses_of(phi).iter().filter(|&&x| x != phi && x != same).cloned().collect::<Vec<_>>();
+        let users = self
+            .ssa
+            .uses_of(phi)
+            .iter()
+            .filter(|&&x| x != phi && x != same)
+            .cloned()
+            .collect::<Vec<_>>();
         // Remove all uses of the phi.
         //for use_ in &users {
-            //self.ssa.op_unuse(*use_, phi);
+        //self.ssa.op_unuse(*use_, phi);
         //}
 
         self.ssa.replace_value(phi, same);
@@ -544,9 +628,12 @@ impl<'a, T> PhiPlacer<'a, T>
         // Try to recursively remove all phi users, which might have become trivial
         for use_ in users {
             match self.ssa.node_data(use_) {
-                Ok(NodeData {vt: _, nt: NodeType::Phi}) => {
+                Ok(NodeData {
+                    vt: _,
+                    nt: NodeType::Phi,
+                }) => {
                     self.try_remove_trivial_phi(use_);
-                },
+                }
                 _ => {}
             }
         }
@@ -567,8 +654,7 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn sync_register_state(&mut self, block: T::ActionRef) {
-        let rs = registers_in_err!(self.ssa, block,
-            self.ssa.invalid_value().unwrap());
+        let rs = registers_in_err!(self.ssa, block, self.ssa.invalid_value().unwrap());
         for var in 0..self.variable_types.len() {
             let mut addr = self.addr_of(&block);
             let val = self.read_variable(&mut addr, var as u64);
@@ -602,11 +688,15 @@ impl<'a, T> PhiPlacer<'a, T>
         i
     }
 
-
     // Some constants are generated to operate with other OpCode, which shoud be careful
     // about its width. Because we treat all consts are 64 bit.
     // Constants need not belong to any block. They are stored as a separate table.
-    pub fn add_const(&mut self, address: &mut MAddress, value: u64, vt_option: Option<ValueInfo>) -> T::ValueRef {
+    pub fn add_const(
+        &mut self,
+        address: &mut MAddress,
+        value: u64,
+        vt_option: Option<ValueInfo>,
+    ) -> T::ValueRef {
         if vt_option.is_none() {
             return self.ssa.insert_const(value).unwrap_or_else(|| {
                 radeco_err!("Cannot insert new constants");
@@ -617,21 +707,19 @@ impl<'a, T> PhiPlacer<'a, T>
         let width = vt.width().get_width().unwrap_or(64);
         if width < 64 {
             let val: u64 = value & (1 << (width) - 1);
-            let const_node = self.ssa.insert_const(val)
-                                        .unwrap_or_else(|| {
-                                            radeco_err!("Cannot insert new constants");
-                                            self.ssa.invalid_value().unwrap()
-                                        });
+            let const_node = self.ssa.insert_const(val).unwrap_or_else(|| {
+                radeco_err!("Cannot insert new constants");
+                self.ssa.invalid_value().unwrap()
+            });
             let opcode = MOpcode::OpNarrow(width as u16);
             let narrow_node = self.add_op(&opcode, address, vt);
             self.op_use(&narrow_node, 0, &const_node);
             narrow_node
         } else {
-            let const_node = self.ssa.insert_const(value)
-                                        .unwrap_or_else(|| {
-                                            radeco_err!("Cannot insert new constants");
-                                            self.ssa.invalid_value().unwrap()
-                                        });
+            let const_node = self.ssa.insert_const(value).unwrap_or_else(|| {
+                radeco_err!("Cannot insert new constants");
+                self.ssa.invalid_value().unwrap()
+            });
             const_node
         }
     }
@@ -646,18 +734,20 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn add_comment(&mut self, address: MAddress, vt: ValueInfo, msg: String) -> T::ValueRef {
-        let i = self.ssa.insert_comment(vt, msg.clone())
-                        .unwrap_or_else(|| {
-                            radeco_err!("Cannot insert new comments");
-                            self.ssa.invalid_value().unwrap()
-                        });
-        
+        let i = self.ssa.insert_comment(vt, msg.clone()).unwrap_or_else(|| {
+            radeco_err!("Cannot insert new comments");
+            self.ssa.invalid_value().unwrap()
+        });
+
         // Add register information into comment;
         for id in 0..self.regfile.whole_names.len() {
-            let name = self.regfile.get_name(RegisterId::from_usize(id)).unwrap_or_else(|| {
-                radeco_err!("Register Name not found");
-                "Unknown"
-            });
+            let name = self
+                .regfile
+                .get_name(RegisterId::from_usize(id))
+                .unwrap_or_else(|| {
+                    radeco_err!("Register Name not found");
+                    "Unknown"
+                });
             if msg.starts_with(name) {
                 self.ssa.set_register(i, name.to_owned());
             }
@@ -675,7 +765,7 @@ impl<'a, T> PhiPlacer<'a, T>
             radeco_err!("Cannot insert new values");
             self.ssa.invalid_value().unwrap()
         });
-        self.index_to_addr.insert(i, *address); 
+        self.index_to_addr.insert(i, *address);
         address.offset += 1;
         i
     }
@@ -729,7 +819,6 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     pub fn write_register(&mut self, address: &mut MAddress, var: &str, mut value: T::ValueRef) {
-
         radeco_trace!("phip_write_reg|{}<-{:?}", var, value);
 
         let info = match self.regfile.get_subregister(var) {
@@ -767,7 +856,7 @@ impl<'a, T> PhiPlacer<'a, T>
                 self.regfile
                     .get_name(RegisterId::from_usize(id as usize))
                     .unwrap_or("")
-                    .to_owned()
+                    .to_owned(),
             );
             return;
         }
@@ -845,44 +934,50 @@ impl<'a, T> PhiPlacer<'a, T>
     }
 
     // For constant, we should narrow it rather widening another OpCode
-    pub fn narrow_const_operand(&mut self, 
-                                address: &mut MAddress, 
-                                lhs: &mut Option<T::ValueRef>, 
-                                rhs: &mut Option<T::ValueRef>) {
+    pub fn narrow_const_operand(
+        &mut self,
+        address: &mut MAddress,
+        lhs: &mut Option<T::ValueRef>,
+        rhs: &mut Option<T::ValueRef>,
+    ) {
         if lhs.is_none() || rhs.is_none() {
-            return
+            return;
         }
 
         let lhs_size = lhs.map_or(0, |i| self.operand_width(&i));
         let rhs_size = rhs.map_or(0, |i| self.operand_width(&i));
 
         // Narrowing will happen only if there is one constant and one normal opcode.
-        if lhs.map_or(false, |i| self.ssa.constant(i).is_some()) ^
-            rhs.map_or(false, |i| self.ssa.constant(i).is_some()) {
-                let (victim, victim_size) = if lhs_size < 64 {
-                    (rhs, lhs_size)
-                } else {
-                    (lhs, rhs_size)
-                };
-                if victim_size < 64 {
-                    let victim_node = victim.unwrap_or_else(|| {
-                        radeco_err!("Wrong victim");
-                        self.ssa.invalid_value().unwrap()
-                    });
-                    let vtype = ValueInfo::new_unresolved(ir::WidthSpec::from(victim_size));
-                    let opc = MOpcode::OpNarrow(victim_size as u16);
-                    let node = self.add_op(&opc, address, vtype);
-                    self.op_use(&node, 0, &victim_node);
-                    *victim = Some(node);
-                }
+        if lhs.map_or(false, |i| self.ssa.constant(i).is_some())
+            ^ rhs.map_or(false, |i| self.ssa.constant(i).is_some())
+        {
+            let (victim, victim_size) = if lhs_size < 64 {
+                (rhs, lhs_size)
+            } else {
+                (lhs, rhs_size)
+            };
+            if victim_size < 64 {
+                let victim_node = victim.unwrap_or_else(|| {
+                    radeco_err!("Wrong victim");
+                    self.ssa.invalid_value().unwrap()
+                });
+                let vtype = ValueInfo::new_unresolved(ir::WidthSpec::from(victim_size));
+                let opc = MOpcode::OpNarrow(victim_size as u16);
+                let node = self.add_op(&opc, address, vtype);
+                self.op_use(&node, 0, &victim_node);
+                *victim = Some(node);
+            }
         }
-    }  
+    }
 
     // Determine which block address should belong to.
     // This basically translates to finding the greatest address that is less that
     // `address` in self.blocks. This is fairly simple as self.blocks is sorted.
     pub fn block_of(&self, address: MAddress) -> Option<T::ActionRef> {
-        self.blocks.range((Included(&MAddress::new(0, 0)), Included(&address))).last().map(|(_, &b)| b)
+        self.blocks
+            .range((Included(&MAddress::new(0, 0)), Included(&address)))
+            .last()
+            .map(|(_, &b)| b)
     }
 
     // Return the address corresponding to the block.
@@ -908,7 +1003,7 @@ impl<'a, T> PhiPlacer<'a, T>
         // For OpWiden/OpNarrow, they only have one operation;
         // For OpAnd/OpOr, OpLsl, only their first operand coule be register;
         // For Phi node, their operations have the same reginfo;
-        // Thus, choosing the first operand is enough. 
+        // Thus, choosing the first operand is enough.
 
         // No arguments, nothing to do.
         if args.len() == 0 {
@@ -919,23 +1014,28 @@ impl<'a, T> PhiPlacer<'a, T>
         if !regnames.is_empty() {
             for regname in &regnames {
                 self.ssa.set_register(node.clone(), regname.clone());
-                // Check whether its child nodes are incomplete 
+                // Check whether its child nodes are incomplete
             }
             for user in self.ssa.uses_of(*node) {
                 if let Some(victim) = self.incomplete_propagation.take(&user) {
                     self.propagate_reginfo(&victim);
-                }            
+                }
             }
         } else {
             // Wait its parent node to be propagated.
             self.incomplete_propagation.insert(*node);
-            radeco_trace!("Fail in propagate_reginfo: {:?} with {:?}"
-                          , node, self.ssa.node_data(*node));
-            radeco_trace!("First operand is {:?} with {:?}", args[0]
-                          , self.ssa.node_data(args[0]));
+            radeco_trace!(
+                "Fail in propagate_reginfo: {:?} with {:?}",
+                node,
+                self.ssa.node_data(*node)
+            );
+            radeco_trace!(
+                "First operand is {:?} with {:?}",
+                args[0],
+                self.ssa.node_data(args[0])
+            );
         }
     }
-
 
     // Visit all the blocks, find the exits of this function, and link these basic
     // with exit_node
@@ -946,7 +1046,7 @@ impl<'a, T> PhiPlacer<'a, T>
             if self.ssa.succs_of(block).len() == 0 {
                 self.ssa.insert_control_edge(block, exit_node, UNCOND_EDGE);
             }
-        } 
+        }
     }
 
     // Performs SSA finish operation such as assigning the blocks in the final
@@ -968,9 +1068,11 @@ impl<'a, T> PhiPlacer<'a, T>
             let current = wl.pop_front().expect("Cannot be `None`");
             let preds = self.ssa.preds_of(current);
             // All preds must be sealed before we process this.
-            let push_current_back = if preds.iter()
-                                        .filter(|&&x| x != current)
-                                        .all(|x| self.sealed_blocks.contains(x)) {
+            let push_current_back = if preds
+                .iter()
+                .filter(|&&x| x != current)
+                .all(|x| self.sealed_blocks.contains(x))
+            {
                 // Check if have not already sealed this block
                 if !self.sealed_blocks.contains(&current) {
                     self.seal_block(current);
@@ -1022,14 +1124,14 @@ impl<'a, T> PhiPlacer<'a, T>
             let off2 = MAddress::new(op2.offset.unwrap_or(0), 0);
 
             match (self.block_of(off1), self.block_of(off2)) {
-                (Some(b1), Some(b2)) if b1 == b2 => { /* Nothing to do */ },
+                (Some(b1), Some(b2)) if b1 == b2 => { /* Nothing to do */ }
                 (Some(b1), Some(_)) => {
                     if let Some(start) = self.ssa.starting_address(b1) {
                         let size = off1.address - start.address;
                         self.ssa.set_block_size(b1, size);
                     }
                 }
-                (_, _) => { }
+                (_, _) => {}
             }
         }
     }

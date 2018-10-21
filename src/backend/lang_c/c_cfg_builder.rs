@@ -148,7 +148,8 @@ impl<'a> CCFGBuilder<'a> {
                     .get(&n)
                     .cloned()
                     .unwrap_or(self.cfg.unknown)
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         let ret_val_node = self.return_node(call_node);
         self.last_action =
             self.cfg
@@ -548,7 +549,8 @@ impl<'a> CCFGDataMap<'a> {
             .filter(|&n| {
                 let op = self.ssa.opcode(*n).unwrap_or(MOpcode::OpInvalid);
                 opcodes.contains(&op)
-            }).next()
+            })
+            .next()
             .is_some()
     }
 

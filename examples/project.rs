@@ -27,7 +27,8 @@ fn main() {
                     .build_callgraph()
                     .load_datarefs()
                     .function_loader(FunctionLoader::default().include_defaults()),
-            ).load();
+            )
+            .load();
 
         for m in p.iter() {
             for rfn in m.module.iter() {

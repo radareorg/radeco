@@ -375,7 +375,8 @@ where
                         .edge_info(edge)
                         .unwrap_or_else(|| {
                             self.g.edge_info(self.g.invalid_edge().unwrap()).unwrap()
-                        }).target;
+                        })
+                        .target;
                     let phis = self.g.phis_in(block);
                     for phi in &phis {
                         let v = self.visit_phi(phi);

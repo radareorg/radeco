@@ -287,7 +287,8 @@ impl ConstraintSet {
             .find(|x| match *x.weight() {
                 ConstraintEdge::Ptr => true,
                 _ => false,
-            }).expect("Inner type of `Ptr` cannot be `None`")
+            })
+            .expect("Inner type of `Ptr` cannot be `None`")
             .source() // TODO .source() or .target() ?
     }
 

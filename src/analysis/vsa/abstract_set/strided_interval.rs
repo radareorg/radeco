@@ -661,13 +661,15 @@ impl Mul for StridedInterval {
                 .fold(None, |max, x| match max {
                     None => Some(x),
                     Some(y) => Some(if x.0 > y.0 { x } else { y }),
-                }).expect("No elements in _poles");
+                })
+                .expect("No elements in _poles");
             let _min = _poles
                 .iter()
                 .fold(None, |min, x| match min {
                     None => Some(x),
                     Some(y) => Some(if x.0 < y.0 { x } else { y }),
-                }).expect("No elements in _poles");
+                })
+                .expect("No elements in _poles");
 
             let k_period: BigInt = BigInt::from(max_in_k_bits!(self.k)) + 1;
 
@@ -749,13 +751,15 @@ impl Div for StridedInterval {
                 .fold(None, |max, x| match max {
                     None => Some(x),
                     Some(y) => Some(if x > y { x } else { y }),
-                }).expect("No elements in _poles");
+                })
+                .expect("No elements in _poles");
             let _min = _poles
                 .iter()
                 .fold(None, |min, x| match min {
                     None => Some(x),
                     Some(y) => Some(if x < y { x } else { y }),
-                }).expect("No elements in _poles");
+                })
+                .expect("No elements in _poles");
 
             StridedInterval::new(self.k, 1, *_min, *_max)
         }
@@ -1387,7 +1391,8 @@ impl AbstractSet for StridedInterval {
                     si.s,
                     n_in_k_bits!(si.ub, k) - si.s,
                     n_in_k_bits!(si.ub, k),
-                ).remove_lower_bound();
+                )
+                .remove_lower_bound();
                 pos_si.join(&neg_si)
             }
         }

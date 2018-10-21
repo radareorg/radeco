@@ -150,12 +150,14 @@ fn ssa_single_fn(
             .filter(|x| match x.call_type {
                 Some(ref c) if c == "C" => true,
                 _ => false,
-            }).map(|x| {
+            })
+            .map(|x| {
                 let call_site = x.source;
                 let callee = x.target;
                 let caller = Some(offset);
                 CallContext::<usize, NodeIndex>::new(caller, callee, call_site, &[])
-            }).collect();
+            })
+            .collect();
     }
 
     if let Some(ref callxrefs) = f.codexrefs {
@@ -164,7 +166,8 @@ fn ssa_single_fn(
             .filter(|x| match x.call_type {
                 Some(ref c) if c == "C" => true,
                 _ => false,
-            }).map(|x| x.source.expect("Invalid address"))
+            })
+            .map(|x| x.source.expect("Invalid address"))
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
@@ -192,7 +195,8 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
                 }),
                 x,
             )
-        }).collect::<HashMap<_, _>>();
+        })
+        .collect::<HashMap<_, _>>();
     {
         let ssa = rfn.ssa_mut();
         for node in ssa.inorder_walk() {
@@ -209,7 +213,8 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
                             .insert_const(info.callee.unwrap_or_else(|| {
                                 radeco_err!("info.callee is None");
                                 0
-                            })).unwrap_or_else(|| {
+                            }))
+                            .unwrap_or_else(|| {
                                 radeco_err!("Cannot insert new constants");
                                 ssa.invalid_value().unwrap()
                             });

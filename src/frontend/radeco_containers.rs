@@ -87,7 +87,8 @@ pub mod loader_defaults {
                 } else {
                     false
                 }
-            }).fold(FLResult::default(), |mut acc, s| {
+            })
+            .fold(FLResult::default(), |mut acc, s| {
                 let mut rfn = RadecoFunction::default();
                 rfn.name = Cow::from(s.name.as_ref().unwrap().to_owned());
                 rfn.offset = s.vaddr.unwrap();
@@ -443,14 +444,15 @@ impl<'a> ProjectLoader<'a> {
 
         if self.mloader.is_none() {
             self.mloader = Some(
-                ModuleLoader::default().source(Rc::clone(source))
-                .build_ssa()
-                .build_callgraph()
-                .load_datarefs()
-                .load_locals()
-                .parallel()
-                // .assume_cc()
-                .stub_imports(),
+                ModuleLoader::default()
+                    .source(Rc::clone(source))
+                    .build_ssa()
+                    .build_callgraph()
+                    .load_datarefs()
+                    .load_locals()
+                    .parallel()
+                    // .assume_cc()
+                    .stub_imports(),
             );
         }
 
@@ -689,7 +691,8 @@ impl<'a> ModuleLoader<'a> {
                                 } else {
                                     false
                                 }
-                            }).unwrap_or(&NodeIndex::end());
+                            })
+                            .unwrap_or(&NodeIndex::end());
                     } else {
                         vb.btype = BindingType::Return;
                         vb.idx = *exit_state
@@ -706,7 +709,8 @@ impl<'a> ModuleLoader<'a> {
                                 } else {
                                     false
                                 }
-                            }).unwrap_or(&NodeIndex::end());
+                            })
+                            .unwrap_or(&NodeIndex::end());
                     }
                     vb.ridx = sub_reg_f
                         .register_id_by_alias(alias)
@@ -715,7 +719,8 @@ impl<'a> ModuleLoader<'a> {
                 } else {
                     None
                 }
-            }).collect();
+            })
+            .collect();
 
         tbindings.sort_by(|x, y| match (&x.btype, &y.btype) {
             (BindingType::RegisterArgument(i), BindingType::RegisterArgument(ref j)) => i.cmp(j),
@@ -776,7 +781,8 @@ impl<'a> ModuleLoader<'a> {
                         } else {
                             None
                         }
-                    }).collect();
+                    })
+                    .collect();
             }
             Err(e) => radeco_warn!(e),
         }
@@ -1229,7 +1235,8 @@ impl RadecoFunction {
                             .filter(|binding| {
                                 let offset = sign * (val as i64);
                                 VarBinding::is_matched_reg_local(binding, left_reg.clone(), offset)
-                            }).cloned()
+                            })
+                            .cloned()
                             .collect::<Vec<_>>();
                         ret_bindings.append(&mut bindings);
                     }

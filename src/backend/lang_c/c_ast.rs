@@ -246,7 +246,8 @@ impl CAST {
                 } else {
                     false
                 }
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         args.sort_by(|a, b| {
             let idx1 = if let CASTEdge::OpOrd(idx) = *a.weight() {
                 idx
@@ -390,7 +391,8 @@ impl CAST {
                 } else {
                     "unknown".to_string()
                 }
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         let call_node = self
             .ast
             .add_node(CASTNode::Call(func_name.to_string(), args_str));
@@ -664,7 +666,8 @@ impl CAST {
                     .filter_map(|x| match x.weight() {
                         CASTEdge::BlockOrd(i) => Some((i, x.target())),
                         _ => None,
-                    }).collect::<Vec<_>>();
+                    })
+                    .collect::<Vec<_>>();
                 ns.sort_by_key(|k| k.0);
                 ns.into_iter()
                     .map(|(_, n)| self.emit_c(&n, indent, false))
@@ -740,7 +743,8 @@ impl CAST {
                 } else {
                     false
                 }
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         edges.sort_by(|a, b| {
             let idx1 = if let CASTEdge::StatementOrd(idx) = *a.weight() {
                 idx

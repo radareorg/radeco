@@ -17,7 +17,8 @@ pub fn load_call_graph(finfos: &[FunctionInfo], rmod: &RadecoModule) -> CallGrap
         .map(|x| {
             let offset = x.offset.unwrap();
             (offset, cg.add_node(offset))
-        }).collect::<HashMap<_, _>>();
+        })
+        .collect::<HashMap<_, _>>();
 
     for x in finfos {
         let offset = x.offset.unwrap();
