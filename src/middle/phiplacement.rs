@@ -836,7 +836,11 @@ where
         if info.width >= width as u64 {
             // Register width should be corresponding with its residence's width.
             value = match width.cmp(&self.operand_width(&value)) {
-                Ordering::Equal => value,
+                Ordering::Equal => {
+                    let mov_node = self.add_op(&MOpcode::OpMov, address, vt);
+                    self.op_use(&mov_node, 0, &value);
+                    mov_node
+                }
                 Ordering::Less => {
                     let opcode = MOpcode::OpNarrow(width);
                     let narrow_node = self.add_op(&opcode, address, vt);
