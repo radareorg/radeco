@@ -512,6 +512,7 @@ impl<'a> CCFGDataMap<'a> {
             MOpcode::OpLsr => Some(c_ast::Expr::Shr),
             MOpcode::OpLt => Some(c_ast::Expr::Lt),
             MOpcode::OpMod => Some(c_ast::Expr::Mod),
+            MOpcode::OpMov => None,
             MOpcode::OpMul => Some(c_ast::Expr::Mul),
             MOpcode::OpNot => Some(c_ast::Expr::Not),
             MOpcode::OpOr => Some(c_ast::Expr::Or),
@@ -600,6 +601,11 @@ impl<'a> CCFGDataMap<'a> {
                     }
                 }
                 MOpcode::OpCall => self.update_data_graph_by_call(ret_node, cfg),
+                MOpcode::OpMov => {
+                    // ops[0] is forwarded to `ret_node`
+                    let cfg_node = *self.var_map.get(&ops[0]).expect("This can not be `None`");
+                    self.var_map.insert(ret_node, cfg_node);
+                }
                 _ => unreachable!(),
             }
         }
