@@ -217,6 +217,7 @@ where
                 let mask = (1 << (size)) - 1;
                 const_val & mask
             }
+            MOpcode::OpMov => const_val as u64,
             MOpcode::OpNot => !const_val as u64,
             MOpcode::OpCall => {
                 return LatticeValue::Bottom;
