@@ -59,6 +59,7 @@ pub struct CallArg {
 
 #[derive(Debug)]
 pub enum Expr {
+    Value(Operand),
     Infix(Operand, InfixOp, Operand),
     Prefix(PrefixOp, Operand),
     Load(Operand, Operand),

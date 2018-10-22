@@ -238,6 +238,10 @@ impl<'a, O: Write> IRWriter<'a, O> {
                 write!(self.output, ")")?;
                 Ok(())
             }
+            OpMov => {
+                self.emit_opt_operand(operands.get(0).cloned())?;
+                Ok(())
+            }
             OpNarrow(wd) => {
                 write!(self.output, "Narrow{}(", wd)?;
                 self.emit_opt_operand(operands.get(0).cloned())?;

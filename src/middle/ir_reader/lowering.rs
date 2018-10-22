@@ -209,6 +209,7 @@ impl<'a> LowerSsa<'a> {
             sast::Operation::Assign(opt_addr, sast::NewValue(vr, ty), sexpr) => {
                 let vi = lower_valueinfo(ty);
                 let (opcode, sops) = match sexpr {
+                    sast::Expr::Value(sop0) => (IrOpcode::OpMov, vec![sop0]),
                     sast::Expr::Infix(sop0, sopcode, sop1) => {
                         (lower_infix_op(sopcode), vec![sop0, sop1])
                     }

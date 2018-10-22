@@ -81,6 +81,7 @@ Phi: Vec<Operand> =
     "Phi" "(" <Comma<Operand>> ")"                          => <>;
 
 Expr: Expr = {
+    <Operand>                                               => Expr::Value(<>),
     <Operand> <InfixOp> <Operand>                           => Expr::Infix(<>),
     <PrefixOp> <Operand>                                    => Expr::Prefix(<>),
     "Load" "(" <Operand> "," <Operand> ")"                  => Expr::Load(<>),
