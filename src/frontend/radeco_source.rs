@@ -438,7 +438,8 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
                             name: f.name.clone(),
                             ops: Some(ops),
                             size: f.size,
-                        }).expect(&format!("Failed to load instructions @ {}", name));
+                        })
+                        .expect(&format!("Failed to load instructions @ {}", name));
                     let json_str =
                         serde_json::to_string(&result).expect("Failed to encode to json");
                     let suffix = format!("{}_{}", suffix::FUNCTION, name);

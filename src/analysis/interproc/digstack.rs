@@ -177,7 +177,8 @@ fn generic_frontward_analysis(
                             .unwrap_or_else(|| {
                                 radeco_err!("Stack offset not found");
                                 &0
-                            }).clone();
+                            })
+                            .clone();
                         stack_offset.insert(*node, num);
                         continue;
                     }
@@ -234,7 +235,8 @@ fn generic_frontward_analysis(
                         .unwrap_or_else(|| {
                             radeco_err!("Stack offset not found");
                             &0
-                        }).clone() as i64;
+                        })
+                        .clone() as i64;
                     stack_offset.insert(*node, base + (opcode_arg - const_arg) * (num as i64));
                     continue;
                 }
@@ -253,7 +255,8 @@ fn generic_frontward_analysis(
                         .unwrap_or_else(|| {
                             radeco_err!("Stack offset not found");
                             &0
-                        }).clone();
+                        })
+                        .clone();
                     if !nums.contains(&num) {
                         nums.push(num);
                     }

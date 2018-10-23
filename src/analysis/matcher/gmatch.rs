@@ -370,7 +370,8 @@ where
                     op.clone(),
                     ValueInfo::new_unresolved(WidthSpec::from(64)),
                     None,
-                ).expect("Cannot insert new values");
+                )
+                .expect("Cannot insert new values");
             match *op {
                 MOpcode::OpConst(_) => {}
                 _ => {

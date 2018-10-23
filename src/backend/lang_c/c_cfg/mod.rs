@@ -281,7 +281,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(_) => Some(e.id()),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         for e in ns {
             self.g.remove_edge(e);
         }
@@ -326,7 +327,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(ActionEdge::Normal) => Some((e.target(), e.id())),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         if es.len() > 1 {
             radeco_warn!("More than one Normal Edges found");
         }
@@ -358,7 +360,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(ActionEdge::Normal) => Some((e.source(), e.id())),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         if es.len() > 1 {
             radeco_warn!("More than one Normal Edges found");
         }
@@ -407,7 +410,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Action(ActionEdge::Normal) => Some(e.target()),
                 _ => None,
-            }).next()
+            })
+            .next()
     }
 
     fn gather_actions(&self, idx: CCFGRef, action_type: &CCFGEdge) -> Option<Vec<CCFGRef>> {
@@ -480,7 +484,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         if goto_dsts.len() > 1 {
             radeco_warn!("More than 1 labels found as Goto destination");
             return None;
@@ -525,7 +530,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::Arg(o)) => Some((o, e.target())),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         args.sort_by_key(|k| k.0);
         let ret = args.into_iter().map(|(_, b)| b).collect();
         Some(ret)
@@ -546,7 +552,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::FuncVal) => Some(e.target()),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         if ret.len() > 1 {
             radeco_warn!("More than one variable found for FuncVal");
         }
@@ -568,7 +575,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::RetVal) => Some(e.target()),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         if ret_val.len() > 1 {
             radeco_warn!("More than one return values found");
         };
@@ -584,7 +592,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::Operand(i)) => Some((i, e.target())),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         operands.sort_by_key(|k| k.0);
         operands.into_iter().map(|(_, n)| n).collect::<Vec<_>>()
     }
@@ -629,7 +638,8 @@ impl CCFG {
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(ActionEdge::Normal) => Some(e.source()),
                 _ => None,
-            }).collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 }
 
@@ -756,7 +766,8 @@ impl CCFGVerifier {
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         if gotos.len() != 1 {
             errors.push("No or more than one ActionEdge::GotoDst found".to_string());
         }
@@ -815,7 +826,8 @@ impl<'a> CASTConverter<'a> {
                 Ty::new(c_ast::BTy::Int, false, 0),
                 &["unknown".to_string()],
                 true,
-            ).first()
+            )
+            .first()
             .cloned()
             .expect("This can not be None");
         self.node_map.insert(self.cfg.unknown, unknown_node);
@@ -862,7 +874,8 @@ impl<'a> CASTConverter<'a> {
                             radeco_warn!("{:?} not found", _n);
                             unknown_node
                         }
-                    }).collect::<Vec<_>>();
+                    })
+                    .collect::<Vec<_>>();
                 let n = self.ast.expr(op.clone(), &operands, is_implicit);
                 self.node_map.insert(expr, n);
             }
@@ -946,7 +959,8 @@ impl<'a> CASTConverter<'a> {
                     radeco_warn!("Error args_call");
                 }
                 ret
-            }).collect();
+            })
+            .collect();
         let ret_node_opt = self
             .cfg
             .func_val(node)

@@ -356,7 +356,8 @@ impl<'a> CallFixer<'a> {
                             .unwrap_or_else(|| {
                                 radeco_err!("Invalid operands: {:?}", operands[1]);
                                 &0
-                            }).clone();
+                            })
+                            .clone();
                         let names = ssa.registers(arg);
                         for name in names {
                             radeco_trace!("CallFixer|Found {:?} with {:?}", name, base);

@@ -434,7 +434,8 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                     ExprView::new_or_panic(opn, self.op.dual())
                         .find_opn(p1_opn)
                         .map(|x| (opn, x))
-                }).next();
+                })
+                .next();
 
             if let Some((p2_opn, (inv, p2_found))) = opt_part_2 {
                 if inv == Negation::Normal {
@@ -597,7 +598,8 @@ impl<'cd, T> ExprView<'cd, T> {
             } else {
                 Ok(())
             }
-        }).err()
+        })
+        .err()
     }
 }
 

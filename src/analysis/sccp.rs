@@ -217,6 +217,7 @@ where
                 let mask = (1 << (size)) - 1;
                 const_val & mask
             }
+            MOpcode::OpMov => const_val as u64,
             MOpcode::OpNot => !const_val as u64,
             MOpcode::OpCall => {
                 return LatticeValue::Bottom;
@@ -375,7 +376,8 @@ where
                         .edge_info(edge)
                         .unwrap_or_else(|| {
                             self.g.edge_info(self.g.invalid_edge().unwrap()).unwrap()
-                        }).target;
+                        })
+                        .target;
                     let phis = self.g.phis_in(block);
                     for phi in &phis {
                         let v = self.visit_phi(phi);

@@ -85,7 +85,8 @@ where
         discovered: graph.visit_map(),
         finished: graph.visit_map(),
         visitor,
-    }.go_rec(start);
+    }
+    .go_rec(start);
 }
 
 /// see [`slice`]
