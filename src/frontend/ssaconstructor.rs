@@ -687,8 +687,6 @@ where
                         self.phiplacer.op_use(&comment_node, 0, &op_call);
                     }
 
-                    current_address.offset += 1;
-                    self.phiplacer.set_address(&op_call, current_address);
                     self.phiplacer.op_use(&op_call, 0, &call_operand);
                     continue;
                 }
