@@ -179,10 +179,12 @@ where
                 self.cfg_worklist.push_back(false_branch);
             }
             LatticeValue::Top => {
-                // TODO: Not really sure what to do here.
+                radeco_warn!("`cond_val` is undefined");
+                self.cfg_worklist.push_back(true_branch);
+                self.cfg_worklist.push_back(false_branch);
             }
             LatticeValue::Const(cval) => {
-                if cval == 1 {
+                if cval == 0 {
                     self.cfgwl_push(&true_branch);
                 } else {
                     self.cfgwl_push(&false_branch);
@@ -333,14 +335,14 @@ where
             MOpcode::OpInvalid
         };
 
-        if let MOpcode::OpConst(v) = opcode {
-            return LatticeValue::Const(v as u64);
-        }
-
-        let val = match opcode.arity() {
-            MArity::Unary => self.evaluate_unary_op(i, opcode),
-            MArity::Binary => self.evaluate_binary_op(i, opcode),
-            _ => self.evaluate_ternary_op(i, opcode),
+        let val = if let MOpcode::OpConst(v) = opcode {
+            LatticeValue::Const(v as u64)
+        } else {
+            match opcode.arity() {
+                MArity::Unary => self.evaluate_unary_op(i, opcode),
+                MArity::Binary => self.evaluate_binary_op(i, opcode),
+                _ => self.evaluate_ternary_op(i, opcode),
+            }
         };
 
         // If expression is a `Selector` it means that it's value can affect the
@@ -400,6 +402,10 @@ where
                             for use_ in self.g.uses_of(expr) {
                                 self.ssawl_push(&use_);
                             }
+                        }
+                        if let Some(selector) = self.g.selector_in(block) {
+                            let val = self.visit_expression(&selector);
+                            self.set_value(&selector, val);
                         }
                     }
 
