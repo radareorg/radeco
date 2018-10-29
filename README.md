@@ -1,6 +1,6 @@
 # radeco-lib
 
-[![Appveyor Status](https://ci.appveyor.com/api/projects/status/t8dujay25g31sxia?svg=true)](https://ci.appveyor.com/project/radare/radeco-lib-8ycg0)|
+[![Appveyor Status](https://ci.appveyor.com/api/projects/status/t8dujay25g31sxia?svg=true)](https://ci.appveyor.com/project/radare/radeco-lib-8ycg0)
 [![Build Status](https://travis-ci.org/radareorg/radeco-lib.svg?branch=master)](https://travis-ci.org/radareorg/radeco-lib)
 [![Coverage Status](https://coveralls.io/repos/github/radare/radeco-lib/badge.svg?branch=master)](https://coveralls.io/github/radare/radeco-lib?branch=master)
 
