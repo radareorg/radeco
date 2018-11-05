@@ -15,7 +15,7 @@ use radeco_lib::middle::ssa::verifier;
 use radeco_lib::middle::{dce, dot};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::process;
+use std::panic;
 use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
@@ -98,7 +98,6 @@ pub fn analyze(rfn: &mut RadecoFunction) {
         match verifier::verify(rfn.ssa()) {
             Err(e) => {
                 eprintln!("  [*] Found Error: {}", e);
-                process::exit(255);
             }
             Ok(_) => {}
         }
@@ -158,13 +157,31 @@ fn decompile_priv(
     func_name_map: &HashMap<u64, String>,
     strings: &HashMap<u64, String>,
 ) -> Result<String, String> {
-    let c_cfg = c_cfg_builder::recover_c_cfg(rfn, func_name_map, strings);
+    let c_cfg_result =
+        panic::catch_unwind(|| c_cfg_builder::recover_c_cfg(rfn, func_name_map, strings));
+
+    if c_cfg_result.is_err() {
+        return Err("Failed to recover C control flow graph".to_string());
+    };
+
+    let c_cfg = c_cfg_result.unwrap();
+
     if let Err(err) = CCFGVerifier::verify(&c_cfg) {
         eprintln!("CCFG verification failed {}", err);
     }
-    ctrl_flow_struct::structure_and_convert(c_cfg)
-        .map(|s| s.print())
-        .map_err(|e| e.to_string())
+
+    let result = panic::catch_unwind(|| {
+        ctrl_flow_struct::structure_and_convert(c_cfg.clone())
+            .map(|s| s.print())
+            .map_err(|e| e.to_string())
+    });
+    match result {
+        Ok(code) => code,
+        Err(_) => {
+            println!("Control flow structuring failed");
+            Ok(c_cfg.to_c_ast().print())
+        }
+    }
 }
 
 pub fn load_proj_by_path(path: &str) -> RadecoProject {
