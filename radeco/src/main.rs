@@ -2,20 +2,20 @@
 #[cfg(feature = "trace_log")]
 extern crate env_logger;
 
-extern crate radeco_lib;
-extern crate r2pipe;
-extern crate r2api;
 extern crate base64;
+extern crate r2api;
+extern crate r2pipe;
+extern crate radeco_lib;
 extern crate rustyline;
 
 mod cli;
 mod core;
 
-use rustyline::{Helper, CompletionType, Config, EditMode, Editor};
-use rustyline::hint::Hinter;
-use rustyline::highlight::Highlighter;
 use rustyline::completion::{Completer, FilenameCompleter};
 use rustyline::error::ReadlineError;
+use rustyline::highlight::Highlighter;
+use rustyline::hint::Hinter;
+use rustyline::{CompletionType, Config, EditMode, Editor, Helper};
 use std::fs;
 use std::process;
 
@@ -77,18 +77,20 @@ impl Completer for Completes {
             command::DECOMPILE,
             command::QUIT,
         ];
-        let mut ret: Vec<String> = cmds.into_iter()
+        let mut ret: Vec<String> = cmds
+            .into_iter()
             .filter(|s| s.starts_with(line))
             .map(|s| s.to_string())
             .collect();
         match self.file_completer.complete(line, _pos) {
             Ok((n, ss)) => {
-                let mut completed_lines = ss.into_iter()
+                let mut completed_lines = ss
+                    .into_iter()
                     .map(|s| {
-                        if let Some (sep_loc) = line.rfind (FILE_SP) {
-                            format! ("{}{}", &line[..sep_loc + 1], s.display)
+                        if let Some(sep_loc) = line.rfind(FILE_SP) {
+                            format!("{}{}", &line[..sep_loc + 1], s.display)
                         } else {
-                            format! ("{}{}", &line[..n], s.display)
+                            format!("{}{}", &line[..n], s.display)
                         }
                     })
                     .collect();
@@ -106,15 +108,17 @@ const USAGE: &'static str = "
 Usage:
   radeco <bin>
   radeco [--append]
-  radeco (--help | --version)
-  radeco [--batch BIN]
+  radeco (--help | \
+                             --version)
+  radeco [--batch <bin>]
 
   Options:
-  -h, --help        Show this screen.
+  -h, --help        \
+                             Show this screen.
   -v, --version     Show current version.
-  --bin             Load a program.
   --append          Append separator to the end of every output.
-  --batch           Decompile the whole binary
+  --batch           Decompile the \
+                             whole binary
 ";
 
 fn main() {
@@ -128,17 +132,22 @@ fn main() {
     let mut rl = Editor::with_config(config);
     rl.set_helper(Some(Completes::default()));
     core::PROJ.with(move |proj| {
-        *proj.borrow_mut() = arg.and_then(|ref s| {
+        let proj_result = arg.map(|ref s| {
             if scheme::is_http(s) {
-                core::load_proj_http(&s[scheme::HTTP.len()..])
+                core::load_proj_http(&s[scheme::HTTP.len()..]).map_err(|e| e.to_string())
             } else if scheme::is_tcp(s) {
-                core::load_proj_tcp(&s[scheme::TCP.len()..])
+                core::load_proj_tcp(&s[scheme::TCP.len()..]).map_err(|e| e.to_string())
             } else if is_file(s) {
                 Ok(core::load_proj_by_path(s))
             } else {
-                Err("Invalid argument")
-            }.ok()
+                Err(format!("Invalid argument {}", s))
+            }
         });
+        match proj_result {
+            Some(Ok(p)) => *proj.borrow_mut() = Some(p),
+            Some(Err(ref err)) => println!("{}", err),
+            None => {}
+        }
     });
 
     if is_batch_mode {
@@ -160,7 +169,7 @@ fn main() {
         let readline = rl.readline(PROMPT);
         match readline {
             Ok(line) => {
-                if !line.is_empty () {
+                if !line.is_empty() {
                     let mut terms = line.split_whitespace();
                     let o1 = terms.next();
                     let o2 = terms.next();
@@ -170,7 +179,7 @@ fn main() {
                     }
                 }
             }
-            Err(ReadlineError::Interrupted) => {},
+            Err(ReadlineError::Interrupted) => {}
             Err(ReadlineError::Eof) => break,
             Err(err) => {
                 println!("Error: {:?}", err);
@@ -204,11 +213,7 @@ mod command {
             format!("{} (http|tcp)://<url>", CONNECT),
             width = width
         );
-        println!(
-            "{:width$}    Show function list",
-            FNLIST,
-            width = width
-        );
+        println!("{:width$}    Show function list", FNLIST, width = width);
         println!(
             "{:width$}    Analyze <func>",
             format!("{} <func>", ANALYZE),
@@ -229,11 +234,7 @@ mod command {
             format!("{} <func>", DECOMPILE),
             width = width
         );
-        println!(
-            "{:width$}    Quit interactive prompt",
-            QUIT,
-            width = width
-        );
+        println!("{:width$}    Quit interactive prompt", QUIT, width = width);
     }
 }
 
@@ -313,12 +314,10 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
                 let decompiled = core::decompile_all_functions(&proj);
                 println!("{}", decompiled);
             }
-            (Some(command::DECOMPILE), Some(f)) => {
-                match core::decompile(f, &proj) {
-                    Ok(res) => println!("{}", res),
-                    Err(err) => println!("{}", err),
-                }
-            }
+            (Some(command::DECOMPILE), Some(f)) => match core::decompile(f, &proj) {
+                Ok(res) => println!("{}", res),
+                Err(err) => println!("{}", err),
+            },
             _ => {
                 println!(
                     "Invalid command {} {}",
