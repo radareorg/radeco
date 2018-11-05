@@ -106,9 +106,10 @@ pub fn analyze(rfn: &mut RadecoFunction) {
 }
 
 pub fn analyze_all_functions<'a>(proj: &'a mut RadecoProject) {
-    let rfns = proj.iter_mut().map(|i| i.module).flat_map(|rmod| {
-        rmod.functions.values_mut()
-    });
+    let rfns = proj
+        .iter_mut()
+        .map(|i| i.module)
+        .flat_map(|rmod| rmod.functions.values_mut());
     for rfn in rfns {
         analyze(rfn);
     }
@@ -130,12 +131,12 @@ pub fn decompile_all_functions<'a>(proj: &'a RadecoProject) -> String {
     let funcs = fn_list(&proj);
     for f in &funcs {
         match decompile(f, &proj) {
-            Ok(res) =>  {
+            Ok(res) => {
                 decompiled_funcs.push(res);
-            },
+            }
             Err(err) => {
                 eprintln!("{}", err);
-            },
+            }
         };
     }
     decompiled_funcs.join("\n")
@@ -216,5 +217,6 @@ pub fn strings(rmod: &RadecoModule) -> HashMap<u64, String> {
                 Err(_e) => _s,
             };
             (addr, ret_string)
-        }).collect()
+        })
+        .collect()
 }
