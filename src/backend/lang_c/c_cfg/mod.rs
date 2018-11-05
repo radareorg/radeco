@@ -80,6 +80,7 @@ pub enum ValueEdge {
 pub type CCFGRef = NodeIndex;
 pub type CASTRef = NodeIndex;
 
+#[derive(Debug, Clone)]
 pub struct CCFG {
     /// Name of function of this AST
     fname: String,
