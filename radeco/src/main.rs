@@ -104,21 +104,19 @@ impl Completer for Completes {
 }
 
 const SEP: &'static str = "END";
+#[rustfmt::skip]
 const USAGE: &'static str = "
 Usage:
   radeco <bin>
   radeco [--append]
-  radeco (--help | \
-                             --version)
+  radeco (--help | --version)
   radeco [--batch <bin>]
 
   Options:
-  -h, --help        \
-                             Show this screen.
+  -h, --help        Show this screen.
   -v, --version     Show current version.
   --append          Append separator to the end of every output.
-  --batch           Decompile the \
-                             whole binary
+  --batch           Decompile the whole binary
 ";
 
 fn main() {
