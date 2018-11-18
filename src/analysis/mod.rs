@@ -24,6 +24,7 @@ pub mod matcher {
 }
 
 pub mod constraint_set;
+pub mod copy_propagation;
 pub mod functions;
 pub mod inst_combine;
 pub mod interproc;
