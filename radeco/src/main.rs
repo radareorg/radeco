@@ -8,8 +8,14 @@ extern crate r2pipe;
 extern crate radeco_lib;
 extern crate rustyline;
 
+#[macro_use]
+extern crate lazy_static;
+extern crate syntect;
+extern crate clap;
+
 mod cli;
 mod core;
+mod highlighting;
 
 use rustyline::completion::{Completer, FilenameCompleter};
 use rustyline::error::ReadlineError;
@@ -104,23 +110,9 @@ impl Completer for Completes {
 }
 
 const SEP: &'static str = "END";
-#[rustfmt::skip]
-const USAGE: &'static str = "
-Usage:
-  radeco <bin>
-  radeco [--append]
-  radeco (--help | --version)
-  radeco [--batch <bin>]
-
-  Options:
-  -h, --help        Show this screen.
-  -v, --version     Show current version.
-  --append          Append separator to the end of every output.
-  --batch           Decompile the whole binary
-";
 
 fn main() {
-    let (arg, is_append_mode, is_batch_mode) = cli::parse_args(USAGE);
+    let (arg, is_append_mode, is_batch_mode, is_highlight) = cli::parse_args();
     let config = Config::builder()
         .auto_add_history(true)
         .history_ignore_space(true)
@@ -158,7 +150,11 @@ fn main() {
             let proj = proj_.as_mut().unwrap();
             core::analyze_all_functions(proj);
             let decompiled = core::decompile_all_functions(proj);
-            println!("{}", decompiled);
+            if is_highlight {
+                highlighting::print_highlighted(&decompiled);
+            } else {
+                println!("{}", decompiled);
+            }
             process::exit(0);
         });
     }
@@ -171,7 +167,7 @@ fn main() {
                     let mut terms = line.split_whitespace();
                     let o1 = terms.next();
                     let o2 = terms.next();
-                    cmd(o1, o2);
+                    cmd(o1, o2, is_highlight);
                     if is_append_mode {
                         println!("{}", SEP);
                     }
@@ -236,7 +232,7 @@ mod command {
     }
 }
 
-fn cmd(op1: Option<&str>, op2: Option<&str>) {
+fn cmd(op1: Option<&str>, op2: Option<&str>, highlight: bool) {
     core::PROJ.with(|proj_opt| {
         match (op1, op2) {
             (Some(command::HELP), _) => {
@@ -310,10 +306,20 @@ fn cmd(op1: Option<&str>, op2: Option<&str>) {
             }
             (Some(command::DECOMPILE), Some("*")) => {
                 let decompiled = core::decompile_all_functions(&proj);
-                println!("{}", decompiled);
+                if highlight {
+                    highlighting::print_highlighted(&decompiled);
+                } else {
+                    println!("{}", decompiled);
+                }
             }
             (Some(command::DECOMPILE), Some(f)) => match core::decompile(f, &proj) {
-                Ok(res) => println!("{}", res),
+                Ok(res) => {
+                    if highlight {
+                        highlighting::print_highlighted(&res);
+                    } else {
+                        println!("{}", res);
+                    }
+                },
                 Err(err) => println!("{}", err),
             },
             _ => {
