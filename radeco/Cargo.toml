@@ -15,11 +15,14 @@ default = []
 trace_log = ["radeco-lib/trace_log"]
 
 [dependencies]
-docopt = "*"
 rustc-serialize = "*"
 log = "*"
 base64 = "0.9.2"
 rustyline = "2.0.0"
+lazy_static = "1.2.0"
+clap = "2.32.0"
+syntect = "3.0"
+
 
 [dependencies.r2pipe]
 # path = "../r2pipe.rs"
