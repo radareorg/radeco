@@ -10,8 +10,8 @@ extern crate rustyline;
 
 #[macro_use]
 extern crate lazy_static;
-extern crate syntect;
 extern crate clap;
+extern crate syntect;
 
 mod cli;
 mod core;
@@ -112,7 +112,7 @@ impl Completer for Completes {
 const SEP: &'static str = "END";
 
 fn main() {
-    let (arg, is_append_mode, is_batch_mode, is_highlight) = cli::parse_args();
+    let (arg, is_append_mode, is_batch_mode, no_highlight) = cli::parse_args();
     let config = Config::builder()
         .auto_add_history(true)
         .history_ignore_space(true)
@@ -150,10 +150,10 @@ fn main() {
             let proj = proj_.as_mut().unwrap();
             core::analyze_all_functions(proj);
             let decompiled = core::decompile_all_functions(proj);
-            if is_highlight {
-                highlighting::print_highlighted(&decompiled);
-            } else {
+            if no_highlight {
                 println!("{}", decompiled);
+            } else {
+                highlighting::print_highlighted(&decompiled);
             }
             process::exit(0);
         });
@@ -167,7 +167,7 @@ fn main() {
                     let mut terms = line.split_whitespace();
                     let o1 = terms.next();
                     let o2 = terms.next();
-                    cmd(o1, o2, is_highlight);
+                    cmd(o1, o2, !no_highlight);
                     if is_append_mode {
                         println!("{}", SEP);
                     }
@@ -319,7 +319,7 @@ fn cmd(op1: Option<&str>, op2: Option<&str>, highlight: bool) {
                     } else {
                         println!("{}", res);
                     }
-                },
+                }
                 Err(err) => println!("{}", err),
             },
             _ => {
