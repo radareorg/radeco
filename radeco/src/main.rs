@@ -112,7 +112,7 @@ impl Completer for Completes {
 const SEP: &'static str = "END";
 
 fn main() {
-    let (arg, is_append_mode, is_batch_mode, no_highlight) = cli::parse_args();
+    let (arg, cmd_opt, is_append_mode, is_batch_mode, no_highlight) = cli::parse_args();
     let config = Config::builder()
         .auto_add_history(true)
         .history_ignore_space(true)
@@ -146,15 +146,23 @@ fn main() {
                 eprintln!("Project was not loaded!");
                 return;
             }
-            let mut proj_ = proj_opt.borrow_mut();
-            let proj = proj_.as_mut().unwrap();
-            core::analyze_all_functions(proj);
-            let decompiled = core::decompile_all_functions(proj);
-            if no_highlight {
-                println!("{}", decompiled);
+            // If a command is specified by the user run it,
+            // otherwise decompile all functions.
+            if let Some(command) = cmd_opt {
+               cmd(command, no_highlight);
             } else {
-                highlighting::print_highlighted(&decompiled);
+                let mut proj_ = proj_opt.borrow_mut();
+                let proj = proj_.as_mut().unwrap();
+
+                core::analyze_all_functions(proj);
+                let decompiled = core::decompile_all_functions(proj);
+                if no_highlight {
+                    println!("{}", decompiled);
+                } else {
+                    highlighting::print_highlighted(&decompiled);
+                }
             }
+
             process::exit(0);
         });
     }
@@ -163,14 +171,9 @@ fn main() {
         let readline = rl.readline(PROMPT);
         match readline {
             Ok(line) => {
-                if !line.is_empty() {
-                    let mut terms = line.split_whitespace();
-                    let o1 = terms.next();
-                    let o2 = terms.next();
-                    cmd(o1, o2, !no_highlight);
-                    if is_append_mode {
-                        println!("{}", SEP);
-                    }
+                cmd(line, !no_highlight);
+                if is_append_mode {
+                    println!("{}", SEP);
                 }
             }
             Err(ReadlineError::Interrupted) => {}
@@ -232,7 +235,15 @@ mod command {
     }
 }
 
-fn cmd(op1: Option<&str>, op2: Option<&str>, highlight: bool) {
+fn cmd(line: String, highlight: bool) {
+    if line.is_empty() {
+       return;
+    }
+
+    let mut terms = line.split_whitespace();
+    let op1 = terms.next();
+    let op2 = terms.next();
+
     core::PROJ.with(|proj_opt| {
         match (op1, op2) {
             (Some(command::HELP), _) => {
