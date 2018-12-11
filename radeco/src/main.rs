@@ -71,7 +71,6 @@ impl Highlighter for Completes {}
 impl Completer for Completes {
     type Candidate = String;
     fn complete(&self, line: &str, _pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
-        // TODO Completion for function names
         let cmds = vec![
             command::HELP,
             command::LOAD,
@@ -83,26 +82,61 @@ impl Completer for Completes {
             command::DECOMPILE,
             command::QUIT,
         ];
+
+        // Check if `line` contains a cmd that requires a function
+        // as parameter.
+        let complete_func: bool = cmds
+            .iter()
+            .filter(|s| line.len() >= s.len())
+            .any(|s| &&line[..s.len()] == s &&
+                 command::requires_func(&line[..s.len()]));
+
+        // Complete commands.
         let mut ret: Vec<String> = cmds
             .into_iter()
+            .filter(|s| line.len() < s.len())
             .filter(|s| s.starts_with(line))
             .map(|s| s.to_string())
             .collect();
-        match self.file_completer.complete(line, _pos) {
-            Ok((n, ss)) => {
-                let mut completed_lines = ss
-                    .into_iter()
-                    .map(|s| {
-                        if let Some(sep_loc) = line.rfind(FILE_SP) {
-                            format!("{}{}", &line[..sep_loc + 1], s.display)
-                        } else {
-                            format!("{}{}", &line[..n], s.display)
-                        }
-                    })
-                    .collect();
-                ret.append(&mut completed_lines);
+
+        if complete_func {
+            core::PROJ.with(|proj_opt| {
+                if let Some(ref proj) = *proj_opt.borrow() {
+                    let mut line_tokens = line.split(' ');
+                    line_tokens.next(); // drop the command.
+
+                    let to_compl = line_tokens.last().unwrap_or("");
+
+                    let mut funcs: Vec<String> = core::fn_list(&proj)
+                        .iter()
+                        .filter(|f| f.len() > to_compl.len())
+                        .filter(|f| &f[0..to_compl.len()] == to_compl)
+                        .map(|f|
+                             format!("{}{}{}", line,
+                                if to_compl.len() == 0 {" "} else {""},
+                                &f[to_compl.len()..f.len()]))
+                        .collect();
+                    ret.append(&mut funcs);
+                }
+            });
+        }
+        if line.starts_with("load") {
+            match self.file_completer.complete(line, _pos) {
+                Ok((n, ss)) => {
+                    let mut completed_lines = ss
+                        .into_iter()
+                        .map(|s| {
+                            if let Some(sep_loc) = line.rfind(FILE_SP) {
+                                format!("{}{}", &line[..sep_loc + 1], s.display)
+                            } else {
+                                format!("{}{}", &line[..n], s.display)
+                            }
+                        })
+                        .collect();
+                    ret.append(&mut completed_lines);
+                }
+                Err(_) => {}
             }
-            Err(_) => {}
         }
 
         Ok((0, ret))
@@ -232,6 +266,14 @@ mod command {
             width = width
         );
         println!("{:width$}    Quit interactive prompt", QUIT, width = width);
+    }
+
+    /// Returns true if `cmd` requires a function as parameter.
+    pub fn requires_func(cmd: &str) -> bool {
+        match cmd {
+            ANALYZE | DOT | IR | DECOMPILE => true,
+            _ => false,
+        }
     }
 }
 
