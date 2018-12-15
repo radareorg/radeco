@@ -1055,15 +1055,10 @@ impl SSAMod for SSAStorage {
         )
     }
 
-    fn insert_const(&mut self, value: u64) -> Option<Self::ValueRef> {
-        if self.constants.contains_key(&value) {
-            Some(self.constants.get(&value).unwrap().clone())
-        } else {
-            let data = NodeData::Op(MOpcode::OpConst(value), scalar!(64));
-            let id = self.insert_node(data).expect("Cannot insert new nodes");
-            self.constants.insert(value, id);
-            Some(id)
-        }
+    fn insert_const(&mut self, value: u64, size: Option<u16>) -> Option<Self::ValueRef> {
+        let data = NodeData::Op(MOpcode::OpConst(value), scalar!(size.unwrap_or(64)));
+        let id = self.insert_node(data).expect("Cannot insert new nodes");
+        Some(id)
     }
 
     fn insert_phi(&mut self, vt: ValueInfo) -> Option<Self::ValueRef> {

@@ -294,7 +294,7 @@ pub trait SSAMod: SSA + CFGMod {
     ) -> Option<Self::ValueRef>;
 
     /// Add a new constant node.
-    fn insert_const(&mut self, value: u64) -> Option<Self::ValueRef>;
+    fn insert_const(&mut self, value: u64, size: Option<u16>) -> Option<Self::ValueRef>;
 
     /// Add a new phi node.
     fn insert_phi(&mut self, vt: ValueInfo) -> Option<Self::ValueRef>;

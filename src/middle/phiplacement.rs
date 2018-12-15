@@ -300,10 +300,11 @@ where
                     .unwrap_or(invalid_edge),
             ];
             for (i, edge) in outgoing.iter().enumerate() {
-                if *edge != self
-                    .ssa
-                    .invalid_edge()
-                    .expect("Invalid Edge is not defined")
+                if *edge
+                    != self
+                        .ssa
+                        .invalid_edge()
+                        .expect("Invalid Edge is not defined")
                 {
                     let target = self
                         .ssa
@@ -698,7 +699,7 @@ where
         vt_option: Option<ValueInfo>,
     ) -> T::ValueRef {
         if vt_option.is_none() {
-            return self.ssa.insert_const(value).unwrap_or_else(|| {
+            return self.ssa.insert_const(value, None).unwrap_or_else(|| {
                 radeco_err!("Cannot insert new constants");
                 self.ssa.invalid_value().unwrap()
             });
@@ -707,7 +708,7 @@ where
         let width = vt.width().get_width().unwrap_or(64);
         if width < 64 {
             let val: u64 = value & (1 << (width) - 1);
-            let const_node = self.ssa.insert_const(val).unwrap_or_else(|| {
+            let const_node = self.ssa.insert_const(val, Some(width)).unwrap_or_else(|| {
                 radeco_err!("Cannot insert new constants");
                 self.ssa.invalid_value().unwrap()
             });
@@ -716,10 +717,13 @@ where
             self.op_use(&narrow_node, 0, &const_node);
             narrow_node
         } else {
-            let const_node = self.ssa.insert_const(value).unwrap_or_else(|| {
-                radeco_err!("Cannot insert new constants");
-                self.ssa.invalid_value().unwrap()
-            });
+            let const_node = self
+                .ssa
+                .insert_const(value, Some(width))
+                .unwrap_or_else(|| {
+                    radeco_err!("Cannot insert new constants");
+                    self.ssa.invalid_value().unwrap()
+                });
             const_node
         }
     }

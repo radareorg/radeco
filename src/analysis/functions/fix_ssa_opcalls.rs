@@ -52,7 +52,7 @@ fn fix_call_site(
             .iter()
             .find(|x| x.0 == 0)?
             .1;
-        let new_opcall_tgt_node = ssa.insert_const(call_target_addr)?;
+        let new_opcall_tgt_node = ssa.insert_const(call_target_addr, None)?;
         ssa.op_unuse(call_node, old_opcall_tgt_node);
         ssa.op_use(call_node, 0, new_opcall_tgt_node);
     } else {

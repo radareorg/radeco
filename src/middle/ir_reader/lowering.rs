@@ -272,7 +272,7 @@ impl<'a> LowerSsa<'a> {
                     }
                 }
             }
-            sast::Operand::Const(v) => self.ssa.insert_const(v)?,
+            sast::Operand::Const(v) => self.ssa.insert_const(v, None)?,
         })
     }
 
@@ -290,7 +290,7 @@ impl<'a> LowerSsa<'a> {
                 return Err(LoweringError::InvalidAst(format!(
                     "value defined twice: {:?}",
                     o.key()
-                )))
+                )));
             }
         }
 
