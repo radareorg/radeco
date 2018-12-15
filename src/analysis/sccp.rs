@@ -452,36 +452,14 @@ where
                     self.g.node_data(*k),
                     val
                 );
+                let ndata = node_data_from_g!(self, k);
+                let w = ndata.vt.width().get_width();
                 // BUG: Width may be changed just using a simple replace.
-                let const_node = self.g.insert_const(val).unwrap_or_else(|| {
+                let const_node = self.g.insert_const(val, w).unwrap_or_else(|| {
                     radeco_err!("Cannot insert new constants");
                     self.g.invalid_value().unwrap()
                 });
-                let ndata = node_data_from_g!(self, k);
-                let w = ndata.vt.width().get_width().unwrap_or(64);
-                let new_node = if w == 64 {
-                    const_node
-                } else {
-                    // val should not be larger than the k node could be.
-                    assert!(w < 64 && val < (1 << (w)));
-                    let block = self.g.block_for(*k).unwrap_or_else(|| {
-                        radeco_err!("No block information found");
-                        self.g.invalid_action().unwrap()
-                    });
-                    let address = self.g.address(*k).unwrap_or_else(|| {
-                        radeco_err!("No address information found");
-                        MAddress::invalid_address()
-                    });
-                    let opcode = MOpcode::OpNarrow(w as u16);
-                    let new_node = self.g.insert_op(opcode, ndata.vt, None).unwrap_or_else(|| {
-                        radeco_err!("Cannot insert new values");
-                        self.g.invalid_value().unwrap()
-                    });
-                    self.g.insert_into_block(new_node, block, address);
-                    self.g.op_use(new_node, 0, const_node);
-                    new_node
-                };
-                self.g.replace_value(*k, new_node);
+                self.g.replace_value(*k, const_node);
             }
         }
         let blocks = self.g.blocks();
