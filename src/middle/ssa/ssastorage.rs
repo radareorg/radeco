@@ -171,7 +171,6 @@ pub struct SSAStorage {
     pub assoc_data: AssociatedData,
     pub replaced_map: HashMap<NodeIndex, NodeIndex>,
     pub regfile: Arc<SubRegisterFile>,
-    pub constants: HashMap<u64, NodeIndex>,
 }
 
 impl default::Default for SSAStorage {
@@ -183,7 +182,6 @@ impl default::Default for SSAStorage {
             assoc_data: HashMap::new(),
             replaced_map: HashMap::new(),
             regfile: Arc::default(),
-            constants: HashMap::new(),
         }
     }
 }
@@ -197,8 +195,17 @@ impl SSAStorage {
             assoc_data: HashMap::new(),
             replaced_map: HashMap::new(),
             regfile: Arc::default(),
-            constants: HashMap::new(),
         }
+    }
+    pub fn constants(&self) -> HashMap<NodeIndex, u64> {
+        self.g
+            .node_indices()
+            .into_iter()
+            .filter_map(|n| match self.g.node_weight(n) {
+                Some(&NodeData::Op(MOpcode::OpConst(v), _)) => Some((n, v)),
+                _ => None,
+            })
+            .collect::<HashMap<_, _>>()
     }
 }
 
@@ -247,16 +254,7 @@ impl Graph for SSAStorage {
 
     fn remove_node(&mut self, exi: Self::GraphNodeRef) {
         radeco_trace!(logger::Event::SSARemoveNode(&exi));
-        // Remove the current association.
-        if let Some(val) = self.constant(exi) {
-            let uses = self.uses_of(exi);
-            if uses.is_empty() {
-                self.g.remove_node(exi);
-                self.constants.remove(&val);
-            }
-        } else {
-            self.g.remove_node(exi);
-        }
+        self.g.remove_node(exi);
     }
 
     // TODO: When i is a constant, there may be some bugs.
@@ -926,7 +924,6 @@ impl SSA for SSAStorage {
     }
 
     fn node_data(&self, i: Self::ValueRef) -> Result<TNodeData, Box<Debug>> {
-
         match self.g.node_weight(i) {
             Some(&NodeData::Op(ref opc, vt)) => Ok(TNodeData {
                 vt: vt,

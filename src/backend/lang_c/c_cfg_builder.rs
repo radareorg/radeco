@@ -632,7 +632,7 @@ impl<'a> CCFGDataMap<'a> {
     }
 
     fn prepare_consts(&mut self, cfg: &mut CCFG, strings: &HashMap<u64, String>) {
-        for (&val, &node) in self.ssa.constants.iter() {
+        for (&node, &val) in self.ssa.constants().iter() {
             if self.ssa.node_data(node).is_ok() {
                 // TODO add type
                 let cfg_node = if let Some(s) = strings.get(&val) {
