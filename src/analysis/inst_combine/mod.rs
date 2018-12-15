@@ -109,7 +109,7 @@ impl Combiner {
             Right(c_val) => {
                 // combined to constant
                 radeco_trace!("{:?} = {:#x}", cur_node, c_val);
-                let c_node = ssa.insert_const(c_val)?;
+                let c_node = ssa.insert_const(c_val, None)?;
                 Some(c_node)
             }
         }
@@ -197,12 +197,12 @@ fn make_opinfo_node(
             ssa.op_use(ret, 0, sub_node);
         }
         COCI::Left(new_c) => {
-            let new_cnode = ssa.insert_const(new_c)?;
+            let new_cnode = ssa.insert_const(new_c, None)?;
             ssa.op_use(ret, 0, new_cnode);
             ssa.op_use(ret, 1, sub_node);
         }
         COCI::Right(new_c) => {
-            let new_cnode = ssa.insert_const(new_c)?;
+            let new_cnode = ssa.insert_const(new_c, None)?;
             ssa.op_use(ret, 0, sub_node);
             ssa.op_use(ret, 1, new_cnode);
         }
