@@ -554,8 +554,12 @@ mod test {
         let add = ssa
             .insert_op(MOpcode::OpAdd, vt, None)
             .expect("Cannot insert new expressions");
-        let const_1 = ssa.insert_const(1).expect("Cannot insert new constants", None)?;
-        let const_2 = ssa.insert_const(2).expect("Cannot insert new constants", None)?;
+        let const_1 = ssa
+            .insert_const(1, None)
+            .expect("Cannot insert new constants");
+        let const_2 = ssa
+            .insert_const(2, None)
+            .expect("Cannot insert new constants");
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_2);
         ssa.set_entry_node(add);
@@ -573,7 +577,9 @@ mod test {
         let add = ssa
             .insert_op(MOpcode::OpXor, vt, None)
             .expect("Cannot insert new expressions");
-        let const_1 = ssa.insert_const(1).expect("Cannot insert new constants", None)?;
+        let const_1 = ssa
+            .insert_const(1, None)
+            .expect("Cannot insert new constants");
         ssa.op_use(add, 0, const_1);
         ssa.op_use(add, 1, const_1);
         ssa.set_entry_node(add);
@@ -592,8 +598,12 @@ mod test {
             let add = ssa
                 .insert_op(MOpcode::OpAdd, vt, None)
                 .expect("Cannot insert new expressions");
-            let const_1 = ssa.insert_const(1).expect("Cannot insert new constants", None)?;
-            let const_2 = ssa.insert_const(2).expect("Cannot insert new constants", None)?;
+            let const_1 = ssa
+                .insert_const(1, None)
+                .expect("Cannot insert new constants");
+            let const_2 = ssa
+                .insert_const(2, None)
+                .expect("Cannot insert new constants");
             let addr = MAddress::new(0, 0);
             ssa.insert_into_block(add, blk, addr);
             ssa.insert_into_block(const_1, blk, addr);
