@@ -2,6 +2,7 @@ use base64;
 use r2pipe::{R2Pipe, R2};
 use radeco_lib;
 use radeco_lib::analysis::cse::cse::CSE;
+use radeco_lib::analysis::inst_combine;
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
 use radeco_lib::analysis::sccp;
 use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
@@ -111,6 +112,7 @@ pub fn analyze(rfn: &mut RadecoFunction) {
         dce::collect(&mut ssa);
     }
     *rfn.ssa_mut() = ssa;
+    inst_combine::run(rfn.ssa_mut());
     {
         // Common SubExpression Elimination (cse)
         eprintln!("  [*] Eliminating Common SubExpressions");
