@@ -13,7 +13,7 @@
 
 use esil::lexer::{Token, Tokenizer};
 
-use esil::parser::{Parse, Parser};
+use esil::parser::{Parse, Parser, ParserError};
 // use frontend::instruction_analyzer::{InstructionAnalyzer, X86_CS_IA, IOperand};
 use frontend::radeco_containers::RadecoFunction;
 
@@ -722,20 +722,39 @@ where
              }
              */
 
-            while let Some(ref token) = p.parse::<_, Tokenizer>(esil_str) {
-                radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
-                let (lhs, rhs) = p.fetch_operands(token);
-                // Determine what to do with the operands and get the result.
-                let result = self.process_op(
-                    token,
-                    &mut current_address,
-                    &[lhs, rhs],
-                    op.size.unwrap_or(0),
-                );
-                if let Some(result_) = self.process_out(result, current_address) {
-                    p.push(result_);
+            loop {
+                let token_opt = match p.parse::<_, Tokenizer>(esil_str) {
+                    Ok(token_opt_) => token_opt_,
+                    Err(err) => {
+                        radeco_err!("{}", err.to_string());
+                        continue;
+                    },
+                };
+
+                if let Some(ref token) = token_opt {
+                    radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
+                    let (lhs, rhs) = match p.fetch_operands(token) {
+                        Ok(operands_opt) => operands_opt,
+                        Err(err) => {
+                            radeco_err!("{}", err.to_string());
+                            continue;
+                        }
+                    };
+
+                    // Determine what to do with the operands and get the result.
+                    let result = self.process_op(
+                        token,
+                        &mut current_address,
+                        &[lhs, rhs],
+                        op.size.unwrap_or(0),
+                    );
+                    if let Some(result_) = self.process_out(result, current_address) {
+                        p.push(result_);
+                    }
+                    current_address.offset += 1;
+                } else {
+                    break;
                 }
-                current_address.offset += 1;
             }
         }
         // BUG: The last block may not have the biggest address, which means current_address
