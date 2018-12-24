@@ -2,6 +2,7 @@ use std::any::Any;
 use std::fmt::Debug;
 
 use analysis::copy_propagation::CopyPropagation;
+use analysis::cse::cse::CSE;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 
 /// This trait provides access to extra informations generated during the analysis pass.
@@ -11,6 +12,7 @@ pub trait AnalyzerResult : Any + Debug { }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnalyzerKind {
     CopyPropagation,
+    CSE,
 }
 
 /// Basic trait for all analyzers.
@@ -37,7 +39,8 @@ pub trait ModuleAnalyzer : Analyzer {
 
 /// Get all the available `FuncAnalyzer`s
 pub fn all_func_analysis() -> Vec<AnalyzerKind> {
-    vec![AnalyzerKind::CopyPropagation]
+    vec![AnalyzerKind::CopyPropagation,
+         AnalyzerKind::CSE]
 }
 
 /// Get all the available `ModuleAnalyzer`s
