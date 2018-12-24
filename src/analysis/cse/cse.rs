@@ -7,42 +7,35 @@
 //! improved.
 
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
-use super::ssasort::Sorter;
+use frontend::radeco_containers::RadecoFunction;
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer};
+
 use middle::ir::MOpcode;
-use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, SSA};
+use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
+use middle::ssa::ssa_traits::SSA;
+use middle::ssa::ssastorage::SSAStorage;
 
 #[derive(Debug)]
-pub struct CSE<'a, I, S>
-where
-    I: Iterator<Item = S::ValueRef>,
-    S: 'a + SSAMod + SSA + SSAWalk<I>,
+pub struct CSE
 {
-    exprs: HashMap<String, Vec<S::ValueRef>>,
-    hashed: HashMap<S::ValueRef, String>,
-    ssa: &'a mut S,
-    foo: PhantomData<I>,
+    exprs: HashMap<String, Vec<<SSAStorage as SSA>::ValueRef>>,
+    hashed: HashMap<<SSAStorage as SSA>::ValueRef, String>,
 }
 
-impl<'a, I, S> CSE<'a, I, S>
-where
-    I: Iterator<Item = S::ValueRef>,
-    S: 'a + SSAMod + SSA + SSAWalk<I>,
+impl CSE
 {
-    pub fn new(ssa: &'a mut S) -> CSE<'a, I, S> {
+    pub fn new() -> CSE {
         CSE {
             exprs: HashMap::new(),
             hashed: HashMap::new(),
-            ssa: ssa,
-            foo: PhantomData,
         }
     }
 
-    fn hash_args(&self, args: &[S::ValueRef]) -> String {
+    fn hash_args(&self, ssa: &SSAStorage, args: &[<SSAStorage as SSA>::ValueRef]) -> String {
         let mut result = String::new();
         for arg in args {
-            if let Ok(node_data) = self.ssa.node_data(*arg) {
+            if let Ok(node_data) = ssa.node_data(*arg) {
                 match node_data.nt {
                     NodeType::Op(opc) => match opc {
                         MOpcode::OpConst(val) => result.push_str(&format!("{}", val)),
@@ -72,54 +65,73 @@ where
     }
 
     // NOTE: Because we have sorted the operands, it's unnecessary to consider commutative opcodes.
-    fn hash_string(&self, idx: &S::ValueRef) -> Option<String> {
-        if let Ok(node_data) = self.ssa.node_data(*idx) {
+    fn hash_string(&self, ssa: &SSAStorage, idx: &<SSAStorage as SSA>::ValueRef) -> Option<String> {
+        if let Ok(node_data) = ssa.node_data(*idx) {
             if let NodeType::Op(opc) = node_data.nt {
-                let args = self.ssa.operands_of(*idx);
-                let hashed_args = self.hash_args(&args);
+                let args = ssa.operands_of(*idx);
+                let hashed_args = self.hash_args(ssa, &args);
                 let hs = format!("{}{}", opc, hashed_args);
                 return Some(hs);
             }
         }
         None
     }
+}
 
-    pub fn run(&mut self) {
+
+impl Analyzer for CSE
+{
+    fn name(&self) -> String {
+        "cse".to_owned()
+    }
+
+    fn kind(&self) -> AnalyzerKind {
+        AnalyzerKind::CSE
+    }
+
+    fn requires(&self) -> Vec<AnalyzerKind> {
+        Vec::new()
+    }
+}
+
+impl FuncAnalyzer for CSE
+{
+    fn analyze(&mut self, func: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
         {
-            let mut sorter = Sorter::new(self.ssa);
-            sorter.run();
-        }
-        // Sort the operands for commutative opcode first;
+            let ssa = func.ssa_mut();
 
-        for expr in self.ssa.inorder_walk() {
-            let hs = match self.hash_string(&expr) {
-                Some(hs) => hs,
-                None => continue,
-            };
-            let mut replaced = false;
-            if let Some(ex_idxs) = self.exprs.get(&hs).cloned() {
-                // NOTE: Though we can eliminate expression even if the two aren't in the same
-                // block, we do not do so cause it requires that block b1 (block of the
-                // replacer) must dominate block b2 (the replacee). Since we are currently not
-                // using the dominator information, this replacement may not be safe. Hence we
-                // restrict outselves to the case where both the expressions belong to the same
-                // block.
-                for ex_idx in &ex_idxs {
-                    if self.ssa.block_for(*ex_idx) == self.ssa.block_for(expr) {
-                        self.ssa.replace_value(expr, *ex_idx);
-                        replaced = true;
-                        break;
+            for expr in ssa.inorder_walk() {
+                let hs = match self.hash_string(ssa, &expr) {
+                    Some(hs) => hs,
+                    None => continue,
+                };
+                let mut replaced = false;
+                if let Some(ex_idxs) = self.exprs.get(&hs).cloned() {
+                    // NOTE: Though we can eliminate expression even if the two aren't in the same
+                    // block, we do not do so cause it requires that block b1 (block of the
+                    // replacer) must dominate block b2 (the replacee). Since we are currently not
+                    // using the dominator information, this replacement may not be safe. Hence we
+                    // restrict outselves to the case where both the expressions belong to the same
+                    // block.
+                    for ex_idx in &ex_idxs {
+                        if ssa.block_for(*ex_idx) == ssa.block_for(expr) {
+                            ssa.replace_value(expr, *ex_idx);
+                            replaced = true;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if !replaced {
-                self.exprs
-                    .entry(hs.clone())
-                    .or_insert_with(Vec::new)
-                    .push(expr);
-                self.hashed.insert(expr, hs.clone());
+                if !replaced {
+                    self.exprs
+                        .entry(hs.clone())
+                        .or_insert_with(Vec::new)
+                        .push(expr);
+                    self.hashed.insert(expr, hs.clone());
+                }
             }
         }
+
+        None
     }
 }
