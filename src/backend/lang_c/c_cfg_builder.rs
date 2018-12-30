@@ -538,7 +538,6 @@ impl<'a> CCFGDataMap<'a> {
             (MOpcode::OpLoad, None) => (None, operands),
             (MOpcode::OpCall, None) => (None, operands),
             (_, exp) => (exp, operands),
-            _ => unimplemented!(),
         }
     }
 
@@ -668,286 +667,18 @@ impl<'a> CCFGDataMap<'a> {
     }
 }
 
-struct CCFGBuilderVerifier {}
-
-impl CCFGBuilderVerifier {
-    const DELIM: &'static str = "; ";
-
-    fn verify(builder: &mut CCFGBuilder) -> Result<(), String> {
-        let ssa = builder.ssa.clone();
-        let mut errors = Vec::new();
-        for node in ssa.inorder_walk() {
-            match ssa.opcode(node) {
-                Some(MOpcode::OpCall) => {
-                    if let Err(err) = Self::verify_args_inorder_at(builder, node) {
-                        errors.push(err);
-                    }
-                    if let Err(err) = Self::verify_call_action_at(builder, node) {
-                        errors.push(err);
-                    }
-                }
-                Some(MOpcode::OpStore) => {
-                    if let Err(err) = Self::verify_assign_at(builder, node) {
-                        errors.push(err);
-                    }
-                }
-                _ => {}
-            }
-        }
-        if errors.len() > 0 {
-            Err(errors.join(Self::DELIM))
-        } else {
-            Ok(())
-        }
-    }
-
-    // All argument node exist in SSAStorage
-    fn verify_args_inorder_at(builder: &CCFGBuilder, call_node: SSARef) -> Result<(), String> {
-        let mut errors = Vec::new();
-        let args = builder.args_inorder(call_node);
-        for arg in args {
-            if let Err(debug) = builder.ssa.node_data(arg) {
-                let err = format!("{:?}", debug);
-                errors.push(err);
-            }
-        }
-        if errors.len() > 0 {
-            Err(errors.join(Self::DELIM))
-        } else {
-            Ok(())
-        }
-    }
-
-    // Verify `assign` made `CCFG::Action(ActionNode::Assignment)` node.
-    fn verify_assign_at(builder: &mut CCFGBuilder, node: SSARef) -> Result<(), String> {
-        let ops = builder.ssa.operands_of(node);
-        let dst = builder
-            .datamap
-            .var_map
-            .get(&ops[1])
-            .map(|&x| builder.cfg.derefed_node(x).unwrap_or(x));
-        let src = builder.datamap.var_map.get(&ops[2]).cloned();
-        if src.is_none() {
-            return Err("Failed to get src operand node from CCFG".to_string());
-        }
-        if dst.is_none() {
-            return Err("Failed to get dst operand node from CCFG".to_string());
-        }
-        let assign_node = builder.assign(dst.unwrap(), src.unwrap());
-        let is_err = builder.last_action != assign_node || !builder.cfg.is_assign_node(assign_node);
-        if is_err {
-            Err("Failed to append assign action".to_string())
-        } else {
-            Ok(())
-        }
-    }
-
-    // Verify `call_action` made `CCFG::Action(ActionNode::Call(_))` node.
-    fn verify_call_action_at(builder: &mut CCFGBuilder, call_node: SSARef) -> Result<(), String> {
-        let call_node = builder.call_action(call_node);
-        let is_err = builder.last_action != call_node || !builder.cfg.is_call_node(call_node);
-        if is_err {
-            Err("`CCFGBuilder::call_action` is failed.".to_string())
-        } else {
-            Ok(())
-        }
-    }
-}
-
-struct CCFGDataMapVerifier {}
-
-type Verifier = Fn(SSARef, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
-impl CCFGDataMapVerifier {
-    const DELIM: &'static str = "; ";
-
-    fn verify_datamap(
-        datamap: &mut CCFGDataMap,
-        cfg: &mut CCFG,
-        strings: &HashMap<u64, String>,
-    ) -> Result<(), String> {
-        Self::verify_prepare(cfg, datamap, strings)?;
-        Self::verify_ops(cfg, datamap)?;
-        Ok(())
-    }
-
-    fn verify_prepare(
-        cfg: &mut CCFG,
-        datamap: &mut CCFGDataMap,
-        strings: &HashMap<u64, String>,
-    ) -> Result<(), String> {
-        datamap.prepare_consts(cfg, strings);
-        Self::verify_prepare_consts(cfg, datamap, strings)?;
-        datamap.prepare_regs(cfg);
-        Self::verify_prepare_regs(datamap)?;
-        Ok(())
-    }
-
-    fn verify_ops(cfg: &mut CCFG, datamap: &mut CCFGDataMap) -> Result<(), String> {
-        Self::verify_handler_each_node(cfg, datamap, &Self::verify_handle, "Handle operator")?;
-        Ok(())
-    }
-
-    fn verify_prepare_consts(
-        cfg: &CCFG,
-        datamap: &CCFGDataMap,
-        strings: &HashMap<u64, String>,
-    ) -> Result<(), String> {
-        let mut errors = Vec::new();
-        // All nodes of datamap.const_nodes should be constant node of SSAStorage
-        for &const_node in &datamap.const_nodes {
-            if !datamap.ssa.is_constant(const_node) {
-                errors.push(format!("Invalid constant node: {:?}", const_node));
-            }
-        }
-
-        // All values of constant nodes between SSAStorage and CCFG should be same.
-        for (&node, &cfg_node) in &datamap.var_map {
-            let val = if let Some(tmp_val) = datamap.ssa.constant_value(node) {
-                let ret = if let Some(s) = strings.get(&tmp_val) {
-                    format!("\"{}\"", s)
-                } else {
-                    format!("0x{:x}", tmp_val)
-                };
-                Some(ret)
-            } else {
-                let err = format!("Invalid constant node: {:?}", node);
-                errors.push(err);
-                None
-            };
-            let const_opt = cfg.constant_of(cfg_node);
-            if const_opt.is_none() {
-                let err = format!("No ValueNode::Constant({:?}) is found", cfg_node);
-                errors.push(err);
-            }
-            if val.is_none() || const_opt.is_none() {
-                continue;
-            }
-            let v = val.unwrap().to_string();
-            let c = const_opt.unwrap();
-            if v != c {
-                let err = format!("Mismatched values `{:?}` and `{:?}`", v, c);
-                errors.push(err);
-            }
-        }
-
-        if errors.len() > 0 {
-            Err(errors.join(Self::DELIM))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_prepare_regs_of(
-        datamap: &CCFGDataMap,
-        node: SSARef,
-        name: String,
-    ) -> Result<(), String> {
-        let mut errors = Vec::new();
-        if datamap.var_map.get(&node).is_none() {
-            let err = format!("Invalid register node: {:?}", node);
-            errors.push(err);
-        }
-        // Checking if name is a key of reg_map.
-        // reg_map.get(&name) is not needed to be same to
-        // cfg_node of var_map.get(&node)
-        if !datamap.reg_map.contains_key(&name) {
-            let err = format!("Invalid register name: {:?}", name);
-            errors.push(err);
-        }
-        if errors.len() > 0 {
-            Err(errors.join(Self::DELIM))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_prepare_regs(datamap: &CCFGDataMap) -> Result<(), String> {
-        let mut errors = Vec::new();
-        for walk_node in datamap.ssa.inorder_walk() {
-            let reg_state = datamap.ssa.registers_in(walk_node);
-            if reg_state.is_none() {
-                continue;
-            }
-            let reg_map = utils::register_state_info(reg_state.unwrap(), datamap.ssa);
-            for (idx, (node, _)) in reg_map.into_iter() {
-                let name = datamap
-                    .ssa
-                    .regfile
-                    .get_name(idx)
-                    .unwrap_or("mem")
-                    .to_string();
-                let res = Self::verify_prepare_regs_of(datamap, node, name);
-                if let Err(e) = res {
-                    errors.push(e);
-                }
-            }
-        }
-        if errors.len() > 0 {
-            Err(errors.join(Self::DELIM))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_handler_each_node(
-        cfg: &mut CCFG,
-        datamap: &mut CCFGDataMap,
-        verifier: &Verifier,
-        name: &str,
-    ) -> Result<(), String> {
-        let mut errors = Vec::new();
-        for node in datamap.ssa.inorder_walk() {
-            if let Err(err) = verifier(node, cfg, datamap) {
-                errors.push(err);
-            }
-        }
-        if errors.len() > 0 {
-            Err(format!(
-                "{} @ {}",
-                errors.join(Self::DELIM),
-                name.to_string()
-            ))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_handle(
-        node: SSARef,
-        cfg: &mut CCFG,
-        datamap: &mut CCFGDataMap,
-    ) -> Result<(), String> {
-        // Ensure `handle_binop` insert node as key into var_map.
-        let expr = c_ast::Expr::Add;
-        let operand_nodes = datamap
-            .var_map
-            .iter()
-            .map(|(n, _)| *n)
-            .filter(|n| *n != node)
-            .take(2)
-            .collect();
-        // Erase the key so as to ensure whether the key will be correctly inserted
-        // by handle
-        datamap.var_map.remove(&node);
-        datamap.handle(node, operand_nodes, expr, cfg);
-        if datamap.var_map.get(&node).is_none() {
-            Err(format!("Failed to handle binary operator: {:?}", node))
-        } else {
-            Ok(())
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
+    use backend::lang_c::c_ast;
     use backend::lang_c::c_cfg;
-    use backend::lang_c::c_cfg_builder::{
-        CCFGBuilder, CCFGBuilderVerifier, CCFGDataMap, CCFGDataMapVerifier,
-    };
+    use backend::lang_c::c_cfg_builder::{CCFG, CCFGBuilder, CCFGDataMap, SSARef};
     use frontend::radeco_containers::RadecoFunction;
     use frontend::radeco_source::SourceErr;
     use middle::ir_reader;
+    use middle::ir::MOpcode;
     use middle::regfile::SubRegisterFile;
+    use middle::ssa::ssa_traits::{SSA, SSAWalk};
+    use middle::ssa::utils;
     use r2api::structs::LRegInfo;
     use serde_json;
     use std::collections::HashMap;
@@ -955,6 +686,277 @@ mod test {
     use std::io::prelude::*;
     use std::path::PathBuf;
     use std::sync::Arc;
+
+    struct CCFGBuilderVerifier {}
+
+    impl CCFGBuilderVerifier {
+        const DELIM: &'static str = "; ";
+
+        fn verify(builder: &mut CCFGBuilder) -> Result<(), String> {
+            let ssa = builder.ssa.clone();
+            let mut errors = Vec::new();
+            for node in ssa.inorder_walk() {
+                match ssa.opcode(node) {
+                    Some(MOpcode::OpCall) => {
+                        if let Err(err) = Self::verify_args_inorder_at(builder, node) {
+                            errors.push(err);
+                        }
+                        if let Err(err) = Self::verify_call_action_at(builder, node) {
+                            errors.push(err);
+                        }
+                    }
+                    Some(MOpcode::OpStore) => {
+                        if let Err(err) = Self::verify_assign_at(builder, node) {
+                            errors.push(err);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if errors.len() > 0 {
+                Err(errors.join(Self::DELIM))
+            } else {
+                Ok(())
+            }
+        }
+
+        // All argument node exist in SSAStorage
+        fn verify_args_inorder_at(builder: &CCFGBuilder, call_node: SSARef) -> Result<(), String> {
+            let mut errors = Vec::new();
+            let args = builder.args_inorder(call_node);
+            for arg in args {
+                if let Err(debug) = builder.ssa.node_data(arg) {
+                    let err = format!("{:?}", debug);
+                    errors.push(err);
+                }
+            }
+            if errors.len() > 0 {
+                Err(errors.join(Self::DELIM))
+            } else {
+                Ok(())
+            }
+        }
+
+        // Verify `assign` made `CCFG::Action(ActionNode::Assignment)` node.
+        fn verify_assign_at(builder: &mut CCFGBuilder, node: SSARef) -> Result<(), String> {
+            let ops = builder.ssa.operands_of(node);
+            let dst = builder
+                .datamap
+                .var_map
+                .get(&ops[1])
+                .map(|&x| builder.cfg.derefed_node(x).unwrap_or(x));
+            let src = builder.datamap.var_map.get(&ops[2]).cloned();
+            if src.is_none() {
+                return Err("Failed to get src operand node from CCFG".to_string());
+            }
+            if dst.is_none() {
+                return Err("Failed to get dst operand node from CCFG".to_string());
+            }
+            let assign_node = builder.assign(dst.unwrap(), src.unwrap());
+            let is_err = builder.last_action != assign_node || !builder.cfg.is_assign_node(assign_node);
+            if is_err {
+                Err("Failed to append assign action".to_string())
+            } else {
+                Ok(())
+            }
+        }
+
+        // Verify `call_action` made `CCFG::Action(ActionNode::Call(_))` node.
+        fn verify_call_action_at(builder: &mut CCFGBuilder, call_node: SSARef) -> Result<(), String> {
+            let call_node = builder.call_action(call_node);
+            let is_err = builder.last_action != call_node || !builder.cfg.is_call_node(call_node);
+            if is_err {
+                Err("`CCFGBuilder::call_action` is failed.".to_string())
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    struct CCFGDataMapVerifier {}
+
+    type Verifier = Fn(SSARef, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
+    impl CCFGDataMapVerifier {
+        const DELIM: &'static str = "; ";
+
+        fn verify_datamap(
+            datamap: &mut CCFGDataMap,
+            cfg: &mut CCFG,
+            strings: &HashMap<u64, String>,
+        ) -> Result<(), String> {
+            Self::verify_prepare(cfg, datamap, strings)?;
+            Self::verify_ops(cfg, datamap)?;
+            Ok(())
+        }
+
+        fn verify_prepare(
+            cfg: &mut CCFG,
+            datamap: &mut CCFGDataMap,
+            strings: &HashMap<u64, String>,
+        ) -> Result<(), String> {
+            datamap.prepare_consts(cfg, strings);
+            Self::verify_prepare_consts(cfg, datamap, strings)?;
+            datamap.prepare_regs(cfg);
+            Self::verify_prepare_regs(datamap)?;
+            Ok(())
+        }
+
+        fn verify_ops(cfg: &mut CCFG, datamap: &mut CCFGDataMap) -> Result<(), String> {
+            Self::verify_handler_each_node(cfg, datamap, &Self::verify_handle, "Handle operator")?;
+            Ok(())
+        }
+
+        fn verify_prepare_consts(
+            cfg: &CCFG,
+            datamap: &CCFGDataMap,
+            strings: &HashMap<u64, String>,
+        ) -> Result<(), String> {
+            let mut errors = Vec::new();
+            // All nodes of datamap.const_nodes should be constant node of SSAStorage
+            for &const_node in &datamap.const_nodes {
+                if !datamap.ssa.is_constant(const_node) {
+                    errors.push(format!("Invalid constant node: {:?}", const_node));
+                }
+            }
+
+            // All values of constant nodes between SSAStorage and CCFG should be same.
+            for (&node, &cfg_node) in &datamap.var_map {
+                let val = if let Some(tmp_val) = datamap.ssa.constant_value(node) {
+                    let ret = if let Some(s) = strings.get(&tmp_val) {
+                        format!("\"{}\"", s)
+                    } else {
+                        format!("0x{:x}", tmp_val)
+                    };
+                    Some(ret)
+                } else {
+                    let err = format!("Invalid constant node: {:?}", node);
+                    errors.push(err);
+                    None
+                };
+                let const_opt = cfg.constant_of(cfg_node);
+                if const_opt.is_none() {
+                    let err = format!("No ValueNode::Constant({:?}) is found", cfg_node);
+                    errors.push(err);
+                }
+                if val.is_none() || const_opt.is_none() {
+                    continue;
+                }
+                let v = val.unwrap().to_string();
+                let c = const_opt.unwrap();
+                if v != c {
+                    let err = format!("Mismatched values `{:?}` and `{:?}`", v, c);
+                    errors.push(err);
+                }
+            }
+
+            if errors.len() > 0 {
+                Err(errors.join(Self::DELIM))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn verify_prepare_regs_of(
+            datamap: &CCFGDataMap,
+            node: SSARef,
+            name: String,
+        ) -> Result<(), String> {
+            let mut errors = Vec::new();
+            if datamap.var_map.get(&node).is_none() {
+                let err = format!("Invalid register node: {:?}", node);
+                errors.push(err);
+            }
+            // Checking if name is a key of reg_map.
+            // reg_map.get(&name) is not needed to be same to
+            // cfg_node of var_map.get(&node)
+            if !datamap.reg_map.contains_key(&name) {
+                let err = format!("Invalid register name: {:?}", name);
+                errors.push(err);
+            }
+            if errors.len() > 0 {
+                Err(errors.join(Self::DELIM))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn verify_prepare_regs(datamap: &CCFGDataMap) -> Result<(), String> {
+            let mut errors = Vec::new();
+            for walk_node in datamap.ssa.inorder_walk() {
+                let reg_state = datamap.ssa.registers_in(walk_node);
+                if reg_state.is_none() {
+                    continue;
+                }
+                let reg_map = utils::register_state_info(reg_state.unwrap(), datamap.ssa);
+                for (idx, (node, _)) in reg_map.into_iter() {
+                    let name = datamap
+                        .ssa
+                        .regfile
+                        .get_name(idx)
+                        .unwrap_or("mem")
+                        .to_string();
+                    let res = Self::verify_prepare_regs_of(datamap, node, name);
+                    if let Err(e) = res {
+                        errors.push(e);
+                    }
+                }
+            }
+            if errors.len() > 0 {
+                Err(errors.join(Self::DELIM))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn verify_handler_each_node(
+            cfg: &mut CCFG,
+            datamap: &mut CCFGDataMap,
+            verifier: &Verifier,
+            name: &str,
+        ) -> Result<(), String> {
+            let mut errors = Vec::new();
+            for node in datamap.ssa.inorder_walk() {
+                if let Err(err) = verifier(node, cfg, datamap) {
+                    errors.push(err);
+                }
+            }
+            if errors.len() > 0 {
+                Err(format!(
+                    "{} @ {}",
+                    errors.join(Self::DELIM),
+                    name.to_string()
+                ))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn verify_handle(
+            node: SSARef,
+            cfg: &mut CCFG,
+            datamap: &mut CCFGDataMap,
+        ) -> Result<(), String> {
+            // Ensure `handle_binop` insert node as key into var_map.
+            let expr = c_ast::Expr::Add;
+            let operand_nodes = datamap
+                .var_map
+                .iter()
+                .map(|(n, _)| *n)
+                .filter(|n| *n != node)
+                .take(2)
+                .collect();
+            // Erase the key so as to ensure whether the key will be correctly inserted
+            // by handle
+            datamap.var_map.remove(&node);
+            datamap.handle(node, operand_nodes, expr, cfg);
+            if datamap.var_map.get(&node).is_none() {
+                Err(format!("Failed to handle binary operator: {:?}", node))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
 
     fn register_profile() -> Result<LRegInfo, SourceErr> {
         let regfile_path = "./test_files/x86_register_profile.json";

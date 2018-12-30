@@ -532,10 +532,10 @@ where
     ) -> T::ValueRef {
         radeco_trace!("Entering add_phi_operands, phi: {:?}", phi);
         // Determine operands from predecessors
-        let baddr = self.addr_of(&block);
+        let _baddr = self.addr_of(&block);
         for pred in self.ssa.preds_of(block) {
             let mut p_addr = self.addr_of(&pred);
-            radeco_trace!("phip_add_phi_operands|cur:{}|pred:{}", baddr, p_addr);
+            radeco_trace!("phip_add_phi_operands|cur:{}|pred:{}", _baddr, p_addr);
             let datasource = self.read_variable(&mut p_addr, variable);
             radeco_trace!("datasource: {:?}", datasource);
             self.ssa.phi_use(phi, datasource);
@@ -921,8 +921,8 @@ where
     pub fn operand_width(&self, node: &T::ValueRef) -> u16 {
         match self.ssa.node_data(*node) {
             Ok(x) => x.vt.width().get_width().unwrap_or(64),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 64
             }
         }

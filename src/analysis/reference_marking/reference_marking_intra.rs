@@ -229,8 +229,6 @@ impl ReferenceMarker {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     #[test]
     fn mark_refs_1() {}
 }

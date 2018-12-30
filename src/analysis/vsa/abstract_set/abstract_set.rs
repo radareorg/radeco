@@ -26,20 +26,20 @@ use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
 // XXX: Try to support 128-bit registers in the future
-// type inum = i128; <-- this one do influence performance
+// type Inum = i128; <-- this one do influence performance
 // const full_bits: u8 = 128;
 
-/// All numbers (except k) in AbstractSet will be stored as `inum` type
-pub type inum = i64;
-/// Unsigned type according to inum
-pub type unum = u64;
-/// All members (except k) in AbstractSet will be hold in `_bits` bits
-pub const _bits: u8 = 64;
+/// All numbers (except k) in AbstractSet will be stored as `Inum` type
+pub type Inum = i64;
+/// Unsigned type according to Inum
+pub type Unum = u64;
+/// All members (except k) in AbstractSet will be hold in `_BITS` bits
+pub const _BITS: u8 = 64;
 
 /// Trait used to indicate this is a container which contains something
 pub trait Container<T: Clone> {
     // Returns true if the Container `self` contains `object`, false otherwise.
-    fn contains(&self, object: &T) -> bool {
+    fn contains(&self, _object: &T) -> bool {
         unimplemented!();
     }
 }
@@ -72,25 +72,25 @@ pub trait AbstractSet:
     + Not
     + Shl
     + Shr
-    + Container<inum>
+    + Container<Inum>
     + Container<Self>
-    + Container<Vec<inum>>
-    + From<inum>
-    + From<(u8, inum)>
+    + Container<Vec<Inum>>
+    + From<Inum>
+    + From<(u8, Inum)>
     + Default
 {
     /// Returns the meet (intersection) of AbstractSet `self` and `other`.
-    fn meet(&self, other: &Self) -> Self {
+    fn meet(&self, _other: &Self) -> Self {
         unimplemented!();
     }
 
     /// Returns the join (union) of AbstractSet `self` and `other`.
-    fn join(&self, other: &Self) -> Self {
+    fn join(&self, _other: &Self) -> Self {
         unimplemented!();
     }
 
     /// Returns the AbstractSet obtained by widening `self` with respect to `other`
-    fn widen(&self, other: &Self) -> Self {
+    fn widen(&self, _other: &Self) -> Self {
         unimplemented!();
     }
 
@@ -100,7 +100,7 @@ pub trait AbstractSet:
     }
 
     /// Returns the AbstractSet obtained by setting lower bound as x for `self`
-    fn set_lower_bound(&self, x: inum) -> Self {
+    fn set_lower_bound(&self, _x: Inum) -> Self {
         unimplemented!()
     }
 
@@ -110,32 +110,32 @@ pub trait AbstractSet:
     }
 
     /// Returns the AbstractSet obtained by setting upper bound as x for `self`
-    fn set_upper_bound(&self, x: inum) -> Self {
+    fn set_upper_bound(&self, _x: Inum) -> Self {
         unimplemented!()
     }
 
     /// Returns the AbstractSet narrowed into a new k-bit-filed, for OpNarrow.
-    fn narrow(&self, k: u8) -> Self {
+    fn narrow(&self, _k: u8) -> Self {
         unimplemented!();
     }
 
     /// Returns the AbstractSet sign extended into a new k-bit-filed, for OpSignExt.
-    fn sign_extend(&self, k: u8) -> Self {
+    fn sign_extend(&self, _k: u8) -> Self {
         unimplemented!();
     }
 
     /// Returns the AbstractSet zero extended into a new k-bit-filed, for OpZeroExt.
-    fn zero_extend(&self, k: u8) -> Self {
+    fn zero_extend(&self, _k: u8) -> Self {
         unimplemented!();
     }
 
     /// Returns Some(cons) if the AbstractSet only contains one constant, None otherwise.
-    fn constant(&self) -> Option<inum> {
+    fn constant(&self) -> Option<Inum> {
         unimplemented!()
     }
 
     /// Returns capacity of AbstractSet.
-    fn capacity(&self) -> inum {
+    fn capacity(&self) -> Inum {
         unimplemented!()
     }
 

@@ -101,15 +101,6 @@ pub struct CCFG {
     debug_info: HashMap<CCFGRef, String>,
 }
 
-impl CCFGNode {
-    fn is_exit(&self) -> bool {
-        match self {
-            &CCFGNode::Action(ActionNode::Return) => true,
-            _ => false,
-        }
-    }
-}
-
 /// Returns nodes which is connected with given type of edge
 fn neighbors_by_edge(edges: &Vec<EdgeReference<CCFGEdge>>, ty: &CCFGEdge) -> Vec<CCFGRef> {
     edges
@@ -892,11 +883,11 @@ impl<'a> CASTConverter<'a> {
             self.ast.label(l);
         };
         let ast_node = self.to_c_ast_single(current_node);
-        if let Ok(n) = ast_node {
+        if let Ok(_) = ast_node {
             self.node_map.insert(current_node, ast_node.unwrap());
         }
-        if let Err(err) = ast_node {
-            radeco_err!(err);
+        if let Err(_err) = ast_node {
+            radeco_err!(_err);
         }
 
         if let Some(ref comment) = self.cfg.debug_info.get(&current_node) {
@@ -1064,10 +1055,10 @@ mod test {
         let mut cfg = CCFG::new("main");
         let x = cfg.var("x", None);
         let y = cfg.var("y", None);
-        let z = cfg.var("z", None);
+        let _z = cfg.var("z", None);
         let entry = cfg.entry;
         let expr = cfg.expr(&[x, y], c_ast::Expr::Add);
-        let assn = cfg.assign(x, expr, entry);
+        let _assn = cfg.assign(x, expr, entry);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
         let output = cfg.to_c_ast().print();
         println!("{}", output);
@@ -1084,7 +1075,7 @@ mod test {
         let x = cfg.var("x", None);
         let y = cfg.var("y", None);
         let entry = cfg.entry;
-        let call_f = cfg.call_func("func", &[x], entry, Some(y));
+        let _call_f = cfg.call_func("func", &[x], entry, Some(y));
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
         let output = cfg.to_c_ast().print();
         println!("{}", output);
@@ -1112,9 +1103,9 @@ mod test {
         let w = cfg.var("w", None);
         let entry = cfg.entry;
         let assn = cfg.assign(x, y, entry);
-        let call_test1 = cfg.call_func("test1", &[], assn, None);
+        let _call_test1 = cfg.call_func("test1", &[], assn, None);
         let call_f = cfg.call_func("func", &[z, w], assn, None);
-        let call_test2 = cfg.call_func("test2", &[], call_f, None);
+        let _call_test2 = cfg.call_func("test2", &[], call_f, None);
         let _ = cfg.conditional(x, assn, Some(call_f), entry);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
         let output = cfg.to_c_ast().print();
@@ -1202,8 +1193,8 @@ mod test {
         let x = cfg.var("x", None);
         let y = cfg.var("y", None);
         let w = cfg.var("w", None);
-        let z = cfg.var("z", None);
-        let v = cfg.var("v", None);
+        let _z = cfg.var("z", None);
+        let _v = cfg.var("v", None);
         let cond = cfg.var("cond", None);
         let assn1 = cfg.assign(x, y, entry);
         let add = cfg.expr(&[x, w], c_ast::Expr::Add);
@@ -1240,15 +1231,15 @@ mod test {
         let x = cfg.var("x", None);
         let y = cfg.var("y", None);
         let w = cfg.var("w", None);
-        let z = cfg.var("z", None);
-        let v = cfg.var("v", None);
+        let _z = cfg.var("z", None);
+        let _v = cfg.var("v", None);
         let cond = cfg.var("cond", None);
         let assn1 = cfg.assign(x, y, entry);
         let add = cfg.expr(&[x, w], c_ast::Expr::Add);
         let assn2 = cfg.assign(x, add, assn1);
         let f_call = cfg.call_func("func", &[x], assn2, Some(cond));
         let f_call1 = cfg.call_func("go", &[x], f_call, None);
-        let break_goto = cfg.add_goto(assn2, "L1", f_call1);
+        let _break_goto = cfg.add_goto(assn2, "L1", f_call1);
         let if_node = cfg.conditional(cond, f_call1, None, f_call);
         let _ = cfg.add_return(None, if_node);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
@@ -1267,13 +1258,12 @@ mod test {
     #[test]
     fn c_cfg_type_test() {
         let mut cfg = CCFG::new("main");
-        let entry = cfg.entry;
-        let i = cfg.var("i", Some(Ty::new(BTy::Int, true, 0)));
-        let u = cfg.var("u", Some(Ty::new(BTy::Int, false, 1)));
-        let d = cfg.var("d", Some(Ty::new(BTy::Double, true, 0)));
-        let c = cfg.var("c", Some(Ty::new(BTy::Char, true, 0)));
-        let v = cfg.var("v", Some(Ty::new(BTy::Void, true, 0)));
-        let f = cfg.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
+        let _i = cfg.var("i", Some(Ty::new(BTy::Int, true, 0)));
+        let _u = cfg.var("u", Some(Ty::new(BTy::Int, false, 1)));
+        let _d = cfg.var("d", Some(Ty::new(BTy::Double, true, 0)));
+        let _c = cfg.var("c", Some(Ty::new(BTy::Char, true, 0)));
+        let _v = cfg.var("v", Some(Ty::new(BTy::Void, true, 0)));
+        let _f = cfg.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
         let output = cfg.to_c_ast().print();
         println!("{}", output);

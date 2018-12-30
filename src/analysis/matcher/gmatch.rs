@@ -488,7 +488,7 @@ mod test {
     use analysis::matcher::gmatch;
     use middle::ir::{MAddress, MOpcode};
     use middle::ssa::cfg_traits::CFGMod;
-    use middle::ssa::ssa_traits::{SSAMod, SSAWalk, ValueType, SSA};
+    use middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
     use middle::ssa::ssastorage::{NodeData, SSAStorage};
 
     #[test]

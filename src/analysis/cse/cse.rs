@@ -7,7 +7,6 @@
 //! improved.
 
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::marker::PhantomData;
 
 use super::ssasort::Sorter;

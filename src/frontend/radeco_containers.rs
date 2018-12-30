@@ -55,7 +55,7 @@ use rayon::prelude::*;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::{btree_map, HashSet};
+use std::collections::btree_map;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::rc::Rc;
@@ -752,12 +752,12 @@ impl<'a> ModuleLoader<'a> {
         // Fill in module level information from the `Source`
         match source.symbols() {
             Ok(sym_info) => rmod.symbols = sym_info,
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         match source.sections() {
             Ok(section_info) => rmod.sections = Arc::new(section_info),
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         match source.imports() {
@@ -784,32 +784,32 @@ impl<'a> ModuleLoader<'a> {
                     })
                     .collect();
             }
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         match source.exports() {
             Ok(exports) => rmod.exports = exports,
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         match source.relocs() {
             Ok(relocs) => rmod.relocs = relocs,
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         match source.libraries() {
             Ok(libs) => rmod.libs = libs,
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         match source.entrypoint() {
             Ok(ep) => rmod.entrypoint = ep,
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         match source.strings(true) {
             Ok(strings) => rmod.strings = strings,
-            Err(e) => radeco_warn!(e),
+            Err(_e) => radeco_warn!(_e),
         }
 
         let mut flresult = floader.load(&rmod);
@@ -876,8 +876,8 @@ impl<'a> ModuleLoader<'a> {
         if self.build_callgraph || self.load_datarefs || self.load_locals {
             let aux_info = match source.functions() {
                 Ok(info) => info,
-                Err(e) => {
-                    radeco_warn!(e);
+                Err(_e) => {
+                    radeco_warn!(_e);
                     Vec::new()
                 }
             };
@@ -916,8 +916,8 @@ impl<'a> ModuleLoader<'a> {
                                 .into_iter()
                                 .map(|l| VarBinding::local(l))
                                 .collect::<Vec<_>>(),
-                            Some(Err(e)) => {
-                                radeco_warn!("{:?}", e);
+                            Some(Err(_e)) => {
+                                radeco_warn!("{:?}", _e);
                                 Vec::new()
                             }
                             None => {
@@ -1271,7 +1271,7 @@ impl RadecoFunction {
         }
     }
 
-    pub fn local_at(&self, mut node: NodeIndex, forward: bool) -> Option<VarBindings> {
+    pub fn local_at(&self, node: NodeIndex, forward: bool) -> Option<VarBindings> {
         let next = self.ssa.replaced_map.get(&node).cloned();
         if next.is_some() && forward {
             self.binding_map.get(&next.unwrap()).cloned()
@@ -1293,8 +1293,6 @@ pub struct CallContextInfo {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     #[test]
     fn test_fn_loader() {
         // let ld = |x: &FLResult, y: &RadecoModule| -> FLResult { unimplemented!() };

@@ -24,8 +24,8 @@ pub trait Source {
 
     // Non essential / functions with default implementation.
     fn function_at(&mut self, address: u64) -> Option<FunctionInfo> {
-        let fs = self.functions().unwrap_or_else(|e| {
-            radeco_err!("Error: {:?}", e);
+        let fs = self.functions().unwrap_or_else(|_e| {
+            radeco_err!("Error: {:?}", _e);
             Vec::new()
         });
         for f in fs {
@@ -38,8 +38,8 @@ pub trait Source {
     }
 
     fn function_named(&mut self, fn_name: &str) -> Option<FunctionInfo> {
-        let fs = self.functions().unwrap_or_else(|e| {
-            radeco_err!("Error: {:?}", e);
+        let fs = self.functions().unwrap_or_else(|_e| {
+            radeco_err!("Error: {:?}", _e);
             Vec::new()
         });
         for f in fs {
@@ -61,8 +61,8 @@ pub trait Source {
     }
 
     fn flag_at(&mut self, address: u64) -> Option<LFlagInfo> {
-        let flags = self.flags().unwrap_or_else(|e| {
-            radeco_err!("Error: {:?}", e);
+        let flags = self.flags().unwrap_or_else(|_e| {
+            radeco_err!("Error: {:?}", _e);
             Vec::new()
         });
         for flag in flags {
@@ -74,8 +74,8 @@ pub trait Source {
     }
 
     fn section_of(&mut self, address: u64) -> Option<LSectionInfo> {
-        let ss = self.section_map().unwrap_or_else(|e| {
-            radeco_err!("Error {:?}", e);
+        let ss = self.section_map().unwrap_or_else(|_e| {
+            radeco_err!("Error {:?}", _e);
             Vec::new()
         });
         for s in ss {
@@ -103,8 +103,8 @@ where
     fn functions(&mut self) -> Result<Vec<FunctionInfo>, &'static str> {
         match self.fn_list() {
             Ok(f) => Ok(f),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to load funtion info from r2")
             }
         }
@@ -121,8 +121,8 @@ where
     fn register_profile(&mut self) -> Result<LRegInfo, &'static str> {
         match self.reg_info() {
             Ok(r) => Ok(r),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to load register profile")
             }
         }
@@ -131,8 +131,8 @@ where
     fn flags(&mut self) -> Result<Vec<LFlagInfo>, &'static str> {
         match self.flag_info() {
             Ok(f) => Ok(f),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to load flags from r2")
             }
         }
@@ -141,8 +141,8 @@ where
     fn section_map(&mut self) -> Result<Vec<LSectionInfo>, &'static str> {
         match self.sections() {
             Ok(s) => Ok(s),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to get section info from r2")
             }
         }
@@ -172,15 +172,15 @@ impl FileSource {
     fn read_file(&self, suffix: &str) -> String {
         let mut path = PathBuf::from(&self.dir);
         path.push(&format!("{}_{}.json", self.base_name, suffix));
-        let mut f = File::open(path).unwrap_or_else(|e| {
+        let mut f = File::open(path).unwrap_or_else(|_e| {
             radeco_err!("Failed to open file");
-            radeco_err!("Error: {:?}", e);
+            radeco_err!("Error: {:?}", _e);
             process::abort();
         });
         let mut json_str = String::new();
-        let _ = f.read_to_string(&mut json_str).unwrap_or_else(|e| {
+        let _ = f.read_to_string(&mut json_str).unwrap_or_else(|_e| {
             radeco_err!("Failed to read file");
-            radeco_err!("Error: {:?}", e);
+            radeco_err!("Error: {:?}", _e);
             process::abort();
         });
         json_str
@@ -189,15 +189,15 @@ impl FileSource {
     fn write_file(&mut self, suffix: &str, data: &str) {
         let mut path = PathBuf::from(&self.dir);
         path.push(&format!("{}_{}.json", self.base_name, suffix));
-        let mut f = File::create(path).unwrap_or_else(|e| {
+        let mut f = File::create(path).unwrap_or_else(|_e| {
             radeco_err!("Failed to open file");
-            radeco_err!("Error: {:?}", e);
+            radeco_err!("Error: {:?}", _e);
             process::abort()
         });
         f.write_all(data.to_string().as_bytes())
-            .unwrap_or_else(|e| {
+            .unwrap_or_else(|_e| {
                 radeco_err!("Failed to write file");
-                radeco_err!("Error: {:?}", e);
+                radeco_err!("Error: {:?}", _e);
             });
     }
 }
@@ -235,8 +235,8 @@ impl FileSource {
     }
 
     pub fn strings(&mut self) -> Vec<LStringInfo> {
-        serde_json::from_str(&self.read_file(suffix::STRING)).unwrap_or_else(|e| {
-            radeco_err!("Failed to decode json\n, Error: {:?}", e);
+        serde_json::from_str(&self.read_file(suffix::STRING)).unwrap_or_else(|_e| {
+            radeco_err!("Failed to decode json\n, Error: {:?}", _e);
             process::abort();
         })
     }
@@ -246,8 +246,8 @@ impl Source for FileSource {
     fn functions(&mut self) -> Result<Vec<FunctionInfo>, &'static str> {
         match serde_json::from_str(&self.read_file(suffix::FUNCTION_INFO)) {
             Ok(s) => Ok(s),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to decode json")
             }
         }
@@ -257,8 +257,8 @@ impl Source for FileSource {
         let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, address);
         match serde_json::from_str(&self.read_file(&suffix)) {
             Ok(s) => Ok(s),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to decode json")
             }
         }
@@ -267,8 +267,8 @@ impl Source for FileSource {
     fn register_profile(&mut self) -> Result<LRegInfo, &'static str> {
         match serde_json::from_str(&self.read_file(suffix::REGISTER)) {
             Ok(s) => Ok(s),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to decode json")
             }
         }
@@ -277,8 +277,8 @@ impl Source for FileSource {
     fn flags(&mut self) -> Result<Vec<LFlagInfo>, &'static str> {
         match serde_json::from_str(&self.read_file(suffix::FLAG)) {
             Ok(s) => Ok(s),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to decode json")
             }
         }
@@ -287,8 +287,8 @@ impl Source for FileSource {
     fn section_map(&mut self) -> Result<Vec<LSectionInfo>, &'static str> {
         match serde_json::from_str(&self.read_file(suffix::SECTION)) {
             Ok(s) => Ok(s),
-            Err(e) => {
-                radeco_err!("{:?}", e);
+            Err(_e) => {
+                radeco_err!("{:?}", _e);
                 Err("Failed to decode json")
             }
         }
@@ -312,8 +312,8 @@ impl From<R2> for FileSource {
         });
         let mut dir = PathBuf::from(".");
         dir.push(&fname);
-        fs::create_dir_all(&dir).unwrap_or_else(|e| {
-            radeco_err!("Error {:?}", e);
+        fs::create_dir_all(&dir).unwrap_or_else(|_e| {
+            radeco_err!("Error {:?}", _e);
             process::abort();
         });
         if dir.to_str().is_none() || fname.to_str().is_none() {
@@ -326,13 +326,13 @@ impl From<R2> for FileSource {
         };
 
         {
-            let fns = r2.functions().unwrap_or_else(|e| {
-                radeco_err!("{:?}", e);
+            let fns = r2.functions().unwrap_or_else(|_e| {
+                radeco_err!("{:?}", _e);
                 Vec::new()
             });
             {
-                let json_str = serde_json::to_string(&fns).unwrap_or_else(|e| {
-                    radeco_err!("Error: {:?}", e);
+                let json_str = serde_json::to_string(&fns).unwrap_or_else(|_e| {
+                    radeco_err!("Error: {:?}", _e);
                     "Invalid json".to_string()
                 });
                 fsource.write_file(suffix::FUNCTION_INFO, &json_str);
@@ -344,8 +344,8 @@ impl From<R2> for FileSource {
                     0
                 });
                 let result = r2.instructions_at(offset);
-                let json_str = serde_json::to_string(&result).unwrap_or_else(|e| {
-                    radeco_err!("Error: {:?}", e);
+                let json_str = serde_json::to_string(&result).unwrap_or_else(|_e| {
+                    radeco_err!("Error: {:?}", _e);
                     "Invalid json".to_string()
                 });
                 let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, offset);

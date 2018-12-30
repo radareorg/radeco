@@ -180,11 +180,11 @@ impl Verify for SSAStorage {
     fn verify_expr(&self, exi: &NodeIndex) -> VResult<Self> {
         radeco_trace!("ssa verify|Node {:?} with {:?}", exi, self.node_data(*exi));
         radeco_trace!("ssa verify|Args: {:?}", self.operands_of(*exi));
-        for arg in &self.operands_of(*exi) {
+        for _arg in &self.operands_of(*exi) {
             radeco_trace!(
                 "ssa verify|\targ: {:?} with {:?}",
-                arg,
-                self.node_data(*arg)
+                _arg,
+                self.node_data(*_arg)
             );
         }
         if let Ok(ndata) = self.node_data(*exi) {

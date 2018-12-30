@@ -63,7 +63,7 @@ pub trait Source {
     fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
         unimplemented!()
     }
-    fn disassemble_function(&self, name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
+    fn disassemble_function(&self, _name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
         unimplemented!()
     }
     fn disassemble_n_bytes(&self, _n: u64, _at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
@@ -78,7 +78,7 @@ pub trait Source {
     fn cc_info_of(&self, _start_addr: u64) -> Result<LCCInfo, SourceErr> {
         unimplemented!()
     }
-    fn strings(&self, data_only: bool) -> Result<Vec<LStringInfo>, SourceErr> {
+    fn strings(&self, _data_only: bool) -> Result<Vec<LStringInfo>, SourceErr> {
         unimplemented!()
     }
     fn raw(&self, _cmd: String) -> Result<String, SourceErr> {
@@ -547,7 +547,6 @@ mod test {
 
     use frontend::radeco_containers::*;
     use frontend::radeco_source::*;
-    use r2pipe::r2::R2;
     use std::rc::Rc;
 
     #[test]
