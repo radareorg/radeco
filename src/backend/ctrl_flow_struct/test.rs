@@ -136,8 +136,8 @@ fn ast_nmg_example() {
     let c_c1 = cctx.mk_var(v_c1);
     let c_c2 = cctx.mk_var(v_c2);
     let c_c3 = cctx.mk_var(v_c3);
-    let c_b1 = cctx.mk_var(v_b1);
-    let c_b2 = cctx.mk_var(v_b2);
+    let _c_b1 = cctx.mk_var(v_b1);
+    let _c_b2 = cctx.mk_var(v_b2);
     let c_d1 = cctx.mk_var(v_d1);
     let c_d2 = cctx.mk_var(v_d2);
     let c_d3 = cctx.mk_var(v_d3);

@@ -72,7 +72,7 @@ where
 mod test {
     use super::*;
     use analysis::interproc::summary;
-    use frontend::radeco_containers::{ProjectLoader, RadecoModule};
+    use frontend::radeco_containers::ProjectLoader;
     use frontend::radeco_source::FileSource;
     use middle::dce;
     use middle::ir_writer;
@@ -82,7 +82,7 @@ mod test {
     #[ignore]
     fn ipa_t1() {
         // let mut rproj = ProjectLoader::new().path("./ct1_sccp_ex.o").load();
-        let mut fsource = FileSource::open("./test_files/ct1_sccp_ex/ct1_sccp_ex");
+        let fsource = FileSource::open("./test_files/ct1_sccp_ex/ct1_sccp_ex");
         let mut rproj = ProjectLoader::new().source(Rc::new(fsource)).load();
         for mut xy in rproj.iter_mut() {
             let mut rmod = &mut xy.module;

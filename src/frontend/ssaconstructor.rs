@@ -13,7 +13,7 @@
 
 use esil::lexer::{Token, Tokenizer};
 
-use esil::parser::{Parse, Parser, ParserError};
+use esil::parser::{Parse, Parser};
 // use frontend::instruction_analyzer::{InstructionAnalyzer, X86_CS_IA, IOperand};
 use frontend::radeco_containers::RadecoFunction;
 
@@ -725,8 +725,8 @@ where
             loop {
                 let token_opt = match p.parse::<_, Tokenizer>(esil_str) {
                     Ok(token_opt_) => token_opt_,
-                    Err(err) => {
-                        radeco_err!("{}", err.to_string());
+                    Err(_err) => {
+                        radeco_err!("{}", _err.to_string());
                         continue;
                     },
                 };
@@ -735,8 +735,8 @@ where
                     radeco_trace!("ssa_construct_token|{}|{:?}", current_address, token);
                     let (lhs, rhs) = match p.fetch_operands(token) {
                         Ok(operands_opt) => operands_opt,
-                        Err(err) => {
-                            radeco_err!("{}", err.to_string());
+                        Err(_err) => {
+                            radeco_err!("{}", _err.to_string());
                             continue;
                         }
                     };

@@ -12,7 +12,7 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
-use middle::ir::{MAddress, MArity, MOpcode, WidthSpec};
+use middle::ir::{MArity, MOpcode, WidthSpec};
 use middle::ssa::graph_traits::{ConditionInfo, Graph};
 use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
 use middle::ssa::ssa_traits::{SSAMod, SSA};
@@ -22,8 +22,8 @@ use std::u64;
 #[macro_export]
 macro_rules! node_data_from_g {
     ($self:ident, $i:ident) => {
-        $self.g.node_data(*$i).unwrap_or_else(|x| {
-            radeco_err!("RegisterState found, {:?}", x);
+        $self.g.node_data(*$i).unwrap_or_else(|_x| {
+            radeco_err!("RegisterState found, {:?}", _x);
             NodeData {
                 vt: ValueInfo::new(ValueType::Invalid, WidthSpec::Unknown),
                 nt: NodeType::Undefined,
@@ -312,7 +312,7 @@ where
         LatticeValue::Const(val)
     }
 
-    fn evaluate_ternary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_ternary_op(&mut self, _i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
         // Do not reason about stores.
         match opcode {
             MOpcode::OpStore => return LatticeValue::Bottom,
@@ -321,8 +321,8 @@ where
     }
 
     fn visit_expression(&mut self, i: &T::ValueRef) -> LatticeValue {
-        let expr = self.g.node_data(*i).unwrap_or_else(|x| {
-            radeco_err!("RegisterState found, {:?}", x);
+        let expr = self.g.node_data(*i).unwrap_or_else(|_x| {
+            radeco_err!("RegisterState found, {:?}", _x);
             NodeData {
                 vt: ValueInfo::new(ValueType::Invalid, WidthSpec::Unknown),
                 nt: NodeType::Undefined,

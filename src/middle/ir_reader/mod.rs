@@ -19,8 +19,8 @@ pub fn parse_il(il: &str, regfile: Arc<SubRegisterFile>) -> SSAStorage {
     ret.regfile = regfile;
     match parser::FunctionParser::new().parse(il) {
         Ok(sast) => lowering::lower_simpleast(&mut ret, sast)
-            .unwrap_or_else(|e| radeco_err!("Error lowering IL to SSA: {:?}", e)),
-        Err(s) => radeco_err!("Error parsing IL: {}", s),
+            .unwrap_or_else(|_e| radeco_err!("Error lowering IL to SSA: {:?}", _e)),
+        Err(_s) => radeco_err!("Error parsing IL: {}", _s),
     }
     ret
 }

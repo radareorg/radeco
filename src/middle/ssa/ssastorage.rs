@@ -24,6 +24,8 @@ use super::graph_traits::{ConditionInfo, EdgeInfo, Graph};
 use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSAExtra, SSAMod, SSAWalk, ValueInfo, SSA};
+
+#[cfg(feature="trace_log")]
 use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the

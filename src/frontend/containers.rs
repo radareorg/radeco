@@ -364,14 +364,14 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
     let locals = locals.expect("This cannot be `None`");
     for l in locals {
         //println!("[z] Local loaded: {:?}", l);
-        let reference = l.reference.unwrap_or_else(|| {
+        let _reference = l.reference.unwrap_or_else(|| {
             radeco_err!("Reference not found");
             LVarRef {
                 base: None,
                 offset: None,
             }
         });
-        radeco_trace!("{:?} {:?}", reference.base, reference.offset);
+        radeco_trace!("{:?} {:?}", _reference.base, _reference.offset);
     }
 }
 
@@ -382,16 +382,16 @@ fn load_locals(rfn: &mut DefaultFnTy, locals: Option<Vec<LVarInfo>>) {
 // the SSA for all the function that it holds and perform basic analysis.
 impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
     fn from(source: &'a mut T) -> RadecoModule<'a, DefaultFnTy> {
-        let reg_info = source.register_profile().unwrap_or_else(|e| {
-            radeco_err!("{:?}", e);
+        let reg_info = source.register_profile().unwrap_or_else(|_e| {
+            radeco_err!("{:?}", _e);
             None.unwrap()
         });
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
         rmod.regfile = Some(SubRegisterFile::new(&reg_info));
         let (tx, rx) = sync::mpsc::channel();
-        let fns = source.functions().unwrap_or_else(|e| {
-            radeco_err!("{:?}", e);
+        let fns = source.functions().unwrap_or_else(|_e| {
+            radeco_err!("{:?}", _e);
             Vec::new()
         });
         for f in fns {
@@ -406,8 +406,8 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
             }
             //radeco_trace!("Locals of {:?}: {:?}", f.name, f.locals);
             let offset = f.offset.expect("Invalid offset");
-            let instructions = source.instructions_at(offset).unwrap_or_else(|e| {
-                radeco_err!("{:?}", e);
+            let instructions = source.instructions_at(offset).unwrap_or_else(|_e| {
+                radeco_err!("{:?}", _e);
                 Vec::new()
             });
             let tx = tx.clone();
@@ -462,7 +462,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
         for h in handles {
             match h.join() {
                 Ok(_) => success += 1,
-                Err(e) => radeco_warn!("{:?}", e),
+                Err(_e) => radeco_warn!("{:?}", _e),
             }
         }
 

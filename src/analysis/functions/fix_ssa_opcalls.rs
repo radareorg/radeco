@@ -21,7 +21,7 @@ pub fn go(rmod: &mut RadecoModule) -> () {
 }
 
 fn go_fn(rfun: &mut RadecoFunction, callgraph: &CallGraph) -> () {
-    let fn_addr = rfun.offset;
+    let _fn_addr = rfun.offset;
     let call_site_addr_to_target_addr: HashMap<u64, u64> = callgraph
         .callees(rfun.cgid())
         .map(|(cs_a, tgt_idx)| (cs_a, callgraph[tgt_idx]))
@@ -33,7 +33,7 @@ fn go_fn(rfun: &mut RadecoFunction, callgraph: &CallGraph) -> () {
                 radeco_err!(
                     "failed to fix call site {:?} in function at {:#X}",
                     node,
-                    fn_addr
+                    _fn_addr
                 )
             });
         }

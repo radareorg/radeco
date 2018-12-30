@@ -153,9 +153,6 @@ enum CASTEdge {
     BlockOrd(u64),
 }
 
-const LHS: CASTEdge = CASTEdge::OpOrd(0);
-const RHS: CASTEdge = CASTEdge::OpOrd(1);
-
 #[derive(Clone, Debug)]
 pub struct CAST {
     /// Internal graph that stores the AST.

@@ -501,7 +501,6 @@ impl<'a> CallFixer<'a> {
 mod test {
     use super::*;
     use frontend::radeco_containers::RadecoModule;
-    use frontend::source::FileSource;
 
     #[test]
     #[ignore]
