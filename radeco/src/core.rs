@@ -49,6 +49,31 @@ pub fn get_function_mut<'a>(
         .next()
 }
 
+pub fn fn_rename(old_f: &str, new_f: &str, proj: &mut RadecoProject) {
+    if let Some(_) = get_function(new_f, proj) {
+        println!("there is already a function called: {}", new_f);
+        return;
+    }
+
+    let mut found = false;
+
+    for module in proj.iter_mut() {
+        let module = module.module;
+        let off = module.iter()
+            .find(|rfn| rfn.function.1.name == old_f)
+            .map(|rfn| rfn.function.1.offset);
+
+        if let Some(off) = off {
+            module.function_rename(off, new_f);
+            found = true;
+        }
+    }
+
+    if !found {
+        println!("function not found: {}", old_f);
+    }
+}
+
 pub fn analyze_mod(regfile: Arc<SubRegisterFile>, rmod: &mut RadecoModule) {
     // Analyze preserved for all functions.
     {

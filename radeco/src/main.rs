@@ -80,6 +80,7 @@ impl Completer for Completes {
             command::DOT,
             command::IR,
             command::DECOMPILE,
+            command::FUNC_RENAME,
             command::QUIT,
         ];
 
@@ -229,6 +230,7 @@ mod command {
     pub const DOT: &'static str = "dot";
     pub const IR: &'static str = "ir";
     pub const DECOMPILE: &'static str = "decompile";
+    pub const FUNC_RENAME: &'static str = "fn_rn";
     pub const QUIT: &'static str = "quit";
 
     pub fn help() {
@@ -265,13 +267,18 @@ mod command {
             format!("{} <func>", DECOMPILE),
             width = width
         );
+        println!(
+            "{:width$}    Rename <old_func_name> to <new_func_name>",
+            format!("{} <old_name> <new_name>", FUNC_RENAME),
+            width = width
+        );
         println!("{:width$}    Quit interactive prompt", QUIT, width = width);
     }
 
     /// Returns true if `cmd` requires a function as parameter.
     pub fn requires_func(cmd: &str) -> bool {
         match cmd {
-            ANALYZE | DOT | IR | DECOMPILE => true,
+            ANALYZE | DOT | IR | DECOMPILE | FUNC_RENAME => true,
             _ => false,
         }
     }
@@ -285,14 +292,15 @@ fn cmd(line: String, highlight: bool) {
     let mut terms = line.split_whitespace();
     let op1 = terms.next();
     let op2 = terms.next();
+    let op3 = terms.next();
 
     core::PROJ.with(|proj_opt| {
-        match (op1, op2) {
-            (Some(command::HELP), _) => {
+        match (op1, op2, op3) {
+            (Some(command::HELP), _, _) => {
                 command::help();
                 return;
             }
-            (Some(command::LOAD), Some(path)) => {
+            (Some(command::LOAD), Some(path), _) => {
                 if is_file(path) {
                     *proj_opt.borrow_mut() = Some(core::load_proj_by_path(path));
                     return;
@@ -301,7 +309,7 @@ fn cmd(line: String, highlight: bool) {
                     return;
                 }
             }
-            (Some(command::CONNECT), Some(url)) => {
+            (Some(command::CONNECT), Some(url), _) => {
                 let p_opt = if scheme::is_http(&url) {
                     core::load_proj_http(&url[scheme::HTTP.len()..])
                 } else if scheme::is_tcp(&url) {
@@ -315,7 +323,7 @@ fn cmd(line: String, highlight: bool) {
                 }
                 return;
             }
-            (Some(command::QUIT), _) => {
+            (Some(command::QUIT), _, _) => {
                 process::exit(0);
             }
             _ => {}
@@ -326,38 +334,38 @@ fn cmd(line: String, highlight: bool) {
         }
         let mut proj_ = proj_opt.borrow_mut();
         let proj = proj_.as_mut().unwrap();
-        match (op1, op2) {
-            (Some(command::ANALYZE), Some("*")) => {
+        match (op1, op2, op3) {
+            (Some(command::ANALYZE), Some("*"), _) => {
                 core::analyze_all_functions(proj);
             }
-            (Some(command::FNLIST), _) => {
+            (Some(command::FNLIST), _, _) => {
                 let funcs = core::fn_list(&proj);
                 println!("{}", funcs.join("\n"));
             }
             // TODO Show list of dependency information of analyses
             // TODO Add command for individual analyses
-            (Some(command::ANALYZE), Some(f)) => {
+            (Some(command::ANALYZE), Some(f), _) => {
                 if let Some(rfn) = core::get_function_mut(f, proj) {
                     core::analyze(rfn);
                 } else {
                     println!("{} is not found", f);
                 }
             }
-            (Some(command::DOT), Some(f)) => {
+            (Some(command::DOT), Some(f), _) => {
                 if let Some(rfn) = core::get_function(f, &proj) {
                     println!("{}", core::emit_dot(rfn.ssa()));
                 } else {
                     println!("{} is not found", f);
                 }
             }
-            (Some(command::IR), Some(f)) => {
+            (Some(command::IR), Some(f), _) => {
                 if let Some(rfn) = core::get_function(f, &proj) {
                     println!("{}", core::emit_ir(rfn));
                 } else {
                     println!("{} is not found", f);
                 }
             }
-            (Some(command::DECOMPILE), Some("*")) => {
+            (Some(command::DECOMPILE), Some("*"), _) => {
                 let decompiled = core::decompile_all_functions(&proj);
                 if highlight {
                     highlighting::print_highlighted(&decompiled);
@@ -365,7 +373,7 @@ fn cmd(line: String, highlight: bool) {
                     println!("{}", decompiled);
                 }
             }
-            (Some(command::DECOMPILE), Some(f)) => match core::decompile(f, &proj) {
+            (Some(command::DECOMPILE), Some(f), _) => match core::decompile(f, &proj) {
                 Ok(res) => {
                     if highlight {
                         highlighting::print_highlighted(&res);
@@ -374,6 +382,9 @@ fn cmd(line: String, highlight: bool) {
                     }
                 }
                 Err(err) => println!("{}", err),
+            },
+            (Some(command::FUNC_RENAME), Some(old_f), Some(new_f)) => {
+                core::fn_rename(old_f, new_f, proj);
             },
             _ => {
                 println!(
