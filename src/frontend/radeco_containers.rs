@@ -1103,6 +1103,19 @@ impl RadecoModule {
         self.functions.get_mut(&offset)
     }
 
+    pub fn function_rename(&mut self, offset: u64, new_name: &str) -> Option<String> {
+        assert!(!new_name.is_empty());
+        let mut old_name = None;
+        if let Some(rfn) = self.function_mut(offset) {
+            old_name = Some(String::from(&*rfn.name));
+            rfn.name = From::from(String::from(new_name));
+        }
+        if let Some(ref mut src) = self.source {
+            let _ = src.raw(format!("afn {} {:x}", new_name, offset));
+        }
+        old_name
+    }
+
     pub fn iter<'a>(&'a self) -> FunctionIter<'a> {
         FunctionIter {
             module: &self,
