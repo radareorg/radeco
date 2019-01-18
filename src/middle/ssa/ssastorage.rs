@@ -7,7 +7,7 @@
 
 //! Module that holds the struct and trait implementations for the ssa form.
 
-use middle::ir::{self, MAddress, MOpcode};
+use middle::ir::{MAddress, MOpcode};
 use middle::regfile::SubRegisterFile;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::stable_graph::StableDiGraph;
@@ -25,7 +25,7 @@ use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSAExtra, SSAMod, SSAWalk, ValueInfo, SSA};
 
-#[cfg(feature="trace_log")]
+#[cfg(feature = "trace_log")]
 use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
