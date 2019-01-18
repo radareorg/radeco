@@ -21,7 +21,8 @@
 //! The associated type `SSA::ValueRef` is used by the methods to refer to
 //! nodes.
 
-use std::fmt::{self, Debug};
+use std::fmt;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use super::cfg_traits::{CFGMod, CFG};
@@ -87,7 +88,7 @@ macro_rules! scalar {
     ($w:expr) => {
         ValueInfo::new(
             $crate::middle::ssa::ssa_traits::ValueType::Scalar,
-            ir::WidthSpec::new_known($w),
+            $crate::middle::ir::WidthSpec::new_known($w),
         )
     };
 }
@@ -96,13 +97,13 @@ macro_rules! reference {
     () => {
         ValueInfo::new(
             $crate::middle::ssa::ssa_traits::ValueType::Reference,
-            ir::WidthSpec::Unknown,
+            $crate::middle::ir::WidthSpec::Unknown,
         )
     };
     ($w:expr) => {
         ValueInfo::new(
             $crate::middle::ssa::ssa_traits::ValueType::Reference,
-            ir::WidthSpec::new_known($w),
+            $crate::middle::ir::WidthSpec::new_known($w),
         )
     };
 }
