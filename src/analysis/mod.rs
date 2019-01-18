@@ -28,6 +28,7 @@ pub mod copy_propagation;
 pub mod functions;
 pub mod inst_combine;
 pub mod interproc;
+pub mod mask2narrow;
 pub mod reference_marking;
 pub mod tie;
 pub mod vsa;
