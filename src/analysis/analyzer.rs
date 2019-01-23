@@ -17,6 +17,9 @@ pub trait Analyzer : Any + Debug {
 
     /// Return the kind of this `Analyzer`.
     fn kind(&self) -> AnalyzerKind;
+
+    /// Return a list of `Analyzer`s to run before this one.
+    fn requires(&self) -> Vec<AnalyzerKind>;
 }
 
 /// An `Analyzer` that takes a function.
