@@ -1,3 +1,5 @@
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer};
+use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::*;
@@ -7,20 +9,48 @@ use petgraph::graph::NodeIndex;
 
 use std::collections::HashSet;
 
-pub fn run(ssa: &mut SSAStorage) -> () {
-    loop {
-        let copies = CopyInfo::gather_copies(ssa);
-        if copies.is_empty() {
-            break;
-        }
-        let mut replaced = HashSet::new();
-        for CopyInfo(from, to) in copies {
-            if replaced.contains(&from) {
-                continue;
+#[derive(Debug)]
+pub struct CopyPropagation;
+
+impl CopyPropagation {
+    pub fn new() -> Self {
+        CopyPropagation
+    }
+}
+
+impl Analyzer for CopyPropagation {
+    fn name(&self) -> String {
+        return "copy_propagation".to_owned()
+    }
+
+    fn kind(&self) -> AnalyzerKind {
+        AnalyzerKind::CopyPropagation
+    }
+
+    fn requires(&self) -> Vec<AnalyzerKind> {
+        Vec::new()
+    }
+}
+
+impl FuncAnalyzer for CopyPropagation {
+    fn analyze(&mut self, func: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
+        let ssa = func.ssa_mut();
+        loop {
+            let copies = CopyInfo::gather_copies(&ssa);
+            if copies.is_empty() {
+                break;
             }
-            replaced.insert(to);
-            ssa.replace_value(to, from);
+            let mut replaced = HashSet::new();
+            for CopyInfo(from, to) in copies {
+                if replaced.contains(&from) {
+                    continue;
+                }
+                replaced.insert(to);
+                ssa.replace_value(to, from);
+            }
         }
+
+        None
     }
 }
 
