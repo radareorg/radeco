@@ -1,5 +1,13 @@
 //! Fixes the call target for all call sites in the SSA
+//! For every [`OpCall`] SSA node in every function, try to find that call
+//! site's corresponding edge in [the callgraph] and replace the "target"
+//! operand of the SSA node with a constant value for the address of the actual
+//! call target.
+//!
+//! [`OpCall`]: ir::MOpcode::OpCall
+//! [the callgraph]: RadecoModule::callgraph
 
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, ModuleAnalyzer};
 use frontend::radeco_containers::*;
 use middle::ir;
 use middle::ssa::ssa_traits::*;
@@ -7,16 +15,36 @@ use middle::ssa::ssastorage::SSAStorage;
 
 use std::collections::HashMap;
 
-/// For every [`OpCall`] SSA node in every function, try to find that call
-/// site's corresponding edge in [the callgraph] and replace the "target"
-/// operand of the SSA node with a constant value for the address of the actual
-/// call target.
-///
-/// [`OpCall`]: ir::MOpcode::OpCall
-/// [the callgraph]: RadecoModule::callgraph
-pub fn go(rmod: &mut RadecoModule) -> () {
-    for rfun in rmod.functions.values_mut() {
-        go_fn(rfun, &rmod.callgraph);
+#[derive(Debug)]
+pub struct CallSiteFixer;
+
+impl CallSiteFixer {
+    pub fn new() -> Self {
+        CallSiteFixer
+    }
+}
+
+impl Analyzer for CallSiteFixer {
+    fn name(&self) -> String {
+        "call_site_fixer".to_owned()
+    }
+
+    fn kind(&self) -> AnalyzerKind {
+        AnalyzerKind::CallSiteFixer
+    }
+
+    fn requires(&self) -> Vec<AnalyzerKind> {
+        Vec::new()
+    }
+}
+
+impl ModuleAnalyzer for CallSiteFixer {
+    fn analyze(&mut self, rmod: &mut RadecoModule) -> Option<Box<AnalyzerResult>> {
+        for rfun in rmod.functions.values_mut() {
+            go_fn(rfun, &rmod.callgraph);
+        }
+
+        None
     }
 }
 

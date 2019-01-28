@@ -3,6 +3,7 @@ use std::fmt::Debug;
 
 use analysis::copy_propagation::CopyPropagation;
 use analysis::cse::cse::CSE;
+use analysis::functions::fix_ssa_opcalls::CallSiteFixer;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 
 /// This trait provides access to extra informations generated during the analysis pass.
@@ -11,6 +12,7 @@ pub trait AnalyzerResult : Any + Debug { }
 /// Kind of `Analyzer`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnalyzerKind {
+    CallSiteFixer,
     CopyPropagation,
     CSE,
 }
@@ -45,5 +47,5 @@ pub fn all_func_analysis() -> Vec<AnalyzerKind> {
 
 /// Get all the available `ModuleAnalyzer`s
 pub fn all_module_analysis() -> Vec<AnalyzerKind> {
-    vec![]
+    vec![AnalyzerKind::CallSiteFixer]
 }
