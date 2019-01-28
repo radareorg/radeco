@@ -1,5 +1,18 @@
 //! Infers how each function uses every register
+//! For every function, patch all of its call sites to ignore registers that the
+//! callee doesn't read and to preserve register values that the callee
+//! preserves. Then, record which registers it reads and which registers it
+//! preserves.
+//!
+//! After this, all functions should have mutable [`regusage`][RadecoFunction::regusage]s.
+//!
+//! This analysis is super conservative; for example, if a function preserves a
+//! register by pushing it onto the stack and popping it back right before
+//! returning, it is considered to be read and not preserved because we can't
+//! guarantee that that stack location is never subsequently read or modified.
+//! See #147 for further discussion
 
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, ModuleAnalyzer};
 use analysis::inst_combine;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::dce;
@@ -14,42 +27,39 @@ use petgraph::visit::{DfsPostOrder, Walker};
 
 use std::collections::{BTreeMap, HashSet};
 
-/// For every function, patch all of its call sites to ignore registers that the
-/// callee doesn't read and to preserve register values that the callee
-/// preserves. Then, record which registers it reads and which registers it
-/// preserves.
-///
-/// After this, all functions should have mutable [`regusage`][RadecoFunction::regusage]s.
-///
-/// This analysis is super conservative; for example, if a function preserves a
-/// register by pushing it onto the stack and popping it back right before
-/// returning, it is considered to be read and not preserved because we can't
-/// guarantee that that stack location is never subsequently read or modified.
-/// See #147 for further discussion
-pub fn run(rmod: &mut RadecoModule, reginfo: &SubRegisterFile) -> () {
-    Inferer::new().run(rmod, reginfo);
-}
+#[derive(Debug)]
+pub struct Inferer {
+    /// Register file of the current architecture.
+    reginfo: SubRegisterFile,
 
-struct Inferer {
     /// Addresses of the functions we've already analyzed
     analyzed: HashSet<u64>,
 }
 
-impl Inferer {
-    fn new() -> Inferer {
-        Inferer {
-            analyzed: HashSet::new(),
-        }
+impl Analyzer for Inferer {
+    fn name(&self) -> String {
+        "inferer".to_owned()
     }
 
+    fn kind(&self) -> AnalyzerKind {
+        AnalyzerKind::Inferer
+    }
+
+    fn requires(&self) -> Vec<AnalyzerKind> {
+        Vec::new()
+    }
+}
+
+impl ModuleAnalyzer for Inferer {
     /// Calls `patch_fn`, `dce::collect`, and `analyze_fn` on every function,
     /// callees first
-    fn run(&mut self, rmod: &mut RadecoModule, reginfo: &SubRegisterFile) -> () {
+    fn analyze(&mut self, rmod: &mut RadecoModule) -> Option<Box<AnalyzerResult>> {
         // for imports, *ASSUME* that the callconv that r2 says is correct
+        let mut new_analyzed = Vec::new();
         {
             let imp_ru_iter = rmod.imports.iter().filter_map(|(&imp_addr, imp_info)| {
                 let imp_rfn = imp_info.rfn.borrow();
-                let regusage = reginfo.r2callconv_to_register_usage(
+                let regusage = self.reginfo.r2callconv_to_register_usage(
                     imp_rfn.callconv.as_ref()?, // ignore imports without callconvs
                     &*imp_rfn.callconv_name,
                 )?;
@@ -57,8 +67,12 @@ impl Inferer {
             });
             for (imp_addr, imp_ru) in imp_ru_iter {
                 rmod.functions.get_mut(&imp_addr).unwrap().regusage = imp_ru;
-                self.analyzed.insert(imp_addr);
+                new_analyzed.push(imp_addr);
             }
+        }
+
+        for func in new_analyzed {
+            self.analyzed.insert(func);
         }
 
         let mut dfs_wi = DfsPostOrder::empty(&rmod.callgraph).iter(&rmod.callgraph);
@@ -77,16 +91,27 @@ impl Inferer {
                     dce::collect(rfn.ssa_mut());
                     inst_combine::run(rfn.ssa_mut());
 
-                    let ru = self.analyze_fn(rfn, reginfo).unwrap_or_else(|| {
+                    let ru = self.analyze_fn(rfn, &self.reginfo).unwrap_or_else(|| {
                         radeco_err!("Failed to analyze fn: {:?} (@ {:#X})", rfn.name, fn_addr);
                         // if analysis failed, default to "reads and clobbers everything"
-                        reginfo.new_register_usage()
+                        self.reginfo.new_register_usage()
                     });
 
                     rfn.regusage = ru;
                     self.analyzed.insert(fn_addr);
                 }
             }
+        }
+
+        None
+    }
+}
+
+impl Inferer {
+    pub fn new(reginfo: SubRegisterFile) -> Inferer {
+        Inferer {
+            reginfo: reginfo,
+            analyzed: HashSet::new(),
         }
     }
 
