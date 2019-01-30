@@ -26,7 +26,7 @@ pub fn load_call_graph(finfos: &[FunctionInfo], rmod: &RadecoModule) -> CallGrap
         if let Some(ref callrefs) = x.callrefs {
             for cs in callrefs {
                 match cs.call_type {
-                    Some(ref c) if c != "C" => continue,
+                    Some(ref c) if c != "CALL" => continue,
                     _ => {}
                 }
                 let mut cctx = CallContextInfo::default();
