@@ -10,6 +10,7 @@ pub trait AnalyzerResult : Any + Debug { }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnalyzerKind {
     CallSiteFixer,
+    Combiner,
     CopyPropagation,
     CSE,
     Inferer,
@@ -39,7 +40,8 @@ pub trait ModuleAnalyzer : Analyzer {
 
 /// Get all the available `FuncAnalyzer`s
 pub fn all_func_analysis() -> Vec<AnalyzerKind> {
-    vec![AnalyzerKind::CopyPropagation,
+    vec![AnalyzerKind::Combiner,
+         AnalyzerKind::CopyPropagation,
          AnalyzerKind::CSE]
 }
 

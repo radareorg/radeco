@@ -1,5 +1,9 @@
 //! Combines sequences of arithmetic or logical instructions into single instructions.
+//! For every instruction, try to combine one of its operands into itself. This
+//! transforms linear data-dependency chains into trees.
 
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer};
+use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::ssa_traits::*;
 use middle::ssa::ssastorage::SSAStorage;
@@ -13,12 +17,6 @@ use std::fmt;
 mod combine_rules;
 
 type SSAValue = <SSAStorage as SSA>::ValueRef;
-
-/// For every instruction, try to combine one of its operands into itself. This
-/// transforms linear data-dependency chains into trees.
-pub fn run(ssa: &mut SSAStorage) -> () {
-    Combiner::new().run(ssa);
-}
 
 /// Represents binary operations that are effectively unary because one of the
 /// operands is constant. In other words, represents curried binary operations.
@@ -38,30 +36,15 @@ enum CombinableOpConstInfo {
 use self::CombinableOpConstInfo as COCI;
 
 #[derive(Debug)]
-struct Combiner {
+pub struct Combiner {
     /// Nodes that could potentially be combined into another
     combine_candidates: HashMap<SSAValue, (SSAValue, CombinableOpInfo)>,
 }
 
 impl Combiner {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Combiner {
             combine_candidates: HashMap::new(),
-        }
-    }
-
-    /// Calls `visit_node` on every node and replaces the node in the SSA with
-    /// its return value.
-    fn run(&mut self, ssa: &mut SSAStorage) -> () {
-        for node in ssa.inorder_walk() {
-            if let Some(repl_node) = self.visit_node(node, ssa) {
-                let blk = ssa.block_for(node).unwrap();
-                let addr = ssa.address(node).unwrap();
-                ssa.replace_value(node, repl_node);
-                if !ssa.is_constant(repl_node) && ssa.address(repl_node).is_none() {
-                    ssa.insert_into_block(repl_node, blk, addr);
-                }
-            }
         }
     }
 
@@ -180,6 +163,38 @@ impl Combiner {
             new_opinfo
         );
         Some((new_opinfo, sub_sub_node))
+    }
+}
+
+impl Analyzer for Combiner {
+    fn name(&self) -> String {
+        "combiner".to_owned()
+    }
+
+    fn kind(&self) -> AnalyzerKind {
+        AnalyzerKind::Combiner
+    }
+
+    fn requires(&self) -> Vec<AnalyzerKind> {
+        Vec::new()
+    }
+}
+
+impl FuncAnalyzer for Combiner {
+    fn analyze(&mut self, func: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
+        let ssa = func.ssa_mut();
+        for node in ssa.inorder_walk() {
+            if let Some(repl_node) = self.visit_node(node, ssa) {
+                let blk = ssa.block_for(node).unwrap();
+                let addr = ssa.address(node).unwrap();
+                ssa.replace_value(node, repl_node);
+                if !ssa.is_constant(repl_node) && ssa.address(repl_node).is_none() {
+                    ssa.insert_into_block(repl_node, blk, addr);
+                }
+            }
+        }
+
+        None
     }
 }
 
