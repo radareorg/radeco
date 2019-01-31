@@ -12,8 +12,8 @@
 //! guarantee that that stack location is never subsequently read or modified.
 //! See #147 for further discussion
 
-use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, ModuleAnalyzer};
-use analysis::inst_combine;
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer, ModuleAnalyzer};
+use analysis::inst_combine::Combiner;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::dce;
 use middle::ir;
@@ -89,7 +89,9 @@ impl ModuleAnalyzer for Inferer {
 
                     let rfn = &mut rmod.functions.get_mut(&fn_addr).unwrap();
                     dce::collect(rfn.ssa_mut());
-                    inst_combine::run(rfn.ssa_mut());
+
+                    let mut combiner = Combiner::new();
+                    combiner.analyze(rfn);
 
                     let ru = self.analyze_fn(rfn, &self.reginfo).unwrap_or_else(|| {
                         radeco_err!("Failed to analyze fn: {:?} (@ {:#X})", rfn.name, fn_addr);
