@@ -15,6 +15,7 @@ pub enum AnalyzerKind {
     CSE,
     Inferer,
     InterProc,
+    SCCP,
 }
 
 /// Basic trait for all analyzers.
@@ -43,7 +44,8 @@ pub trait ModuleAnalyzer : Analyzer {
 pub fn all_func_analysis() -> Vec<AnalyzerKind> {
     vec![AnalyzerKind::Combiner,
          AnalyzerKind::CopyPropagation,
-         AnalyzerKind::CSE]
+         AnalyzerKind::CSE,
+         AnalyzerKind::SCCP]
 }
 
 /// Get all the available `ModuleAnalyzer`s

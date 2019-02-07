@@ -12,17 +12,21 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer};
+use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MArity, MOpcode, WidthSpec};
+use middle::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ssa::graph_traits::{ConditionInfo, Graph};
 use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
 use middle::ssa::ssa_traits::{SSAMod, SSA};
+use middle::ssa::ssastorage::SSAStorage;
 use std::collections::{HashMap, VecDeque};
 use std::u64;
 
 #[macro_export]
 macro_rules! node_data_from_g {
-    ($self:ident, $i:ident) => {
-        $self.g.node_data(*$i).unwrap_or_else(|_x| {
+    ($g:ident, $i:ident) => {
+        $g.node_data(*$i).unwrap_or_else(|_x| {
             radeco_err!("RegisterState found, {:?}", _x);
             NodeData {
                 vt: ValueInfo::new(ValueType::Invalid, WidthSpec::Unknown),
@@ -79,32 +83,23 @@ fn meet(v1: &LatticeValue, v2: &LatticeValue) -> LatticeValue {
     *v1
 }
 
-pub struct Analyzer<T>
-where
-    T: Clone
-        + SSAMod<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>
-        + SSA<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>,
+#[derive(Debug)]
+pub struct SCCP
 {
-    ssa_worklist: VecDeque<T::ValueRef>,
-    cfg_worklist: VecDeque<T::CFEdgeRef>,
-    executable: HashMap<T::CFEdgeRef, bool>,
-    expr_val: HashMap<T::ValueRef, LatticeValue>,
-    g: T,
+    ssa_worklist: VecDeque<<SSAStorage as SSA>::ValueRef>,
+    cfg_worklist: VecDeque<<SSAStorage as CFG>::CFEdgeRef>,
+    executable: HashMap<<SSAStorage as CFG>::CFEdgeRef, bool>,
+    expr_val: HashMap<<SSAStorage as SSA>::ValueRef, LatticeValue>,
 }
 
-impl<T> Analyzer<T>
-where
-    T: Clone
-        + SSAMod<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>
-        + SSA<ActionRef = <T as Graph>::GraphNodeRef, CFEdgeRef = <T as Graph>::GraphEdgeRef>,
+impl SCCP
 {
-    pub fn new(g: &mut T) -> Analyzer<T> {
-        Analyzer {
+    pub fn new() -> SCCP {
+        SCCP {
             ssa_worklist: VecDeque::new(),
             cfg_worklist: VecDeque::new(),
             executable: HashMap::new(),
             expr_val: HashMap::new(),
-            g: g.clone(),
         }
     }
 
@@ -112,23 +107,22 @@ where
         println!("{:?}", self.expr_val);
     }
 
-    fn visit_phi(&mut self, i: &T::ValueRef) -> LatticeValue {
-        let operands = self.g.operands_of(*i);
-        let mut phi_val = self.get_value(i);
+    fn visit_phi(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+        let operands = g.operands_of(*i);
+        let mut phi_val = self.get_value(g, i);
 
         // If "overdefined" return it.
         if phi_val.is_overdefined() {
             return LatticeValue::Bottom;
         }
 
-        let invalid_block = self
-            .g
+        let invalid_block = g
             .invalid_action()
             .expect("Invalid Action is not defind");
-        let parent_block = self.g.block_for(*i).unwrap_or(invalid_block);
+        let parent_block = g.block_for(*i).unwrap_or(invalid_block);
         for op in &operands {
-            let operand_block = self.g.block_for(*op).unwrap_or(invalid_block);
-            let op_val = self.get_value(op);
+            let operand_block = g.block_for(*op).unwrap_or(invalid_block);
+            let op_val = self.get_value(g, op);
 
             if op_val.is_undefined() {
                 continue;
@@ -140,13 +134,13 @@ where
             // Only operand which could be executable will be considered.
             // Even these operands are overdefined.
 
-            let edge = self.g.find_edges_between(operand_block, parent_block);
+            let edge = g.find_edges_between(operand_block, parent_block);
             if edge.len() == 0 {
                 continue;
             }
             assert_eq!(edge.len(), 1);
             if !self.is_executable(&edge[0])
-                && edge[0] != self.g.invalid_edge().expect("Invalid Edge is not defined")
+                && edge[0] != g.invalid_edge().expect("Invalid Edge is not defined")
             {
                 continue;
             }
@@ -157,16 +151,16 @@ where
         phi_val
     }
 
-    fn evaluate_control_flow(&mut self, i: &T::ValueRef) {
-        assert!(self.g.is_selector(*i));
+    fn evaluate_control_flow(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) {
+        assert!(g.is_selector(*i));
 
-        let cond_val = self.get_value(i);
-        let block = self.g.selector_for(*i).unwrap_or_else(|| {
+        let cond_val = self.get_value(g, i);
+        let block = g.selector_for(*i).unwrap_or_else(|| {
             radeco_err!("Victim value is not a selector");
-            self.g.invalid_action().unwrap()
+            g.invalid_action().unwrap()
         });
-        let invalid_edge = self.g.invalid_edge().expect("Invalid Edge is not defined");
-        let conditional_branches = if let Some(branches) = self.g.conditional_edges(block) {
+        let invalid_edge = g.invalid_edge().expect("Invalid Edge is not defined");
+        let conditional_branches = if let Some(branches) = g.conditional_edges(block) {
             branches
         } else {
             ConditionInfo::new(invalid_edge, invalid_edge)
@@ -193,15 +187,15 @@ where
         }
     }
 
-    fn evaluate_unary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
-        let operand = self.g.operands_of(*i);
+    fn evaluate_unary_op(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
+        let operand = g.operands_of(*i);
         let operand = if operand.is_empty() {
             return LatticeValue::Top;
         } else {
             operand[0]
         };
 
-        let val = self.get_value(&operand);
+        let val = self.get_value(g, &operand);
         let const_val = if let LatticeValue::Const(cval) = val {
             cval
         } else {
@@ -228,7 +222,7 @@ where
         };
 
         // We should consider width.
-        let ndata = node_data_from_g!(self, i);
+        let ndata = node_data_from_g!(g, i);
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
@@ -237,18 +231,17 @@ where
         LatticeValue::Const(val)
     }
 
-    fn evaluate_binary_op(&mut self, i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_binary_op(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
         // Do not reason about load/stores.
         match opcode {
             MOpcode::OpLoad | MOpcode::OpStore => return LatticeValue::Bottom,
             _ => {}
         }
 
-        let operands = self
-            .g
+        let operands = g
             .operands_of(*i)
             .iter()
-            .map(|x| self.get_value(x))
+            .map(|x| self.get_value(g, x))
             .collect::<Vec<_>>();
 
         let lhs = operands[0];
@@ -303,7 +296,7 @@ where
         };
 
         // We should consider width.
-        let ndata = node_data_from_g!(self, i);
+        let ndata = node_data_from_g!(g, i);
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
             val = val & ((1 << (w)) - 1);
@@ -312,7 +305,7 @@ where
         LatticeValue::Const(val)
     }
 
-    fn evaluate_ternary_op(&mut self, _i: &T::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_ternary_op(&mut self, _i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
         // Do not reason about stores.
         match opcode {
             MOpcode::OpStore => return LatticeValue::Bottom,
@@ -320,8 +313,8 @@ where
         }
     }
 
-    fn visit_expression(&mut self, i: &T::ValueRef) -> LatticeValue {
-        let expr = self.g.node_data(*i).unwrap_or_else(|_x| {
+    fn visit_expression(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+        let expr = g.node_data(*i).unwrap_or_else(|_x| {
             radeco_err!("RegisterState found, {:?}", _x);
             NodeData {
                 vt: ValueInfo::new(ValueType::Invalid, WidthSpec::Unknown),
@@ -339,8 +332,8 @@ where
             LatticeValue::Const(v as u64)
         } else {
             match opcode.arity() {
-                MArity::Unary => self.evaluate_unary_op(i, opcode),
-                MArity::Binary => self.evaluate_binary_op(i, opcode),
+                MArity::Unary => self.evaluate_unary_op(g, i, opcode),
+                MArity::Binary => self.evaluate_binary_op(g, i, opcode),
                 _ => self.evaluate_ternary_op(i, opcode),
             }
         };
@@ -350,21 +343,110 @@ where
         // Hence evaluate the control flow to add edges to the cfgwl.
         // TODO: Handle the case where the selector of a block may belong to a
         // different block.
-        if self.g.is_selector(*i) {
-            self.evaluate_control_flow(i);
+        if g.is_selector(*i) {
+            self.evaluate_control_flow(g, i);
         }
 
         val
     }
 
-    pub fn analyze(&mut self) {
+    /// ////////////////////////////////////////////////////////////////////////
+    /// / Helper functions.
+    /// ////////////////////////////////////////////////////////////////////////
+
+    fn is_executable(&self, i: &<SSAStorage as CFG>::CFEdgeRef) -> bool {
+        self.executable.get(i).cloned().unwrap_or(false)
+    }
+
+    fn mark_executable(&mut self, i: &<SSAStorage as CFG>::CFEdgeRef) {
+        let n = self.executable.entry(*i).or_insert(false);
+        *n = true;
+    }
+
+    // Determines the Initial value
+    fn init_val(&self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+        //TODO replace unwrap
+        let node_data = g.node_data(*i).unwrap();
+        match node_data.nt {
+            NodeType::Op(MOpcode::OpConst(v)) => LatticeValue::Const(v),
+            NodeType::Undefined => LatticeValue::Bottom,
+            _ => LatticeValue::Top,
+        }
+    }
+
+    fn get_value(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+        if self.expr_val.contains_key(i) {
+            return self.expr_val[i];
+        }
+
+        let v = self.init_val(g, i);
+        self.expr_val.insert(*i, v);
+        v
+    }
+
+    fn set_value(&mut self, i: &<SSAStorage as SSA>::ValueRef, v: LatticeValue) {
+        let n = self.expr_val.entry(*i).or_insert(LatticeValue::Top);
+        *n = v;
+    }
+
+    fn is_block_executable(&self, g: &mut SSAStorage, i: &<SSAStorage as CFG>::ActionRef) -> bool {
+        // entry_node is always reachable.
+        if *i == entry_node_err!(&g) {
+            return true;
+        }
+        let incoming = g.incoming_edges(*i);
+        for &(ref edge, _) in &incoming {
+            if self.is_executable(edge) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn ssawl_push(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) {
+        if !g.is_expr(*i) {
+            return;
+        }
+        let owner_block = g.block_for(*i).unwrap_or_else(|| {
+            radeco_err!("Value node doesn't belong to any block");
+            g.invalid_action().unwrap()
+        });
+        if self.is_block_executable(g, &owner_block) {
+            self.ssa_worklist.push_back(*i);
+        }
+    }
+
+    fn cfgwl_push(&mut self, i: &<SSAStorage as CFG>::CFEdgeRef) {
+        self.cfg_worklist.push_back(*i);
+    }
+}
+
+impl Analyzer for SCCP {
+    fn name(&self) -> String {
+        "sccp".to_owned()
+    }
+
+    fn kind(&self) -> AnalyzerKind {
+        AnalyzerKind::SCCP
+    }
+
+    fn requires(&self) -> Vec<AnalyzerKind> {
+        Vec::new()
+    }
+}
+
+
+impl FuncAnalyzer for SCCP {
+    fn analyze(&mut self, rfn: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
+        let mut g = rfn.ssa_mut();
+
         {
-            let entry_node = entry_node_err!(self.g);
-            let edges = self.g.outgoing_edges(entry_node);
+            let entry_node = entry_node_err!(g);
+            let edges = g.outgoing_edges(entry_node);
             for &(ref next, _) in &edges {
                 self.cfgwl_push(next);
             }
-            for arg in self.g.operands_of(registers_in_err!(self.g, entry_node)) {
+            for arg in g.operands_of(registers_in_err!(g, entry_node)) {
                 self.set_value(&arg, LatticeValue::Bottom);
             }
         }
@@ -373,20 +455,19 @@ where
             while let Some(edge) = self.cfg_worklist.pop_front() {
                 if !self.is_executable(&edge) {
                     self.mark_executable(&edge);
-                    let block = self
-                        .g
+                    let block = g
                         .edge_info(edge)
                         .unwrap_or_else(|| {
-                            self.g.edge_info(self.g.invalid_edge().unwrap()).unwrap()
+                            g.edge_info(g.invalid_edge().unwrap()).unwrap()
                         })
                         .target;
-                    let phis = self.g.phis_in(block);
+                    let phis = g.phis_in(block);
                     for phi in &phis {
-                        let v = self.visit_phi(phi);
+                        let v = self.visit_phi(&mut g, phi);
                         self.set_value(phi, v);
                     }
 
-                    let visits = self.g.incoming_edges(block).iter().fold(0, |acc, &e| {
+                    let visits = g.incoming_edges(block).iter().fold(0, |acc, &e| {
                         if self.is_executable(&e.0) {
                             acc + 1
                         } else {
@@ -396,164 +477,93 @@ where
 
                     // If this is the first visit to the block.
                     if visits == 1 {
-                        for expr in self.g.exprs_in(block) {
-                            let val = self.visit_expression(&expr);
+                        for expr in g.exprs_in(block) {
+                            let val = self.visit_expression(&mut g, &expr);
                             self.set_value(&expr, val);
-                            for use_ in self.g.uses_of(expr) {
-                                self.ssawl_push(&use_);
+                            for use_ in g.uses_of(expr) {
+                                self.ssawl_push(&mut g, &use_);
                             }
                         }
-                        if let Some(selector) = self.g.selector_in(block) {
-                            let val = self.visit_expression(&selector);
+                        if let Some(selector) = g.selector_in(block) {
+                            let val = self.visit_expression(&mut g, &selector);
                             self.set_value(&selector, val);
                         }
                     }
 
-                    if let Some(next_edge) = self.g.unconditional_edge(block) {
+                    if let Some(next_edge) = g.unconditional_edge(block) {
                         self.cfgwl_push(&next_edge);
                     }
                 }
             } // End of cfgwl
 
             while let Some(e) = self.ssa_worklist.pop_front() {
-                let t = if self.g.is_expr(e) {
-                    let block_of = self.g.block_for(e).unwrap_or_else(|| {
+                let t = if g.is_expr(e) {
+                    let block_of = g.block_for(e).unwrap_or_else(|| {
                         radeco_err!("Value node doesn't belong to any block");
-                        self.g.invalid_action().unwrap()
+                        g.invalid_action().unwrap()
                     });
-                    if self.is_block_executable(&block_of) {
-                        self.visit_expression(&e)
+                    if self.is_block_executable(&mut g, &block_of) {
+                        self.visit_expression(&mut g, &e)
                     } else {
-                        self.get_value(&e)
+                        self.get_value(&mut g, &e)
                     }
                 } else {
-                    self.visit_phi(&e)
+                    self.visit_phi(&mut g, &e)
                 };
 
-                if t != self.get_value(&e) {
+                if t != self.get_value(&mut g, &e) {
                     self.set_value(&e, t);
-                    for use_ in &self.g.uses_of(e) {
-                        self.ssawl_push(use_);
+                    for use_ in &g.uses_of(e) {
+                        self.ssawl_push(&mut g, use_);
                     }
                 }
             } // End of ssawl
         } // End of while-loop
-    }
 
-    pub fn emit_ssa(&mut self) -> T {
         for (k, v) in &self.expr_val {
-            if self.g.constant(*k).is_some() {
+            if g.constant(*k).is_some() {
                 continue;
             }
             if let LatticeValue::Const(val) = *v {
                 radeco_trace!(
                     "{:?} with {:?} --> Const {:#}",
                     k,
-                    self.g.node_data(*k),
+                    g.node_data(*k),
                     val
                 );
-                let ndata = node_data_from_g!(self, k);
+                let ndata = node_data_from_g!(g, k);
                 let w = ndata.vt.width().get_width();
                 // BUG: Width may be changed just using a simple replace.
-                let const_node = self.g.insert_const(val, w).unwrap_or_else(|| {
+                let const_node = g.insert_const(val, w).unwrap_or_else(|| {
                     radeco_err!("Cannot insert new constants");
-                    self.g.invalid_value().unwrap()
+                    g.invalid_value().unwrap()
                 });
-                self.g.replace_value(*k, const_node);
+                g.replace_value(*k, const_node);
             }
         }
-        let blocks = self.g.blocks();
-        let mut remove_edges = Vec::<T::CFEdgeRef>::new();
-        let mut remove_blocks = Vec::<T::ActionRef>::new();
+        let blocks = g.blocks();
+        let mut remove_edges = Vec::<<SSAStorage as CFG>::CFEdgeRef>::new();
+        let mut remove_blocks = Vec::<<SSAStorage as CFG>::ActionRef>::new();
         for block in &blocks {
-            let edges = self.g.outgoing_edges(*block);
+            let edges = g.outgoing_edges(*block);
             for &(ref edge, _) in &edges {
                 if !self.is_executable(edge) {
                     remove_edges.push(*edge);
                 }
             }
             // TODO: Make this automatic in dce.
-            if !self.is_block_executable(block) {
+            if !self.is_block_executable(g, block) {
                 remove_blocks.push(*block);
             }
         }
         for edge in &remove_edges {
-            self.g.remove_data_edge(*edge);
+            g.remove_data_edge(*edge);
         }
         for block in &remove_blocks {
-            self.g.remove_block(*block);
-        }
-        self.g.clone()
-    }
-
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Helper functions.
-    /// ////////////////////////////////////////////////////////////////////////
-
-    fn is_executable(&self, i: &T::CFEdgeRef) -> bool {
-        self.executable.get(i).cloned().unwrap_or(false)
-    }
-
-    fn mark_executable(&mut self, i: &T::CFEdgeRef) {
-        let n = self.executable.entry(*i).or_insert(false);
-        *n = true;
-    }
-
-    // Determines the Initial value
-    fn init_val(&self, i: &T::ValueRef) -> LatticeValue {
-        //TODO replace unwrap
-        let node_data = self.g.node_data(*i).unwrap();
-        match node_data.nt {
-            NodeType::Op(MOpcode::OpConst(v)) => LatticeValue::Const(v),
-            NodeType::Undefined => LatticeValue::Bottom,
-            _ => LatticeValue::Top,
-        }
-    }
-
-    fn get_value(&mut self, i: &T::ValueRef) -> LatticeValue {
-        if self.expr_val.contains_key(i) {
-            return self.expr_val[i];
+            g.remove_block(*block);
         }
 
-        let v = self.init_val(i);
-        self.expr_val.insert(*i, v);
-        v
-    }
-
-    fn set_value(&mut self, i: &T::ValueRef, v: LatticeValue) {
-        let n = self.expr_val.entry(*i).or_insert(LatticeValue::Top);
-        *n = v;
-    }
-
-    fn is_block_executable(&self, i: &T::ActionRef) -> bool {
-        // entry_node is always reachable.
-        if *i == entry_node_err!(&self.g) {
-            return true;
-        }
-        let incoming = self.g.incoming_edges(*i);
-        for &(ref edge, _) in &incoming {
-            if self.is_executable(edge) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn ssawl_push(&mut self, i: &T::ValueRef) {
-        if !self.g.is_expr(*i) {
-            return;
-        }
-        let owner_block = self.g.block_for(*i).unwrap_or_else(|| {
-            radeco_err!("Value node doesn't belong to any block");
-            self.g.invalid_action().unwrap()
-        });
-        if self.is_block_executable(&owner_block) {
-            self.ssa_worklist.push_back(*i);
-        }
-    }
-
-    fn cfgwl_push(&mut self, i: &T::CFEdgeRef) {
-        self.cfg_worklist.push_back(*i);
+        None
     }
 }
 
