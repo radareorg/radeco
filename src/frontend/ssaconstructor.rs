@@ -923,7 +923,8 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::sccp;
+    use analysis::analyzer::FuncAnalyzer;
+    use analysis::sccp::SCCP;
     use middle::ir_writer;
     use middle::ssa::ssastorage::SSAStorage;
     use middle::{dce, dot};
@@ -957,16 +958,17 @@ mod test {
             &mut instructions,
             "test_files/tiny_sccp_test_instructions.json",
         );
-        let mut ssa = SSAStorage::new();
+        let mut rfn = RadecoFunction::default();
+        let ssa = rfn.ssa_mut();
         {
             let regfile = SubRegisterFile::new(&reg_profile);
-            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
+            let mut constructor = SSAConstruct::new(ssa, &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
         {
-            dce::collect(&mut ssa);
+            dce::collect(ssa);
         }
-        let tmp = dot::emit_dot(&ssa);
+        let tmp = dot::emit_dot(ssa);
         let mut f = File::create("yay.dot").unwrap();
         f.write_all(tmp.as_bytes()).expect("Write failed!");
     }
@@ -980,24 +982,25 @@ mod test {
             &mut instructions,
             "test_files/tiny_sccp_test_instructions.json",
         );
-        let mut ssa = SSAStorage::new();
+        let mut rfn = RadecoFunction::default();
         {
-            let regfile = SubRegisterFile::new(&reg_profile);
-            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
-            constructor.run(instructions.ops.unwrap().as_slice());
+            let ssa = rfn.ssa_mut();
+            {
+                let regfile = SubRegisterFile::new(&reg_profile);
+                let mut constructor = SSAConstruct::new(ssa, &regfile);
+                constructor.run(instructions.ops.unwrap().as_slice());
+            }
+            {
+                dce::collect(ssa);
+            }
         }
+        let mut analyzer = SCCP::new();
+        analyzer.analyze(&mut rfn);
+        let ssa = rfn.ssa_mut();
         {
-            dce::collect(&mut ssa);
+            dce::collect(ssa);
         }
-        let mut ssa = {
-            let mut analyzer = sccp::Analyzer::new(&mut ssa);
-            analyzer.analyze();
-            analyzer.emit_ssa()
-        };
-        {
-            dce::collect(&mut ssa);
-        }
-        let tmp = dot::emit_dot(&ssa);
+        let tmp = dot::emit_dot(ssa);
         let mut f = File::create("yay.dot").unwrap();
         f.write_all(tmp.as_bytes()).expect("Write failed!");
     }
@@ -1011,31 +1014,31 @@ mod test {
             &mut instructions,
             "test_files/tiny_sccp_test_instructions.json",
         );
-        let mut ssa = SSAStorage::new();
+        let mut rfn = RadecoFunction::default();
         {
-            let regfile = Arc::new(SubRegisterFile::new(&reg_profile));
-            ssa.regfile = regfile.clone();
-            let mut constructor = SSAConstruct::new(&mut ssa, &*regfile);
-            constructor.run(instructions.ops.unwrap().as_slice());
+            let mut ssa = SSAStorage::new();
+            {
+                let regfile = Arc::new(SubRegisterFile::new(&reg_profile));
+                ssa.regfile = regfile.clone();
+                let mut constructor = SSAConstruct::new(&mut ssa, &*regfile);
+                constructor.run(instructions.ops.unwrap().as_slice());
+            }
+            {
+                dce::collect(&mut ssa);
+            }
+            println!("\nBefore Constant Propagation:");
+            let mut il = String::new();
+            ir_writer::emit_il(&mut il, Some("main".to_owned()), &ssa).unwrap();
+            println!("{}", il);
         }
+        let mut analyzer = SCCP::new();
+        analyzer.analyze(&mut rfn);
         {
-            dce::collect(&mut ssa);
-        }
-        println!("\nBefore Constant Propagation:");
-        let mut il = String::new();
-        ir_writer::emit_il(&mut il, Some("main".to_owned()), &ssa).unwrap();
-        println!("{}", il);
-        let mut ssa = {
-            let mut analyzer = sccp::Analyzer::new(&mut ssa);
-            analyzer.analyze();
-            analyzer.emit_ssa()
-        };
-        {
-            dce::collect(&mut ssa);
+            dce::collect(rfn.ssa_mut());
         }
         println!("\nAfter Constant Propagation:");
         let mut il = String::new();
-        ir_writer::emit_il(&mut il, Some("main".to_owned()), &ssa).unwrap();
+        ir_writer::emit_il(&mut il, Some("main".to_owned()), rfn.ssa()).unwrap();
         println!("{}", il);
     }
 }
