@@ -12,6 +12,7 @@ pub mod analyzer;
 #[allow(dead_code)]
 // pub mod valueset;
 // pub mod propagate;
+pub mod dce;
 pub mod dom;
 pub mod sccp;
 pub mod cse {

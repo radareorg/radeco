@@ -13,9 +13,9 @@
 //! See #147 for further discussion
 
 use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer, ModuleAnalyzer};
+use analysis::dce;
 use analysis::inst_combine::Combiner;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
-use middle::dce;
 use middle::ir;
 use middle::regfile::*;
 use middle::ssa::cfg_traits::*;
