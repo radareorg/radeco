@@ -14,6 +14,7 @@ pub enum AnalyzerKind {
     CopyPropagation,
     CSE,
     Inferer,
+    InterProc,
 }
 
 /// Basic trait for all analyzers.
@@ -48,5 +49,6 @@ pub fn all_func_analysis() -> Vec<AnalyzerKind> {
 /// Get all the available `ModuleAnalyzer`s
 pub fn all_module_analysis() -> Vec<AnalyzerKind> {
     vec![AnalyzerKind::CallSiteFixer,
-         AnalyzerKind::Inferer]
+         AnalyzerKind::Inferer,
+         AnalyzerKind::InterProc]
 }

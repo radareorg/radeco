@@ -1,56 +1,44 @@
 //! Fills out the call summary information for `RFunction`
 
+use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, ModuleAnalyzer};
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::radeco_containers::RadecoModule;
 use std::collections::HashSet;
+use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct InterProcAnalyzer<'a, T>
+pub struct InterProcAnalyzer<T>
 where
     T: InterProcAnalysis,
 {
     analyzed: HashSet<u64>,
-    rmod: &'a mut RadecoModule,
     analyzer: T,
 }
 
-pub fn analyze_module<'a, A>(ssa: &'a mut RadecoModule)
+impl<T> InterProcAnalyzer<T>
 where
-    A: InterProcAnalysis,
+    T: InterProcAnalysis + Debug,
 {
-    let mut ipa = InterProcAnalyzer::<'a, A>::new(ssa);
-    let fs = ipa.rmod.functions.clone();
-    for (_, f) in fs {
-        ipa.analyze_function(f.offset);
-    }
-}
-
-impl<'a, T> InterProcAnalyzer<'a, T>
-where
-    T: InterProcAnalysis,
-{
-    pub fn new(rmod: &'a mut RadecoModule) -> InterProcAnalyzer<'a, T> {
+    pub fn new() -> InterProcAnalyzer<T> {
         InterProcAnalyzer {
             analyzed: HashSet::new(),
-            rmod: rmod,
             analyzer: T::new(),
         }
     }
 
-    fn analyze_function(&mut self, func_addr: u64) {
+    fn analyze_function(&mut self, rmod: &mut RadecoModule, func_addr: u64) {
         // If the current function has already been analyzed, return.
         if self.analyzed.contains(&func_addr) {
             return;
         }
         // Analyze all children of the present node in call graph.
-        let callees = self
-            .rmod
+        let callees = rmod
             .function(func_addr)
-            .map(|rfn| self.rmod.callees_of(rfn))
+            .map(|rfn| rmod.callees_of(rfn))
             .unwrap_or(Vec::new());
 
         for (call, _) in callees {
-            self.analyze_function(call);
+            self.analyze_function(rmod, call);
         }
 
         // Propagate changes and remove deadcode based on the analysis information from
@@ -58,13 +46,44 @@ where
         // TODO.
         {
             // Pull changes from callee.
-            self.analyzer.propagate(self.rmod, func_addr);
+            self.analyzer.propagate(rmod, func_addr);
             // Analyze transfer function for the current function.
-            self.analyzer.transfer(self.rmod, func_addr);
+            self.analyzer.transfer(rmod, func_addr);
         }
 
         // Insert the current function into analyzed set.
         self.analyzed.insert(func_addr);
+    }
+}
+
+impl<T: 'static> Analyzer for InterProcAnalyzer<T>
+where
+    T: InterProcAnalysis + Debug,
+{
+    fn name(&self) -> String {
+        "interproc".to_owned()
+    }
+
+    fn kind(&self) -> AnalyzerKind {
+        AnalyzerKind::InterProc
+    }
+
+    fn requires(&self) -> Vec<AnalyzerKind> {
+        Vec::new()
+    }
+}
+
+impl<T: 'static> ModuleAnalyzer for InterProcAnalyzer<T>
+where
+    T: InterProcAnalysis + Debug,
+{
+    fn analyze(&mut self, rmod: &mut RadecoModule) -> Option<Box<AnalyzerResult>> {
+        let fs = rmod.functions.clone();
+        for (_, f) in fs {
+            self.analyze_function(rmod, f.offset);
+        }
+
+        None
     }
 }
 
@@ -87,7 +106,8 @@ mod test {
         for mut xy in rproj.iter_mut() {
             let mut rmod = &mut xy.module;
             {
-                analyze_module::<summary::CallSummary>(&mut rmod);
+                let mut analyzer: InterProcAnalyzer<summary::CallSummary> = InterProcAnalyzer::new();
+                analyzer.analyze(&mut rmod);
             }
 
             for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
