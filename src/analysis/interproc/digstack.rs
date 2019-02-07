@@ -279,10 +279,11 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
 
-    use analysis::dce;
+    use analysis::analyzer::FuncAnalyzer;
+    use analysis::dce::DCE;
+    use frontend::radeco_containers::RadecoFunction;
     use frontend::ssaconstructor::SSAConstruct;
     use middle::regfile::SubRegisterFile;
-    use middle::ssa::ssastorage::SSAStorage;
 
     const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
     const BIN_LS_INSTRUCTIONS: &'static str = "test_files/bin_ls_instructions.json";
@@ -299,19 +300,20 @@ mod test {
         let mut s = String::new();
         instruction_file.read_to_string(&mut s).unwrap();
         instructions = serde_json::from_str(&*s).unwrap();
-        let mut ssa = SSAStorage::new();
+        let mut rfn = RadecoFunction::default();
+
         {
             let regfile = SubRegisterFile::new(&reg_profile);
-            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
+            let mut constructor = SSAConstruct::new(rfn.ssa_mut(), &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
-        {
-            dce::collect(&mut ssa);
-        }
 
-        frontward_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
-        backward_analysis(&ssa, "rsp".to_string());
-        rounded_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
+        let mut dce = DCE::new();
+        dce.analyze(&mut rfn);
+
+        frontward_analysis(rfn.ssa(), "rsp".to_string(), "rbp".to_string());
+        backward_analysis(rfn.ssa(), "rsp".to_string());
+        rounded_analysis(rfn.ssa(), "rsp".to_string(), "rbp".to_string());
     }
 
     #[test]
@@ -325,18 +327,19 @@ mod test {
         let mut s = String::new();
         instruction_file.read_to_string(&mut s).unwrap();
         instructions = serde_json::from_str(&*s).unwrap();
-        let mut ssa = SSAStorage::new();
+        let mut rfn = RadecoFunction::default();
+
         {
             let regfile = SubRegisterFile::new(&reg_profile);
-            let mut constructor = SSAConstruct::new(&mut ssa, &regfile);
+            let mut constructor = SSAConstruct::new(rfn.ssa_mut(), &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
-        {
-            dce::collect(&mut ssa);
-        }
 
-        frontward_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
-        backward_analysis(&ssa, "rsp".to_string());
-        rounded_analysis(&ssa, "rsp".to_string(), "rbp".to_string());
+        let mut dce = DCE::new();
+        dce.analyze(&mut rfn);
+
+        frontward_analysis(rfn.ssa(), "rsp".to_string(), "rbp".to_string());
+        backward_analysis(rfn.ssa(), "rsp".to_string());
+        rounded_analysis(rfn.ssa(), "rsp".to_string(), "rbp".to_string());
     }
 }

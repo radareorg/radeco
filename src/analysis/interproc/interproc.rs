@@ -90,8 +90,9 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use analysis::analyzer::FuncAnalyzer;
     use analysis::interproc::summary;
-    use analysis::dce;
+    use analysis::dce::DCE;
     use frontend::radeco_containers::ProjectLoader;
     use frontend::radeco_source::FileSource;
     use middle::ir_writer;
@@ -111,9 +112,9 @@ mod test {
             }
 
             for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
-                {
-                    dce::collect(rfn.ssa_mut());
-                }
+                let mut dce = DCE::new();
+                dce.analyze(rfn);
+
                 //println!("Binds: {:?}", rfn.bindings.bindings());
                 println!("Info for: {:#x}", addr);
                 println!("Local Variable info: {:#?}", rfn.locals());

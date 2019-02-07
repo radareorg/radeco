@@ -13,7 +13,7 @@
 //! See #147 for further discussion
 
 use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer, ModuleAnalyzer};
-use analysis::dce;
+use analysis::dce::DCE;
 use analysis::inst_combine::Combiner;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 use middle::ir;
@@ -88,7 +88,8 @@ impl ModuleAnalyzer for Inferer {
                     self.patch_fn(fn_addr, &mut rmod.functions);
 
                     let rfn = &mut rmod.functions.get_mut(&fn_addr).unwrap();
-                    dce::collect(rfn.ssa_mut());
+                    let mut dce = DCE::new();
+                    dce.analyze(rfn);
 
                     let mut combiner = Combiner::new();
                     combiner.analyze(rfn);

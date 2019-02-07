@@ -925,9 +925,8 @@ mod test {
     use super::*;
     use analysis::analyzer::FuncAnalyzer;
     use analysis::sccp::SCCP;
-    use analysis::dce;
+    use analysis::dce::DCE;
     use middle::ir_writer;
-    use middle::ssa::ssastorage::SSAStorage;
     use middle::dot;
     use r2api::structs::{LFunctionInfo, LRegInfo};
     use serde_json;
@@ -960,16 +959,17 @@ mod test {
             "test_files/tiny_sccp_test_instructions.json",
         );
         let mut rfn = RadecoFunction::default();
-        let ssa = rfn.ssa_mut();
+
         {
             let regfile = SubRegisterFile::new(&reg_profile);
-            let mut constructor = SSAConstruct::new(ssa, &regfile);
+            let mut constructor = SSAConstruct::new(rfn.ssa_mut(), &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
-        {
-            dce::collect(ssa);
-        }
-        let tmp = dot::emit_dot(ssa);
+
+        let mut dce = DCE::new();
+        dce.analyze(&mut rfn);
+
+        let tmp = dot::emit_dot(rfn.ssa());
         let mut f = File::create("yay.dot").unwrap();
         f.write_all(tmp.as_bytes()).expect("Write failed!");
     }
@@ -984,24 +984,22 @@ mod test {
             "test_files/tiny_sccp_test_instructions.json",
         );
         let mut rfn = RadecoFunction::default();
+
         {
-            let ssa = rfn.ssa_mut();
-            {
-                let regfile = SubRegisterFile::new(&reg_profile);
-                let mut constructor = SSAConstruct::new(ssa, &regfile);
-                constructor.run(instructions.ops.unwrap().as_slice());
-            }
-            {
-                dce::collect(ssa);
-            }
+            let regfile = SubRegisterFile::new(&reg_profile);
+            let mut constructor = SSAConstruct::new(rfn.ssa_mut(), &regfile);
+            constructor.run(instructions.ops.unwrap().as_slice());
         }
+
+        let mut dce = DCE::new();
+        dce.analyze(&mut rfn);
+
         let mut analyzer = SCCP::new();
         analyzer.analyze(&mut rfn);
-        let ssa = rfn.ssa_mut();
-        {
-            dce::collect(ssa);
-        }
-        let tmp = dot::emit_dot(ssa);
+
+        dce.analyze(&mut rfn);
+
+        let tmp = dot::emit_dot(rfn.ssa());
         let mut f = File::create("yay.dot").unwrap();
         f.write_all(tmp.as_bytes()).expect("Write failed!");
     }
@@ -1016,27 +1014,27 @@ mod test {
             "test_files/tiny_sccp_test_instructions.json",
         );
         let mut rfn = RadecoFunction::default();
+
         {
-            let mut ssa = SSAStorage::new();
-            {
-                let regfile = Arc::new(SubRegisterFile::new(&reg_profile));
-                ssa.regfile = regfile.clone();
-                let mut constructor = SSAConstruct::new(&mut ssa, &*regfile);
-                constructor.run(instructions.ops.unwrap().as_slice());
-            }
-            {
-                dce::collect(&mut ssa);
-            }
-            println!("\nBefore Constant Propagation:");
-            let mut il = String::new();
-            ir_writer::emit_il(&mut il, Some("main".to_owned()), &ssa).unwrap();
-            println!("{}", il);
+            let regfile = Arc::new(SubRegisterFile::new(&reg_profile));
+            rfn.ssa_mut().regfile = regfile.clone();
+            let mut constructor = SSAConstruct::new(rfn.ssa_mut(), &*regfile);
+            constructor.run(instructions.ops.unwrap().as_slice());
         }
+
+        let mut dce = DCE::new();
+        dce.analyze(&mut rfn);
+
+        println!("\nBefore Constant Propagation:");
+        let mut il = String::new();
+        ir_writer::emit_il(&mut il, Some("main".to_owned()), rfn.ssa()).unwrap();
+        println!("{}", il);
+
         let mut analyzer = SCCP::new();
         analyzer.analyze(&mut rfn);
-        {
-            dce::collect(rfn.ssa_mut());
-        }
+
+        dce.analyze(&mut rfn);
+
         println!("\nAfter Constant Propagation:");
         let mut il = String::new();
         ir_writer::emit_il(&mut il, Some("main".to_owned()), rfn.ssa()).unwrap();

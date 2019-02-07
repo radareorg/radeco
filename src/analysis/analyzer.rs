@@ -13,6 +13,7 @@ pub enum AnalyzerKind {
     Combiner,
     CopyPropagation,
     CSE,
+    DCE,
     Inferer,
     InterProc,
     SCCP,
@@ -45,6 +46,7 @@ pub fn all_func_analysis() -> Vec<AnalyzerKind> {
     vec![AnalyzerKind::Combiner,
          AnalyzerKind::CopyPropagation,
          AnalyzerKind::CSE,
+         AnalyzerKind::DCE,
          AnalyzerKind::SCCP]
 }
 
