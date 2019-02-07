@@ -925,9 +925,10 @@ mod test {
     use super::*;
     use analysis::analyzer::FuncAnalyzer;
     use analysis::sccp::SCCP;
+    use analysis::dce;
     use middle::ir_writer;
     use middle::ssa::ssastorage::SSAStorage;
-    use middle::{dce, dot};
+    use middle::dot;
     use r2api::structs::{LFunctionInfo, LRegInfo};
     use serde_json;
     use std::fs::File;

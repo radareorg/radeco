@@ -279,8 +279,8 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
 
+    use analysis::dce;
     use frontend::ssaconstructor::SSAConstruct;
-    use middle::dce;
     use middle::regfile::SubRegisterFile;
     use middle::ssa::ssastorage::SSAStorage;
 

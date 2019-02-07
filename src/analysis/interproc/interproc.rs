@@ -91,9 +91,9 @@ where
 mod test {
     use super::*;
     use analysis::interproc::summary;
+    use analysis::dce;
     use frontend::radeco_containers::ProjectLoader;
     use frontend::radeco_source::FileSource;
-    use middle::dce;
     use middle::ir_writer;
     use std::rc::Rc;
 

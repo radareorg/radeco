@@ -23,7 +23,6 @@ pub mod ssa {
 #[macro_use] pub mod dot;
 pub mod ir;
 pub mod ir_reader;
-pub mod dce;
 #[macro_use] pub mod ir_writer;
 #[allow(non_snake_case)] pub mod phiplacement;
 pub mod regfile;
