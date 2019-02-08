@@ -1,10 +1,13 @@
 use base64;
 use r2pipe::{R2Pipe, R2};
-use radeco_lib;
+use radeco_lib::analysis::analyzer::{FuncAnalyzer, ModuleAnalyzer};
 use radeco_lib::analysis::cse::cse::CSE;
-use radeco_lib::analysis::inst_combine;
+use radeco_lib::analysis::inst_combine::Combiner;
+use radeco_lib::analysis::functions::infer_regusage::Inferer;
+use radeco_lib::analysis::functions::fix_ssa_opcalls::CallSiteFixer;
 use radeco_lib::analysis::interproc::fixcall::CallFixer;
-use radeco_lib::analysis::sccp;
+use radeco_lib::analysis::dce::DCE;
+use radeco_lib::analysis::sccp::SCCP;
 use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
 use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 use radeco_lib::backend::lang_c::c_cfg_builder;
@@ -13,7 +16,7 @@ use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::regfile::SubRegisterFile;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
 use radeco_lib::middle::ssa::verifier;
-use radeco_lib::middle::{dce, dot};
+use radeco_lib::middle::dot;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::panic;
@@ -88,36 +91,42 @@ pub fn analyze_mod(regfile: Arc<SubRegisterFile>, rmod: &mut RadecoModule) {
     }
 
     // Fix call sites
-    radeco_lib::analysis::functions::fix_ssa_opcalls::go(rmod);
+    let mut call_site_fixer = CallSiteFixer::new();
+    call_site_fixer.analyze(rmod);
 
     // Infer calling conventions
-    radeco_lib::analysis::functions::infer_regusage::run(rmod, &*regfile);
+    let mut inferer = Inferer::new((*regfile).clone());
+    inferer.analyze(rmod);
 }
 
 pub fn analyze(rfn: &mut RadecoFunction) {
     eprintln!("[+] Analyzing: {} @ {:#x}", rfn.name, rfn.offset);
     {
         eprintln!("  [*] Eliminating Dead Code");
-        dce::collect(rfn.ssa_mut());
+        let mut dce = DCE::new();
+        dce.analyze(rfn);
     }
-    let mut ssa = {
+    {
         // Constant Propagation (sccp)
         eprintln!("  [*] Propagating Constants");
-        let mut analyzer = sccp::Analyzer::new(rfn.ssa_mut());
-        analyzer.analyze();
-        analyzer.emit_ssa()
-    };
+        let mut sccp = SCCP::new();
+        sccp.analyze(rfn);
+    }
     {
         eprintln!("  [*] Eliminating More DeadCode");
-        dce::collect(&mut ssa);
+        let mut dce = DCE::new();
+        dce.analyze(rfn);
     }
-    *rfn.ssa_mut() = ssa;
-    inst_combine::run(rfn.ssa_mut());
+    {
+        // Instruction combiner
+        let mut combiner = Combiner::new();
+        combiner.analyze(rfn);
+    }
     {
         // Common SubExpression Elimination (cse)
         eprintln!("  [*] Eliminating Common SubExpressions");
-        let mut cse = CSE::new(rfn.ssa_mut());
-        cse.run();
+        let mut cse = CSE::new();
+        cse.analyze(rfn);
     }
     {
         // Verify SSA
