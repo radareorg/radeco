@@ -12,7 +12,7 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
-use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MArity, MOpcode, WidthSpec};
 use middle::ssa::cfg_traits::{CFG, CFGMod};
@@ -107,7 +107,7 @@ impl SCCP
         println!("{:?}", self.expr_val);
     }
 
-    fn visit_phi(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+    fn visit_phi(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
         let operands = g.operands_of(*i);
         let mut phi_val = self.get_value(g, i);
 
@@ -151,7 +151,7 @@ impl SCCP
         phi_val
     }
 
-    fn evaluate_control_flow(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) {
+    fn evaluate_control_flow(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef) {
         assert!(g.is_selector(*i));
 
         let cond_val = self.get_value(g, i);
@@ -187,7 +187,7 @@ impl SCCP
         }
     }
 
-    fn evaluate_unary_op(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_unary_op(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
         let operand = g.operands_of(*i);
         let operand = if operand.is_empty() {
             return LatticeValue::Top;
@@ -231,7 +231,7 @@ impl SCCP
         LatticeValue::Const(val)
     }
 
-    fn evaluate_binary_op(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_binary_op(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
         // Do not reason about load/stores.
         match opcode {
             MOpcode::OpLoad | MOpcode::OpStore => return LatticeValue::Bottom,
@@ -313,7 +313,7 @@ impl SCCP
         }
     }
 
-    fn visit_expression(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+    fn visit_expression(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
         let expr = g.node_data(*i).unwrap_or_else(|_x| {
             radeco_err!("RegisterState found, {:?}", _x);
             NodeData {
@@ -364,7 +364,7 @@ impl SCCP
     }
 
     // Determines the Initial value
-    fn init_val(&self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+    fn init_val(&self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
         //TODO replace unwrap
         let node_data = g.node_data(*i).unwrap();
         match node_data.nt {
@@ -374,7 +374,7 @@ impl SCCP
         }
     }
 
-    fn get_value(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+    fn get_value(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
         if self.expr_val.contains_key(i) {
             return self.expr_val[i];
         }
@@ -389,7 +389,7 @@ impl SCCP
         *n = v;
     }
 
-    fn is_block_executable(&self, g: &mut SSAStorage, i: &<SSAStorage as CFG>::ActionRef) -> bool {
+    fn is_block_executable(&self, g: &SSAStorage, i: &<SSAStorage as CFG>::ActionRef) -> bool {
         // entry_node is always reachable.
         if *i == entry_node_err!(&g) {
             return true;
@@ -403,7 +403,7 @@ impl SCCP
         false
     }
 
-    fn ssawl_push(&mut self, g: &mut SSAStorage, i: &<SSAStorage as SSA>::ValueRef) {
+    fn ssawl_push(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef) {
         if !g.is_expr(*i) {
             return;
         }
@@ -433,11 +433,14 @@ impl Analyzer for SCCP {
     fn requires(&self) -> Vec<AnalyzerKind> {
         Vec::new()
     }
+
+    fn uses_policy(&self) -> bool {
+        false
+    }
 }
 
-
 impl FuncAnalyzer for SCCP {
-    fn analyze(&mut self, rfn: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, rfn: &mut RadecoFunction, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         let mut g = rfn.ssa_mut();
 
         {

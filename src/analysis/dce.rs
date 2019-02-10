@@ -12,7 +12,7 @@
 //! are in code that is actually executed or not. For a better analysis
 //! look at `analysis::constant_propagation`.
 
-use analysis::analyzer::{Analyzer, FuncAnalyzer, AnalyzerKind, AnalyzerResult};
+use analysis::analyzer::{Action, Analyzer, FuncAnalyzer, AnalyzerKind, AnalyzerResult, Change, RemoveValue};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ssa::graph_traits::Graph;
@@ -58,11 +58,17 @@ impl DCE {
 
 
     // Sweeps away the un-marked nodes
-    fn sweep(&self, ssa: &mut SSAStorage)
+    fn sweep<T: Fn(Box<Change>) -> Action>(&self, ssa: &mut SSAStorage, policy: T)
     {
         for node in &ssa.values() {
             if !ssa.is_marked(node) {
-                ssa.remove_value(*node);
+                match policy(Box::new(RemoveValue(*node))) {
+                    Action::Apply => {
+                        ssa.remove_value(*node);
+                    },
+                    Action::Skip => (),
+                    Action::Abort => { return; }
+                };
             }
             ssa.clear_mark(node);
         }
@@ -120,12 +126,16 @@ impl Analyzer for DCE {
     fn requires(&self) -> Vec<AnalyzerKind> {
         Vec::new()
     }
+
+    fn uses_policy(&self) -> bool {
+        true
+    }
 }
 
 impl FuncAnalyzer for DCE {
-    fn analyze(&mut self, rfn: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, rfn: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         self.mark(rfn.ssa_mut());
-        self.sweep(rfn.ssa_mut());
+        self.sweep(rfn.ssa_mut(), policy.expect("A policy function must be provided"));
 
         None
     }

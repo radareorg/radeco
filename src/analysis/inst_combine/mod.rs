@@ -2,7 +2,7 @@
 //! For every instruction, try to combine one of its operands into itself. This
 //! transforms linear data-dependency chains into trees.
 
-use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::ssa_traits::*;
@@ -22,9 +22,9 @@ type SSAValue = <SSAStorage as SSA>::ValueRef;
 /// operands is constant. In other words, represents curried binary operations.
 /// e.g. `(|x| 7 & x)`, `(|x| x + 3)`, etc.
 #[derive(Clone)]
-struct CombinableOpInfo(MOpcode, CombinableOpConstInfo);
+pub struct CombinableOpInfo(MOpcode, CombinableOpConstInfo);
 #[derive(Clone, Debug)]
-enum CombinableOpConstInfo {
+pub enum CombinableOpConstInfo {
     /// no const, like in `(|x| !x)`
     Unary,
     /// const is on the left, like in `(|x| 3 - x)`
@@ -34,6 +34,30 @@ enum CombinableOpConstInfo {
 }
 
 use self::CombinableOpConstInfo as COCI;
+
+#[derive(Debug)]
+pub struct CombineChange {
+    /// Index of the node to combine.
+    node: SSAValue,
+
+    /// Left: The node and one of its args were combined. The tuple contains: the
+    /// structure of the combined node (if the node is a no-op then `None` is present)
+    /// and the index of the non-const operand of the combined node.
+    /// Right: The node and its args were combined into a constant value.
+    res: Either<(Option<CombinableOpInfo>, SSAValue), u64>,
+}
+impl Change for CombineChange { }
+
+enum CombErr {
+    /// The op-info is not combinable.
+    NoComb,
+
+    /// Skip this substitution.
+    Skip,
+
+    /// An abort request was raised.
+    Abort,
+}
 
 #[derive(Debug)]
 pub struct Combiner {
@@ -50,11 +74,19 @@ impl Combiner {
 
     /// Returns `Some(new_node)` if one of `cur_node`'s operands can be combined
     /// into `cur_node`, resulting in `new_node`; or, if `cur_node` could be
-    /// simplified, resulting in `new_node`.
-    /// Returns `None` if no simplification can occur.
-    fn visit_node(&mut self, cur_node: SSAValue, ssa: &mut SSAStorage) -> Option<SSAValue> {
+    /// simplified, resulting in `new_node`. In both cases `Action::Apply` was returned
+    /// by the policy function.
+    /// Returns `Err(CombErr::NoComb)` if no simplification can occur.
+    /// Returns `Err(CombErr::Skip)` if the policy function returned `Action::Skip`.
+    /// Returns `Err(CombErr::Abort)` if the policy function returned `Action::Abort`.
+    fn visit_node<T: Fn(Box<Change>) -> Action>(
+        &mut self,
+        cur_node: SSAValue,
+        ssa: &mut SSAStorage,
+        policy: &T
+    ) -> Result<SSAValue, CombErr> {
         // bail if non-combinable
-        let extracted = extract_opinfo(cur_node, ssa)?;
+        let extracted = extract_opinfo(cur_node, ssa).ok_or(CombErr::NoComb)?;
         match extracted {
             Left((sub_node, cur_opinfo, cur_vt)) => {
                 radeco_trace!(
@@ -63,9 +95,9 @@ impl Combiner {
                     sub_node,
                     cur_opinfo
                 );
-                let opt_new_node = self.make_combined_node(&cur_opinfo, cur_vt, sub_node, ssa);
+                let opt_new_node = self.make_combined_node(cur_node, &cur_opinfo, cur_vt, sub_node, ssa, policy);
                 match opt_new_node {
-                    Some(Left((new_node, new_sub_node, new_opinfo))) => {
+                    Ok(Left((new_node, new_sub_node, new_opinfo))) => {
                         radeco_trace!(
                             "  {:?} ==> ({:?} = {:?} {:?})",
                             cur_node,
@@ -75,25 +107,38 @@ impl Combiner {
                         );
                         self.combine_candidates
                             .insert(new_node, (new_sub_node, new_opinfo));
-                        Some(new_node)
+                        Ok(new_node)
                     }
-                    Some(Right(new_node)) => {
+                    Ok(Right(new_node)) => {
                         radeco_trace!("  {:?} ==> no-op", cur_node);
-                        Some(new_node)
+                        Ok(new_node)
                     }
-                    None => {
-                        // no change; still add to `combine_candidates`
-                        self.combine_candidates
-                            .insert(cur_node, (sub_node, cur_opinfo));
-                        None
+                    Err(comb_err) => {
+                        if let CombErr::NoComb = comb_err {
+                            // no change; still add to `combine_candidates`
+                            self.combine_candidates
+                                .insert(cur_node, (sub_node, cur_opinfo));
+                        }
+                        Err(comb_err)
                     }
                 }
             }
             Right(c_val) => {
-                // combined to constant
-                radeco_trace!("{:?} = {:#x}", cur_node, c_val);
-                let c_node = ssa.insert_const(c_val, None)?;
-                Some(c_node)
+                let action = policy(Box::new(CombineChange{
+                    node: cur_node,
+                    res: Right(c_val),
+                }));
+
+                match action {
+                    Action::Apply => {
+                        // combined to constant
+                        radeco_trace!("{:?} = {:#x}", cur_node, c_val);
+                        let c_node = ssa.insert_const(c_val, None).ok_or(CombErr::NoComb)?;
+                        Ok(c_node)
+                    },
+                    Action::Skip => Err(CombErr::Skip),
+                    Action::Abort => Err(CombErr::Abort),
+                }
             }
         }
     }
@@ -102,14 +147,18 @@ impl Combiner {
     /// combined with an operand or if `cur_opinfo` was simplified.
     /// Returns `Right(new_node)` if `cur_opinfo` canceled with an
     /// operand to make a no-op or was originally a no-op.
-    /// Returns `None` if no combination or simplification exists.
-    fn make_combined_node(
+    /// Returns `Err(CombErr::NoComb)` if no combination or simplification exists.
+    /// Returns `Err(CombErr::Skip)` if the policy function returned `Action::Skip`.
+    /// Returns `Err(CombErr::Abort)` if the policy funcion returned `Action::Abort`.
+    fn make_combined_node<T: Fn(Box<Change>) -> Action>(
         &self,
+        cur_node: SSAValue,
         cur_opinfo: &CombinableOpInfo,
         cur_vt: ValueInfo,
         sub_node: SSAValue,
         ssa: &mut SSAStorage,
-    ) -> Option<Either<(SSAValue, SSAValue, CombinableOpInfo), SSAValue>> {
+        policy: &T,
+    ) -> Result<Either<(SSAValue, SSAValue, CombinableOpInfo), SSAValue>, CombErr> {
         let (new_opinfo, new_sub_node) = self
             .combine_opinfo(cur_opinfo, sub_node)
             .map(|(oi, sn)| (Cow::Owned(oi), sn))
@@ -118,29 +167,65 @@ impl Combiner {
         // simplify
         match simplify_opinfo(&new_opinfo) {
             Some(Some(simpl_new_opinfo)) => {
-                radeco_trace!(
-                    "    simplified ({:?}) into ({:?})",
-                    new_opinfo,
-                    simpl_new_opinfo
-                );
-                // make the new node
-                let new_node =
-                    make_opinfo_node(cur_vt, simpl_new_opinfo.clone(), new_sub_node, ssa)?;
-                Some(Left((new_node, new_sub_node, simpl_new_opinfo)))
+                let action = policy(Box::new(CombineChange{
+                    node: cur_node,
+                    res: Left((Some(simpl_new_opinfo.clone()), new_sub_node)),
+                }));
+
+                match action {
+                    Action::Apply => {
+                        radeco_trace!(
+                            "    simplified ({:?}) into ({:?})",
+                            new_opinfo,
+                            simpl_new_opinfo
+                        );
+                        // make the new node
+                        let new_node =
+                            make_opinfo_node(cur_vt, simpl_new_opinfo.clone(), new_sub_node, ssa)
+                                .ok_or(CombErr::NoComb)?;
+                        Ok(Left((new_node, new_sub_node, simpl_new_opinfo)))
+                    }
+                    Action::Skip => Err(CombErr::Skip),
+                    Action::Abort => Err(CombErr::Abort),
+                }
+
             }
             Some(None) => {
-                radeco_trace!("    simplified ({:?}) into no-op", new_opinfo);
-                Some(Right(new_sub_node))
+                let action = policy(Box::new(CombineChange{
+                    node: cur_node,
+                    res: Left((None, new_sub_node)),
+                }));
+
+                match action {
+                    Action::Apply => {
+                        radeco_trace!("    simplified ({:?}) into no-op", new_opinfo);
+                        Ok(Right(new_sub_node))
+                    }
+                    Action::Skip => Err(CombErr::Skip),
+                    Action::Abort => Err(CombErr::Abort),
+                }
             }
             None => {
                 // no simplification
                 match new_opinfo {
-                    Cow::Borrowed(_) => None,
+                    Cow::Borrowed(_) => Err(CombErr::NoComb),
                     Cow::Owned(new_opinfo) => {
-                        // combined, but no further simplification
-                        let new_node =
-                            make_opinfo_node(cur_vt, new_opinfo.clone(), new_sub_node, ssa)?;
-                        Some(Left((new_node, new_sub_node, new_opinfo)))
+                        let action = policy(Box::new(CombineChange{
+                            node: cur_node,
+                            res: Left((Some(new_opinfo.clone()), new_sub_node)),
+                        }));
+
+                        match action {
+                            Action::Apply => {
+                                // combined, but no further simplification
+                                let new_node =
+                                    make_opinfo_node(cur_vt, new_opinfo.clone(), new_sub_node, ssa)
+                                        .ok_or(CombErr::NoComb)?;
+                                Ok(Left((new_node, new_sub_node, new_opinfo)))
+                            }
+                            Action::Skip => Err(CombErr::Skip),
+                            Action::Abort => Err(CombErr::Abort),
+                        }
                     }
                 }
             }
@@ -178,19 +263,30 @@ impl Analyzer for Combiner {
     fn requires(&self) -> Vec<AnalyzerKind> {
         Vec::new()
     }
+
+    fn uses_policy(&self) -> bool {
+        true
+    }
 }
 
 impl FuncAnalyzer for Combiner {
-    fn analyze(&mut self, func: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         let ssa = func.ssa_mut();
+        let policy = policy.expect("A policy function must be provided");
         for node in ssa.inorder_walk() {
-            if let Some(repl_node) = self.visit_node(node, ssa) {
+            let res = self.visit_node(node, ssa, &policy);
+
+            if let Ok(repl_node) = res {
                 let blk = ssa.block_for(node).unwrap();
                 let addr = ssa.address(node).unwrap();
                 ssa.replace_value(node, repl_node);
                 if !ssa.is_constant(repl_node) && ssa.address(repl_node).is_none() {
                     ssa.insert_into_block(repl_node, blk, addr);
                 }
+            }
+
+            if let Err(CombErr::Abort) = res {
+                return None;
             }
         }
 

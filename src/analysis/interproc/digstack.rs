@@ -279,7 +279,7 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
 
-    use analysis::analyzer::FuncAnalyzer;
+    use analysis::analyzer::{FuncAnalyzer, all};
     use analysis::dce::DCE;
     use frontend::radeco_containers::RadecoFunction;
     use frontend::ssaconstructor::SSAConstruct;
@@ -309,7 +309,7 @@ mod test {
         }
 
         let mut dce = DCE::new();
-        dce.analyze(&mut rfn);
+        dce.analyze(&mut rfn, Some(all));
 
         frontward_analysis(rfn.ssa(), "rsp".to_string(), "rbp".to_string());
         backward_analysis(rfn.ssa(), "rsp".to_string());
@@ -336,7 +336,7 @@ mod test {
         }
 
         let mut dce = DCE::new();
-        dce.analyze(&mut rfn);
+        dce.analyze(&mut rfn, Some(all));
 
         frontward_analysis(rfn.ssa(), "rsp".to_string(), "rbp".to_string());
         backward_analysis(rfn.ssa(), "rsp".to_string());

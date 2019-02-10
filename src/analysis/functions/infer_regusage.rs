@@ -12,7 +12,7 @@
 //! guarantee that that stack location is never subsequently read or modified.
 //! See #147 for further discussion
 
-use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer, ModuleAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ModuleAnalyzer, all};
 use analysis::dce::DCE;
 use analysis::inst_combine::Combiner;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
@@ -48,12 +48,16 @@ impl Analyzer for Inferer {
     fn requires(&self) -> Vec<AnalyzerKind> {
         Vec::new()
     }
+
+    fn uses_policy(&self) -> bool {
+        false
+    }
 }
 
 impl ModuleAnalyzer for Inferer {
     /// Calls `patch_fn`, `dce::collect`, and `analyze_fn` on every function,
     /// callees first
-    fn analyze(&mut self, rmod: &mut RadecoModule) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         // for imports, *ASSUME* that the callconv that r2 says is correct
         let mut new_analyzed = Vec::new();
         {
@@ -89,10 +93,10 @@ impl ModuleAnalyzer for Inferer {
 
                     let rfn = &mut rmod.functions.get_mut(&fn_addr).unwrap();
                     let mut dce = DCE::new();
-                    dce.analyze(rfn);
+                    dce.analyze(rfn, Some(all));
 
                     let mut combiner = Combiner::new();
-                    combiner.analyze(rfn);
+                    combiner.analyze(rfn, Some(all));
 
                     let ru = self.analyze_fn(rfn, &self.reginfo).unwrap_or_else(|| {
                         radeco_err!("Failed to analyze fn: {:?} (@ {:#X})", rfn.name, fn_addr);

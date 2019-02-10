@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use frontend::radeco_containers::RadecoFunction;
-use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, FuncAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ReplaceValue};
 
 use middle::ir::MOpcode;
 use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
@@ -92,11 +92,17 @@ impl Analyzer for CSE
     fn requires(&self) -> Vec<AnalyzerKind> {
         Vec::new()
     }
+
+    fn uses_policy(&self) -> bool {
+        true
+    }
 }
 
 impl FuncAnalyzer for CSE
 {
-    fn analyze(&mut self, func: &mut RadecoFunction) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+        let policy = policy.expect("A policy function must be provided");
+
         {
             let ssa = func.ssa_mut();
 
@@ -115,9 +121,15 @@ impl FuncAnalyzer for CSE
                     // block.
                     for ex_idx in &ex_idxs {
                         if ssa.block_for(*ex_idx) == ssa.block_for(expr) {
-                            ssa.replace_value(expr, *ex_idx);
-                            replaced = true;
-                            break;
+                            match policy(Box::new(ReplaceValue(expr, *ex_idx))) {
+                                Action::Apply => {
+                                    ssa.replace_value(expr, *ex_idx);
+                                    replaced = true;
+                                    break;
+                                },
+                                Action::Skip  => (),
+                                Action::Abort => { return None },
+                            }
                         }
                     }
                 }
