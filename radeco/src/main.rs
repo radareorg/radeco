@@ -147,6 +147,8 @@ impl Completer for Completes {
 const SEP: &'static str = "END";
 
 fn main() {
+    #[cfg(feature = "trace_log")]
+    env_logger::init();
     let (arg, cmd_opt, is_append_mode, is_batch_mode, no_highlight) = cli::parse_args();
     let config = Config::builder()
         .auto_add_history(true)
