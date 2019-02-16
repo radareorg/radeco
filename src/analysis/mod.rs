@@ -26,6 +26,7 @@ pub mod matcher {
     pub mod gmatch;
 }
 
+pub mod arithmetic;
 pub mod constraint_set;
 pub mod copy_propagation;
 pub mod functions;

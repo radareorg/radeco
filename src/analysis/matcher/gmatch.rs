@@ -54,6 +54,19 @@ pub struct Match<T: Clone + fmt::Debug> {
     bindings: Vec<(String, T)>,
 }
 
+impl<T> Match<T>
+where
+    T: Clone + fmt::Debug
+{
+    pub fn get_root(&self) -> &T {
+        &self.root
+    }
+
+    pub fn get_bindings(&self) -> &Vec<(String, T)> {
+        &self.bindings
+    }
+}
+
 pub struct GraphMatcher<'a, I, S>
 where
     I: Iterator<Item = S::ValueRef>,
@@ -194,6 +207,7 @@ where
                     MOpcode::OpMul => "OpMul".to_owned(),
                     MOpcode::OpDiv => "OpDiv".to_owned(),
                     MOpcode::OpMod => "OpMod".to_owned(),
+                    MOpcode::OpMov => "OpMov".to_owned(),
                     MOpcode::OpAnd => "OpAnd".to_owned(),
                     MOpcode::OpOr => "OpOr".to_owned(),
                     MOpcode::OpXor => "OpXor".to_owned(),
