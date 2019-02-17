@@ -1,6 +1,6 @@
 use base64;
 use r2pipe::{R2Pipe, R2};
-use radeco_lib::analysis::analyzer::{FuncAnalyzer, ModuleAnalyzer};
+use radeco_lib::analysis::analyzer::{FuncAnalyzer, ModuleAnalyzer, all};
 use radeco_lib::analysis::cse::cse::CSE;
 use radeco_lib::analysis::inst_combine::Combiner;
 use radeco_lib::analysis::functions::infer_regusage::Inferer;
@@ -92,11 +92,11 @@ pub fn analyze_mod(regfile: Arc<SubRegisterFile>, rmod: &mut RadecoModule) {
 
     // Fix call sites
     let mut call_site_fixer = CallSiteFixer::new();
-    call_site_fixer.analyze(rmod);
+    call_site_fixer.analyze(rmod, Some(all));
 
     // Infer calling conventions
     let mut inferer = Inferer::new((*regfile).clone());
-    inferer.analyze(rmod);
+    inferer.analyze(rmod, Some(all));
 }
 
 pub fn analyze(rfn: &mut RadecoFunction) {
@@ -104,29 +104,29 @@ pub fn analyze(rfn: &mut RadecoFunction) {
     {
         eprintln!("  [*] Eliminating Dead Code");
         let mut dce = DCE::new();
-        dce.analyze(rfn);
+        dce.analyze(rfn, Some(all));
     }
     {
         // Constant Propagation (sccp)
         eprintln!("  [*] Propagating Constants");
         let mut sccp = SCCP::new();
-        sccp.analyze(rfn);
+        sccp.analyze(rfn, Some(all));
     }
     {
         eprintln!("  [*] Eliminating More DeadCode");
         let mut dce = DCE::new();
-        dce.analyze(rfn);
+        dce.analyze(rfn, Some(all));
     }
     {
         // Instruction combiner
         let mut combiner = Combiner::new();
-        combiner.analyze(rfn);
+        combiner.analyze(rfn, Some(all));
     }
     {
         // Common SubExpression Elimination (cse)
         eprintln!("  [*] Eliminating Common SubExpressions");
         let mut cse = CSE::new();
-        cse.analyze(rfn);
+        cse.analyze(rfn, Some(all));
     }
     {
         // Verify SSA
