@@ -1,6 +1,6 @@
 //! Fills out the call summary information for `RFunction`
 
-use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, ModuleAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::radeco_containers::RadecoModule;
 use std::collections::HashSet;
@@ -71,13 +71,17 @@ where
     fn requires(&self) -> Vec<AnalyzerKind> {
         Vec::new()
     }
+
+    fn uses_policy(&self) -> bool {
+        false
+    }
 }
 
 impl<T: 'static> ModuleAnalyzer for InterProcAnalyzer<T>
 where
     T: InterProcAnalysis + Debug,
 {
-    fn analyze(&mut self, rmod: &mut RadecoModule) -> Option<Box<AnalyzerResult>> {
+    fn analyze<F: Fn(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<F>) -> Option<Box<AnalyzerResult>> {
         let fs = rmod.functions.clone();
         for (_, f) in fs {
             self.analyze_function(rmod, f.offset);
@@ -90,7 +94,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::analyzer::FuncAnalyzer;
+    use analysis::analyzer::{FuncAnalyzer, all};
     use analysis::interproc::summary;
     use analysis::dce::DCE;
     use frontend::radeco_containers::ProjectLoader;
@@ -108,12 +112,12 @@ mod test {
             let mut rmod = &mut xy.module;
             {
                 let mut analyzer: InterProcAnalyzer<summary::CallSummary> = InterProcAnalyzer::new();
-                analyzer.analyze(&mut rmod);
+                analyzer.analyze(&mut rmod, Some(all));
             }
 
             for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {
                 let mut dce = DCE::new();
-                dce.analyze(rfn);
+                dce.analyze(rfn, Some(all));
 
                 //println!("Binds: {:?}", rfn.bindings.bindings());
                 println!("Info for: {:#x}", addr);

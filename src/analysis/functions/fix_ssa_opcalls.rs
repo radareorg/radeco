@@ -7,7 +7,7 @@
 //! [`OpCall`]: ir::MOpcode::OpCall
 //! [the callgraph]: RadecoModule::callgraph
 
-use analysis::analyzer::{Analyzer, AnalyzerKind, AnalyzerResult, ModuleAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
 use frontend::radeco_containers::*;
 use middle::ir;
 use middle::ssa::ssa_traits::*;
@@ -36,10 +36,16 @@ impl Analyzer for CallSiteFixer {
     fn requires(&self) -> Vec<AnalyzerKind> {
         Vec::new()
     }
+
+    fn uses_policy(&self) -> bool {
+        // There is no point in fixing some sites and skipping
+        // some others.
+        false
+    }
 }
 
 impl ModuleAnalyzer for CallSiteFixer {
-    fn analyze(&mut self, rmod: &mut RadecoModule) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         for rfun in rmod.functions.values_mut() {
             go_fn(rfun, &rmod.callgraph);
         }

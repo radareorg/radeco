@@ -923,7 +923,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::analyzer::FuncAnalyzer;
+    use analysis::analyzer::{FuncAnalyzer, all};
     use analysis::sccp::SCCP;
     use analysis::dce::DCE;
     use middle::ir_writer;
@@ -967,7 +967,7 @@ mod test {
         }
 
         let mut dce = DCE::new();
-        dce.analyze(&mut rfn);
+        dce.analyze(&mut rfn, Some(all));
 
         let tmp = dot::emit_dot(rfn.ssa());
         let mut f = File::create("yay.dot").unwrap();
@@ -992,12 +992,12 @@ mod test {
         }
 
         let mut dce = DCE::new();
-        dce.analyze(&mut rfn);
+        dce.analyze(&mut rfn, Some(all));
 
         let mut analyzer = SCCP::new();
-        analyzer.analyze(&mut rfn);
+        analyzer.analyze(&mut rfn, Some(all));
 
-        dce.analyze(&mut rfn);
+        dce.analyze(&mut rfn, Some(all));
 
         let tmp = dot::emit_dot(rfn.ssa());
         let mut f = File::create("yay.dot").unwrap();
@@ -1023,7 +1023,7 @@ mod test {
         }
 
         let mut dce = DCE::new();
-        dce.analyze(&mut rfn);
+        dce.analyze(&mut rfn, Some(all));
 
         println!("\nBefore Constant Propagation:");
         let mut il = String::new();
@@ -1031,9 +1031,9 @@ mod test {
         println!("{}", il);
 
         let mut analyzer = SCCP::new();
-        analyzer.analyze(&mut rfn);
+        analyzer.analyze(&mut rfn, Some(all));
 
-        dce.analyze(&mut rfn);
+        dce.analyze(&mut rfn, Some(all));
 
         println!("\nAfter Constant Propagation:");
         let mut il = String::new();
