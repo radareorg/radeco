@@ -27,7 +27,7 @@ impl GraphDot for SSAStorage {
 
 
     fn configure(&self) -> String {
-        "digraph cfg {\nsplines=\"ortho\";\ngraph [fontsize=12 fontname=\"Verdana\" compound=true \
+        "digraph cfg {\nsplines=\"ortho\"\nranksep=1\nnodesep=1;\ngraph [fontsize=12 fontname=\"Verdana\" compound=true \
          rankdir=TB;]\n"
             .to_owned()
     }
