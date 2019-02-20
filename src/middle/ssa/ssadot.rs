@@ -195,18 +195,20 @@ impl GraphDot for SSAStorage {
                     r.push_str(">");
                 }
 
-                if let MOpcode::OpConst(_) = *opc {
-                    attrs.push(("style".to_owned(), "filled".to_owned()));
+                attrs.push(("style".to_owned(), "filled".to_owned()));
+                if let MOpcode::OpConst(c) = *opc {
                     attrs.push(("color".to_owned(), "black".to_owned()));
                     attrs.push(("fillcolor".to_owned(), "yellow".to_owned()));
-                }
-                if self.is_marked(i) {
-                    attrs.push(("label".to_string(), r));
-                    attrs.push(("style".to_owned(), "filled".to_owned()));
-                    attrs.push(("color".to_owned(), "black".to_owned()));
-                    attrs.push(("fillcolor".to_owned(), "green".to_owned()));
+                    attrs.push(("label".to_string(), format!("\"0x{:x}\"", c)));
                 } else {
-                    attrs.push(("fillcolor".to_owned(), "white".to_owned()));
+                    attrs.push(("color".to_owned(), "black".to_owned()));
+                    attrs.push(("label".to_string(), r));
+
+                    if self.is_marked(i) {
+                        attrs.push(("fillcolor".to_owned(), "green".to_owned()));
+                    } else {
+                        attrs.push(("fillcolor".to_owned(), "white".to_owned()));
+                    }
                 }
                 attrs
             }
