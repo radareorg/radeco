@@ -99,6 +99,14 @@ impl GraphDot for SSAStorage {
         let edge = edge_opt.unwrap();
         match *edge.weight() {
             EdgeData::ContainedInBB(_) | EdgeData::RegisterState => true,
+            EdgeData::Data(_) => {
+                // Skip data edges from registers to registerstates.
+                if let NodeData::RegisterState = self.g[edge.source()] {
+                    self.comment(edge.target()).is_some()
+                } else {
+                    false
+                }
+            },
             _ => false,
         }
     }
