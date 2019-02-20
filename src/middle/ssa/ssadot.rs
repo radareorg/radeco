@@ -243,7 +243,6 @@ impl GraphDot for SSAStorage {
             NodeData::Phi(_, _) => {
                 let mut attrs = Vec::new();
                 let mut label = format!("{:?}", node);
-                label = label.replace("\"", "\\\"");
                 label = format!("\"{}\"", label);
                 if let Some(addr) = self.addr(i) {
                     label = format!("<<font color=\"black\">{}: </font> {}>", addr, label);
