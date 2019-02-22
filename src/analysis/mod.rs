@@ -8,6 +8,7 @@
 //! Module that implements analysis and optimizations on radeco IR.
 
 pub mod analyzer;
+pub mod engine;
 
 #[allow(dead_code)]
 // pub mod valueset;

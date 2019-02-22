@@ -143,7 +143,7 @@ pub trait ModuleAnalyzer : Analyzer {
 }
 
 /// Get all the available `FuncAnalyzer`s
-pub fn all_func_analysis() -> Vec<AnalyzerKind> {
+pub fn all_func_analyzers() -> Vec<AnalyzerKind> {
     vec![AnalyzerKind::Arithmetic,
          AnalyzerKind::Combiner,
          AnalyzerKind::CopyPropagation,
