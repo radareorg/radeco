@@ -18,6 +18,8 @@ use middle::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ssa::graph_traits::Graph;
 use middle::ssa::ssastorage::SSAStorage;
 use middle::ssa::ssa_traits::{NodeType, SSA, SSAExtra, SSAMod};
+
+use std::any::Any;
 use std::collections::VecDeque;
 
 #[derive(Debug)]
@@ -130,6 +132,8 @@ impl Analyzer for DCE {
     fn uses_policy(&self) -> bool {
         true
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl FuncAnalyzer for DCE {

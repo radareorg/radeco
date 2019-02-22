@@ -25,6 +25,7 @@ use middle::ssa::utils;
 
 use petgraph::visit::{DfsPostOrder, Walker};
 
+use std::any::Any;
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Debug)]
@@ -52,6 +53,8 @@ impl Analyzer for Inferer {
     fn uses_policy(&self) -> bool {
         false
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl ModuleAnalyzer for Inferer {

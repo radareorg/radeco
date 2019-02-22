@@ -20,6 +20,8 @@ use middle::ssa::graph_traits::{ConditionInfo, Graph};
 use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
 use middle::ssa::ssa_traits::{SSAMod, SSA};
 use middle::ssa::ssastorage::SSAStorage;
+
+use std::any::Any;
 use std::collections::{HashMap, VecDeque};
 use std::u64;
 
@@ -437,6 +439,8 @@ impl Analyzer for SCCP {
     fn uses_policy(&self) -> bool {
         false
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl FuncAnalyzer for SCCP {

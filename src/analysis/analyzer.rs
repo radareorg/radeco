@@ -6,7 +6,9 @@ use petgraph::graph::NodeIndex;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 
 /// This trait provides access to extra informations generated during the analysis pass.
-pub trait AnalyzerResult : Any + Debug { }
+pub trait AnalyzerResult : Any + Debug {
+    fn as_any(&self) -> &dyn Any;
+}
 
 /// Kind of `Analyzer`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -45,22 +47,30 @@ pub trait Analyzer : Any + Debug {
     /// function/module at the same time and it does not make sense to split their work into smaller
     /// atomic `Change`s.
     fn uses_policy(&self) -> bool;
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// An atomic change to the IR.
 ///
 /// It represents a high-level, `Analyzer` specific change to apply to the IR.
-pub trait Change : Any + Debug { }
+pub trait Change : Any + Debug {
+    fn as_any(&self) -> &dyn Any;
+}
 
 /// A `Change` which replaces a node with another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReplaceValue(pub NodeIndex, pub NodeIndex);
-impl Change for ReplaceValue { }
+impl Change for ReplaceValue {
+    fn as_any(&self) -> &dyn Any { self }
+}
 
 /// A `Change` which removes a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoveValue(pub NodeIndex);
-impl Change for RemoveValue { }
+impl Change for RemoveValue {
+    fn as_any(&self) -> &dyn Any { self }
+}
 
 /// An `Action` to take with respect to a `Change`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

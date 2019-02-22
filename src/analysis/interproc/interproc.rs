@@ -3,6 +3,8 @@
 use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::radeco_containers::RadecoModule;
+
+use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
@@ -75,6 +77,8 @@ where
     fn uses_policy(&self) -> bool {
         false
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl<T: 'static> ModuleAnalyzer for InterProcAnalyzer<T>
