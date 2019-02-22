@@ -5,6 +5,7 @@ use middle::ssa::cfg_traits::CFG;
 use middle::ssa::ssa_traits::*;
 use middle::ssa::ssastorage::SSAStorage;
 
+use std::any::Any;
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -54,6 +55,8 @@ impl Analyzer for CopyPropagation {
     fn uses_policy(&self) -> bool {
         true
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl FuncAnalyzer for CopyPropagation {

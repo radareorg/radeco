@@ -10,6 +10,7 @@ use middle::ssa::ssastorage::SSAStorage;
 
 use either::*;
 
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -46,7 +47,9 @@ pub struct CombineChange {
     /// Right: The node and its args were combined into a constant value.
     res: Either<(Option<CombinableOpInfo>, SSAValue), u64>,
 }
-impl Change for CombineChange { }
+impl Change for CombineChange {
+    fn as_any(&self) -> &dyn Any { self }
+}
 
 enum CombErr {
     /// The op-info is not combinable.
@@ -267,6 +270,8 @@ impl Analyzer for Combiner {
     fn uses_policy(&self) -> bool {
         true
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl FuncAnalyzer for Combiner {

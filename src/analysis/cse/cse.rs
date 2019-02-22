@@ -6,6 +6,7 @@
 //! a huge memory consume. Thus, a balanced solution should be
 //! improved.
 
+use std::any::Any;
 use std::collections::HashMap;
 
 use frontend::radeco_containers::RadecoFunction;
@@ -96,6 +97,8 @@ impl Analyzer for CSE
     fn uses_policy(&self) -> bool {
         true
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl FuncAnalyzer for CSE

@@ -13,6 +13,7 @@ use middle::ir;
 use middle::ssa::ssa_traits::*;
 use middle::ssa::ssastorage::SSAStorage;
 
+use std::any::Any;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -42,6 +43,8 @@ impl Analyzer for CallSiteFixer {
         // some others.
         false
     }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 impl ModuleAnalyzer for CallSiteFixer {
