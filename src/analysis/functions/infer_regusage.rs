@@ -56,7 +56,7 @@ impl Analyzer for Inferer {
 impl ModuleAnalyzer for Inferer {
     /// Calls `patch_fn`, `dce::collect`, and `analyze_fn` on every function,
     /// callees first
-    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         // for imports, *ASSUME* that the callconv that r2 says is correct
         let mut new_analyzed = Vec::new();
         {

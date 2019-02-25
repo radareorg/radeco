@@ -98,8 +98,8 @@ impl Analyzer for CSE
 
 impl FuncAnalyzer for CSE
 {
-    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
-        let policy = policy.expect("A policy function must be provided");
+    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+        let mut policy = policy.expect("A policy function must be provided");
 
         {
             let ssa = func.ssa_mut();

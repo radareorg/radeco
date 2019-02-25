@@ -93,11 +93,11 @@ impl Combiner {
     /// Returns `Err(CombErr::NoComb)` if no simplification can occur.
     /// Returns `Err(CombErr::Skip)` if the policy function returned `Action::Skip`.
     /// Returns `Err(CombErr::Abort)` if the policy function returned `Action::Abort`.
-    fn visit_node<T: Fn(Box<Change>) -> Action>(
+    fn visit_node<T: FnMut(Box<Change>) -> Action>(
         &mut self,
         cur_node: SSAValue,
         ssa: &mut SSAStorage,
-        policy: &T
+        policy: &mut T
     ) -> Result<SSAValue, CombErr> {
         // bail if non-combinable
         let extracted = extract_opinfo(cur_node, ssa).ok_or(CombErr::NoComb)?;
@@ -164,14 +164,14 @@ impl Combiner {
     /// Returns `Err(CombErr::NoComb)` if no combination or simplification exists.
     /// Returns `Err(CombErr::Skip)` if the policy function returned `Action::Skip`.
     /// Returns `Err(CombErr::Abort)` if the policy funcion returned `Action::Abort`.
-    fn make_combined_node<T: Fn(Box<Change>) -> Action>(
+    fn make_combined_node<T: FnMut(Box<Change>) -> Action>(
         &self,
         cur_node: SSAValue,
         cur_opinfo: &CombinableOpInfo,
         cur_vt: ValueInfo,
         sub_node: SSAValue,
         ssa: &mut SSAStorage,
-        policy: &T,
+        policy: &mut T,
     ) -> Result<Either<(SSAValue, SSAValue, CombinableOpInfo), SSAValue>, CombErr> {
         let (new_opinfo, new_sub_node) = self
             .combine_opinfo(cur_opinfo, sub_node)
@@ -271,11 +271,11 @@ impl Analyzer for Combiner {
 }
 
 impl FuncAnalyzer for Combiner {
-    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         let ssa = func.ssa_mut();
-        let policy = policy.expect("A policy function must be provided");
+        let mut policy = policy.expect("A policy function must be provided");
         for node in ssa.inorder_walk() {
-            let res = self.visit_node(node, ssa, &policy);
+            let res = self.visit_node(node, ssa, &mut policy);
 
             if let Ok(repl_node) = res {
                 let blk = ssa.block_for(node).unwrap();

@@ -55,12 +55,12 @@ impl Analyzer for CopyPropagation {
 }
 
 impl FuncAnalyzer for CopyPropagation {
-    fn analyze<T: Fn(Box<Change>) -> Action>(
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
         &mut self,
         func: &mut RadecoFunction,
         policy: Option<T>,
     ) -> Option<Box<AnalyzerResult>> {
-        let policy = policy.expect("A policy function must be provided");
+        let mut policy = policy.expect("A policy function must be provided");
         let ssa = func.ssa_mut();
         loop {
             let copies = CopyPropagation::gather_copies(&ssa)
