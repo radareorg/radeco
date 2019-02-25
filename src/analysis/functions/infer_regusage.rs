@@ -12,7 +12,7 @@
 //! guarantee that that stack location is never subsequently read or modified.
 //! See #147 for further discussion
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ModuleAnalyzer, all};
+use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ModuleAnalyzer, all};
 use analysis::dce::DCE;
 use analysis::inst_combine::Combiner;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
@@ -28,6 +28,17 @@ use petgraph::visit::{DfsPostOrder, Walker};
 use std::any::Any;
 use std::collections::{BTreeMap, HashSet};
 
+
+const NAME: &str = "inferer";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::Inferer,
+    requires: REQUIRES,
+    uses_policy: false,
+};
+
 #[derive(Debug)]
 pub struct Inferer {
     /// Register file of the current architecture.
@@ -38,22 +49,7 @@ pub struct Inferer {
 }
 
 impl Analyzer for Inferer {
-    fn name(&self) -> String {
-        "inferer".to_owned()
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::Inferer
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        false
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 

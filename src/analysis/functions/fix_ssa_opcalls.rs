@@ -7,7 +7,7 @@
 //! [`OpCall`]: ir::MOpcode::OpCall
 //! [the callgraph]: RadecoModule::callgraph
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
 use frontend::radeco_containers::*;
 use middle::ir;
 use middle::ssa::ssa_traits::*;
@@ -15,6 +15,16 @@ use middle::ssa::ssastorage::SSAStorage;
 
 use std::any::Any;
 use std::collections::HashMap;
+
+const NAME: &str = "call_size_fixer";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::CallSiteFixer,
+    requires: REQUIRES,
+    uses_policy: false,
+};
 
 #[derive(Debug)]
 pub struct CallSiteFixer;
@@ -26,24 +36,7 @@ impl CallSiteFixer {
 }
 
 impl Analyzer for CallSiteFixer {
-    fn name(&self) -> String {
-        "call_site_fixer".to_owned()
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::CallSiteFixer
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        // There is no point in fixing some sites and skipping
-        // some others.
-        false
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 

@@ -2,7 +2,7 @@
 //! For every instruction, try to combine one of its operands into itself. This
 //! transforms linear data-dependency chains into trees.
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::ssa_traits::*;
@@ -47,6 +47,7 @@ pub struct CombineChange {
     /// Right: The node and its args were combined into a constant value.
     res: Either<(Option<CombinableOpInfo>, SSAValue), u64>,
 }
+
 impl Change for CombineChange {
     fn as_any(&self) -> &dyn Any { self }
 }
@@ -61,6 +62,16 @@ enum CombErr {
     /// An abort request was raised.
     Abort,
 }
+
+const NAME: &str = "combiner";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::Combiner,
+    requires: REQUIRES,
+    uses_policy: true,
+};
 
 #[derive(Debug)]
 pub struct Combiner {
@@ -255,22 +266,7 @@ impl Combiner {
 }
 
 impl Analyzer for Combiner {
-    fn name(&self) -> String {
-        "combiner".to_owned()
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::Combiner
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        true
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 

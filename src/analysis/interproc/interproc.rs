@@ -1,6 +1,6 @@
 //! Fills out the call summary information for `RFunction`
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::radeco_containers::RadecoModule;
 
@@ -16,6 +16,16 @@ where
     analyzed: HashSet<u64>,
     analyzer: T,
 }
+
+const NAME: &str = "interproc";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::InterProc,
+    requires: REQUIRES,
+    uses_policy: false,
+};
 
 impl<T> InterProcAnalyzer<T>
 where
@@ -62,22 +72,7 @@ impl<T: 'static> Analyzer for InterProcAnalyzer<T>
 where
     T: InterProcAnalysis + Debug,
 {
-    fn name(&self) -> String {
-        "interproc".to_owned()
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::InterProc
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        false
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 
