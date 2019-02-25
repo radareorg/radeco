@@ -439,7 +439,7 @@ impl Analyzer for SCCP {
 }
 
 impl FuncAnalyzer for SCCP {
-    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, rfn: &mut RadecoFunction, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, rfn: &mut RadecoFunction, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
         let mut g = rfn.ssa_mut();
 
         {

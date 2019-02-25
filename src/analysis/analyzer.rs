@@ -127,7 +127,7 @@ pub trait FuncAnalyzer : Analyzer {
     /// As `Change`s are applied, the IR is not the same as before, thus `Change`s previously
     /// discarded could be proposed again by the `Analyer`. On the other hand an `Analyzer` is
     /// not expected to propose again a `Change` if all the previous other `Change`s were skipped.
-    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>>;
+    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>>;
 }
 
 /// An `Analyzer` that takes a module.
@@ -138,7 +138,7 @@ pub trait ModuleAnalyzer : Analyzer {
     /// As `Change`s are applied, the IR is not the same as before, thus `Change`s previously
     /// discarded could be proposed again by the `Analyer`. On the other hand an `Analyzer` is
     /// not expected to propose again a `Change` if all the previous other `Change`s were skipped.
-    fn analyze<T: Fn(Box<Change>) -> Action>(&mut self, module: &mut RadecoModule, policy: Option<T>) -> Option<Box<AnalyzerResult>>;
+    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, module: &mut RadecoModule, policy: Option<T>) -> Option<Box<AnalyzerResult>>;
 }
 
 /// Get all the available `FuncAnalyzer`s

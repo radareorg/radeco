@@ -80,7 +80,7 @@ impl<T: 'static> ModuleAnalyzer for InterProcAnalyzer<T>
 where
     T: InterProcAnalysis + Debug,
 {
-    fn analyze<F: Fn(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<F>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<F: FnMut(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<F>) -> Option<Box<AnalyzerResult>> {
         let fs = rmod.functions.clone();
         for (_, f) in fs {
             self.analyze_function(rmod, f.offset);
