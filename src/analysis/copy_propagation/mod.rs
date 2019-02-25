@@ -1,4 +1,4 @@
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ReplaceValue};
+use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerInfo, AnalyzerResult, Change, FuncAnalyzer, ReplaceValue};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
@@ -39,23 +39,18 @@ impl CopyPropagation {
     }
 }
 
+const NAME: &str = "copy_propagation";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::CopyPropagation,
+    requires: REQUIRES,
+    uses_policy: true,
+};
+
 impl Analyzer for CopyPropagation {
-    fn name(&self) -> String {
-        return "copy_propagation".to_owned();
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::CopyPropagation
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        true
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 

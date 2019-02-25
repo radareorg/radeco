@@ -1,8 +1,13 @@
 use std::any::Any;
+use std::convert::From;
 use std::fmt::Debug;
 
 use petgraph::graph::NodeIndex;
 
+use analysis::{arithmetic, copy_propagation, dce, inst_combine, sccp};
+use analysis::cse::cse;
+use analysis::functions::{fix_ssa_opcalls, infer_regusage};
+use analysis::interproc::interproc;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 
 /// This trait provides access to extra informations generated during the analysis pass.
@@ -23,31 +28,55 @@ pub enum AnalyzerKind {
     SCCP,
 }
 
-/// Basic trait for all the analyzers.
-pub trait Analyzer : Any + Debug {
-    /// Returns the name of this `Analyzer`.
-    fn name(&self) -> String;
+/// A struct providing information about an analyzer.
+#[derive(Debug)]
+pub struct AnalyzerInfo {
+    /// The name of this `Analyzer`.
+    pub name: &'static str,
 
-    /// Returns the kind of this `Analyzer`.
-    fn kind(&self) -> AnalyzerKind;
+    /// The type of this `Analyzer`.
+    pub kind: AnalyzerKind,
 
-    /// Returns a list of `Analyzer`s to run before this one.
-    fn requires(&self) -> Vec<AnalyzerKind>;
-
-    /// Returns `true` if this `Analyzer` uses a policy function to decide whether to apply or not
-    /// `Changes` to the IR. In this case a policy function must be provided when calling `analyze`.
-    /// Returns `false` if this `Analyzer` does not use a policy function and changes directly the
-    /// IR. Any policy function passed to `analyze` is ignored by this kind of analyzers.
+    /// A list of `Analyzer`s that should be run before running this one.
     ///
-    /// The former is the type of `Analyzer`s which (typically) produce one single atomic `Change`
+    /// # Note
+    /// These analyzers are **not guaranteed** to be called before this one.
+    pub requires: &'static [AnalyzerKind],
+
+    /// It is `true` if this `Analyzer` uses a policy function to decide whether or not to apply
+    /// `Changes` to the IR. In this case a policy function must be provided when calling `analyze`.
+    /// It is `false` if this `Analyzer` does not use a policy function and it changes directly the
+    /// IR.
+    ///
+    /// The former is the kind of `Analyzer`s which (typically) produce one single atomic `Change`
     /// at time, e.g. `DCE` removes useless expressions one by one. Interrupting their work in the
     /// middle will still deliver some useful output.
     ///
-    /// The latter type of `Analyzer`s are module-oriented, meaning that they work on the entire
+    /// The latter kind of `Analyzer`s are module-oriented, meaning that they work on the entire
     /// function/module at the same time and it does not make sense to split their work into smaller
-    /// atomic `Change`s.
-    fn uses_policy(&self) -> bool;
+    /// atomic `Change`s. Any policy function passed to `analyze` is ignored by this kind of analyzers.
+    pub uses_policy: bool,
+}
 
+impl From<AnalyzerKind> for &'static AnalyzerInfo {
+    fn from(kind: AnalyzerKind) -> &'static AnalyzerInfo {
+        match kind {
+            AnalyzerKind::Arithmetic      => &arithmetic::INFO,
+            AnalyzerKind::CallSiteFixer   => &fix_ssa_opcalls::INFO,
+            AnalyzerKind::Combiner        => &inst_combine::INFO,
+            AnalyzerKind::CopyPropagation => &copy_propagation::INFO,
+            AnalyzerKind::CSE             => &cse::INFO,
+            AnalyzerKind::DCE             => &dce::INFO,
+            AnalyzerKind::Inferer         => &infer_regusage::INFO,
+            AnalyzerKind::InterProc       => &interproc::INFO,
+            AnalyzerKind::SCCP            => &sccp::INFO,
+        }
+    }
+}
+
+/// Basic trait for all the analyzers.
+pub trait Analyzer : Any + Debug {
+    fn info(&self) -> &'static AnalyzerInfo;
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -122,7 +151,7 @@ pub fn all_func_analysis() -> Vec<AnalyzerKind> {
 }
 
 /// Get all the available `ModuleAnalyzer`s
-pub fn all_module_analysis() -> Vec<AnalyzerKind> {
+pub fn all_module_analyzers() -> Vec<AnalyzerKind> {
     vec![AnalyzerKind::CallSiteFixer,
          AnalyzerKind::Inferer,
          AnalyzerKind::InterProc]

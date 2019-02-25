@@ -12,7 +12,7 @@
 //! are in code that is actually executed or not. For a better analysis
 //! look at `analysis::constant_propagation`.
 
-use analysis::analyzer::{Action, Analyzer, FuncAnalyzer, AnalyzerKind, AnalyzerResult, Change, RemoveValue};
+use analysis::analyzer::{Action, Analyzer, FuncAnalyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, RemoveValue};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ssa::cfg_traits::{CFG, CFGMod};
 use middle::ssa::graph_traits::Graph;
@@ -24,6 +24,16 @@ use std::collections::VecDeque;
 
 #[derive(Debug)]
 pub struct DCE { }
+
+const NAME: &str = "dce";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::DCE,
+    requires: REQUIRES,
+    uses_policy: true,
+};
 
 impl DCE {
     pub fn new() -> Self {
@@ -117,22 +127,7 @@ impl DCE {
 }
 
 impl Analyzer for DCE {
-    fn name(&self) -> String {
-        "dce".to_owned()
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::DCE
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        true
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 

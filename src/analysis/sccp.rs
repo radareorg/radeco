@@ -12,7 +12,7 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
+use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MArity, MOpcode, WidthSpec};
 use middle::ssa::cfg_traits::{CFG, CFGMod};
@@ -84,6 +84,16 @@ fn meet(v1: &LatticeValue, v2: &LatticeValue) -> LatticeValue {
 
     *v1
 }
+
+const NAME: &str = "sccp";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::SCCP,
+    requires: REQUIRES,
+    uses_policy: false,
+};
 
 #[derive(Debug)]
 pub struct SCCP
@@ -424,22 +434,7 @@ impl SCCP
 }
 
 impl Analyzer for SCCP {
-    fn name(&self) -> String {
-        "sccp".to_owned()
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::SCCP
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        false
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 

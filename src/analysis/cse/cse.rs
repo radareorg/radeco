@@ -10,7 +10,7 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use frontend::radeco_containers::RadecoFunction;
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ReplaceValue};
+use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ReplaceValue};
 
 use middle::ir::MOpcode;
 use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
@@ -23,6 +23,16 @@ pub struct CSE
     exprs: HashMap<String, Vec<<SSAStorage as SSA>::ValueRef>>,
     hashed: HashMap<<SSAStorage as SSA>::ValueRef, String>,
 }
+
+const NAME: &str = "cse";
+const REQUIRES: &[AnalyzerKind] = &[];
+
+pub const INFO: AnalyzerInfo = AnalyzerInfo {
+    name: NAME,
+    kind: AnalyzerKind::CSE,
+    requires: REQUIRES,
+    uses_policy: true,
+};
 
 impl CSE
 {
@@ -82,22 +92,7 @@ impl CSE
 
 impl Analyzer for CSE
 {
-    fn name(&self) -> String {
-        "cse".to_owned()
-    }
-
-    fn kind(&self) -> AnalyzerKind {
-        AnalyzerKind::CSE
-    }
-
-    fn requires(&self) -> Vec<AnalyzerKind> {
-        Vec::new()
-    }
-
-    fn uses_policy(&self) -> bool {
-        true
-    }
-
+    fn info(&self) -> &'static AnalyzerInfo { &INFO }
     fn as_any(&self) -> &dyn Any { self }
 }
 
