@@ -53,6 +53,9 @@ const PROMPT: &'static str = ">> ";
 // File seperator for Windows
 const FILE_SP: char = '\\';
 
+// Default max number of iterations of the engine.
+pub const MAX_ITERATIONS: u32 = 100;
+
 #[derive(Default)]
 struct Completes {
     file_completer: FilenameCompleter,
@@ -149,7 +152,7 @@ const SEP: &'static str = "END";
 fn main() {
     #[cfg(feature = "trace_log")]
     env_logger::init();
-    let (arg, cmd_opt, is_append_mode, is_batch_mode, no_highlight) = cli::parse_args();
+    let (arg, cmd_opt, is_append_mode, is_batch_mode, no_highlight, max_it) = cli::parse_args();
     let config = Config::builder()
         .auto_add_history(true)
         .history_ignore_space(true)
@@ -161,11 +164,11 @@ fn main() {
     core::PROJ.with(move |proj| {
         let proj_result = arg.map(|ref s| {
             if scheme::is_http(s) {
-                core::load_proj_http(&s[scheme::HTTP.len()..]).map_err(|e| e.to_string())
+                core::load_proj_http(&s[scheme::HTTP.len()..], max_it).map_err(|e| e.to_string())
             } else if scheme::is_tcp(s) {
-                core::load_proj_tcp(&s[scheme::TCP.len()..]).map_err(|e| e.to_string())
+                core::load_proj_tcp(&s[scheme::TCP.len()..], max_it).map_err(|e| e.to_string())
             } else if is_file(s) {
-                Ok(core::load_proj_by_path(s))
+                Ok(core::load_proj_by_path(s, max_it))
             } else {
                 Err(format!("Invalid argument {}", s))
             }
@@ -186,12 +189,12 @@ fn main() {
             // If a command is specified by the user run it,
             // otherwise decompile all functions.
             if let Some(command) = cmd_opt {
-               cmd(command, no_highlight);
+               cmd(command, no_highlight, max_it);
             } else {
                 let mut proj_ = proj_opt.borrow_mut();
                 let proj = proj_.as_mut().unwrap();
 
-                core::analyze_all_functions(proj);
+                core::analyze_all_functions(proj, max_it);
                 let decompiled = core::decompile_all_functions(proj);
                 if no_highlight {
                     println!("{}", decompiled);
@@ -208,7 +211,7 @@ fn main() {
         let readline = rl.readline(PROMPT);
         match readline {
             Ok(line) => {
-                cmd(line, !no_highlight);
+                cmd(line, !no_highlight, max_it);
                 if is_append_mode {
                     println!("{}", SEP);
                 }
@@ -286,7 +289,7 @@ mod command {
     }
 }
 
-fn cmd(line: String, highlight: bool) {
+fn cmd(line: String, highlight: bool, max_it: u32) {
     if line.is_empty() {
        return;
     }
@@ -304,7 +307,7 @@ fn cmd(line: String, highlight: bool) {
             }
             (Some(command::LOAD), Some(path), _) => {
                 if is_file(path) {
-                    *proj_opt.borrow_mut() = Some(core::load_proj_by_path(path));
+                    *proj_opt.borrow_mut() = Some(core::load_proj_by_path(path, max_it));
                     return;
                 } else {
                     println!("{} is not found.", path);
@@ -313,9 +316,9 @@ fn cmd(line: String, highlight: bool) {
             }
             (Some(command::CONNECT), Some(url), _) => {
                 let p_opt = if scheme::is_http(&url) {
-                    core::load_proj_http(&url[scheme::HTTP.len()..])
+                    core::load_proj_http(&url[scheme::HTTP.len()..], max_it)
                 } else if scheme::is_tcp(&url) {
-                    core::load_proj_tcp(&url[scheme::TCP.len()..])
+                    core::load_proj_tcp(&url[scheme::TCP.len()..], max_it)
                 } else {
                     Err("Invalid url")
                 };
@@ -338,7 +341,7 @@ fn cmd(line: String, highlight: bool) {
         let proj = proj_.as_mut().unwrap();
         match (op1, op2, op3) {
             (Some(command::ANALYZE), Some("*"), _) => {
-                core::analyze_all_functions(proj);
+                core::analyze_all_functions(proj, max_it);
             }
             (Some(command::FNLIST), _, _) => {
                 let funcs = core::fn_list(&proj);
@@ -348,7 +351,7 @@ fn cmd(line: String, highlight: bool) {
             // TODO Add command for individual analyses
             (Some(command::ANALYZE), Some(f), _) => {
                 if let Some(rfn) = core::get_function_mut(f, proj) {
-                    core::analyze(rfn);
+                    core::analyze(rfn, max_it);
                 } else {
                     println!("{} is not found", f);
                 }
