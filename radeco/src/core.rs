@@ -1,28 +1,18 @@
 use base64;
 use r2pipe::{R2Pipe, R2};
-use radeco_lib::analysis::analyzer::{FuncAnalyzer, ModuleAnalyzer, all};
-use radeco_lib::analysis::cse::cse::CSE;
-use radeco_lib::analysis::inst_combine::Combiner;
-use radeco_lib::analysis::functions::infer_regusage::Inferer;
-use radeco_lib::analysis::functions::fix_ssa_opcalls::CallSiteFixer;
-use radeco_lib::analysis::interproc::fixcall::CallFixer;
-use radeco_lib::analysis::dce::DCE;
-use radeco_lib::analysis::sccp::SCCP;
+use radeco_lib::analysis::engine::{Engine, RadecoEngine};
 use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
 use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 use radeco_lib::backend::lang_c::c_cfg_builder;
 use radeco_lib::frontend::radeco_containers::*;
 use radeco_lib::middle::ir_writer;
-use radeco_lib::middle::regfile::SubRegisterFile;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
-use radeco_lib::middle::ssa::verifier;
 use radeco_lib::middle::dot;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::panic;
 use std::rc::Rc;
 use std::str;
-use std::sync::Arc;
 
 thread_local!(pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None););
 
@@ -78,75 +68,18 @@ pub fn fn_rename(old_f: &str, new_f: &str, proj: &mut RadecoProject) {
     }
 }
 
-pub fn analyze_mod(regfile: Arc<SubRegisterFile>, rmod: &mut RadecoModule) {
-    // Analyze preserved for all functions.
-    {
-        eprintln!("[*] Fixing Callee Information");
-        let bp_name = regfile.get_name_by_alias(&"BP".to_string());
-        let bp_name = bp_name.map(|s| s.to_owned());
-        let sp_name = regfile.get_name_by_alias(&"SP".to_string());
-        let sp_name = sp_name.map(|s| s.to_owned());
-        let mut callfixer = CallFixer::new(rmod, bp_name, sp_name);
-        callfixer.rounded_analysis();
-    }
-
-    // Fix call sites
-    let mut call_site_fixer = CallSiteFixer::new();
-    call_site_fixer.analyze(rmod, Some(all));
-
-    // Infer calling conventions
-    let mut inferer = Inferer::new((*regfile).clone());
-    inferer.analyze(rmod, Some(all));
+pub fn analyze(rfn: &mut RadecoFunction, max_it: u32) {
+    let engine = RadecoEngine::new(max_it);
+    engine.run_func(rfn);
 }
 
-pub fn analyze(rfn: &mut RadecoFunction) {
-    eprintln!("[+] Analyzing: {} @ {:#x}", rfn.name, rfn.offset);
-    {
-        eprintln!("  [*] Eliminating Dead Code");
-        let mut dce = DCE::new();
-        dce.analyze(rfn, Some(all));
-    }
-    {
-        // Constant Propagation (sccp)
-        eprintln!("  [*] Propagating Constants");
-        let mut sccp = SCCP::new();
-        sccp.analyze(rfn, Some(all));
-    }
-    {
-        eprintln!("  [*] Eliminating More DeadCode");
-        let mut dce = DCE::new();
-        dce.analyze(rfn, Some(all));
-    }
-    {
-        // Instruction combiner
-        let mut combiner = Combiner::new();
-        combiner.analyze(rfn, Some(all));
-    }
-    {
-        // Common SubExpression Elimination (cse)
-        eprintln!("  [*] Eliminating Common SubExpressions");
-        let mut cse = CSE::new();
-        cse.analyze(rfn, Some(all));
-    }
-    {
-        // Verify SSA
-        eprintln!("  [*] Verifying SSA's Validity");
-        match verifier::verify(rfn.ssa()) {
-            Err(e) => {
-                eprintln!("  [*] Found Error: {}", e);
-            }
-            Ok(_) => {}
-        }
-    }
-}
-
-pub fn analyze_all_functions<'a>(proj: &'a mut RadecoProject) {
+pub fn analyze_all_functions<'a>(proj: &'a mut RadecoProject, max_it: u32) {
     let rfns = proj
         .iter_mut()
         .map(|i| i.module)
         .flat_map(|rmod| rmod.functions.values_mut());
     for rfn in rfns {
-        analyze(rfn);
+        analyze(rfn, max_it);
     }
 }
 
@@ -220,32 +153,34 @@ fn decompile_priv(
     }
 }
 
-pub fn load_proj_by_path(path: &str) -> RadecoProject {
+pub fn load_proj_by_path(path: &str, max_it: u32) -> RadecoProject {
     let mut p = ProjectLoader::new().path(path).load();
     let regfile = p.regfile().clone();
     for mut xy in p.iter_mut() {
-        analyze_mod(regfile.clone(), xy.module);
+        let engine = RadecoEngine::new(max_it);
+        engine.run_module(xy.module, &*regfile.clone());
     }
     p
 }
 
-pub fn load_proj_tcp(url: &str) -> Result<RadecoProject, &'static str> {
+pub fn load_proj_tcp(url: &str, max_it: u32) -> Result<RadecoProject, &'static str> {
     let r2p = R2Pipe::tcp(url)?;
-    Ok(load_project_by_r2pipe(r2p))
+    Ok(load_project_by_r2pipe(r2p, max_it))
 }
 
-pub fn load_proj_http(url: &str) -> Result<RadecoProject, &'static str> {
+pub fn load_proj_http(url: &str, max_it: u32) -> Result<RadecoProject, &'static str> {
     let r2p = R2Pipe::http(url)?;
-    Ok(load_project_by_r2pipe(r2p))
+    Ok(load_project_by_r2pipe(r2p, max_it))
 }
 
-pub fn load_project_by_r2pipe(r2p: R2Pipe) -> RadecoProject {
+pub fn load_project_by_r2pipe(r2p: R2Pipe, max_it: u32) -> RadecoProject {
     let r2 = R2::from(r2p);
     let r2w = Rc::new(RefCell::new(r2));
     let mut p = ProjectLoader::new().source(Rc::new(r2w)).load();
     let regfile = p.regfile().clone();
     for mut xy in p.iter_mut() {
-        analyze_mod(regfile.clone(), xy.module);
+        let engine = RadecoEngine::new(max_it);
+        engine.run_module(xy.module, &*regfile.clone());
     }
     p
 }
