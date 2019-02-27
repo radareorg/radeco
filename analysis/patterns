@@ -1,0 +1,8 @@
+(OpNarrow1 (OpXor #x1, (OpSub %1, %2))) => (OpEq %1, %2))
+(OpNot (OpOr (OpEq %1, %2), (OpMov (OpLt %1, (OpSub %1, %2))))) => (OpGt %1, %2))
+(OpNot (OpMov (OpLt %1, (OpSub %1, %2))))  => (OpOr (OpGt %1, %2), (OpEq %1, %2)))
+(OpMov (OpLt %1, (OpSub %1, %2))) => (OpLt %1, %2))
+(OpOr (OpEq %1, %2), (OpLt %1, %2)) => (OpOr (OpLt %1, %2), (OpEq %1, %2)))
+(OpXor %1, %1) => (OpConst #x0))
+(OpMul %1, #x0) => (OpConst #x0)
+(OpMul %1, #x1) => (OpConst %1)
