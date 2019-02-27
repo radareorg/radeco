@@ -3,8 +3,38 @@ use frontend::radeco_containers::RadecoFunction;
 use analysis::matcher::gmatch;
 
 use std::any::Any;
+use std::io;
+use std::io::{BufRead, BufReader, ErrorKind};
 
 use petgraph::graph::NodeIndex;
+
+fn load_patterns() -> io::Result<Vec<(String, String)>> {
+    let patterns_str = include_str!("../../analysis/patterns");
+    let reader = BufReader::new(patterns_str.as_bytes());
+
+    let mut identities = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim();
+
+        if line.len() == 0 || line.starts_with('#') {
+            continue;
+        }
+
+        let mut tokens = line.split("=>");
+
+        let error = io::Error::new(ErrorKind::InvalidInput, "invalid pattern");
+        let old = tokens.next().ok_or(error)?;
+
+        let error = io::Error::new(ErrorKind::InvalidInput, "invalid pattern");
+        let new = tokens.next().ok_or(error)?;
+
+        identities.push((old.trim().to_string(), new.trim().to_string()));
+    }
+
+    Ok(identities)
+}
 
 #[derive(Debug)]
 pub struct ArithChange {
@@ -25,33 +55,6 @@ impl Change for ArithChange {
     fn as_any(&self) -> &dyn Any { self }
 }
 
-macro_rules! find_and_replace {
-    ($ctx: expr, $f: expr => $r: expr) => {{
-        let f = $f.to_string();
-        let r = $r.to_string();
-
-        let mut matcher = gmatch::GraphMatcher::new($ctx.0);
-        let grep = matcher.grep(f.to_string());
-
-        for m in grep {
-            let action = $ctx.1(Box::new(ArithChange{
-                old: m.get_root().clone(),
-                old_expr: f.clone(),
-                new_expr: r.clone(),
-                bindings: m.get_bindings().clone()
-            }));
-
-            match action {
-                Action::Apply => {
-                    matcher.replace_value(m, r.clone());
-                },
-                Action::Skip => (),
-                Action::Abort => return None,
-            };
-        }
-    }}
-}
-
 const NAME: &str = "arithmetic";
 const REQUIRES: &[AnalyzerKind] = &[];
 
@@ -63,12 +66,22 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
 };
 
 #[derive(Debug)]
-pub struct Arithmetic { }
+pub struct Arithmetic {
+    replace_patterns: Vec<(String, String)>
+}
 
 impl Arithmetic {
     pub fn new() -> Self {
-        Arithmetic { }
+        let replace_patterns = load_patterns().unwrap_or_else(|_e| {
+            radeco_err!("Failed to load the replace patterns: {}", _e);
+            Vec::new()
+        });
+
+        Arithmetic {
+            replace_patterns: replace_patterns,
+        }
     }
+
 }
 
 impl Analyzer for Arithmetic {
@@ -78,21 +91,30 @@ impl Analyzer for Arithmetic {
 
 impl FuncAnalyzer for Arithmetic {
     fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
-        let policy = policy.expect("A policy function must be provided");
+        let mut policy = policy.expect("A policy function must be provided");
         let ssa = func.ssa_mut();
-        let mut ctx = (ssa, policy);
 
-        // Convert conditon codes into proper relational operators.
-        find_and_replace!(ctx, "(OpNarrow1 (OpXor #x1, (OpSub %1, %2)))" => "(OpEq %1, %2)");
-        find_and_replace!(ctx, "(OpNot (OpOr (OpEq %1, %2), (OpMov (OpLt %1, (OpSub %1, %2)))))" => "(OpGt %1, %2)");
-        find_and_replace!(ctx, "(OpNot (OpMov (OpLt %1, (OpSub %1, %2))))"  => "(OpOr (OpGt %1, %2), (OpEq %1, %2))");
-        find_and_replace!(ctx, "(OpMov (OpLt %1, (OpSub %1, %2)))" => "(OpLt %1, %2)");
-        find_and_replace!(ctx, "(OpOr (OpEq %1, %2), (OpLt %1, %2))" => "(OpOr (OpLt %1, %2), (OpEq %1, %2))");
+        for (old, new) in self.replace_patterns.iter() {
+            let mut matcher = gmatch::GraphMatcher::new(ssa);
+            let grep = matcher.grep(old.to_string());
 
-        // Some arithmetic identities.
-        find_and_replace!(ctx, "(OpXor %1, %1)" => "(OpConst #x0)");
-        find_and_replace!(ctx, "(OpMul %1, #x0)" => "(OpConst #x0");
-        find_and_replace!(ctx, "(OpMul %1, #x1)" => "(OpConst %1");
+            for m in grep {
+                let action = policy(Box::new(ArithChange{
+                    old: m.get_root().clone(),
+                    old_expr: old.clone(),
+                    new_expr: new.clone(),
+                    bindings: m.get_bindings().clone()
+                }));
+
+                match action {
+                    Action::Apply => {
+                        matcher.replace_value(m, new.clone());
+                    },
+                    Action::Skip => (),
+                    Action::Abort => return None,
+                };
+            }
+        }
 
         None
     }
