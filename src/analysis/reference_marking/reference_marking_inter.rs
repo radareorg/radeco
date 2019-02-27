@@ -115,7 +115,8 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                     csite_node: csite.csite_node,
                 };
                 (caller, T::pull(&mut current_analyzer, current_fn, &rcsite))
-            }) {
+            })
+        {
             let ref mut e = infos.entry(caller).or_insert(Vec::new());
             if let Some(inf) = info {
                 e.push(inf);
@@ -223,11 +224,9 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             // dependency.
             for infov in infos.values_mut() {
                 // XXX: Avoid allocation
-                *infov = vec![
-                    infov
-                        .iter()
-                        .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x)),
-                ];
+                *infov = vec![infov
+                    .iter()
+                    .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
             }
 
             // Push the information down to the analyzers.

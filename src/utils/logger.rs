@@ -43,39 +43,18 @@ pub enum Event<'a, T: 'a + Debug> {
 impl<'a, T: Debug> ToString for Event<'a, T> {
     fn to_string(&self) -> String {
         match *self {
-            Event::SSAInsertNode(i) => {
-                format!("{}|{:?}", "ssa_insert_node", i)
-            }
-            Event::SSARemoveNode(i) => {
-                format!("{}|{:?}", "ssa_remove_node", i)
-            }
-            Event::SSAReplaceNode(i, j) => {
-                format!("{}|{:?}|{:?}", "ssa_replace", i, j)
-            }
-            Event::SSAInsertEdge(i, j) => {
-                format!("{}|{:?}|{:?}", "ssa_insert_edge", i, j)
-            }
-            Event::SSARemoveEdge(i, j) => {
-                format!("{}|{:?}|{:?}", "ssa_remove_edge", i, j)
-            }
-            Event::SSAUpdateEdge(i, j) => {
-                format!("{}|{:?}|{:?}", "ssa_update_edge", i, j)
-            }
-            Event::SSAMarkNode(i) => {
-                format!("{}|{:?}", "ssa_mark_node", i)
-            }
-            Event::SSAClearMark(i) => {
-                format!("{}|{:?}", "ssa_clear_mark", i)
-            }
-            Event::SSAQueryExternal(i) => {
-                format!("{}|{:?}", "ssa_query_external", i)
-            }
-            Event::SSAQueryInternal(i) => {
-                format!("{}|{:?}", "ssa_query_internal", i)
-            }
+            Event::SSAInsertNode(i) => format!("{}|{:?}", "ssa_insert_node", i),
+            Event::SSARemoveNode(i) => format!("{}|{:?}", "ssa_remove_node", i),
+            Event::SSAReplaceNode(i, j) => format!("{}|{:?}|{:?}", "ssa_replace", i, j),
+            Event::SSAInsertEdge(i, j) => format!("{}|{:?}|{:?}", "ssa_insert_edge", i, j),
+            Event::SSARemoveEdge(i, j) => format!("{}|{:?}|{:?}", "ssa_remove_edge", i, j),
+            Event::SSAUpdateEdge(i, j) => format!("{}|{:?}|{:?}", "ssa_update_edge", i, j),
+            Event::SSAMarkNode(i) => format!("{}|{:?}", "ssa_mark_node", i),
+            Event::SSAClearMark(i) => format!("{}|{:?}", "ssa_clear_mark", i),
+            Event::SSAQueryExternal(i) => format!("{}|{:?}", "ssa_query_external", i),
+            Event::SSAQueryInternal(i) => format!("{}|{:?}", "ssa_query_internal", i),
         }
     }
-
 }
 
 #[macro_export]

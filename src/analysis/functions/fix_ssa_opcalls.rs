@@ -7,7 +7,9 @@
 //! [`OpCall`]: ir::MOpcode::OpCall
 //! [the callgraph]: RadecoModule::callgraph
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer,
+};
 use frontend::radeco_containers::*;
 use middle::ir;
 use middle::ssa::ssa_traits::*;
@@ -36,12 +38,20 @@ impl CallSiteFixer {
 }
 
 impl Analyzer for CallSiteFixer {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl ModuleAnalyzer for CallSiteFixer {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        rmod: &mut RadecoModule,
+        _policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>> {
         for rfun in rmod.functions.values_mut() {
             go_fn(rfun, &rmod.callgraph);
         }

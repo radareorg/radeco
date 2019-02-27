@@ -9,20 +9,25 @@
 
 #[macro_use]
 pub mod ssa {
-    pub mod graph_traits;
     pub mod cfg_traits;
-    #[macro_use] pub mod ssa_traits;
-    pub mod ssastorage;
+    pub mod graph_traits;
+    #[macro_use]
+    pub mod ssa_traits;
     pub mod error;
-    pub mod ssadot;
     pub mod memoryssa;
-    #[allow(non_snake_case)] pub mod verifier;
+    pub mod ssadot;
+    pub mod ssastorage;
     pub mod utils;
+    #[allow(non_snake_case)]
+    pub mod verifier;
 }
 
-#[macro_use] pub mod dot;
+#[macro_use]
+pub mod dot;
 pub mod ir;
 pub mod ir_reader;
-#[macro_use] pub mod ir_writer;
-#[allow(non_snake_case)] pub mod phiplacement;
+#[macro_use]
+pub mod ir_writer;
+#[allow(non_snake_case)]
+pub mod phiplacement;
 pub mod regfile;

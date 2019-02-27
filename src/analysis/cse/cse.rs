@@ -9,17 +9,19 @@
 use std::any::Any;
 use std::collections::HashMap;
 
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
+    ReplaceValue,
+};
 use frontend::radeco_containers::RadecoFunction;
-use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ReplaceValue};
 
 use middle::ir::MOpcode;
-use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
 use middle::ssa::ssa_traits::SSA;
+use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
 use middle::ssa::ssastorage::SSAStorage;
 
 #[derive(Debug)]
-pub struct CSE
-{
+pub struct CSE {
     exprs: HashMap<String, Vec<<SSAStorage as SSA>::ValueRef>>,
     hashed: HashMap<<SSAStorage as SSA>::ValueRef, String>,
 }
@@ -34,8 +36,7 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
     uses_policy: true,
 };
 
-impl CSE
-{
+impl CSE {
     pub fn new() -> CSE {
         CSE {
             exprs: HashMap::new(),
@@ -89,16 +90,21 @@ impl CSE
     }
 }
 
-
-impl Analyzer for CSE
-{
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+impl Analyzer for CSE {
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
-impl FuncAnalyzer for CSE
-{
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+impl FuncAnalyzer for CSE {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        func: &mut RadecoFunction,
+        policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>> {
         let mut policy = policy.expect("A policy function must be provided");
 
         {
@@ -124,9 +130,9 @@ impl FuncAnalyzer for CSE
                                     ssa.replace_value(expr, *ex_idx);
                                     replaced = true;
                                     break;
-                                },
-                                Action::Skip  => (),
-                                Action::Abort => { return None },
+                                }
+                                Action::Skip => (),
+                                Action::Abort => return None,
                             }
                         }
                     }

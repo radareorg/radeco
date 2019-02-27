@@ -12,10 +12,12 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
+};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::{MArity, MOpcode, WidthSpec};
-use middle::ssa::cfg_traits::{CFG, CFGMod};
+use middle::ssa::cfg_traits::{CFGMod, CFG};
 use middle::ssa::graph_traits::{ConditionInfo, Graph};
 use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
 use middle::ssa::ssa_traits::{SSAMod, SSA};
@@ -96,16 +98,14 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
 };
 
 #[derive(Debug)]
-pub struct SCCP
-{
+pub struct SCCP {
     ssa_worklist: VecDeque<<SSAStorage as SSA>::ValueRef>,
     cfg_worklist: VecDeque<<SSAStorage as CFG>::CFEdgeRef>,
     executable: HashMap<<SSAStorage as CFG>::CFEdgeRef, bool>,
     expr_val: HashMap<<SSAStorage as SSA>::ValueRef, LatticeValue>,
 }
 
-impl SCCP
-{
+impl SCCP {
     pub fn new() -> SCCP {
         SCCP {
             ssa_worklist: VecDeque::new(),
@@ -128,9 +128,7 @@ impl SCCP
             return LatticeValue::Bottom;
         }
 
-        let invalid_block = g
-            .invalid_action()
-            .expect("Invalid Action is not defind");
+        let invalid_block = g.invalid_action().expect("Invalid Action is not defind");
         let parent_block = g.block_for(*i).unwrap_or(invalid_block);
         for op in &operands {
             let operand_block = g.block_for(*op).unwrap_or(invalid_block);
@@ -199,7 +197,12 @@ impl SCCP
         }
     }
 
-    fn evaluate_unary_op(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_unary_op(
+        &mut self,
+        g: &SSAStorage,
+        i: &<SSAStorage as SSA>::ValueRef,
+        opcode: MOpcode,
+    ) -> LatticeValue {
         let operand = g.operands_of(*i);
         let operand = if operand.is_empty() {
             return LatticeValue::Top;
@@ -243,7 +246,12 @@ impl SCCP
         LatticeValue::Const(val)
     }
 
-    fn evaluate_binary_op(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_binary_op(
+        &mut self,
+        g: &SSAStorage,
+        i: &<SSAStorage as SSA>::ValueRef,
+        opcode: MOpcode,
+    ) -> LatticeValue {
         // Do not reason about load/stores.
         match opcode {
             MOpcode::OpLoad | MOpcode::OpStore => return LatticeValue::Bottom,
@@ -317,7 +325,11 @@ impl SCCP
         LatticeValue::Const(val)
     }
 
-    fn evaluate_ternary_op(&mut self, _i: &<SSAStorage as SSA>::ValueRef, opcode: MOpcode) -> LatticeValue {
+    fn evaluate_ternary_op(
+        &mut self,
+        _i: &<SSAStorage as SSA>::ValueRef,
+        opcode: MOpcode,
+    ) -> LatticeValue {
         // Do not reason about stores.
         match opcode {
             MOpcode::OpStore => return LatticeValue::Bottom,
@@ -325,7 +337,11 @@ impl SCCP
         }
     }
 
-    fn visit_expression(&mut self, g: &SSAStorage, i: &<SSAStorage as SSA>::ValueRef) -> LatticeValue {
+    fn visit_expression(
+        &mut self,
+        g: &SSAStorage,
+        i: &<SSAStorage as SSA>::ValueRef,
+    ) -> LatticeValue {
         let expr = g.node_data(*i).unwrap_or_else(|_x| {
             radeco_err!("RegisterState found, {:?}", _x);
             NodeData {
@@ -434,12 +450,20 @@ impl SCCP
 }
 
 impl Analyzer for SCCP {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl FuncAnalyzer for SCCP {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, rfn: &mut RadecoFunction, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        rfn: &mut RadecoFunction,
+        _policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>> {
         let mut g = rfn.ssa_mut();
 
         {
@@ -459,9 +483,7 @@ impl FuncAnalyzer for SCCP {
                     self.mark_executable(&edge);
                     let block = g
                         .edge_info(edge)
-                        .unwrap_or_else(|| {
-                            g.edge_info(g.invalid_edge().unwrap()).unwrap()
-                        })
+                        .unwrap_or_else(|| g.edge_info(g.invalid_edge().unwrap()).unwrap())
                         .target;
                     let phis = g.phis_in(block);
                     for phi in &phis {
@@ -527,12 +549,7 @@ impl FuncAnalyzer for SCCP {
                 continue;
             }
             if let LatticeValue::Const(val) = *v {
-                radeco_trace!(
-                    "{:?} with {:?} --> Const {:#}",
-                    k,
-                    g.node_data(*k),
-                    val
-                );
+                radeco_trace!("{:?} with {:?} --> Const {:#}", k, g.node_data(*k), val);
                 let ndata = node_data_from_g!(g, k);
                 let w = ndata.vt.width().get_width();
                 // BUG: Width may be changed just using a simple replace.

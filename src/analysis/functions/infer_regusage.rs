@@ -12,7 +12,10 @@
 //! guarantee that that stack location is never subsequently read or modified.
 //! See #147 for further discussion
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, ModuleAnalyzer, all};
+use analysis::analyzer::{
+    all, Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
+    ModuleAnalyzer,
+};
 use analysis::dce::DCE;
 use analysis::inst_combine::Combiner;
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
@@ -27,7 +30,6 @@ use petgraph::visit::{DfsPostOrder, Walker};
 
 use std::any::Any;
 use std::collections::{BTreeMap, HashSet};
-
 
 const NAME: &str = "inferer";
 const REQUIRES: &[AnalyzerKind] = &[];
@@ -49,14 +51,22 @@ pub struct Inferer {
 }
 
 impl Analyzer for Inferer {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl ModuleAnalyzer for Inferer {
     /// Calls `patch_fn`, `dce::collect`, and `analyze_fn` on every function,
     /// callees first
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        rmod: &mut RadecoModule,
+        _policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>> {
         // for imports, *ASSUME* that the callconv that r2 says is correct
         let mut new_analyzed = Vec::new();
         {

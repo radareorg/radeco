@@ -49,7 +49,10 @@ pub fn call_rets(call_node: NodeIndex, ssa: &SSAStorage) -> RegisterMap<(NodeInd
 }
 
 /// Extracts the value of all registers at a `RegisterState` SSA node.
-pub fn register_state_info(regstate_node: NodeIndex, ssa: &SSAStorage) -> RegisterMap<(NodeIndex, ValueInfo)> {
+pub fn register_state_info(
+    regstate_node: NodeIndex,
+    ssa: &SSAStorage,
+) -> RegisterMap<(NodeIndex, ValueInfo)> {
     let mut ret = ssa.regfile.new_register_map();
     for edge_ref in ssa.g.edges_directed(regstate_node, Outgoing) {
         if let (&EdgeData::Data(op_idx), Some(&vt)) =

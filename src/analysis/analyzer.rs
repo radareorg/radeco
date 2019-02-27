@@ -4,14 +4,14 @@ use std::fmt::Debug;
 
 use petgraph::graph::NodeIndex;
 
-use analysis::{arithmetic, copy_propagation, dce, inst_combine, sccp};
 use analysis::cse::cse;
 use analysis::functions::{fix_ssa_opcalls, infer_regusage};
 use analysis::interproc::interproc;
+use analysis::{arithmetic, copy_propagation, dce, inst_combine, sccp};
 use frontend::radeco_containers::{RadecoFunction, RadecoModule};
 
 /// This trait provides access to extra informations generated during the analysis pass.
-pub trait AnalyzerResult : Any + Debug {
+pub trait AnalyzerResult: Any + Debug {
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -62,21 +62,21 @@ pub struct AnalyzerInfo {
 impl From<AnalyzerKind> for &'static AnalyzerInfo {
     fn from(kind: AnalyzerKind) -> &'static AnalyzerInfo {
         match kind {
-            AnalyzerKind::Arithmetic      => &arithmetic::INFO,
-            AnalyzerKind::CallSiteFixer   => &fix_ssa_opcalls::INFO,
-            AnalyzerKind::Combiner        => &inst_combine::INFO,
+            AnalyzerKind::Arithmetic => &arithmetic::INFO,
+            AnalyzerKind::CallSiteFixer => &fix_ssa_opcalls::INFO,
+            AnalyzerKind::Combiner => &inst_combine::INFO,
             AnalyzerKind::CopyPropagation => &copy_propagation::INFO,
-            AnalyzerKind::CSE             => &cse::INFO,
-            AnalyzerKind::DCE             => &dce::INFO,
-            AnalyzerKind::Inferer         => &infer_regusage::INFO,
-            AnalyzerKind::InterProc       => &interproc::INFO,
-            AnalyzerKind::SCCP            => &sccp::INFO,
+            AnalyzerKind::CSE => &cse::INFO,
+            AnalyzerKind::DCE => &dce::INFO,
+            AnalyzerKind::Inferer => &infer_regusage::INFO,
+            AnalyzerKind::InterProc => &interproc::INFO,
+            AnalyzerKind::SCCP => &sccp::INFO,
         }
     }
 }
 
 /// Basic trait for all the analyzers.
-pub trait Analyzer : Any + Debug {
+pub trait Analyzer: Any + Debug {
     fn info(&self) -> &'static AnalyzerInfo;
     fn as_any(&self) -> &dyn Any;
 }
@@ -84,7 +84,7 @@ pub trait Analyzer : Any + Debug {
 /// An atomic change to the IR.
 ///
 /// It represents a high-level, `Analyzer` specific change to apply to the IR.
-pub trait Change : Any + Debug {
+pub trait Change: Any + Debug {
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -92,14 +92,18 @@ pub trait Change : Any + Debug {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReplaceValue(pub NodeIndex, pub NodeIndex);
 impl Change for ReplaceValue {
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// A `Change` which removes a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoveValue(pub NodeIndex);
 impl Change for RemoveValue {
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// An `Action` to take with respect to a `Change`.
@@ -121,40 +125,52 @@ pub fn none(_change: Box<Change>) -> Action {
 }
 
 /// An `Analyzer` that takes a function.
-pub trait FuncAnalyzer : Analyzer {
+pub trait FuncAnalyzer: Analyzer {
     /// Look for possbile `Change`s to apply to `func`. When one is found `policy` is called with
     /// that `Change` as parameter; then according to the return value it is applied or discarded.
     ///
     /// As `Change`s are applied, the IR is not the same as before, thus `Change`s previously
     /// discarded could be proposed again by the `Analyer`. On the other hand an `Analyzer` is
     /// not expected to propose again a `Change` if all the previous other `Change`s were skipped.
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>>;
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        func: &mut RadecoFunction,
+        policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>>;
 }
 
 /// An `Analyzer` that takes a module.
-pub trait ModuleAnalyzer : Analyzer {
+pub trait ModuleAnalyzer: Analyzer {
     /// Look for possbile `Change`s to apply to `mod`. When one is found `policy` is called with
     /// that `Change` as parameter; then according to the return value it is applied or discarded.
     ///
     /// As `Change`s are applied, the IR is not the same as before, thus `Change`s previously
     /// discarded could be proposed again by the `Analyer`. On the other hand an `Analyzer` is
     /// not expected to propose again a `Change` if all the previous other `Change`s were skipped.
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, module: &mut RadecoModule, policy: Option<T>) -> Option<Box<AnalyzerResult>>;
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        module: &mut RadecoModule,
+        policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>>;
 }
 
 /// Get all the available `FuncAnalyzer`s
 pub fn all_func_analyzers() -> Vec<AnalyzerKind> {
-    vec![AnalyzerKind::Arithmetic,
-         AnalyzerKind::Combiner,
-         AnalyzerKind::CopyPropagation,
-         AnalyzerKind::CSE,
-         AnalyzerKind::DCE,
-         AnalyzerKind::SCCP]
+    vec![
+        AnalyzerKind::Arithmetic,
+        AnalyzerKind::Combiner,
+        AnalyzerKind::CopyPropagation,
+        AnalyzerKind::CSE,
+        AnalyzerKind::DCE,
+        AnalyzerKind::SCCP,
+    ]
 }
 
 /// Get all the available `ModuleAnalyzer`s
 pub fn all_module_analyzers() -> Vec<AnalyzerKind> {
-    vec![AnalyzerKind::CallSiteFixer,
-         AnalyzerKind::Inferer,
-         AnalyzerKind::InterProc]
+    vec![
+        AnalyzerKind::CallSiteFixer,
+        AnalyzerKind::Inferer,
+        AnalyzerKind::InterProc,
+    ]
 }

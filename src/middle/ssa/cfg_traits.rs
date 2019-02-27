@@ -40,8 +40,8 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
+use super::graph_traits::{ConditionInfo, Graph};
 use middle::ir::MAddress;
-use super::graph_traits::{Graph, ConditionInfo};
 
 /// Provides __accessors__ to the underlying storage
 pub trait CFG: Graph {
@@ -121,7 +121,12 @@ pub trait CFGMod: CFG {
     fn insert_dynamic(&mut self) -> Option<Self::ActionRef>;
 
     /// Insert a control edge between to basic blocks
-    fn insert_control_edge(&mut self, source: Self::ActionRef, target: Self::ActionRef, index: u8) -> Option<Self::CFEdgeRef>;
+    fn insert_control_edge(
+        &mut self,
+        source: Self::ActionRef,
+        target: Self::ActionRef,
+        index: u8,
+    ) -> Option<Self::CFEdgeRef>;
 
     /// Remove a block and all its associated data from the graph
     fn remove_block(&mut self, node: Self::ActionRef);

@@ -671,13 +671,13 @@ impl<'a> CCFGDataMap<'a> {
 mod test {
     use backend::lang_c::c_ast;
     use backend::lang_c::c_cfg;
-    use backend::lang_c::c_cfg_builder::{CCFG, CCFGBuilder, CCFGDataMap, SSARef};
+    use backend::lang_c::c_cfg_builder::{CCFGBuilder, CCFGDataMap, SSARef, CCFG};
     use frontend::radeco_containers::RadecoFunction;
     use frontend::radeco_source::SourceErr;
-    use middle::ir_reader;
     use middle::ir::MOpcode;
+    use middle::ir_reader;
     use middle::regfile::SubRegisterFile;
-    use middle::ssa::ssa_traits::{SSA, SSAWalk};
+    use middle::ssa::ssa_traits::{SSAWalk, SSA};
     use middle::ssa::utils;
     use r2api::structs::LRegInfo;
     use serde_json;
@@ -753,7 +753,8 @@ mod test {
                 return Err("Failed to get dst operand node from CCFG".to_string());
             }
             let assign_node = builder.assign(dst.unwrap(), src.unwrap());
-            let is_err = builder.last_action != assign_node || !builder.cfg.is_assign_node(assign_node);
+            let is_err =
+                builder.last_action != assign_node || !builder.cfg.is_assign_node(assign_node);
             if is_err {
                 Err("Failed to append assign action".to_string())
             } else {
@@ -762,7 +763,10 @@ mod test {
         }
 
         // Verify `call_action` made `CCFG::Action(ActionNode::Call(_))` node.
-        fn verify_call_action_at(builder: &mut CCFGBuilder, call_node: SSARef) -> Result<(), String> {
+        fn verify_call_action_at(
+            builder: &mut CCFGBuilder,
+            call_node: SSARef,
+        ) -> Result<(), String> {
             let call_node = builder.call_action(call_node);
             let is_err = builder.last_action != call_node || !builder.cfg.is_call_node(call_node);
             if is_err {
@@ -956,7 +960,6 @@ mod test {
             }
         }
     }
-
 
     fn register_profile() -> Result<LRegInfo, SourceErr> {
         let regfile_path = "./test_files/x86_register_profile.json";

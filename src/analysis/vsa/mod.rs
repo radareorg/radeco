@@ -11,8 +11,8 @@
 //!     * https://research.cs.wisc.edu/wpis/papers/balakrishnan_thesis.pdf
 
 pub mod abstract_set {
-    pub mod bdd;
     pub mod abstract_set;
+    pub mod bdd;
     pub mod polynomial;
     pub mod strided_interval;
 }

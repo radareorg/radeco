@@ -279,7 +279,7 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
 
-    use analysis::analyzer::{FuncAnalyzer, all};
+    use analysis::analyzer::{all, FuncAnalyzer};
     use analysis::dce::DCE;
     use frontend::radeco_containers::RadecoFunction;
     use frontend::ssaconstructor::SSAConstruct;

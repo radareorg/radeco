@@ -56,7 +56,7 @@ pub struct Match<T: Clone + fmt::Debug> {
 
 impl<T> Match<T>
 where
-    T: Clone + fmt::Debug
+    T: Clone + fmt::Debug,
 {
     pub fn get_root(&self) -> &T {
         &self.root

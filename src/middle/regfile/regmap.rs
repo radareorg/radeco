@@ -11,9 +11,9 @@ pub struct RegisterMap<V> {
 }
 
 impl<V> RegisterMap<V> {
-    pub(super) fn with_register_count(regcount: usize ) -> Self {
+    pub(super) fn with_register_count(regcount: usize) -> Self {
         RegisterMap {
-            map: VecMap::with_capacity(regcount)
+            map: VecMap::with_capacity(regcount),
         }
     }
     pub fn get(&self, key: RegisterId) -> Option<&V> {
@@ -23,7 +23,11 @@ impl<V> RegisterMap<V> {
         self.map.get_mut(key.to_usize())
     }
     pub fn insert(&mut self, key: RegisterId, value: V) -> Option<V> {
-        assert!(key.to_usize() < self.map.capacity(), "invalid regid: {:?}", key);
+        assert!(
+            key.to_usize() < self.map.capacity(),
+            "invalid regid: {:?}",
+            key
+        );
         self.map.insert(key.to_usize(), value)
     }
     pub fn remove(&mut self, key: RegisterId) -> Option<V> {

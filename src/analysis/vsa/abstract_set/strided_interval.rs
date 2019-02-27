@@ -30,7 +30,7 @@ use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 use num::bigint::BigInt;
 
 use super::abstract_set::{AbstractSet, Container};
-use super::abstract_set::{_BITS, Inum, Unum};
+use super::abstract_set::{Inum, Unum, _BITS};
 
 // XXX: Distiguish imul/umul idiv/udiv urem/irem
 // XXX: Might fail when k bits is one bit (k == 1)
@@ -180,13 +180,13 @@ where
     //      u = x - x % k_period - k_period = i * k_period
     //      e.g. 4 bits: -1 -> -8, -7 -> -8, -9 -> -16
     // in which i is a stable step function
-    let _x = x.clone() - x.clone() % period.clone() - if (x < T::from(0))
-        && (x.clone() % period.clone() != T::from(0))
-    {
-        period.clone()
-    } else {
-        T::from(0)
-    };
+    let _x = x.clone()
+        - x.clone() % period.clone()
+        - if (x < T::from(0)) && (x.clone() % period.clone() != T::from(0)) {
+            period.clone()
+        } else {
+            T::from(0)
+        };
 
     _x.clone() / period.clone()
 }
@@ -1504,8 +1504,14 @@ mod test {
         assert_eq!(ntz(0x0001000), 12);
         assert_eq!(ntz(0x0), 64);
         assert_eq!(ntz(Inum::min_value()), 63);
-        assert_eq!(min_or(0x0000101, 0x0001001, 0x0010011, 0x0101001), 0x0010101);
-        assert_eq!(max_or(0x0000101, 0x0001001, 0x0010011, 0x0101001), 0x0101fff);
+        assert_eq!(
+            min_or(0x0000101, 0x0001001, 0x0010011, 0x0101001),
+            0x0010101
+        );
+        assert_eq!(
+            max_or(0x0000101, 0x0001001, 0x0010011, 0x0101001),
+            0x0101fff
+        );
         let (x, y) = (3, 8);
         let (s, t) = exgcd(x, y);
         assert_eq!(x * s + y * t, gcd(x, y));

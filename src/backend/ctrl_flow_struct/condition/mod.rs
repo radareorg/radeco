@@ -48,7 +48,7 @@ macro_rules! impl_copy {
 /// A condition. This can be freely copied.
 /// Use [`Context`] to make one.
 pub struct Condition<'cd, T: 'cd>(&'cd CondVariants<'cd, T>, &'cd CondVariants<'cd, T>);
-impl_copy!{Condition}
+impl_copy! {Condition}
 
 /// *Really* a condition. These are the referents of [`Condition`]s and are
 /// what live in [`Storage`]s.
@@ -79,7 +79,7 @@ enum Op {
 /// Use [`Context::new_var`] to make one.
 #[derive(Debug)]
 pub struct VarRef<'cd, T: 'cd>(&'cd T);
-impl_copy!{VarRef}
+impl_copy! {VarRef}
 
 /// Helper for creating new conditions. This can be freely copied.
 /// Use [`Storage::cctx`] to make one.
@@ -87,7 +87,7 @@ impl_copy!{VarRef}
 pub struct Context<'cd, T: 'cd> {
     store: &'cd Storage<'cd, T>,
 }
-impl_copy!{Context}
+impl_copy! {Context}
 
 /// Backing storage for [`Condition`]s and entry point to this module's API.
 pub struct Storage<'cd, T: 'cd> {
@@ -132,47 +132,49 @@ impl<'cd, T> Context<'cd, T> {
         l: Condition<'cd, T>,
         r: Condition<'cd, T>,
     ) -> Result<Condition<'cd, T>, ()> {
-        Ok(match (
-            ExprView::new(l, mk_op.dual()),
-            ExprView::new(r, mk_op.dual()),
-        ) {
-            (Ok(lev), Ok(rev)) => {
-                if lev.is_empty() || rev.is_empty() {
-                    // annihilator
-                    self.mk_empty_op(mk_op.dual())
-                } else {
-                    // nothing to simplify
-                    let mut builder = self.expr_builder(mk_op, LinearSet::new());
-                    builder.insert_one(lev)?;
-                    builder.insert_one(rev)?;
-                    builder.finish()
+        Ok(
+            match (
+                ExprView::new(l, mk_op.dual()),
+                ExprView::new(r, mk_op.dual()),
+            ) {
+                (Ok(lev), Ok(rev)) => {
+                    if lev.is_empty() || rev.is_empty() {
+                        // annihilator
+                        self.mk_empty_op(mk_op.dual())
+                    } else {
+                        // nothing to simplify
+                        let mut builder = self.expr_builder(mk_op, LinearSet::new());
+                        builder.insert_one(lev)?;
+                        builder.insert_one(rev)?;
+                        builder.finish()
+                    }
                 }
-            }
-            (Err(opn_v), Ok(ev)) | (Ok(ev), Err(opn_v)) => {
-                if ev.is_empty() {
-                    // annihilator
-                    self.mk_empty_op(mk_op.dual())
-                } else {
+                (Err(opn_v), Ok(ev)) | (Ok(ev), Err(opn_v)) => {
+                    if ev.is_empty() {
+                        // annihilator
+                        self.mk_empty_op(mk_op.dual())
+                    } else {
+                        // inline
+                        let mut builder = self.expr_builder(mk_op, opn_v.clone());
+                        builder.insert_one(ev)?;
+                        builder.finish()
+                    }
+                }
+                (Err(lopn_v), Err(ropn_v)) => {
                     // inline
-                    let mut builder = self.expr_builder(mk_op, opn_v.clone());
-                    builder.insert_one(ev)?;
+                    let (aopn_v, bopn_v) = if lopn_v.len() >= ropn_v.len() {
+                        (lopn_v, ropn_v)
+                    } else {
+                        (ropn_v, lopn_v)
+                    };
+                    let mut builder = self.expr_builder(mk_op, aopn_v.clone());
+                    for &bopn in bopn_v {
+                        builder.insert_one(ExprView::new_or_panic(bopn, mk_op.dual()))?;
+                    }
                     builder.finish()
                 }
-            }
-            (Err(lopn_v), Err(ropn_v)) => {
-                // inline
-                let (aopn_v, bopn_v) = if lopn_v.len() >= ropn_v.len() {
-                    (lopn_v, ropn_v)
-                } else {
-                    (ropn_v, lopn_v)
-                };
-                let mut builder = self.expr_builder(mk_op, aopn_v.clone());
-                for &bopn in bopn_v {
-                    builder.insert_one(ExprView::new_or_panic(bopn, mk_op.dual()))?;
-                }
-                builder.finish()
-            }
-        })
+            },
+        )
     }
 
     /// Creates the logical conjunction (And) of several conditions.
@@ -546,7 +548,7 @@ struct ExprView<'cd, T: 'cd> {
     cond: Condition<'cd, T>,
     op: Op,
 }
-impl_copy!{ExprView}
+impl_copy! {ExprView}
 
 impl<'cd, T> ExprView<'cd, T> {
     fn new(cond: Condition<'cd, T>, op: Op) -> Result<Self, &'cd LinearSet<Condition<'cd, T>>> {
