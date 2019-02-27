@@ -259,11 +259,10 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
 
                 // can't use `contract_nodes_and_map` b/c we need to know
                 // which node is `then` and which is `else`
-                debug_assert!(
-                    self.graph
-                        .find_edge_undirected(then_node, else_node)
-                        .is_none()
-                );
+                debug_assert!(self
+                    .graph
+                    .find_edge_undirected(then_node, else_node)
+                    .is_none());
                 let preds: NodeSet = self
                     .graph
                     .neighbors_directed(then_node, Incoming)
@@ -496,7 +495,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         AstNodeC::Loop(LoopType::Endless, Box::new(body))
     }
 
-    gen_rule!{rule_While, |self, body| {
+    gen_rule! {rule_While, |self, body| {
         if let Seq(mut seq) = body {
             if let Some(&Cond(c, box Break, None)) = seq.first() {
                 seq.remove(0);
@@ -509,7 +508,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         }
     }}
 
-    gen_rule!{rule_DoWhile, |self, body| {
+    gen_rule! {rule_DoWhile, |self, body| {
         if let Seq(mut seq) = body {
             if let Some(&Cond(c, box Break, None)) = seq.last() {
                 seq.pop();
@@ -522,7 +521,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         }
     }}
 
-    gen_rule!{rule_NestedDoWhile, |self, body| {
+    gen_rule! {rule_NestedDoWhile, |self, body| {
         if let Seq(mut seq) = body {
             if let Some(last) = seq.pop() {
                 if let Cond(c, t, None) = last {
@@ -551,7 +550,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         }
     }}
 
-    gen_rule!{rule_LoopToSeq, |self, body| {
+    gen_rule! {rule_LoopToSeq, |self, body| {
         if let Seq(mut seq) = body {
             if let Some(last) = seq.pop() {
                 if always_breaks(&last) {
@@ -573,7 +572,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         }
     }}
 
-    gen_rule!{rule_CondToSeq, |self, body| {
+    gen_rule! {rule_CondToSeq, |self, body| {
         if let Cond(c, t, Some(e)) = body {
             if !contains_break(&*t) && contains_break(&*e) {
                 Ok(self.refine_loop(mk_seq_2(Loop(PreChecked(c), t), *e)))
@@ -585,7 +584,7 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
         }
     }}
 
-    gen_rule!{rule_CondToSeqNeg, |self, body| {
+    gen_rule! {rule_CondToSeqNeg, |self, body| {
         if let Cond(c, t, Some(e)) = body {
             if contains_break(&*t) && !contains_break(&*e) {
                 Ok(self.refine_loop(mk_seq_2(Loop(PreChecked(self.cctx.mk_not(c)), t), *e)))

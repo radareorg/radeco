@@ -12,18 +12,20 @@
 //! are in code that is actually executed or not. For a better analysis
 //! look at `analysis::constant_propagation`.
 
-use analysis::analyzer::{Action, Analyzer, FuncAnalyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, RemoveValue};
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, RemoveValue,
+};
 use frontend::radeco_containers::RadecoFunction;
-use middle::ssa::cfg_traits::{CFG, CFGMod};
+use middle::ssa::cfg_traits::{CFGMod, CFG};
 use middle::ssa::graph_traits::Graph;
+use middle::ssa::ssa_traits::{NodeType, SSAExtra, SSAMod, SSA};
 use middle::ssa::ssastorage::SSAStorage;
-use middle::ssa::ssa_traits::{NodeType, SSA, SSAExtra, SSAMod};
 
 use std::any::Any;
 use std::collections::VecDeque;
 
 #[derive(Debug)]
-pub struct DCE { }
+pub struct DCE {}
 
 const NAME: &str = "dce";
 const REQUIRES: &[AnalyzerKind] = &[];
@@ -37,12 +39,11 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
 
 impl DCE {
     pub fn new() -> Self {
-        DCE{}
+        DCE {}
     }
 
     // Marks node for removal. This method does not remove nodes.
-    fn mark(&self, ssa: &mut SSAStorage)
-    {
+    fn mark(&self, ssa: &mut SSAStorage) {
         let nodes = ssa.values();
         let roots = registers_in_err!(ssa, exit_node_err!(ssa), ssa.invalid_value().unwrap());
         let mut queue = VecDeque::<<SSAStorage as SSA>::ValueRef>::new();
@@ -68,18 +69,18 @@ impl DCE {
         }
     }
 
-
     // Sweeps away the un-marked nodes
-    fn sweep<T: FnMut(Box<Change>) -> Action>(&self, ssa: &mut SSAStorage, mut policy: T)
-    {
+    fn sweep<T: FnMut(Box<Change>) -> Action>(&self, ssa: &mut SSAStorage, mut policy: T) {
         for node in &ssa.values() {
             if !ssa.is_marked(node) {
                 match policy(Box::new(RemoveValue(*node))) {
                     Action::Apply => {
                         ssa.remove_value(*node);
-                    },
+                    }
                     Action::Skip => (),
-                    Action::Abort => { return; }
+                    Action::Abort => {
+                        return;
+                    }
                 };
             }
             ssa.clear_mark(node);
@@ -93,7 +94,8 @@ impl DCE {
                 continue;
             }
 
-            let remove_block = if ssa.exprs_in(*block).is_empty() && ssa.phis_in(*block).is_empty() {
+            let remove_block = if ssa.exprs_in(*block).is_empty() && ssa.phis_in(*block).is_empty()
+            {
                 let incoming = ssa.incoming_edges(*block);
                 let outgoing = ssa.outgoing_edges(*block);
                 // Two cases.
@@ -127,14 +129,25 @@ impl DCE {
 }
 
 impl Analyzer for DCE {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl FuncAnalyzer for DCE {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, rfn: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        rfn: &mut RadecoFunction,
+        policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>> {
         self.mark(rfn.ssa_mut());
-        self.sweep(rfn.ssa_mut(), policy.expect("A policy function must be provided"));
+        self.sweep(
+            rfn.ssa_mut(),
+            policy.expect("A policy function must be provided"),
+        );
 
         None
     }

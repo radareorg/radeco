@@ -1,4 +1,7 @@
-use analysis::analyzer::{Action, Analyzer, AnalyzerKind, AnalyzerInfo, AnalyzerResult, Change, FuncAnalyzer, ReplaceValue};
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
+    ReplaceValue,
+};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
@@ -15,9 +18,7 @@ pub struct CopyPropagation {
 
 impl CopyPropagation {
     pub fn new() -> Self {
-        CopyPropagation {
-            skip: Vec::new()
-        }
+        CopyPropagation { skip: Vec::new() }
     }
 
     fn gather_copies(ssa: &SSAStorage) -> Vec<ReplaceValue> {
@@ -50,8 +51,12 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
 };
 
 impl Analyzer for CopyPropagation {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl FuncAnalyzer for CopyPropagation {
@@ -86,15 +91,14 @@ impl FuncAnalyzer for CopyPropagation {
                         replaced.insert(to);
                         ssa.replace_value(to, from);
                         self.skip.clear();
-                    },
+                    }
                     Action::Skip => {
                         self.skip.push(change);
-                    },
+                    }
                     Action::Abort => {
                         return None;
                     }
                 }
-
             }
         }
 

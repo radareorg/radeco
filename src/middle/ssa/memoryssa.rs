@@ -5,42 +5,39 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-
 //! Module that implements memory SSA generation.
-//! 
-//! This module implements the algorithm mentioned in 
+//!
+//! This module implements the algorithm mentioned in
 //! "Memory SSA - A Unified Approach for Fparsely Representing Memory Operations"
 //!
-//! Like what LLVM has done, we use the Dynamic Memory Partitions. In futher 
+//! Like what LLVM has done, we use the Dynamic Memory Partitions. In futher
 //! work, it may be improved to Hybrid Partitioning.
 //! For more details, please refer:
 //!     * http://www.airs.com/dnovillo/Papers/mem-ssa.pdf
 
-
+use petgraph::graph::{EdgeIndex, NodeIndex};
+use petgraph::stable_graph::StableDiGraph;
+use petgraph::EdgeDirection;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
-use petgraph::EdgeDirection;
-use petgraph::stable_graph::StableDiGraph;
-use petgraph::graph::{EdgeIndex,  NodeIndex};
 
 use r2api::structs::LVarInfo;
 
-use super::ssa_traits::{SSA, SSAMod, SSAWalk};
 use super::ssa_traits::NodeType;
+use super::ssa_traits::{SSAMod, SSAWalk, SSA};
 use middle::ir::MOpcode;
 
-// NOTE: Until now, this file is only used to implement raw Memory SSA, in 
+// NOTE: Until now, this file is only used to implement raw Memory SSA, in
 // future work, it may be modified to support API for more accurate memory
 // SSA, as the Value Set Analysis and Type Interface Analysis have been done.
 //
 // Memory SSA generation algorithm is similar with phiplacement.rs, but a little
-// different. Also, considering different data structures, it's maybe not an 
-// easy work to combine these two files together. 
-
+// different. Also, considering different data structures, it's maybe not an
+// easy work to combine these two files together.
 
 // TODO: Add Memory SSA into SSA_Extra.
 // TODO: Add a trait for MemorySSA as APIs for future work.
-// TODO: Split this file into two files, one for may_alias set, another for MemorySSA. 
+// TODO: Split this file into two files, one for may_alias set, another for MemorySSA.
 // Above tasks should be done after Value Set Analysis finished.
 
 #[derive(Clone, Debug)]
@@ -73,14 +70,15 @@ type VarId = usize;
 type ArgOrd = u16;
 
 pub struct MemorySSA<'a, I, T>
-    where I: Iterator<Item = T::ValueRef>,
-          T: 'a + SSA + SSAMod + SSAWalk<I>
+where
+    I: Iterator<Item = T::ValueRef>,
+    T: 'a + SSA + SSAMod + SSAWalk<I>,
 {
     ssa: &'a T,
     pub g: StableDiGraph<MemOpcode, ArgOrd>,
     /// Transform a Memory SSA Node into its associated basic block.
     pub associated_blocks: HashMap<NodeIndex, T::ActionRef>,
-    /// Transform a VDef/VUse node into its associated opcode node. 
+    /// Transform a VDef/VUse node into its associated opcode node.
     pub associated_nodes: HashMap<NodeIndex, T::ValueRef>,
     /// All variables used in this function.
     // TODO: Create an API for variables to renew its station, for VSA may change it
@@ -91,8 +89,8 @@ pub struct MemorySSA<'a, I, T>
     pub local_nodes: HashSet<T::ValueRef>,
     /// Nodes which could be regared as a global variable address.
     pub global_nodes: HashSet<T::ValueRef>,
-    // TODO: Above two members(local_nodes & global_nodes) may be combined with 
-    // each other and expand to indicated every special variable's address separately 
+    // TODO: Above two members(local_nodes & global_nodes) may be combined with
+    // each other and expand to indicated every special variable's address separately
     // after VSA finish.
     /// Different variables' Phi nodes for every basic block.
     pub phi_nodes: HashMap<NodeIndex, VarId>,
@@ -100,14 +98,15 @@ pub struct MemorySSA<'a, I, T>
     // in future work.
     sealed_blocks: HashSet<T::ActionRef>,
     current_def: Vec<HashMap<T::ActionRef, NodeIndex>>,
-    incomplete_phis: Vec<HashMap<T::ActionRef, NodeIndex>>, 
+    incomplete_phis: Vec<HashMap<T::ActionRef, NodeIndex>>,
     // Same usage in phiplacement.rs
     foo: PhantomData<I>,
 }
 
 impl<'a, I, T> MemorySSA<'a, I, T>
-    where I: Iterator<Item = T::ValueRef>,
-          T: 'a + SSA + SSAMod + SSAWalk<I>
+where
+    I: Iterator<Item = T::ValueRef>,
+    T: 'a + SSA + SSAMod + SSAWalk<I>,
 {
     pub fn new(ssa: &'a T) -> MemorySSA<'a, I, T> {
         MemorySSA {
@@ -124,8 +123,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             current_def: Vec::new(),
             incomplete_phis: Vec::new(),
             foo: PhantomData,
-        } 
-    } 
+        }
+    }
 
     /// Run to generate MemorySSA.
     pub fn run(&mut self) {
@@ -144,14 +143,16 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     //      global:from r2api to get datafers;
     //      extra: for every call statement generate an extra variable.
     /// Use information from RadecoFunctoin to gather basic variables' information.
-    pub fn gather_variables(&mut self,
-                        datafers: &Vec<u64>,
-                        locals: &Vec<LVarInfo>,
-                        callrefs: &Vec<NodeIndex>) {
+    pub fn gather_variables(
+        &mut self,
+        datafers: &Vec<u64>,
+        locals: &Vec<LVarInfo>,
+        callrefs: &Vec<NodeIndex>,
+    ) {
         radeco_trace!("MemorrySSA|Get datafers: {:?}", datafers);
         // datafers is coming from RadecoFunctoin::datafers
-        let mut gvars: Vec<VariableType> 
-            = datafers.clone()
+        let mut gvars: Vec<VariableType> = datafers
+            .clone()
             .iter()
             .map(|x| VariableType::Global(x.clone()))
             .collect();
@@ -159,8 +160,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
         radeco_trace!("MemorrySSA|Get locals: {:?}", locals);
         // locals is coming from RadecoFunctoin::locals
-        let mut lvars: Vec<VariableType>
-            = locals.clone()
+        let mut lvars: Vec<VariableType> = locals
+            .clone()
             .iter()
             .map(|x| VariableType::Local(x.clone()))
             .collect();
@@ -168,10 +169,11 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
         radeco_trace!("MemorrySSA|Get callrefs: {:?}", callrefs);
         // callrefs is coming from RadecoFunctoin::call_ctx::ssa_ref
-        let mut evars: Vec<VariableType>
-            = callrefs.clone().into_iter()
-                        .map(|x| VariableType::Extra(x))
-                        .collect();
+        let mut evars: Vec<VariableType> = callrefs
+            .clone()
+            .into_iter()
+            .map(|x| VariableType::Extra(x))
+            .collect();
         self.variables.append(&mut evars);
 
         radeco_trace!("MemorrySSA|Gather variables: {:?}", self.variables);
@@ -195,7 +197,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
             }
         }
         return false;
-    } 
+    }
 
     // Check reg is a BP/SP register or not
     fn check_local(&self, mut comment: String) -> bool {
@@ -222,21 +224,20 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                     radeco_trace!("MemorrySSA|New BP/SP register found: {:?}", comment);
                     return true;
                 }
-            } 
+            }
         }
         return false;
     }
     // TODO: Above two functions should be combined into one named check_variables,
     // which could use to check every different variable after VSA.
-    // OR: It's only used for raw Memory SSA to gather may_alias set, after raw 
+    // OR: It's only used for raw Memory SSA to gather may_alias set, after raw
     // MemorySSA, the later may_alias set analysis should be done by VSA.
-
 
     // Initialize the nodes which could be regard as variables' addresses.
     //      For locals, it should be based on the BP/SP registers;      -> CommentNode
     //      For globals, it should be equal to the globals' addresses;  -> OpConse
     //
-    // NOTE: It maybe become unnecessary after VSA finish, because VSA could make 
+    // NOTE: It maybe become unnecessary after VSA finish, because VSA could make
     // may_alias set, rather than in MemorySSA.
     fn init_nodes_type(&mut self) {
         for node in &self.ssa.values() {
@@ -252,15 +253,21 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                         if self.check_local(reg.clone()) {
                             self.local_nodes.insert(*node);
                         }
-                    } 
+                    }
                     _ => {}
                 }
             }
         }
-        radeco_trace!("MemorrySSA|Find local variable address: {:?}", self.local_nodes);
-        radeco_trace!("MemorrySSA|Find global variable address: {:?}", self.global_nodes);
+        radeco_trace!(
+            "MemorrySSA|Find local variable address: {:?}",
+            self.local_nodes
+        );
+        radeco_trace!(
+            "MemorrySSA|Find global variable address: {:?}",
+            self.global_nodes
+        );
     }
-    
+
     // If idx's operands include local addresses or global addresses, it could
     // be regared as corresponding address.
     //
@@ -278,15 +285,21 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         }
 
         match (involve_local, involve_global) {
-            (true, false) => { 
+            (true, false) => {
                 radeco_trace!("MemorrySSA|Find new local variable address node: {:?}", idx);
-                self.local_nodes.insert(*idx); 
+                self.local_nodes.insert(*idx);
                 radeco_trace!("MemorrySSA|Local variable address: {:?}", self.local_nodes);
             }
-            (false, true) => { 
-                radeco_trace!("MemorrySSA|Find new global variable address node: {:?}", idx);
-                radeco_trace!("MemorrySSA|Global variable address: {:?}", self.global_nodes);
-                self.global_nodes.insert(*idx); 
+            (false, true) => {
+                radeco_trace!(
+                    "MemorrySSA|Find new global variable address node: {:?}",
+                    idx
+                );
+                radeco_trace!(
+                    "MemorrySSA|Global variable address: {:?}",
+                    self.global_nodes
+                );
+                self.global_nodes.insert(*idx);
             }
             _ => {}
         }
@@ -295,7 +308,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // This function calculate the may_alias, using a simple rule:
     //      if mem is a local address, then the may_alias set will include all
     // local variables;
-    //      if mem is a global address, the the may_alias set will include all 
+    //      if mem is a global address, the the may_alias set will include all
     // global variables;
     //      Otherwise, it will include all the variables.
     //
@@ -304,21 +317,20 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         let involve_local = self.local_nodes.contains(mem);
         let involve_global = self.global_nodes.contains(mem);
         let mut may_alias = HashSet::new();
-        
+
         let involve_all = !(involve_local ^ involve_global);
-        // if involve_local and involve_global is both true or both false, 
-        // it should involve_all. 
+        // if involve_local and involve_global is both true or both false,
+        // it should involve_all.
 
         for i in 0..self.variables.len() {
             match self.variables[i] {
                 VariableType::Extra(_) => {
                     if involve_all {
-                        may_alias.insert(i); 
+                        may_alias.insert(i);
                     }
                 }
-                // TODO: Add function to check the call statement could reach mem node 
+                // TODO: Add function to check the call statement could reach mem node
                 // or not.
-
                 VariableType::Local(_) => {
                     if involve_local || involve_all {
                         may_alias.insert(i);
@@ -330,7 +342,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                         may_alias.insert(i);
                     }
                 }
-            } 
+            }
         }
 
         radeco_trace!("MemorrySSA|New may_alias set {:?} for {:?}", may_alias, idx);
@@ -345,11 +357,11 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         // Calculate nodes' type first.
 
         // TODO: There is a problem in this implement:
-        //      if a phi node uses some node behind it, this will fail in 
+        //      if a phi node uses some node behind it, this will fail in
         //      propagating node type. But it's not urgent, because there must
         //      be at least one argument of phi node having been visited.
-        //      My idea is using bfs from node which have been regared as 
-        //      variable address to propagate node type. 
+        //      My idea is using bfs from node which have been regared as
+        //      variable address to propagate node type.
         //      I will try to do it later.
         for expr in self.ssa.inorder_walk() {
             if let Ok(ndata) = self.ssa.node_data(expr) {
@@ -369,19 +381,16 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                             }
                         }
                     }
-                    NodeType::Phi => {
-                        self.propagate_nodes_type(&expr, &operands)
-                    }
+                    NodeType::Phi => self.propagate_nodes_type(&expr, &operands),
                     _ => {}
                 }
-            } 
-        } 
+            }
+        }
     }
-
 
     // Above code are used in raw MemorySSA to gather may_alias set.
     // Following code will concentrate on MemorySSA generation, which
-    // will cut into two parts. Part One concentrates on the basic 
+    // will cut into two parts. Part One concentrates on the basic
     // operations on MemorySSA graph (self.g), while Part Two concentrates
     // on the MemorySSA generation, especially phi placement.
 
@@ -390,11 +399,10 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         let mem_node = self.g.add_node(data);
         self.associated_nodes.insert(mem_node, *ssa_node);
 
-        let block = self.ssa.block_for(*ssa_node)
-                            .unwrap_or_else(|| {
-                                radeco_err!("Value node doesn't belong to any block");
-                                self.ssa.invalid_action().unwrap()
-                            });
+        let block = self.ssa.block_for(*ssa_node).unwrap_or_else(|| {
+            radeco_err!("Value node doesn't belong to any block");
+            self.ssa.invalid_action().unwrap()
+        });
         self.associated_blocks.insert(mem_node, block.clone());
         return mem_node;
     }
@@ -421,27 +429,28 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     fn add_use(&mut self, expr: &NodeIndex, arg: &NodeIndex) {
         if !self.g.find_edge(*expr, *arg).is_none() {
             return;
-            // In MemorySSA, it's common that add an edge between two nodes 
+            // In MemorySSA, it's common that add an edge between two nodes
             // which have been connected before.
         }
         self.g.add_edge(*expr, *arg, 0);
     }
 
     fn get_uses(&self, mem_node: &NodeIndex) -> Vec<NodeIndex> {
-       let adjacents = self.gather_adjacent(mem_node, EdgeDirection::Incoming);
-       adjacents.1
+        let adjacents = self.gather_adjacent(mem_node, EdgeDirection::Incoming);
+        adjacents.1
     }
 
     // NOTE: Now, we do not concentrate on the order of operands.
     fn get_operands(&self, mem_node: &NodeIndex) -> Vec<NodeIndex> {
-       let adjacents = self.gather_adjacent(mem_node, EdgeDirection::Outgoing);
-       adjacents.1
+        let adjacents = self.gather_adjacent(mem_node, EdgeDirection::Outgoing);
+        adjacents.1
     }
 
-    fn gather_adjacent(&self,
-                       node: &NodeIndex,
-                       direction: EdgeDirection)
-                       -> (Vec<EdgeIndex>, Vec<NodeIndex>) {
+    fn gather_adjacent(
+        &self,
+        node: &NodeIndex,
+        direction: EdgeDirection,
+    ) -> (Vec<EdgeIndex>, Vec<NodeIndex>) {
         let mut edges: Vec<EdgeIndex> = Vec::new();
         let mut adjacent: Vec<NodeIndex> = Vec::new();
         let mut walk = self.g.neighbors_directed(*node, direction).detach();
@@ -480,7 +489,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         // Delete the association with ssa graph
         // NOTE: It must be phi now, but maybe change in future work.
         if !self.is_phi(origin) {
-            self.associated_nodes.remove(origin); 
+            self.associated_nodes.remove(origin);
         }
         self.associated_blocks.remove(origin);
 
@@ -488,24 +497,29 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         self.g.remove_node(*origin);
     }
 
-
     // PART TWO: MemorySSA Generation
 
-    // Recode the current define of variable var. 
+    // Recode the current define of variable var.
     fn write_variable(&mut self, var: VarId, block: &T::ActionRef, mem_node: &NodeIndex) {
-        radeco_trace!("MemorrySSA|Write variable ({:?}) in block ({:?}) at mem node ({:?})", 
-                    var, 
-                    block, 
-                    mem_node);
+        radeco_trace!(
+            "MemorrySSA|Write variable ({:?}) in block ({:?}) at mem node ({:?})",
+            var,
+            block,
+            mem_node
+        );
         self.current_def[var].insert(block.clone(), mem_node.clone());
     }
 
     // Get the reachable define for var, if it doesn't exist in this block, call
     // read_variable_recursive to visit block's predecessors.
     fn read_variable(&mut self, var: VarId, block: &T::ActionRef) -> NodeIndex {
-        radeco_trace!("MemorrySSA|Read variable ({:?}) in block ({:?})", var, block);
+        radeco_trace!(
+            "MemorrySSA|Read variable ({:?}) in block ({:?})",
+            var,
+            block
+        );
         if let Some(node) = self.current_def[var].get(block) {
-            return node.clone()
+            return node.clone();
         }
         return self.read_variable_recursive(var, block);
     }
@@ -513,8 +527,15 @@ impl<'a, I, T> MemorySSA<'a, I, T>
     // Add phi nodes in the basic block, and visit its predecessors.
     // This function will only be called when the current block doesn't have var's define.
     fn read_variable_recursive(&mut self, var: VarId, block: &T::ActionRef) -> NodeIndex {
-        radeco_trace!("MemorrySSA|Call read_variable_recursive: {:?} {:?}", var, block);
-        radeco_trace!("MemorrySSA|Pred Block information {:?}", self.ssa.preds_of(block.clone()));
+        radeco_trace!(
+            "MemorrySSA|Call read_variable_recursive: {:?} {:?}",
+            var,
+            block
+        );
+        radeco_trace!(
+            "MemorrySSA|Pred Block information {:?}",
+            self.ssa.preds_of(block.clone())
+        );
         let mut val: NodeIndex;
 
         if !self.sealed_blocks.contains(block) {
@@ -533,7 +554,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
         self.write_variable(var, block, &val);
         return val;
-    } 
+    }
 
     // Add phi operands, and try to use try_remove_trivial_phi to delete trivial phi node.
     fn add_phi_operands(&mut self, var: VarId, phi: &NodeIndex) -> NodeIndex {
@@ -542,9 +563,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                 radeco_err!("Phi not found!");
                 vec![self.ssa.invalid_action().unwrap().clone()]
             },
-            |block| {
-                self.ssa.preds_of(block.clone())
-            },
+            |block| self.ssa.preds_of(block.clone()),
         );
         for pred in &preds {
             let target = self.read_variable(var, pred);
@@ -585,13 +604,16 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         }
         self.replace(phi, &same);
         for variable in 0..self.variables.len() {
-            let tmp: HashMap<T::ActionRef, NodeIndex> = self.current_def[variable].iter()
-                                        .map(|(block, target)| 
-                                                    if target == phi {
-                                                        (*block, same)
-                                                    } else {
-                                                        (*block, *target)
-                                                    }).collect();
+            let tmp: HashMap<T::ActionRef, NodeIndex> = self.current_def[variable]
+                .iter()
+                .map(|(block, target)| {
+                    if target == phi {
+                        (*block, same)
+                    } else {
+                        (*block, *target)
+                    }
+                })
+                .collect();
             self.current_def[variable] = tmp;
         }
         self.phi_nodes.remove(&phi);
@@ -619,7 +641,7 @@ impl<'a, I, T> MemorySSA<'a, I, T>
         self.sealed_blocks.insert(block.clone());
     }
 
-    // Main function of MemorySSA, generate Memory SSA using the similar way of 
+    // Main function of MemorySSA, generate Memory SSA using the similar way of
     // phiplacement.rs
     fn generate(&mut self) {
         let entry_node = entry_node_err!(self.ssa);
@@ -637,40 +659,44 @@ impl<'a, I, T> MemorySSA<'a, I, T>
 
                 match ndata.nt {
                     NodeType::Op(MOpcode::OpLoad) => {
-                        let set: Vec<VarId> = self.may_aliases.get(&expr)
-                                                                .unwrap_or_else(|| {
-                                                                    radeco_err!("Cannot find may_alias set!");
-                                                                    &dummy
-                                                                }).iter()
-                                                                .cloned()
-                                                                .collect();
+                        let set: Vec<VarId> = self
+                            .may_aliases
+                            .get(&expr)
+                            .unwrap_or_else(|| {
+                                radeco_err!("Cannot find may_alias set!");
+                                &dummy
+                            })
+                            .iter()
+                            .cloned()
+                            .collect();
                         let vuse = self.add_node(&expr, MemOpcode::VUse);
                         for i in set {
-                            let block = self.ssa.block_for(expr)
-                                                .unwrap_or_else(|| {
-                                                    radeco_err!("Value node doesn't belong to any block");
-                                                    self.ssa.invalid_action().unwrap()
-                                                });
+                            let block = self.ssa.block_for(expr).unwrap_or_else(|| {
+                                radeco_err!("Value node doesn't belong to any block");
+                                self.ssa.invalid_action().unwrap()
+                            });
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vuse, &arg);
                         }
                     }
 
-                    NodeType::Op(MOpcode::OpStore) => {  
-                        let set: Vec<VarId> = self.may_aliases.get(&expr)
-                                                                .unwrap_or_else(|| {
-                                                                    radeco_err!("Cannot find may_alias set!");
-                                                                    &dummy
-                                                                }).iter()
-                                                                .cloned()
-                                                                .collect();
+                    NodeType::Op(MOpcode::OpStore) => {
+                        let set: Vec<VarId> = self
+                            .may_aliases
+                            .get(&expr)
+                            .unwrap_or_else(|| {
+                                radeco_err!("Cannot find may_alias set!");
+                                &dummy
+                            })
+                            .iter()
+                            .cloned()
+                            .collect();
                         let vdef = self.add_node(&expr, MemOpcode::VDef);
                         for i in set {
-                            let block = self.ssa.block_for(expr)
-                                                .unwrap_or_else(|| {
-                                                    radeco_err!("Value node doesn't belong to any block");
-                                                    self.ssa.invalid_action().unwrap()
-                                                });
+                            let block = self.ssa.block_for(expr).unwrap_or_else(|| {
+                                radeco_err!("Value node doesn't belong to any block");
+                                self.ssa.invalid_action().unwrap()
+                            });
                             let arg = self.read_variable(i, &block);
                             self.add_use(&vdef, &arg);
                             self.write_variable(i, &block, &vdef);
@@ -679,8 +705,8 @@ impl<'a, I, T> MemorySSA<'a, I, T>
                     // TODO: Combine above code chunk
                     _ => {}
                 }
-            } 
-        } 
+            }
+        }
 
         // Seal blocks
         for block in self.ssa.blocks() {

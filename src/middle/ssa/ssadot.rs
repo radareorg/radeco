@@ -8,13 +8,13 @@
 //! Implements the `GraphDot` trait for `SSAStorage`
 
 use petgraph::graph;
-use petgraph::visit::{IntoEdgeReferences, EdgeRef};
 use petgraph::graph::NodeIndex;
+use petgraph::visit::{EdgeRef, IntoEdgeReferences};
 
-use middle::ir::MOpcode;
-use middle::dot::{DotAttrBlock, GraphDot};
+use super::ssa_traits::{SSAExtra, SSA};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
-use super::ssa_traits::{SSA, SSAExtra};
+use middle::dot::{DotAttrBlock, GraphDot};
+use middle::ir::MOpcode;
 use middle::ssa::cfg_traits::CFG;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -25,10 +25,9 @@ impl GraphDot for SSAStorage {
     type NodeIndex = graph::NodeIndex;
     type EdgeIndex = graph::EdgeIndex;
 
-
     fn configure(&self) -> String {
-        "digraph cfg {\nsplines=\"ortho\"\nranksep=1\nnodesep=1;\ngraph [fontsize=12 fontname=\"Verdana\" compound=true \
-         rankdir=TB;]\n"
+        "digraph cfg {\nsplines=\"ortho\"\nranksep=1\nnodesep=1;\ngraph [fontsize=12 \
+         fontname=\"Verdana\" compound=true rankdir=TB;]\n"
             .to_owned()
     }
 
@@ -57,7 +56,9 @@ impl GraphDot for SSAStorage {
     }
 
     fn node_cluster(&self, i: &Self::NodeIndex) -> Option<usize> {
-        let invalid_block = self.invalid_action().expect("Invalid Action is not defined");
+        let invalid_block = self
+            .invalid_action()
+            .expect("Invalid Action is not defined");
         match self.g.node_weight(*i) {
             Some(&NodeData::BasicBlock(_, _)) | Some(&NodeData::DynamicAction) => Some(i.index()),
             _ => Some(self.block_for(*i).unwrap_or(invalid_block).index()),
@@ -84,7 +85,7 @@ impl GraphDot for SSAStorage {
             return NodeIndex::end();
         };
         let edge = edge_opt.unwrap();
-         match *edge.weight() {
+        match *edge.weight() {
             EdgeData::Data(_) => edge.source(),
             _ => edge.target(),
         }
@@ -106,7 +107,7 @@ impl GraphDot for SSAStorage {
                 } else {
                     false
                 }
-            },
+            }
             _ => false,
         }
     }
@@ -125,18 +126,14 @@ impl GraphDot for SSAStorage {
         let src = edge.source();
         let target = edge.target();
 
-        prefix.push_str(&format!("n{} -> n{}",
-                                 src.index(),
-                                 target.index()));
+        prefix.push_str(&format!("n{} -> n{}", src.index(), target.index()));
         let target_is_bb = if let NodeData::BasicBlock(_, _) = self.g[edge.target()] {
             true
         } else {
             false
         };
         let attr = match *edge.weight() {
-            EdgeData::Control(_) if !target_is_bb => {
-                vec![("color".to_string(), "red".to_string())]
-            }
+            EdgeData::Control(_) if !target_is_bb => vec![("color".to_string(), "red".to_string())],
             EdgeData::Control(i) => {
                 // Determine the source and destination clusters.
                 let source_cluster = edge.source().index();
@@ -147,28 +144,22 @@ impl GraphDot for SSAStorage {
                     2 => ("blue", "U"),
                     _ => unreachable!(),
                 };
-                vec![("color".to_string(), color.to_string()),
-                     ("xlabel".to_string(), label.to_string()),
-                     ("ltail".to_string(), format!("cluster_{}", source_cluster)),
-                     ("lhead".to_string(), format!("cluster_{}", dst_cluster)),
-                     ("minlen".to_string(), "9".to_owned())]
+                vec![
+                    ("color".to_string(), color.to_string()),
+                    ("xlabel".to_string(), label.to_string()),
+                    ("ltail".to_string(), format!("cluster_{}", source_cluster)),
+                    ("lhead".to_string(), format!("cluster_{}", dst_cluster)),
+                    ("minlen".to_string(), "9".to_owned()),
+                ]
             }
-            EdgeData::Data(i) => {
-                vec![("dir".to_string(), "back".to_string()),
-                     ("xlabel".to_string(), format!("{}", i))]
-            }
-            EdgeData::ContainedInBB(_) => {
-                vec![("color".to_string(), "gray".to_string())]
-            }
-            EdgeData::Selector => {
-                vec![("color".to_string(), "purple".to_string())]
-            }
-            EdgeData::ReplacedBy => {
-                vec![("color".to_string(), "brown".to_string())]
-            }
-            EdgeData::RegisterInfo => {
-                vec![("color".to_string(), "yellow".to_string())]
-            }
+            EdgeData::Data(i) => vec![
+                ("dir".to_string(), "back".to_string()),
+                ("xlabel".to_string(), format!("{}", i)),
+            ],
+            EdgeData::ContainedInBB(_) => vec![("color".to_string(), "gray".to_string())],
+            EdgeData::Selector => vec![("color".to_string(), "purple".to_string())],
+            EdgeData::ReplacedBy => vec![("color".to_string(), "brown".to_string())],
+            EdgeData::RegisterInfo => vec![("color".to_string(), "yellow".to_string())],
             EdgeData::RegisterState => unreachable!(),
         };
 
@@ -187,8 +178,10 @@ impl GraphDot for SSAStorage {
                 let mut r = String::new();
                 let addr = self.addr(i);
                 if addr.is_some() {
-                    r.push_str(&format!("<<font color=\"grey50\">{}: </font>",
-                                        addr.as_ref().unwrap()))
+                    r.push_str(&format!(
+                        "<<font color=\"grey50\">{}: </font>",
+                        addr.as_ref().unwrap()
+                    ))
                 }
                 r.push_str(&format!("\"[i{}] {:?}\"", w, opc));
                 if addr.is_some() {
@@ -213,9 +206,10 @@ impl GraphDot for SSAStorage {
                 attrs
             }
             NodeData::BasicBlock(addr, _) => {
-                let label_str = format!("<<font color=\"grey50\">Basic Block \
-                                         Information<br/>Start Address: {}</font>>",
-                                        addr);
+                let label_str = format!(
+                    "<<font color=\"grey50\">Basic Block Information<br/>Start Address: {}</font>>",
+                    addr
+                );
                 let mut attrs = Vec::new();
                 if let Some(e) = self.entry_node() {
                     if *i == e {
@@ -223,23 +217,29 @@ impl GraphDot for SSAStorage {
                     }
                 };
 
-                attrs.extend([("style".to_string(), "filled".to_string()),
-                              ("fillcolor".to_string(), "white".to_string()),
-                              ("label".to_string(), label_str),
-                              ("shape".to_string(), "box".to_string()),
-                              ("color".to_string(), "\"grey\"".to_string()),]
-                                 .iter()
-                                 .cloned());
+                attrs.extend(
+                    [
+                        ("style".to_string(), "filled".to_string()),
+                        ("fillcolor".to_string(), "white".to_string()),
+                        ("label".to_string(), label_str),
+                        ("shape".to_string(), "box".to_string()),
+                        ("color".to_string(), "\"grey\"".to_string()),
+                    ]
+                    .iter()
+                    .cloned(),
+                );
                 attrs
             }
-            NodeData::Comment(_, ref msg) => {
-                vec![("label".to_string(),
-                      format!("\"{}\"", msg.replace("\"", "\\\""))),
-                     ("shape".to_owned(), "box".to_owned()),
-                     ("style".to_owned(), "filled".to_owned()),
-                     ("color".to_owned(), "black".to_owned()),
-                     ("fillcolor".to_owned(), "greenyellow".to_owned())]
-            }
+            NodeData::Comment(_, ref msg) => vec![
+                (
+                    "label".to_string(),
+                    format!("\"{}\"", msg.replace("\"", "\\\"")),
+                ),
+                ("shape".to_owned(), "box".to_owned()),
+                ("style".to_owned(), "filled".to_owned()),
+                ("color".to_owned(), "black".to_owned()),
+                ("fillcolor".to_owned(), "greenyellow".to_owned()),
+            ],
             NodeData::Phi(_, _) => {
                 let mut attrs = Vec::new();
                 let mut label = format!("{:?}", node);

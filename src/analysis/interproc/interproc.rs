@@ -1,6 +1,8 @@
 //! Fills out the call summary information for `RFunction`
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer};
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer,
+};
 use analysis::interproc::transfer::InterProcAnalysis;
 use frontend::radeco_containers::RadecoModule;
 
@@ -72,15 +74,23 @@ impl<T: 'static> Analyzer for InterProcAnalyzer<T>
 where
     T: InterProcAnalysis + Debug,
 {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl<T: 'static> ModuleAnalyzer for InterProcAnalyzer<T>
 where
     T: InterProcAnalysis + Debug,
 {
-    fn analyze<F: FnMut(Box<Change>) -> Action>(&mut self, rmod: &mut RadecoModule, _policy: Option<F>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<F: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        rmod: &mut RadecoModule,
+        _policy: Option<F>,
+    ) -> Option<Box<AnalyzerResult>> {
         let fs = rmod.functions.clone();
         for (_, f) in fs {
             self.analyze_function(rmod, f.offset);
@@ -93,9 +103,9 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::analyzer::{FuncAnalyzer, all};
-    use analysis::interproc::summary;
+    use analysis::analyzer::{all, FuncAnalyzer};
     use analysis::dce::DCE;
+    use analysis::interproc::summary;
     use frontend::radeco_containers::ProjectLoader;
     use frontend::radeco_source::FileSource;
     use middle::ir_writer;
@@ -110,7 +120,8 @@ mod test {
         for mut xy in rproj.iter_mut() {
             let mut rmod = &mut xy.module;
             {
-                let mut analyzer: InterProcAnalyzer<summary::CallSummary> = InterProcAnalyzer::new();
+                let mut analyzer: InterProcAnalyzer<summary::CallSummary> =
+                    InterProcAnalyzer::new();
                 analyzer.analyze(&mut rmod, Some(all));
             }
 

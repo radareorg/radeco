@@ -2,7 +2,9 @@
 //! For every instruction, try to combine one of its operands into itself. This
 //! transforms linear data-dependency chains into trees.
 
-use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
+};
 use frontend::radeco_containers::RadecoFunction;
 use middle::ir::MOpcode;
 use middle::ssa::ssa_traits::*;
@@ -49,7 +51,9 @@ pub struct CombineChange {
 }
 
 impl Change for CombineChange {
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 enum CombErr {
@@ -97,7 +101,7 @@ impl Combiner {
         &mut self,
         cur_node: SSAValue,
         ssa: &mut SSAStorage,
-        policy: &mut T
+        policy: &mut T,
     ) -> Result<SSAValue, CombErr> {
         // bail if non-combinable
         let extracted = extract_opinfo(cur_node, ssa).ok_or(CombErr::NoComb)?;
@@ -109,7 +113,8 @@ impl Combiner {
                     sub_node,
                     cur_opinfo
                 );
-                let opt_new_node = self.make_combined_node(cur_node, &cur_opinfo, cur_vt, sub_node, ssa, policy);
+                let opt_new_node =
+                    self.make_combined_node(cur_node, &cur_opinfo, cur_vt, sub_node, ssa, policy);
                 match opt_new_node {
                     Ok(Left((new_node, new_sub_node, new_opinfo))) => {
                         radeco_trace!(
@@ -138,7 +143,7 @@ impl Combiner {
                 }
             }
             Right(c_val) => {
-                let action = policy(Box::new(CombineChange{
+                let action = policy(Box::new(CombineChange {
                     node: cur_node,
                     res: Right(c_val),
                 }));
@@ -149,7 +154,7 @@ impl Combiner {
                         radeco_trace!("{:?} = {:#x}", cur_node, c_val);
                         let c_node = ssa.insert_const(c_val, None).ok_or(CombErr::NoComb)?;
                         Ok(c_node)
-                    },
+                    }
                     Action::Skip => Err(CombErr::Skip),
                     Action::Abort => Err(CombErr::Abort),
                 }
@@ -181,7 +186,7 @@ impl Combiner {
         // simplify
         match simplify_opinfo(&new_opinfo) {
             Some(Some(simpl_new_opinfo)) => {
-                let action = policy(Box::new(CombineChange{
+                let action = policy(Box::new(CombineChange {
                     node: cur_node,
                     res: Left((Some(simpl_new_opinfo.clone()), new_sub_node)),
                 }));
@@ -202,10 +207,9 @@ impl Combiner {
                     Action::Skip => Err(CombErr::Skip),
                     Action::Abort => Err(CombErr::Abort),
                 }
-
             }
             Some(None) => {
-                let action = policy(Box::new(CombineChange{
+                let action = policy(Box::new(CombineChange {
                     node: cur_node,
                     res: Left((None, new_sub_node)),
                 }));
@@ -224,7 +228,7 @@ impl Combiner {
                 match new_opinfo {
                     Cow::Borrowed(_) => Err(CombErr::NoComb),
                     Cow::Owned(new_opinfo) => {
-                        let action = policy(Box::new(CombineChange{
+                        let action = policy(Box::new(CombineChange {
                             node: cur_node,
                             res: Left((Some(new_opinfo.clone()), new_sub_node)),
                         }));
@@ -266,12 +270,20 @@ impl Combiner {
 }
 
 impl Analyzer for Combiner {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl FuncAnalyzer for Combiner {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        func: &mut RadecoFunction,
+        policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>> {
         let ssa = func.ssa_mut();
         let mut policy = policy.expect("A policy function must be provided");
         for node in ssa.inorder_walk() {

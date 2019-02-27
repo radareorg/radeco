@@ -700,27 +700,27 @@ where
             }
 
             /*
-             // Some overrides as we do not support all esil and don't want to panic.
-             let overrides = &["GOTO", "TRAP", "$", "TODO", "REPEAT"];
-             if esil_str.split(",").any(|x| overrides.contains(&x)) {
-                 // Do something else other than asking the parserS
-                 lazy_static! {
-                     static ref OPRE: Regex = Regex::new(r"[[:xdigit:]][[:xdigit:]]")
-                                                 .expect("Unable to compile regex");
-                 }
-            
-                 let byte_str = op.bytes.as_ref().expect("Invalid bytes for instruction");
-                 let bytes = OPRE.captures_iter(byte_str.as_str())
-                     .map(|cap| u8::from_str_radix(&cap[0], 16).expect("Cannot Fail"))
-                     .collect::<Vec<u8>>();
-            
-                 // TODO/XXX:
-                 // This needs to be selected based on the current arch
-                 let ia = X86_CS_IA::new(bytes).expect("Unable to instantiate IA");
-                 self.process_custom(&ia, &mut current_address);
-                 continue;
-             }
-             */
+            // Some overrides as we do not support all esil and don't want to panic.
+            let overrides = &["GOTO", "TRAP", "$", "TODO", "REPEAT"];
+            if esil_str.split(",").any(|x| overrides.contains(&x)) {
+                // Do something else other than asking the parserS
+                lazy_static! {
+                    static ref OPRE: Regex = Regex::new(r"[[:xdigit:]][[:xdigit:]]")
+                                                .expect("Unable to compile regex");
+                }
+
+                let byte_str = op.bytes.as_ref().expect("Invalid bytes for instruction");
+                let bytes = OPRE.captures_iter(byte_str.as_str())
+                    .map(|cap| u8::from_str_radix(&cap[0], 16).expect("Cannot Fail"))
+                    .collect::<Vec<u8>>();
+
+                // TODO/XXX:
+                // This needs to be selected based on the current arch
+                let ia = X86_CS_IA::new(bytes).expect("Unable to instantiate IA");
+                self.process_custom(&ia, &mut current_address);
+                continue;
+            }
+            */
 
             loop {
                 let token_opt = match p.parse::<_, Tokenizer>(esil_str) {
@@ -728,7 +728,7 @@ where
                     Err(_err) => {
                         radeco_err!("{}", _err.to_string());
                         continue;
-                    },
+                    }
                 };
 
                 if let Some(ref token) = token_opt {
@@ -824,110 +824,110 @@ where
     }
 
     /*
-     fn process_custom<IA: InstructionAnalyzer>(&mut self, ia: &IA, addr: &mut MAddress) {
-         let mnemonic = ia.mnemonic().clone();
-         let opcode = MOpcode::OpCustom(mnemonic.into_owned());
-         let vt = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
-    
-         let custom_opnode = self.phiplacer.add_op(&opcode, addr, vt);
-    
-         let reg_r = ia.registers_read()
-             .iter()
-             .map(|&x| if let &IOperand::Register(ref s) = x {
-                 let tok = Token::ERegister(s.clone());
-                 self.process_in(&Some(tok), addr, None)
-             } else {
-                 None
-             })
-             .filter(|x| x.is_some())
-             .collect::<Vec<_>>();
-    
-         // Use read registers as arguments
-         for (i, reg) in reg_r.iter().enumerate() {
-             if let &Some(ref reg_node) = reg {
-                 self.phiplacer.op_use(&custom_opnode, i as u8, reg_node);
-             }
-         }
-    
-         let opidx = reg_r.len() as u8;
-    
-         let reg_w = ia.registers_written()
-             .iter()
-             .map(|&x| if let &IOperand::Register(ref s) = x {
-                 Some(s)
-             } else {
-                 None
-             })
-             .filter(|x| x.is_some())
-             .collect::<Vec<_>>();
-    
-         // Write out modified variables
-         for reg in &reg_w {
-             if let Some(ref rname) = *reg {
-                 self.phiplacer.write_register(addr, rname, custom_opnode);
-             }
-         }
-    
-         if ia.has_memory_operand() {
-             // <addr> in represented in mem_op, need to extract the mib.
-             // base + index*scale +- disp
-             let (opcode, maddr) = if let Some(mem_op) = ia.memory_written() {
-                 // Insert a store
-                 let st = MOpcode::OpStore;
-                 let addr =
-                     if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } =
-                         mem_op {
-                         self.process_memory_op(base, index, *scale, *disp, addr)
-                     } else {
-                         unreachable!()
-                     };
-                 (st, addr)
-             } else if let Some(mem_op) = ia.memory_read() {
-                 // Insert load
-                 let ld = MOpcode::OpLoad;
-                 let addr =
-                     if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } =
-                         mem_op {
-                         self.process_memory_op(base, index, *scale, *disp, addr)
-                     } else {
-                         unreachable!()
-                     };
-                 (ld, addr)
-             } else {
-                 // Memory has to be a load or a store operation, cannot be anything else
-                 unreachable!()
-             };
-    
-             let mem_op = self.phiplacer.add_op(&opcode, addr, vt);
-             let mem = self.phiplacer.read_variable(addr, self.mem_id);
-    
-             // Op[Load/Store](mem, addr)
-             self.phiplacer.op_use(&mem_op, 0, &mem);
-             self.phiplacer.op_use(&mem_op, 1, &maddr);
-    
-             // Do some additional handling, such as associating the written value,
-             // creating new instance of memory etc.
-             if opcode == MOpcode::OpStore {
-                 self.phiplacer.op_use(&mem_op, 2, &custom_opnode);
-                 // New instance of memory
-                 self.phiplacer.write_variable(*addr, self.mem_id, mem_op);
-             } else {
-                 // Use memory load in the custom_opnode
-                 self.phiplacer.op_use(&custom_opnode, opidx, &mem_op);
-             }
-         }
-     }
-     */
+    fn process_custom<IA: InstructionAnalyzer>(&mut self, ia: &IA, addr: &mut MAddress) {
+        let mnemonic = ia.mnemonic().clone();
+        let opcode = MOpcode::OpCustom(mnemonic.into_owned());
+        let vt = ValueInfo::new_unresolved(ir::WidthSpec::Unknown);
+
+        let custom_opnode = self.phiplacer.add_op(&opcode, addr, vt);
+
+        let reg_r = ia.registers_read()
+            .iter()
+            .map(|&x| if let &IOperand::Register(ref s) = x {
+                let tok = Token::ERegister(s.clone());
+                self.process_in(&Some(tok), addr, None)
+            } else {
+                None
+            })
+            .filter(|x| x.is_some())
+            .collect::<Vec<_>>();
+
+        // Use read registers as arguments
+        for (i, reg) in reg_r.iter().enumerate() {
+            if let &Some(ref reg_node) = reg {
+                self.phiplacer.op_use(&custom_opnode, i as u8, reg_node);
+            }
+        }
+
+        let opidx = reg_r.len() as u8;
+
+        let reg_w = ia.registers_written()
+            .iter()
+            .map(|&x| if let &IOperand::Register(ref s) = x {
+                Some(s)
+            } else {
+                None
+            })
+            .filter(|x| x.is_some())
+            .collect::<Vec<_>>();
+
+        // Write out modified variables
+        for reg in &reg_w {
+            if let Some(ref rname) = *reg {
+                self.phiplacer.write_register(addr, rname, custom_opnode);
+            }
+        }
+
+        if ia.has_memory_operand() {
+            // <addr> in represented in mem_op, need to extract the mib.
+            // base + index*scale +- disp
+            let (opcode, maddr) = if let Some(mem_op) = ia.memory_written() {
+                // Insert a store
+                let st = MOpcode::OpStore;
+                let addr =
+                    if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } =
+                        mem_op {
+                        self.process_memory_op(base, index, *scale, *disp, addr)
+                    } else {
+                        unreachable!()
+                    };
+                (st, addr)
+            } else if let Some(mem_op) = ia.memory_read() {
+                // Insert load
+                let ld = MOpcode::OpLoad;
+                let addr =
+                    if let &IOperand::Memory { ref base, ref index, ref scale, ref disp } =
+                        mem_op {
+                        self.process_memory_op(base, index, *scale, *disp, addr)
+                    } else {
+                        unreachable!()
+                    };
+                (ld, addr)
+            } else {
+                // Memory has to be a load or a store operation, cannot be anything else
+                unreachable!()
+            };
+
+            let mem_op = self.phiplacer.add_op(&opcode, addr, vt);
+            let mem = self.phiplacer.read_variable(addr, self.mem_id);
+
+            // Op[Load/Store](mem, addr)
+            self.phiplacer.op_use(&mem_op, 0, &mem);
+            self.phiplacer.op_use(&mem_op, 1, &maddr);
+
+            // Do some additional handling, such as associating the written value,
+            // creating new instance of memory etc.
+            if opcode == MOpcode::OpStore {
+                self.phiplacer.op_use(&mem_op, 2, &custom_opnode);
+                // New instance of memory
+                self.phiplacer.write_variable(*addr, self.mem_id, mem_op);
+            } else {
+                // Use memory load in the custom_opnode
+                self.phiplacer.op_use(&custom_opnode, opidx, &mem_op);
+            }
+        }
+    }
+    */
 } // end impl SSAConstruct
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::analyzer::{FuncAnalyzer, all};
-    use analysis::sccp::SCCP;
+    use analysis::analyzer::{all, FuncAnalyzer};
     use analysis::dce::DCE;
-    use middle::ir_writer;
+    use analysis::sccp::SCCP;
     use middle::dot;
+    use middle::ir_writer;
     use r2api::structs::{LFunctionInfo, LRegInfo};
     use serde_json;
     use std::fs::File;

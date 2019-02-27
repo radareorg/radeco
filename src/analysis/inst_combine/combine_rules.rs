@@ -39,7 +39,7 @@ macro_rules! gen_rules {
 
 pub(super) fn combine_opinfo(cur_opinfo: &COI, sub_opinfo: &COI) -> Option<COI> {
     // try to keep put the const on the left like `ssasort` does
-    gen_rules!{
+    gen_rules! {
         . -> sub_opinfo -> cur_opinfo
         {
             // add/add

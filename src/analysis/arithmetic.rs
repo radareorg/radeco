@@ -1,6 +1,8 @@
-use analysis::analyzer::{Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer};
-use frontend::radeco_containers::RadecoFunction;
+use analysis::analyzer::{
+    Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
+};
 use analysis::matcher::gmatch;
+use frontend::radeco_containers::RadecoFunction;
 
 use std::any::Any;
 use std::io;
@@ -52,7 +54,9 @@ pub struct ArithChange {
 }
 
 impl Change for ArithChange {
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 const NAME: &str = "arithmetic";
@@ -67,7 +71,7 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
 
 #[derive(Debug)]
 pub struct Arithmetic {
-    replace_patterns: Vec<(String, String)>
+    replace_patterns: Vec<(String, String)>,
 }
 
 impl Arithmetic {
@@ -81,16 +85,23 @@ impl Arithmetic {
             replace_patterns: replace_patterns,
         }
     }
-
 }
 
 impl Analyzer for Arithmetic {
-    fn info(&self) -> &'static AnalyzerInfo { &INFO }
-    fn as_any(&self) -> &dyn Any { self }
+    fn info(&self) -> &'static AnalyzerInfo {
+        &INFO
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl FuncAnalyzer for Arithmetic {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(&mut self, func: &mut RadecoFunction, policy: Option<T>) -> Option<Box<AnalyzerResult>> {
+    fn analyze<T: FnMut(Box<Change>) -> Action>(
+        &mut self,
+        func: &mut RadecoFunction,
+        policy: Option<T>,
+    ) -> Option<Box<AnalyzerResult>> {
         let mut policy = policy.expect("A policy function must be provided");
         let ssa = func.ssa_mut();
 
@@ -99,17 +110,17 @@ impl FuncAnalyzer for Arithmetic {
             let grep = matcher.grep(old.to_string());
 
             for m in grep {
-                let action = policy(Box::new(ArithChange{
+                let action = policy(Box::new(ArithChange {
                     old: m.get_root().clone(),
                     old_expr: old.clone(),
                     new_expr: new.clone(),
-                    bindings: m.get_bindings().clone()
+                    bindings: m.get_bindings().clone(),
                 }));
 
                 match action {
                     Action::Apply => {
                         matcher.replace_value(m, new.clone());
-                    },
+                    }
                     Action::Skip => (),
                     Action::Abort => return None,
                 };

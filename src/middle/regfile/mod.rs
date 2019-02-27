@@ -157,7 +157,9 @@ impl SubRegisterFile {
 
     // Get id for a register named `reg`
     pub fn register_id_by_name(&self, reg: &str) -> Option<RegisterId> {
-        self.named_registers.get(reg).map(|sr| RegisterId::from_usize(sr.base as usize))
+        self.named_registers
+            .get(reg)
+            .map(|sr| RegisterId::from_usize(sr.base as usize))
     }
 
     // Get id for register by alias/role
