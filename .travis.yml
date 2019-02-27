@@ -39,11 +39,17 @@ before_script:
       export CC=gcc-7 && export CXX=g++7 &&
       git clone https://github.com/aquynh/capstone.git &&
       cd ./capstone && ./make.sh && sudo ./make.sh install && cd ../
+  # Install rustfmt
+  - |
+      rustup component add rustfmt
 
 script:
   - |
     travis-cargo build &&
     travis-cargo test &&
+    chmod 644 src/middle/ir_reader/parser.rs &&
+    rustfmt src/middle/ir_reader/parser.rs
+    travis-cargo fmt -- -- --check &&
     travis-cargo bench
 after_success:
   - travis-cargo --only nightly coveralls --no-sudo --verify
