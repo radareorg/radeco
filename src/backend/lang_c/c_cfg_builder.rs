@@ -649,19 +649,21 @@ impl<'a> CCFGDataMap<'a> {
 
     fn prepare_regs(&mut self, cfg: &mut CCFG) {
         for walk_node in self.ssa.inorder_walk() {
-            let reg_state = self.ssa.registers_in(walk_node);
-            if reg_state.is_none() {
-                continue;
-            }
-            let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
-            for (idx, (node, _)) in reg_map.into_iter() {
-                let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
-                // XXX CCFG::constant may not be proper method for registering regs.
-                let cfg_node = cfg.constant(&name, None);
-                radeco_trace!("Add register {:?}", node);
-                self.var_map.insert(node, cfg_node);
-                // XXX Maybe not needed
-                self.reg_map.insert(name, cfg_node);
+            if self.ssa.is_action(walk_node) {
+                let reg_state = self.ssa.registers_in(walk_node);
+                if reg_state.is_none() {
+                    continue;
+                }
+                let reg_map = utils::register_state_info(reg_state.unwrap(), self.ssa);
+                for (idx, (node, _)) in reg_map.into_iter() {
+                    let name = self.ssa.regfile.get_name(idx).unwrap_or("mem").to_string();
+                    // XXX CCFG::constant may not be proper method for registering regs.
+                    let cfg_node = cfg.constant(&name, None);
+                    radeco_trace!("Add register {:?}", node);
+                    self.var_map.insert(node, cfg_node);
+                    // XXX Maybe not needed
+                    self.reg_map.insert(name, cfg_node);
+                }
             }
         }
     }
