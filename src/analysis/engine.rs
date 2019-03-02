@@ -3,6 +3,8 @@
 use petgraph::algo::tarjan_scc;
 use petgraph::Graph;
 
+use rayon::prelude::*;
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -102,9 +104,9 @@ impl Engine for RadecoEngine {
         let mut inferer = Inferer::new((*regfile).clone());
         inferer.analyze(rmod, None::<fn(_) -> _>);
 
-        for rfn in rmod.functions.values_mut() {
+        rmod.functions.par_iter_mut().for_each(|(_, rfn)| {
             self.run_func(rfn);
-        }
+        });
 
         None
     }
