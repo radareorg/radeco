@@ -5,16 +5,18 @@ use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
 use radeco_lib::backend::lang_c::c_cfg::CCFGVerifier;
 use radeco_lib::backend::lang_c::c_cfg_builder;
 use radeco_lib::frontend::radeco_containers::*;
+use radeco_lib::middle::dot;
 use radeco_lib::middle::ir_writer;
 use radeco_lib::middle::ssa::ssastorage::SSAStorage;
-use radeco_lib::middle::dot;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::panic;
 use std::rc::Rc;
 use std::str;
 
-thread_local!(pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None););
+thread_local!(
+    pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None);
+);
 
 pub fn fn_list(proj: &RadecoProject) -> Vec<String> {
     proj.iter()
@@ -53,7 +55,8 @@ pub fn fn_rename(old_f: &str, new_f: &str, proj: &mut RadecoProject) {
 
     for module in proj.iter_mut() {
         let module = module.module;
-        let off = module.iter()
+        let off = module
+            .iter()
             .find(|rfn| rfn.function.1.name == old_f)
             .map(|rfn| rfn.function.1.offset);
 

@@ -8,18 +8,22 @@ pub fn parse_args() -> (Option<String>, Option<String>, bool, bool, bool, u32) {
     let matches = App::new("radeco")
         .version(vs)
         .arg(Arg::with_name("BIN").help("Binary to load").required(false))
-        .arg(Arg::with_name("command")
-            .help("Run a custom command in batch mode")
-            .short("c")
-            .long("command")
-            .required(false)
-            .takes_value(true))
-        .arg(Arg::with_name("max-iterations")
-            .help("Max number of iterations of the engine")
-            .short("i")
-            .long("max-iterations")
-            .required(false)
-            .takes_value(true))
+        .arg(
+            Arg::with_name("command")
+                .help("Run a custom command in batch mode")
+                .short("c")
+                .long("command")
+                .required(false)
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("max-iterations")
+                .help("Max number of iterations of the engine")
+                .short("i")
+                .long("max-iterations")
+                .required(false)
+                .takes_value(true),
+        )
         .arg(Arg::from_usage(
             "-a --append 'Append separator to the end of every output.'",
         ))
@@ -50,9 +54,9 @@ pub fn parse_args() -> (Option<String>, Option<String>, bool, bool, bool, u32) {
                 Err(_) => {
                     eprintln!("max-iterations must be a deciamal number");
                     process::exit(0);
-                },
+                }
             }
-        },
+        }
         None => MAX_ITERATIONS,
     };
 

@@ -92,8 +92,7 @@ impl Completer for Completes {
         let complete_func: bool = cmds
             .iter()
             .filter(|s| line.len() >= s.len())
-            .any(|s| &&line[..s.len()] == s &&
-                 command::requires_func(&line[..s.len()]));
+            .any(|s| &&line[..s.len()] == s && command::requires_func(&line[..s.len()]));
 
         // Complete commands.
         let mut ret: Vec<String> = cmds
@@ -115,10 +114,14 @@ impl Completer for Completes {
                         .iter()
                         .filter(|f| f.len() > to_compl.len())
                         .filter(|f| &f[0..to_compl.len()] == to_compl)
-                        .map(|f|
-                             format!("{}{}{}", line,
-                                if to_compl.len() == 0 {" "} else {""},
-                                &f[to_compl.len()..f.len()]))
+                        .map(|f| {
+                            format!(
+                                "{}{}{}",
+                                line,
+                                if to_compl.len() == 0 { " " } else { "" },
+                                &f[to_compl.len()..f.len()]
+                            )
+                        })
                         .collect();
                     ret.append(&mut funcs);
                 }
@@ -195,7 +198,7 @@ fn main() {
             // If a command is specified by the user run it,
             // otherwise decompile all functions.
             if let Some(command) = cmd_opt {
-               cmd(command, no_highlight, max_it);
+                cmd(command, no_highlight, max_it);
             } else {
                 let mut proj_ = proj_opt.borrow_mut();
                 let proj = proj_.as_mut().unwrap();
@@ -297,7 +300,7 @@ mod command {
 
 fn cmd(line: String, highlight: bool, max_it: u32) {
     if line.is_empty() {
-       return;
+        return;
     }
 
     let mut terms = line.split_whitespace();
@@ -396,7 +399,7 @@ fn cmd(line: String, highlight: bool, max_it: u32) {
             },
             (Some(command::FUNC_RENAME), Some(old_f), Some(new_f)) => {
                 core::fn_rename(old_f, new_f, proj);
-            },
+            }
             _ => {
                 println!(
                     "Invalid command {} {}",
