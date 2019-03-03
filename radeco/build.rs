@@ -1,5 +1,5 @@
 // build.rs
-// This build script is used to recognize radeco-lib version at 
+// This build script is used to recognize radeco-lib version at
 // compile from the Cargo.lock file and save it in the
 // VERSION_STR environment variable to be retrieved at runtime.
 extern crate toml;
@@ -25,12 +25,12 @@ fn parse_dependencies(lock_toml_buf: &str) -> Vec<(String, String)> {
     deps
 }
 
-fn main () {
-    let radeco_version    = env!("CARGO_PKG_VERSION").to_string();
-    let mut version_str   = format!("radeco - v{}", radeco_version);
+fn main() {
+    let radeco_version = env!("CARGO_PKG_VERSION").to_string();
+    let mut version_str = format!("radeco - v{}", radeco_version);
 
     let manifest_dir_path = env!("CARGO_MANIFEST_DIR").to_string();
-    let cargo_lock_path   = Path::new(&manifest_dir_path).join("Cargo.lock");
+    let cargo_lock_path = Path::new(&manifest_dir_path).join("Cargo.lock");
 
     if cargo_lock_path.exists() {
         let lock_buf = read_to_string(cargo_lock_path).ok().unwrap();
