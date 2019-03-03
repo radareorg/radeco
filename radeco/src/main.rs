@@ -162,21 +162,27 @@ fn main() {
     let mut rl = Editor::with_config(config);
     rl.set_helper(Some(Completes::default()));
     core::PROJ.with(move |proj| {
-        let proj_result = arg.map(|ref s| {
-            if scheme::is_http(s) {
-                core::load_proj_http(&s[scheme::HTTP.len()..], max_it).map_err(|e| e.to_string())
-            } else if scheme::is_tcp(s) {
-                core::load_proj_tcp(&s[scheme::TCP.len()..], max_it).map_err(|e| e.to_string())
-            } else if is_file(s) {
-                Ok(core::load_proj_by_path(s, max_it))
-            } else {
-                Err(format!("Invalid argument {}", s))
+        use r2pipe::R2Pipe;
+        let proj_result = match arg {
+            Some(ref s) if scheme::is_http(s) => {
+                core::load_proj_http(&s[scheme::HTTP.len()..], max_it)
+                    .map_err(|e| Some(e.to_string()))
             }
-        });
+            Some(ref s) if scheme::is_tcp(s) => {
+                core::load_proj_tcp(&s[scheme::TCP.len()..], max_it)
+                    .map_err(|e| Some(e.to_string()))
+            }
+            Some(ref s) if is_file(s) => Ok(core::load_proj_by_path(s, max_it)),
+            Some(s) => Err(Some(format!("Invalid argument {}", s))),
+            None => match R2Pipe::open() {
+                Ok(r2p) => Ok(core::load_project_by_r2pipe(r2p, max_it)),
+                Err(_) => Err(None),
+            },
+        };
         match proj_result {
-            Some(Ok(p)) => *proj.borrow_mut() = Some(p),
-            Some(Err(ref err)) => println!("{}", err),
-            None => {}
+            Ok(p) => *proj.borrow_mut() = Some(p),
+            Err(Some(ref err)) => println!("{}", err),
+            Err(None) => {}
         }
     });
 
