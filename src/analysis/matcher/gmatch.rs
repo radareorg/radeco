@@ -217,6 +217,8 @@ where
                     MOpcode::OpLt => "OpLt".to_owned(),
                     MOpcode::OpLsl => "OpLsl".to_owned(),
                     MOpcode::OpLsr => "OpLsr".to_owned(),
+                    MOpcode::OpRor => "OpRor".to_owned(),
+                    MOpcode::OpRol => "OpRol".to_owned(),
                     MOpcode::OpLoad => "OpLoad".to_owned(),
                     MOpcode::OpStore => "OpStore".to_owned(),
                     MOpcode::OpNarrow(w) => format!("OpNarrow{}", w),
