@@ -7,7 +7,7 @@ run:
 	cargo run
 
 install:
-	cargo install
+	cargo install --force
 	make -C plugin
 
 uninstall:
