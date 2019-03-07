@@ -86,6 +86,8 @@ impl Engine for RadecoEngine {
         rmod: &mut RadecoModule,
         regfile: &SubRegisterFile,
     ) -> Option<Box<EngineResult>> {
+        radeco_trace!("run_module");
+
         // Analyze preserved for all functions.
         {
             let bp_name = regfile.get_name_by_alias(&"BP".to_string());
@@ -112,6 +114,8 @@ impl Engine for RadecoEngine {
     }
 
     fn run_func(&self, rfn: &mut RadecoFunction) -> Option<Box<EngineResult>> {
+        radeco_trace!("run_func: {}", rfn.name);
+
         // Try to convert the condition codes to relational operators. This should be done before
         // all the other passes.
         let mut arithmetic = Arithmetic::new();
@@ -145,6 +149,7 @@ impl Engine for RadecoEngine {
 
             // Build and run the analyzers.
             while let Some(analyzer) = analyzers.next() {
+                radeco_trace!("running analyzer: {:?}", analyzer);
                 // If the policy is called then there is still something to change, thus this is
                 // not a stable point.
                 let policy = |_| {
