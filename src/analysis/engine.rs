@@ -23,7 +23,7 @@ use analysis::functions::infer_regusage::Inferer;
 use analysis::inst_combine::Combiner;
 use analysis::interproc::fixcall::CallFixer;
 use analysis::sccp::SCCP;
-use frontend::radeco_containers::{RadecoFunction, RadecoModule};
+use frontend::radeco_containers::{FunctionKind, RadecoFunction, RadecoModule};
 use middle::regfile::SubRegisterFile;
 
 fn sort_by_requires(analyzers: &Vec<AnalyzerKind>) -> impl Iterator<Item = AnalyzerKind> {
@@ -115,6 +115,11 @@ impl Engine for RadecoEngine {
 
     fn run_func(&self, rfn: &mut RadecoFunction) -> Option<Box<EngineResult>> {
         radeco_trace!("run_func: {}", rfn.name);
+
+        // There is no code for imported/relocated functions.
+        if rfn.kind != FunctionKind::Local {
+            return None;
+        }
 
         // Try to convert the condition codes to relational operators. This should be done before
         // all the other passes.
