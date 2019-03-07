@@ -67,7 +67,7 @@ use std::sync::Arc;
 /// Defines sane defaults for the loading process.
 pub mod loader_defaults {
     use super::FLResult;
-    use super::{RadecoFunction, RadecoModule};
+    use super::{FunctionKind, RadecoFunction, RadecoModule};
     use frontend::radeco_source::Source;
     use r2api::structs::LSymbolType;
     use std::borrow::Cow;
@@ -109,17 +109,46 @@ pub mod loader_defaults {
         // Load function information fom `Source`
         if let Some(ref src) = source {
             let mut new_fl = FLResult::default();
-            if let Ok(ref functions) = src.functions() {
-                for function in functions {
+
+            // FIXME -> Handle errors properly.
+            let relocs = src
+                .relocs()
+                .expect("failed to get relocs")
+                .into_iter()
+                .map(|reloc| reloc.name.unwrap())
+                .collect::<Vec<_>>();
+            let imports = src
+                .imports()
+                .expect("failed to get imports")
+                .into_iter()
+                .map(|import| import.name.unwrap())
+                .collect::<Vec<_>>();
+
+            let functions = src.functions().expect("failed to get functions");
+
+            functions
+                .into_iter()
+                .map(|f| {
+                    let name = f.clone().name.unwrap();
+
+                    if relocs.iter().any(|reloc| name.ends_with(reloc)) {
+                        (f, FunctionKind::Relocated)
+                    } else if imports.iter().any(|import| name.ends_with(import)) {
+                        (f, FunctionKind::Imported)
+                    } else {
+                        (f, FunctionKind::Local)
+                    }
+                })
+                .for_each(|(function, kind)| {
                     let mut rfn = RadecoFunction::default();
                     rfn.offset = function.offset.unwrap();
                     rfn.size = function.size.unwrap();
                     rfn.name = Cow::from(function.name.as_ref().unwrap().to_owned());
                     rfn.callconv_name = function.calltype.as_ref().unwrap().to_owned();
+                    rfn.kind = kind;
                     new_fl.functions.insert(rfn.offset, rfn);
                     new_fl.new = new_fl.new + 1;
-                }
-            }
+                });
             new_fl
         } else {
             fl.clone()
@@ -322,6 +351,20 @@ impl VarBinding {
 
 pub type VarBindings = Vec<VarBinding>;
 
+/// The type of this function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionKind {
+    Local,
+    Imported,
+    Relocated,
+}
+
+impl Default for FunctionKind {
+    fn default() -> Self {
+        FunctionKind::Local
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 /// Container to store information about identified function.
 /// Used as a basic unit in intra-functional analysis.
@@ -357,6 +400,9 @@ pub struct RadecoFunction {
     /// Name of the calling convention of this function (e.g. amd64, ms, arm64, etc.)
     // see https://github.com/radare/radare2/tree/9e08da0fa6b6c36edf04db72d22e065ccc90d381/libr/anal/d
     pub callconv_name: String,
+
+    /// Kind of the function.
+    pub kind: FunctionKind,
 }
 
 #[derive(Default)]
@@ -828,7 +874,9 @@ impl<'a> ModuleLoader<'a> {
 
         // Load instructions into functions
         for rfn in rmod.functions.values_mut() {
-            rfn.instructions = source.disassemble_function(&rfn.name).unwrap_or(Vec::new());
+            if let FunctionKind::Local = rfn.kind {
+                rfn.instructions = source.disassemble_function(&rfn.name).unwrap_or(Vec::new());
+            }
         }
 
         // Load calling conventions for all functions and imports
