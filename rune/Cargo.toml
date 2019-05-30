@@ -25,13 +25,15 @@ serde_json = "*"
 git = "https://github.com/sushant94/libsmt.rs"
 
 [dependencies.radeco-lib]
-git = "https://github.com/radare/radeco-lib"
+#git = "https://github.com/radare/radeco-lib"
+path = "../radeco-lib"
 
 [dependencies.esil]
-git = "https://github.com/radare/esil-rs"
+#git = "https://github.com/radare/esil-rs"
+path = "../esil-rs"
 
 [dependencies.r2pipe]
-git = "https://github.com/radare/r2pipe.rs"
+git = "https://github.com/radareorg/r2pipe.rs"
 
 [dependencies.r2api]
 git = "https://github.com/radare/radare2-r2pipe-api"
