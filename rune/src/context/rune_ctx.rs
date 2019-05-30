@@ -1,11 +1,7 @@
 //! Define break;
 
-use std::fs::File;
-use std::io::prelude::*;
-
 use r2api::structs::LRegInfo;
 use petgraph::graph::NodeIndex;
-use serde_json::{to_string, from_reader};
 use std::collections::HashMap;
 
 use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
@@ -17,13 +13,13 @@ use memory::memory::Memory;
 use memory::qword_mem::QWordMemory;
 
 use regstore::regstore::{RegStore, RegEntry, RegStoreAPI};
-use regstore::regfile::RuneRegFile;
+//use regstore::regfile::RuneRegFile;
 
 use utils::utils::Key;
 use context::context::{Context, ContextAPI, Evaluate, RegisterRead, RegisterWrite, MemoryRead, MemoryWrite};
 
 #[derive(Clone, Debug)]
-pub struct RuneContext<Mem, Reg> 
+pub struct RuneContext<Mem, Reg>
     where Mem: Memory,
           Reg: RegStore
 {
@@ -42,7 +38,7 @@ impl<Mem, Reg> Context for RuneContext<Mem, Reg>
     fn set_e_old(&mut self, i: NodeIndex) {
         self.e_old = Some(i);
     }
-    
+
     fn set_e_cur(&mut self, i: NodeIndex) {
         self.e_cur = Some(i);
     }
@@ -101,7 +97,7 @@ where Mem: Memory<VarRef=NodeIndex>,
     }
 }
 
-impl<Mem, Reg> RegisterWrite for RuneContext<Mem, Reg> 
+impl<Mem, Reg> RegisterWrite for RuneContext<Mem, Reg>
 where Mem: Memory<VarRef=NodeIndex>,
       Reg: RegStore<VarRef=NodeIndex>
 {
@@ -123,7 +119,7 @@ where Mem: Memory<VarRef=NodeIndex>,
       Reg: RegStore<VarRef=NodeIndex>
 {
     type VarRef = NodeIndex;
-    
+
     fn mem_read(&mut self, addr: NodeIndex, read_size: usize) -> NodeIndex {
         // Assert read size is multiple of 8
         assert_eq!(read_size%8, 0, "Read Size is not divisible by 8");
@@ -172,14 +168,14 @@ where Mem: Memory<VarRef=NodeIndex>,
             let cval = self.define_const(val, 64);
             self.regstore.set_reg(reg.as_ref(), cval);
             cval
-        } 
+        }
     }
 
     fn set_reg_as_sym<T: AsRef<str>>(&mut self, reg: T) -> NodeIndex {
         let sym = self.solver.new_var(Some(reg.as_ref()), qf_abv::bv_sort(64));
         self.regstore.set_reg(reg.as_ref(), sym);
         // self.syms.insert(reg.as_ref().to_owned(), sym);
-        
+
         sym
     }
 
@@ -204,7 +200,7 @@ where Mem: Memory<VarRef=NodeIndex>,
 
         self.mem_write(addr, sym, write_size);
         // self.syms.insert(key, sym);
-        
+
         sym
     }
 

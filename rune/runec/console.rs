@@ -79,7 +79,7 @@ impl Console {
 
             match readline {
                 Ok(buffer) => {
-                    r.add_history_entry(&buffer);
+                    r.add_history_entry(buffer.clone());
                     cmd = From::from(buffer.to_owned());
 
                     if cmd.is_chainable() {

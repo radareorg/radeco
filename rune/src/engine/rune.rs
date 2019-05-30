@@ -217,31 +217,48 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
             let width = opinfo.size.as_ref().unwrap();
             self.ctx.increment_ip(*width);
 
-            while let Some(ref token) = p.parse::<_, Tokenizer>(esil) {
-                // println!("{:?}", token);
-                // If skip is active, we do not want to modify the esil stack
-                let (lhs, rhs) = if self.skip {
-                    (None, None)
-                } else {
-                    p.fetch_operands(token)
+            loop {
+                let token_opt = match p.parse::<_, Tokenizer>(esil) {
+                    Ok(token_opt_) => token_opt_,
+                    Err(_err) => {
+                        // FIXME: Implement proper error reporting!
+                        panic!("ERROR tokenizing!");
+                        continue;
+                    }
                 };
+                if let Some(ref token) = token_opt {
+                    // println!("{:?}", token);
+                    // If skip is active, we do not want to modify the esil stack
+                    let (lhs, rhs) = if self.skip {
+                        (None, None)
+                    } else {
+                        match p.fetch_operands(token) {
+                            Ok(operands_opt) => operands_opt,
+                            Err(_err) => {
+                                // FIXME: Implement proper error reporting!
+                                panic!("Error fetching operands!");
+                                continue;
+                            }
+                        }
+                    };
 
-                if let Ok(Some(ref res)) = self.process_op(token.clone(), lhs, rhs, &mut control) {
-                    let rt = self.process_out(res);
-                    p.push(rt);
-                }
+                    if let Ok(Some(ref res)) = self.process_op(token.clone(), lhs, rhs, &mut control) {
+                        let rt = self.process_out(res);
+                        p.push(rt);
+                    }
 
-                // `ExploreTrue` -> Don't skip the section inside the ?{,...,}
-                // `ExploreFalse` -> Skip the section inside the ?{,...,}
-                match control {
-                    RuneControl::ExploreTrue => {
-                        self.skip = false;
+                    // `ExploreTrue` -> Don't skip the section inside the ?{,...,}
+                    // `ExploreFalse` -> Skip the section inside the ?{,...,}
+                    match control {
+                        RuneControl::ExploreTrue => {
+                            self.skip = false;
+                        }
+                        RuneControl::ExploreFalse => {
+                            self.skip = true;
+                        }
+                        RuneControl::Continue => continue,
+                        _ => break,
                     }
-                    RuneControl::ExploreFalse => {
-                        self.skip = true;
-                    }
-                    RuneControl::Continue => continue,
-                    _ => break,
                 }
             }
 
