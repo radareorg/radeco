@@ -15,13 +15,13 @@ use esil::lexer::{Token, Tokenizer};
 
 use esil::parser::{Parse, Parser};
 // use frontend::instruction_analyzer::{InstructionAnalyzer, X86_CS_IA, IOperand};
-use frontend::radeco_containers::RadecoFunction;
+use crate::frontend::radeco_containers::RadecoFunction;
 
-use middle::ir::{self, MAddress, MOpcode};
-use middle::phiplacement::PhiPlacer;
-use middle::regfile::SubRegisterFile;
-use middle::ssa::graph_traits::Graph;
-use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
+use crate::middle::ir::{self, MAddress, MOpcode};
+use crate::middle::phiplacement::PhiPlacer;
+use crate::middle::regfile::SubRegisterFile;
+use crate::middle::ssa::graph_traits::Graph;
+use crate::middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
 
 use r2api::structs::{LOpInfo, LRegInfo};
 

@@ -1,8 +1,8 @@
 //! Implements some low-level analysis as a part of frontend
 
-use frontend::radeco_containers::{CallContextInfo, CallGraph, RadecoFunction, RadecoModule};
-use middle::ir::MOpcode;
-use middle::ssa::ssa_traits::{NodeType, SSAWalk, SSA};
+use crate::frontend::radeco_containers::{CallContextInfo, CallGraph, RadecoFunction, RadecoModule};
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::ssa_traits::{NodeType, SSAWalk, SSA};
 use petgraph::graph::NodeIndex;
 use petgraph::Direction;
 use r2api::structs::FunctionInfo;

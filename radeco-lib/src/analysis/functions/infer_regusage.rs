@@ -12,19 +12,19 @@
 //! guarantee that that stack location is never subsequently read or modified.
 //! See #147 for further discussion
 
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     all, Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
     ModuleAnalyzer,
 };
-use analysis::dce::DCE;
-use analysis::inst_combine::Combiner;
-use frontend::radeco_containers::{RadecoFunction, RadecoModule};
-use middle::ir;
-use middle::regfile::*;
-use middle::ssa::cfg_traits::*;
-use middle::ssa::ssa_traits::*;
-use middle::ssa::ssastorage::SSAStorage;
-use middle::ssa::utils;
+use crate::analysis::dce::DCE;
+use crate::analysis::inst_combine::Combiner;
+use crate::frontend::radeco_containers::{RadecoFunction, RadecoModule};
+use crate::middle::ir;
+use crate::middle::regfile::*;
+use crate::middle::ssa::cfg_traits::*;
+use crate::middle::ssa::ssa_traits::*;
+use crate::middle::ssa::ssastorage::SSAStorage;
+use crate::middle::ssa::utils;
 
 use petgraph::visit::{DfsPostOrder, Walker};
 

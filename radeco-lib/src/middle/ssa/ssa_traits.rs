@@ -26,7 +26,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use super::cfg_traits::{CFGMod, CFG};
-use middle::ir;
+use crate::middle::ir;
 
 #[macro_export]
 macro_rules! entry_node_err {
@@ -307,7 +307,7 @@ pub trait SSAMod: SSA + CFGMod {
     fn insert_comment(&mut self, vt: ValueInfo, msg: String) -> Option<Self::ValueRef>;
 
     /// Associate a node with index n with a block
-    fn insert_into_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, ir::MAddress);
+    fn insert_into_block(&mut self, node: Self::ValueRef, block: Self::ActionRef, _: ir::MAddress);
 
     /// Add a data source to a phi node.
     fn phi_use(&mut self, phi: Self::ValueRef, node: Self::ValueRef);
@@ -340,7 +340,7 @@ pub trait SSAMod: SSA + CFGMod {
 
 pub trait SSAExtra: SSA {
     fn mark(&mut self, _: &Self::ValueRef) {}
-    fn clear_mark(&mut self, &Self::ValueRef) {}
+    fn clear_mark(&mut self, _: &Self::ValueRef) {}
     fn set_color(&mut self, _: &Self::ValueRef, _: u8) {}
     fn set_comment(&mut self, _: &Self::ValueRef, _: String) {}
     fn add_flag(&mut self, _: &Self::ValueRef, _: String) {}

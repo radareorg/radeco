@@ -1,5 +1,5 @@
-use middle::ir_writer;
-use middle::regfile::SubRegisterFile;
+use crate::middle::ir_writer;
+use crate::middle::regfile::SubRegisterFile;
 use serde_json;
 use std::fs::File;
 use std::io::Read;

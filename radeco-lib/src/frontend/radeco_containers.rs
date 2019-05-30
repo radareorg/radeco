@@ -17,7 +17,6 @@
 //! default options:
 //!
 //! ```rust ignore
-//! # extern crate radeco_lib;
 //! # use radeco_lib::frontend::radeco_containers::{RadecoProject, ProjectLoader};
 //! # fn main() {
 //! let mut rp: RadecoProject = ProjectLoader::default()  // setup the default loader
@@ -30,16 +29,16 @@
 //!
 //! For more examples of loading, check the `examples/` directory of this project.
 
-use frontend::imports::ImportInfo;
-use frontend::llanalyzer;
-use frontend::radeco_source::Source;
-use frontend::ssaconstructor::SSAConstruct;
+use crate::frontend::imports::ImportInfo;
+use crate::frontend::llanalyzer;
+use crate::frontend::radeco_source::Source;
+use crate::frontend::ssaconstructor::SSAConstruct;
 
-use middle::regfile::{RegisterUsage, SubRegisterFile};
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{NodeType, SSA};
+use crate::middle::regfile::{RegisterUsage, SubRegisterFile};
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{NodeType, SSA};
 
-use middle::ssa::ssastorage::SSAStorage;
+use crate::middle::ssa::ssastorage::SSAStorage;
 use petgraph::Direction;
 
 use petgraph::graph::{Graph, NodeIndex};
@@ -68,7 +67,7 @@ use std::sync::Arc;
 pub mod loader_defaults {
     use super::FLResult;
     use super::{FunctionKind, RadecoFunction, RadecoModule};
-    use frontend::radeco_source::Source;
+    use crate::frontend::radeco_source::Source;
     use r2api::structs::LSymbolType;
     use std::borrow::Cow;
     use std::rc::Rc;
@@ -1276,7 +1275,7 @@ impl RadecoFunction {
     }
 
     fn retrieve_binding(&self, node: NodeIndex) -> Vec<VarBinding> {
-        use middle::ir::MOpcode;
+        use crate::middle::ir::MOpcode;
         let sign = match self.ssa.opcode(node) {
             Some(MOpcode::OpSub) => -1,
             Some(MOpcode::OpAdd) => 1,
@@ -1315,8 +1314,8 @@ impl RadecoFunction {
     }
 
     pub fn mark_locals(&mut self) {
-        use middle::ir::MOpcode;
-        use middle::ssa::ssa_traits::SSAWalk;
+        use crate::middle::ir::MOpcode;
+        use crate::middle::ssa::ssa_traits::SSAWalk;
         let ssa = &self.ssa;
         for node in ssa.inorder_walk() {
             match ssa.opcode(node) {

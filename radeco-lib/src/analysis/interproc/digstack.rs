@@ -8,10 +8,10 @@
 //! This Module provides information about stack offset with variable,
 //! which will help other modules analyze.
 
-use middle::ir::MOpcode;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSAWalk, SSA};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{SSAWalk, SSA};
+use crate::middle::ssa::ssastorage::SSAStorage;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 type LValueRef = <SSAStorage as SSA>::ValueRef;

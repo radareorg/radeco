@@ -25,7 +25,7 @@ use r2api::structs::LVarInfo;
 
 use super::ssa_traits::NodeType;
 use super::ssa_traits::{SSAMod, SSAWalk, SSA};
-use middle::ir::MOpcode;
+use crate::middle::ir::MOpcode;
 
 // NOTE: Until now, this file is only used to implement raw Memory SSA, in
 // future work, it may be modified to support API for more accurate memory

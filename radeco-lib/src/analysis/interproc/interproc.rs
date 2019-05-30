@@ -1,10 +1,10 @@
 //! Fills out the call summary information for `RFunction`
 
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer,
 };
-use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::radeco_containers::RadecoModule;
+use crate::analysis::interproc::transfer::InterProcAnalysis;
+use crate::frontend::radeco_containers::RadecoModule;
 
 use std::any::Any;
 use std::collections::HashSet;

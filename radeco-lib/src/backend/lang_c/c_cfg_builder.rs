@@ -7,12 +7,12 @@
 use super::c_ast;
 use super::c_ast::Ty;
 use super::c_cfg::{CCFGRef, CCFG};
-use frontend::radeco_containers::RadecoFunction;
-use middle::ir::{MAddress, MOpcode};
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSAWalk, SSA};
-use middle::ssa::ssastorage::{NodeData, SSAStorage};
-use middle::ssa::utils;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ir::{MAddress, MOpcode};
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{SSAWalk, SSA};
+use crate::middle::ssa::ssastorage::{NodeData, SSAStorage};
+use crate::middle::ssa::utils;
 use petgraph::graph::NodeIndex;
 use std::collections::{HashMap, HashSet};
 

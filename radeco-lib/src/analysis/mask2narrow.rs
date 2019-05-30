@@ -1,9 +1,9 @@
 //! Module that implements translation from bit mask to MOpcode::OpNarrow
 
-use middle::ir::MOpcode;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSAMod, ValueInfo, SSA};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{SSAMod, ValueInfo, SSA};
+use crate::middle::ssa::ssastorage::SSAStorage;
 use petgraph::graph::NodeIndex;
 
 fn mask2narrow(ssa: &SSAStorage, expr: NodeIndex) -> Option<MOpcode> {

@@ -6,8 +6,8 @@
 //!   structure of the analysis is same.
 //!
 
-use frontend::radeco_containers::{CallContextInfo, CallGraph, RadecoFunction, RadecoModule};
-use middle::regfile::SubRegisterFile;
+use crate::frontend::radeco_containers::{CallContextInfo, CallGraph, RadecoFunction, RadecoModule};
+use crate::middle::regfile::SubRegisterFile;
 
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -27,11 +27,11 @@ pub trait Transfer {
     // Generalize to take anything (any information about the context/module)
     // This function is only called the first time the analysis is executed. This function then
     // returns `Self` that contains (partially-)analyzed information.
-    fn transfer(&mut RadecoFunction, Arc<SubRegisterFile>, Arc<Vec<LSectionInfo>>) -> Self;
+    fn transfer(_: &mut RadecoFunction, _: Arc<SubRegisterFile>, _: Arc<Vec<LSectionInfo>>) -> Self;
     // Called when transfer function needs to be executed iteratively.
     // This function returns a `bool` which indicates if the analysis made any progress on this
     // iteration of call.
-    fn transfer_iterative(&mut Self, &mut RadecoFunction) -> bool;
+    fn transfer_iterative(_: &mut Self, _: &mut RadecoFunction) -> bool;
 }
 
 pub trait Propagate {
@@ -39,19 +39,19 @@ pub trait Propagate {
     // Used to `pull` information, `Info`, relevant in inter-proc analysis computed in
     // the transfer phase.
     // For imports, the first argument, the analyzer, is passed as None.
-    fn pull(&mut Option<&mut Self>, &RadecoFunction, &CallContextInfo) -> Option<Self::Info>;
-    fn summary(&mut Self, &RadecoFunction) -> Option<Self::Info>;
+    fn pull(_: &mut Option<&mut Self>, _: &RadecoFunction, _: &CallContextInfo) -> Option<Self::Info>;
+    fn summary(_: &mut Self, _: &RadecoFunction) -> Option<Self::Info>;
     // Used to aggregate information obtained from various sources/callsites
-    fn union(&mut Self, &[Self::Info]) -> Option<Self::Info>;
+    fn union(_: &mut Self, _: &[Self::Info]) -> Option<Self::Info>;
     // Used to `push` information to the analyzer based on computed InterProc information.
     // Returns true if something in the internal state of the analyzer changed. This could be used
     // as a hint to determine if the analyzer can make further progress.
-    fn push(&mut Self, Option<&Self::Info>) -> bool;
+    fn push(_: &mut Self, _: Option<&Self::Info>) -> bool;
 }
 
 // TODO: Maybe `Eval` can be a part of definition of a lattice later on.
 pub trait Eval: Default {
-    fn eval(&Self, &Self) -> Self;
+    fn eval(_: &Self, _: &Self) -> Self;
 }
 
 // TODO: Think about implementing this on top of the trait directly rather than a dummy struct

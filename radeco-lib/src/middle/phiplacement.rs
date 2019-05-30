@@ -13,13 +13,13 @@ use std::collections::Bound::Included;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::u64;
 
-use middle::ir::{self, MAddress, MOpcode};
-use middle::ssa::graph_traits::{ConditionInfo, EdgeInfo, Graph};
-use middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
-use r2api::structs::LOpInfo;
+use crate::middle::ir::{self, MAddress, MOpcode};
+use crate::middle::ssa::graph_traits::{ConditionInfo, EdgeInfo, Graph};
+use crate::middle::ssa::ssa_traits::{SSAExtra, SSAMod, ValueInfo};
+use crate::r2api::structs::LOpInfo;
 
-use middle::regfile::{RegisterId, SubRegisterFile};
-use middle::ssa::ssa_traits::{NodeData, NodeType};
+use crate::middle::regfile::{RegisterId, SubRegisterFile};
+use crate::middle::ssa::ssa_traits::{NodeData, NodeType};
 
 pub type VarId = u64;
 

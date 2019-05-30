@@ -1,9 +1,9 @@
 use super::c_ast::CAST;
 use super::c_cfg;
 use super::c_cfg_builder;
-use frontend::radeco_containers::RadecoFunction;
-use middle::ir_reader;
-use middle::regfile::SubRegisterFile;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ir_reader;
+use crate::middle::regfile::SubRegisterFile;
 use serde_json;
 use std::collections::HashMap;
 use std::fs;

@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::default;
 
 use super::index::InternalIndex;
-use middle::dot::{DotAttrBlock, GraphDot};
+use crate::middle::dot::{DotAttrBlock, GraphDot};
 
 #[derive(Clone, Debug)]
 /// Depth first visitor that stores pre- and post- order traversal over a

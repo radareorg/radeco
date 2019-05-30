@@ -1,12 +1,12 @@
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
     ReplaceValue,
 };
-use frontend::radeco_containers::RadecoFunction;
-use middle::ir::MOpcode;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::*;
-use middle::ssa::ssastorage::SSAStorage;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::*;
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use std::any::Any;
 use std::collections::HashSet;

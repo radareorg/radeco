@@ -12,16 +12,16 @@
 //!    * https://www.cs.utexas.edu/~lin/cs380c/wegman.pdf.
 //!
 
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
 };
-use frontend::radeco_containers::RadecoFunction;
-use middle::ir::{MArity, MOpcode, WidthSpec};
-use middle::ssa::cfg_traits::{CFGMod, CFG};
-use middle::ssa::graph_traits::{ConditionInfo, Graph};
-use middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
-use middle::ssa::ssa_traits::{SSAMod, SSA};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ir::{MArity, MOpcode, WidthSpec};
+use crate::middle::ssa::cfg_traits::{CFGMod, CFG};
+use crate::middle::ssa::graph_traits::{ConditionInfo, Graph};
+use crate::middle::ssa::ssa_traits::{NodeData, NodeType, ValueInfo, ValueType};
+use crate::middle::ssa::ssa_traits::{SSAMod, SSA};
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use std::any::Any;
 use std::collections::{HashMap, VecDeque};

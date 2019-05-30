@@ -1,8 +1,8 @@
 use super::ast::{AstNode as AstNodeC, LoopType};
 use super::condition;
 use super::{AstNode, Condition};
-use backend::lang_c::c_ast::{self, CAST};
-use backend::lang_c::c_cfg::{CASTConverter, CASTRef, CCFGRef, CCFG};
+use crate::backend::lang_c::c_ast::{self, CAST};
+use crate::backend::lang_c::c_cfg::{CASTConverter, CASTRef, CCFGRef, CCFG};
 
 pub fn to_c_ast<'cd>(ccfg: &CCFG, ast: AstNode<'cd, CCFG>) -> Result<CAST, &'static str> {
     let mut conv = CASTConverter::new(ccfg);

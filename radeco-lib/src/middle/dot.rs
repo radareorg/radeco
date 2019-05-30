@@ -95,8 +95,8 @@ pub trait GraphDot {
     type NodeIndex: Hash + Clone + Eq + Index + Debug;
     type EdgeIndex: Hash + Clone + Eq;
 
-    fn node_index_new(usize) -> Self::NodeIndex;
-    fn edge_index_new(usize) -> Self::EdgeIndex;
+    fn node_index_new(_: usize) -> Self::NodeIndex;
+    fn edge_index_new(_: usize) -> Self::EdgeIndex;
 
     fn configure(&self) -> String;
     fn node_count(&self) -> usize;
@@ -111,18 +111,18 @@ pub trait GraphDot {
         Some(0)
     }
 
-    fn node_skip(&self, &Self::NodeIndex) -> bool {
+    fn node_skip(&self, _: &Self::NodeIndex) -> bool {
         false
     }
-    fn node_attrs(&self, &Self::NodeIndex) -> DotAttrBlock;
+    fn node_attrs(&self, _: &Self::NodeIndex) -> DotAttrBlock;
 
-    fn edge_skip(&self, &Self::EdgeIndex) -> bool {
+    fn edge_skip(&self, _: &Self::EdgeIndex) -> bool {
         false
     }
-    fn edge_attrs(&self, &Self::EdgeIndex) -> DotAttrBlock;
+    fn edge_attrs(&self, _: &Self::EdgeIndex) -> DotAttrBlock;
 
-    fn edge_source(&self, &Self::EdgeIndex) -> Self::NodeIndex;
-    fn edge_target(&self, &Self::EdgeIndex) -> Self::NodeIndex;
+    fn edge_source(&self, _: &Self::EdgeIndex) -> Self::NodeIndex;
+    fn edge_target(&self, _: &Self::EdgeIndex) -> Self::NodeIndex;
 }
 
 pub fn emit_dot<T: GraphDot>(g: &T) -> String {

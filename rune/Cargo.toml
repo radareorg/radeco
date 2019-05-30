@@ -2,6 +2,7 @@
 name = "rune"
 version = "0.1.0"
 authors = ["Sushant <sushant.dinesh94@gmail.com>"]
+edition = "2018"
 
 [features]
 default=[]

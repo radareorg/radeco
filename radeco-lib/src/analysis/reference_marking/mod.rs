@@ -14,9 +14,9 @@
 pub mod reference_marking_inter;
 pub mod reference_marking_intra;
 
-use frontend::radeco_containers::{CallContextInfo, RadecoFunction};
-use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{ValueType, SSA};
+use crate::frontend::radeco_containers::{CallContextInfo, RadecoFunction};
+use crate::middle::regfile::SubRegisterFile;
+use crate::middle::ssa::ssa_traits::{ValueType, SSA};
 use petgraph::graph::NodeIndex;
 use r2api::structs::LSectionInfo;
 // XXX: This will move out sometime in the future

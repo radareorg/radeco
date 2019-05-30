@@ -2,11 +2,11 @@
 
 use std::collections::HashSet;
 
-use analysis::interproc::transfer::InterProcAnalysis;
-use frontend::radeco_containers::{CGInfo, RadecoModule};
-use middle::ir::MOpcode;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{NodeType, SSA};
+use crate::analysis::interproc::transfer::InterProcAnalysis;
+use crate::frontend::radeco_containers::{CGInfo, RadecoModule};
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{NodeType, SSA};
 
 #[derive(Clone, Debug, Default)]
 pub struct CallSummary {}

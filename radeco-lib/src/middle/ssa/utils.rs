@@ -1,8 +1,8 @@
 //! A few utility functions for working with an [`SSAStorage`].
 
-use middle::regfile::{RegisterId, RegisterMap};
-use middle::ssa::ssa_traits::ValueInfo;
-use middle::ssa::ssastorage::{EdgeData, SSAStorage};
+use crate::middle::regfile::{RegisterId, RegisterMap};
+use crate::middle::ssa::ssa_traits::ValueInfo;
+use crate::middle::ssa::ssastorage::{EdgeData, SSAStorage};
 
 use petgraph::prelude::*;
 

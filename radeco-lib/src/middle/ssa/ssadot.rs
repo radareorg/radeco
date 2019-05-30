@@ -13,9 +13,9 @@ use petgraph::visit::{EdgeRef, IntoEdgeReferences};
 
 use super::ssa_traits::{SSAExtra, SSA};
 use super::ssastorage::{EdgeData, NodeData, SSAStorage};
-use middle::dot::{DotAttrBlock, GraphDot};
-use middle::ir::MOpcode;
-use middle::ssa::cfg_traits::CFG;
+use crate::middle::dot::{DotAttrBlock, GraphDot};
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::cfg_traits::CFG;
 
 ///////////////////////////////////////////////////////////////////////////////
 //// Implementation of GraphDot to emit Dot for SSAStorage.

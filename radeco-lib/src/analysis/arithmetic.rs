@@ -1,8 +1,8 @@
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
 };
-use analysis::matcher::gmatch;
-use frontend::radeco_containers::RadecoFunction;
+use crate::analysis::matcher::gmatch;
+use crate::frontend::radeco_containers::RadecoFunction;
 
 use std::any::Any;
 use std::io;

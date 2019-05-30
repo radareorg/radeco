@@ -1,6 +1,6 @@
 use super::CombinableOpConstInfo as COCI;
 use super::CombinableOpInfo as COI;
-use middle::ir::MOpcode::*;
+use crate::middle::ir::MOpcode::*;
 
 macro_rules! gen_rules {
     (

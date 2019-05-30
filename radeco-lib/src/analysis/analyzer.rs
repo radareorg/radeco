@@ -4,11 +4,11 @@ use std::fmt::Debug;
 
 use petgraph::graph::NodeIndex;
 
-use analysis::cse::cse;
-use analysis::functions::{fix_ssa_opcalls, infer_regusage};
-use analysis::interproc::interproc;
-use analysis::{arithmetic, copy_propagation, dce, inst_combine, sccp};
-use frontend::radeco_containers::{RadecoFunction, RadecoModule};
+use crate::analysis::cse::cse;
+use crate::analysis::functions::{fix_ssa_opcalls, infer_regusage};
+use crate::analysis::interproc::interproc;
+use crate::analysis::{arithmetic, copy_propagation, dce, inst_combine, sccp};
+use crate::frontend::radeco_containers::{RadecoFunction, RadecoModule};
 
 /// This trait provides access to extra informations generated during the analysis pass.
 pub trait AnalyzerResult: Any + Debug {

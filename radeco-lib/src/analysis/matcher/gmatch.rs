@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 
-use middle::ir::{MAddress, MOpcode, WidthSpec};
-use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, ValueInfo, SSA};
+use crate::middle::ir::{MAddress, MOpcode, WidthSpec};
+use crate::middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, ValueInfo, SSA};
 
 #[derive(Clone, Debug)]
 struct ParseToken {

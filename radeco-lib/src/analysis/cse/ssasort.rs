@@ -8,10 +8,10 @@
 //! Module that implements operands' sort for SSA, which could help futher
 //! analysis.
 
-use middle::ssa::ssa_traits::{NodeData, NodeType};
+use crate::middle::ssa::ssa_traits::{NodeData, NodeType};
 
-use middle::ir::{MAddress, MOpcode};
-use middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
+use crate::middle::ir::{MAddress, MOpcode};
+use crate::middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::marker::PhantomData;

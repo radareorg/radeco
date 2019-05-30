@@ -9,16 +9,16 @@
 use std::any::Any;
 use std::collections::HashMap;
 
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
     ReplaceValue,
 };
-use frontend::radeco_containers::RadecoFunction;
+use crate::frontend::radeco_containers::RadecoFunction;
 
-use middle::ir::MOpcode;
-use middle::ssa::ssa_traits::SSA;
-use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::ssa_traits::SSA;
+use crate::middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 #[derive(Debug)]
 pub struct CSE {

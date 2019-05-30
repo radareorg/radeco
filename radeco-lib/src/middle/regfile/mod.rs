@@ -15,9 +15,9 @@ mod regusage;
 pub use self::regmap::RegisterMap;
 pub use self::regusage::RegisterUsage;
 
-use middle::ir;
+use crate::middle::ir;
 
-use middle::ssa::ssa_traits::ValueInfo;
+use crate::middle::ssa::ssa_traits::ValueInfo;
 
 use r2api::structs::{LCCInfo, LRegInfo};
 use std::cmp::Ordering;

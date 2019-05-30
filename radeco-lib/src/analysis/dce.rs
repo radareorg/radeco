@@ -12,14 +12,14 @@
 //! are in code that is actually executed or not. For a better analysis
 //! look at `analysis::constant_propagation`.
 
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer, RemoveValue,
 };
-use frontend::radeco_containers::RadecoFunction;
-use middle::ssa::cfg_traits::{CFGMod, CFG};
-use middle::ssa::graph_traits::Graph;
-use middle::ssa::ssa_traits::{NodeType, SSAExtra, SSAMod, SSA};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ssa::cfg_traits::{CFGMod, CFG};
+use crate::middle::ssa::graph_traits::Graph;
+use crate::middle::ssa::ssa_traits::{NodeType, SSAExtra, SSAMod, SSA};
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use std::any::Any;
 use std::collections::VecDeque;

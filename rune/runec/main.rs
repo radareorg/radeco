@@ -62,10 +62,10 @@ fn main() {
     let mut stream = R2::new(Some(args.get_str("<file>"))).expect("Unable to spawn r2");
     stream.init();
 
-    let mut lreginfo = stream.reg_info().expect("Unable to retrieve register info.");
+    let lreginfo = stream.reg_info().expect("Unable to retrieve register info.");
 
     let c: Console = Default::default();
-    let mut is: RInitialState = RInitialState::new(); 
+    let mut is: RInitialState = RInitialState::new();
 
     if args.get_bool("-p") {
         let path = args.get_str("<path>");
@@ -102,13 +102,13 @@ fn main() {
                                               rvalue: ValType::Break }) => {
                 is.add_breakpoint(val as u64);
             },
-            Command::SetContext(SAssignment { lvalue: ref val, 
+            Command::SetContext(SAssignment { lvalue: ref val,
                                               rvalue: ValType::Symbolic }) => {
                 is.add_sym(val.clone());
             },
             Command::SetContext(SAssignment { lvalue: ref key,
                                               rvalue: ValType::Concrete(val) }) => {
-                // If the register to be set is rip, we infer that the user is setting 
+                // If the register to be set is rip, we infer that the user is setting
                 // their start address
                 if *key == Key::Reg("rip".to_owned()) {
                     is.set_start_addr(val as u64);

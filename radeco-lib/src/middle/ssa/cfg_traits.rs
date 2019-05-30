@@ -41,7 +41,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use super::graph_traits::{ConditionInfo, Graph};
-use middle::ir::MAddress;
+use crate::middle::ir::MAddress;
 
 /// Provides __accessors__ to the underlying storage
 pub trait CFG: Graph {

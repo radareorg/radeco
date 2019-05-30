@@ -21,10 +21,10 @@ pub trait RBind {
     fn mark_return(&mut self);
 
     fn name(&self) -> String;
-    fn set_name(&mut self, String);
+    fn set_name(&mut self, _: String);
 
     fn is_register(&self) -> bool;
-    fn mark_register(&mut self, String);
+    fn mark_register(&mut self, _: String);
 
     fn is_memory(&self) -> bool {
         !self.is_register() && !self.is_unknown()
@@ -32,19 +32,19 @@ pub trait RBind {
     fn mark_memory(&mut self);
 
     fn is_fn_local(&self) -> bool;
-    fn mark_fn_local(&mut self, usize, i64);
+    fn mark_fn_local(&mut self, _: usize, _: i64);
     fn local_info(&self) -> LocalInfo;
 
     fn is_stack(&self) -> bool;
     fn mark_stack(&mut self);
 
     fn is_global(&self) -> bool;
-    fn mark_global(&mut self, u64);
+    fn mark_global(&mut self, _: u64);
     fn global_offset(&self) -> u64;
 
     fn is_unknown(&self) -> bool;
 
-    fn add_refs(&mut self, Vec<Self::SSARef>);
+    fn add_refs(&mut self, _: Vec<Self::SSARef>);
     fn refs(&self) -> ::std::slice::Iter<Self::SSARef>;
 }
 
@@ -54,10 +54,10 @@ pub trait RBindings {
     type Idx: Clone + fmt::Debug + Eq + Ord + Hash + From<usize>;
 
     fn new() -> Self;
-    fn insert(&mut self, Self::BTy) -> Self::Idx;
+    fn insert(&mut self, _: Self::BTy) -> Self::Idx;
 
-    fn binding(&self, &Self::Idx) -> Option<&Self::BTy>;
-    fn binding_mut(&mut self, &Self::Idx) -> Option<&mut Self::BTy>;
+    fn binding(&self, _: &Self::Idx) -> Option<&Self::BTy>;
+    fn binding_mut(&mut self, _: &Self::Idx) -> Option<&mut Self::BTy>;
 
     fn bindings(&self) -> RBinds<Self::BTy>;
     fn bindings_mut(&mut self) -> RBindsMut<Self::BTy>;
