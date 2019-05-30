@@ -2,8 +2,8 @@
 
 use r2api::structs::Endian;
 
-use cc::calling_convention::*;
-use regfile::regfile::*;
+use crate::cc::calling_convention::*;
+use crate::regfile::regfile::*;
 
 /// Defines a generic trait which all architectures have to implement,
 /// over and above their own specifics
@@ -41,27 +41,27 @@ pub trait Architecture {
     /////////////////
     //// Setters ////
     /////////////////
- 
+
     /// Get architecture name
-    fn set_name(&mut self, String);
+    fn set_name(&mut self, _: String);
 
     /// Set memory Endianness of the architecture
-    fn set_endianness(&mut self, Endian);
+    fn set_endianness(&mut self, _: Endian);
 
     /// Get word length for instructions in number of bits
-    fn set_word_length(&mut self, u32);
+    fn set_word_length(&mut self, _: u32);
 
     /// Get size of an integer variable on the processor architecture
-    fn set_int_size(&mut self, u32);
+    fn set_int_size(&mut self, _: u32);
 
     /// Get size of long variable on the processor architectire
-    fn set_long_size(&mut self, u32);
+    fn set_long_size(&mut self, _: u32);
 
     /// Return instance of calling convention used for the implementation
-    fn set_calling_convention(&mut self, Self::CC);
+    fn set_calling_convention(&mut self, _: Self::CC);
 
     /// Return instance of register file used for this implementation
-    fn set_register_file(&mut self, Self::RF);
+    fn set_register_file(&mut self, _: Self::RF);
 
     /* TODO: Possible additions(as taken from various sources):
      * Function prologues

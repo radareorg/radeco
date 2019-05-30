@@ -1,8 +1,8 @@
-use utils::*;
+use crate::utils::*;
 
 /// Defines the Argument push type in a calling convention
 /// During a function call, arguments can be pushed onto the
-/// call stack in different ways. 
+/// call stack in different ways.
 /// Floating point arguments are pushed onto a PseudoStack.
 #[derive(Copy, Clone, Debug)]
 pub enum ArgPushType {
@@ -39,7 +39,7 @@ pub trait CallingConvention {
     /////////////////
     //// Getters ////
     /////////////////
-    
+
     /// Get Calling Convention name
     fn name(&self) -> Option<&String>;
 
@@ -67,28 +67,28 @@ pub trait CallingConvention {
     /////////////////
     //// Setters ////
     /////////////////
-    
+
     /// Get Calling Convention name
-    fn set_name(&mut self, String);
+    fn set_name(&mut self, _: String);
 
     /// Defines the method used for placement of call arguments
-    fn set_arg_placement(&mut self, ArgPlacement);
+    fn set_arg_placement(&mut self, _: ArgPlacement);
 
     /// Defines the method used for placement of floating point arguments
-    fn set_fp_arg_placement(&mut self, ArgPlacement);
+    fn set_fp_arg_placement(&mut self, _: ArgPlacement);
 
     /// Defines stack difference reserved for return addr
-    fn set_stack_sp_diff(&mut self, u64);
+    fn set_stack_sp_diff(&mut self, _: u64);
 
     /// Describes the way the return value is stored for caller to retrieve
-    fn set_return_val(&mut self, VType);
+    fn set_return_val(&mut self, _: VType);
 
     /// Describes the way the return address is used by callee
-    fn set_return_addr(&mut self, VType);
+    fn set_return_addr(&mut self, _: VType);
 
     /// Boolean to denote if the callee is responsible for stack cleanup in it's epilogue
-    fn set_callee_cleanup(&mut self, bool);
+    fn set_callee_cleanup(&mut self, _: bool);
 
     /// Set register mapping for this calling convention
-    fn set_absregmap(&mut self, AbsRegMap);
+    fn set_absregmap(&mut self, _: AbsRegMap);
 }

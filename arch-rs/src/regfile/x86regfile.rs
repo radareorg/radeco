@@ -2,8 +2,8 @@ use r2api::structs::LRegInfo;
 use std::collections::HashMap;
 use std::cmp::Ordering;
 
-use utils::*;
-use regfile::regfile::*;
+use crate::utils::*;
+use crate::regfile::regfile::*;
 
 /// Basic X86Register structure
 #[derive(Clone, Debug, Hash)]
@@ -33,7 +33,7 @@ impl BasicRegInfo for X86Register {
     /////////////////
     //// Getters ////
     /////////////////
-    
+
     fn name(&self) -> Option<&String> {
         Some(&self.name)
     }
@@ -61,7 +61,7 @@ impl BasicRegInfo for X86Register {
     /////////////////
     //// Setters ////
     /////////////////
-    
+
     fn set_name(&mut self, name: String) {
         self.name = name;
     }
@@ -73,7 +73,7 @@ impl BasicRegInfo for X86Register {
     fn set_offset(&mut self, offset: usize) {
         self.offset = offset;
     }
-    
+
     fn set_width(&mut self, width: usize) {
         self.width = width;
     }

@@ -1,7 +1,7 @@
 //! Defines traits which describe a RegisterFile
 use r2api::structs::LRegInfo;
 use std::collections::HashMap;
-use utils::*;
+use crate::utils::*;
 
 /// Register Type
 #[derive(Clone, Debug, Copy, Hash)]
@@ -70,24 +70,24 @@ pub trait BasicRegInfo {
     /////////////////
     //// Setters ////
     /////////////////
-    
+
     /// Set name of the register
-    fn set_name(&mut self, String);
+    fn set_name(&mut self, _: String);
 
     /// Set register type
-    fn set_regtype(&mut self, RegType);
+    fn set_regtype(&mut self, _: RegType);
 
     /// Set register offset
-    fn set_offset(&mut self, usize);
+    fn set_offset(&mut self, _: usize);
 
     /// Set register width
-    fn set_width(&mut self, usize);
+    fn set_width(&mut self, _: usize);
 
     /// Set register wholeness
-    fn set_whole(&mut self, bool);
+    fn set_whole(&mut self, _: bool);
 
     /// Set the parent of the register
-    fn set_parent(&mut self, Option<AbstractRegister>);
+    fn set_parent(&mut self, _: Option<AbstractRegister>);
 }
 
 /// Trait defining methods which should be implemented by a struct which aims to be a RegisterFile
@@ -95,17 +95,17 @@ pub trait RegisterFile {
     type Reg: BasicRegInfo + Clone;
 
     /// Get register information by AbstractRegister-based indexing
-    fn register(&self, AbstractRegister) -> Option<&Self::Reg>;
+    fn register(&self, _: AbstractRegister) -> Option<&Self::Reg>;
 
     /// Get register information using name of the register
-    fn register_by_name(&self, String) -> Option<&Self::Reg>;
+    fn register_by_name(&self, _: String) -> Option<&Self::Reg>;
 
-    /// Insert information for a new register to the RegisterFile. 
+    /// Insert information for a new register to the RegisterFile.
     /// The next available AR is provided.
-    fn add_register(&mut self, Option<AbstractRegister>, &Self::Reg) -> Result<AbstractRegister, RegFileError>;
+    fn add_register(&mut self, _: Option<AbstractRegister>, _: &Self::Reg) -> Result<AbstractRegister, RegFileError>;
 
     /// Remove register allocation for an AbstractRegister
-    fn remove_register(&mut self, AbstractRegister) -> Result<AbstractRegister, RegFileError>;
+    fn remove_register(&mut self, _: AbstractRegister) -> Result<AbstractRegister, RegFileError>;
 
     /// Get associated register mapping for the RegisterFile.
     fn absregmap(&self) -> Option<AbsRegMap>;

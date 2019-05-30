@@ -1,11 +1,11 @@
-// Copyright (c) 2015, The Radare Project. All rights reserved.
+// Copyright (c) 2015-2019, The Radare Project. All rights reserved.
 // See the COPYING file at the top-level directory of this distribution.
 // Licensed under the BSD 3-Clause License:
 // <http://opensource.org/licenses/BSD-3-Clause>
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use lexer::{Token, Tokenize};
+use crate::lexer::{Token, Tokenize};
 
 use std::fmt::Debug;
 use std::collections::{HashMap, VecDeque};
@@ -68,7 +68,7 @@ pub trait Parse {
     type OutType: Clone + Debug;
     type ParseError: ToString + Debug;
 
-    fn parse<S, T>(&mut self, S) -> Result<Option<Self::OutType>, Self::ParseError>
+    fn parse<S, T>(&mut self, unused: S) -> Result<Option<Self::OutType>, Self::ParseError>
         where S: AsRef<str>,
               T: Tokenize<Token = Self::InType>;
 
