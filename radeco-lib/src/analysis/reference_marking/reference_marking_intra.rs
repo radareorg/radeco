@@ -20,12 +20,12 @@
 //!   - Return from functions                           -- Added from inter-function propagation
 //!     + Returns from 'well-known' functions that return references, such as malloc.
 
-use analysis::constraint_set::ConstraintSet;
-use frontend::radeco_containers::RadecoFunction;
-use middle::ir::MOpcode;
-use middle::regfile::SubRegisterFile;
-use middle::ssa::ssa_traits::{NodeType, SSAWalk, ValueType, SSA};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::analysis::constraint_set::ConstraintSet;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ir::MOpcode;
+use crate::middle::regfile::SubRegisterFile;
+use crate::middle::ssa::ssa_traits::{NodeType, SSAWalk, ValueType, SSA};
+use crate::middle::ssa::ssastorage::SSAStorage;
 use petgraph::graph::NodeIndex;
 use r2api::structs::LSectionInfo;
 use std::collections::HashSet;

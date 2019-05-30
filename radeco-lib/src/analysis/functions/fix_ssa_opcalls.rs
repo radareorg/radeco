@@ -7,13 +7,13 @@
 //! [`OpCall`]: ir::MOpcode::OpCall
 //! [the callgraph]: RadecoModule::callgraph
 
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, ModuleAnalyzer,
 };
-use frontend::radeco_containers::*;
-use middle::ir;
-use middle::ssa::ssa_traits::*;
-use middle::ssa::ssastorage::SSAStorage;
+use crate::frontend::radeco_containers::*;
+use crate::middle::ir;
+use crate::middle::ssa::ssa_traits::*;
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use std::any::Any;
 use std::collections::HashMap;

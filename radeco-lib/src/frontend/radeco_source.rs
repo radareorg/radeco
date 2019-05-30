@@ -41,7 +41,7 @@ impl<T: 'static + Error> From<T> for SourceErr {
 // as currently this is a re-implementation of r2api
 pub trait Source {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr>;
-    fn instructions_at(&self, u64) -> Result<Vec<LOpInfo>, SourceErr>;
+    fn instructions_at(&self, _: u64) -> Result<Vec<LOpInfo>, SourceErr>;
     fn register_profile(&self) -> Result<LRegInfo, SourceErr>;
     fn flags(&self) -> Result<Vec<LFlagInfo>, SourceErr>;
     fn sections(&self) -> Result<Vec<LSectionInfo>, SourceErr>;

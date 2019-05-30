@@ -1,12 +1,12 @@
 //! (see [`lower_simpleast`](lower_simpleast))
 
 use super::simple_ast as sast;
-use middle::ir;
-use middle::ir::MOpcode as IrOpcode;
-use middle::regfile::RegisterId;
-use middle::ssa::cfg_traits::{CFGMod, CFG};
-use middle::ssa::ssa_traits::{SSAMod, ValueInfo, SSA};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::middle::ir;
+use crate::middle::ir::MOpcode as IrOpcode;
+use crate::middle::regfile::RegisterId;
+use crate::middle::ssa::cfg_traits::{CFGMod, CFG};
+use crate::middle::ssa::ssa_traits::{SSAMod, ValueInfo, SSA};
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use std::collections::HashMap;
 use std::error;

@@ -11,7 +11,7 @@
 //!
 //! Apart from decompilation, this library is designed to allow users to
 //! perform static analysis on binaries in a easy and intuitive way.
-//! __Reusuablility__ and __Interactivity__ are the most important
+//! __Reusablility__ and __Interactivity__ are the most important
 //! design principles of this library.
 //!
 //! # Design

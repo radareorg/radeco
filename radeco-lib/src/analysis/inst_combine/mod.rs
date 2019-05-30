@@ -2,13 +2,13 @@
 //! For every instruction, try to combine one of its operands into itself. This
 //! transforms linear data-dependency chains into trees.
 
-use analysis::analyzer::{
+use crate::analysis::analyzer::{
     Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
 };
-use frontend::radeco_containers::RadecoFunction;
-use middle::ir::MOpcode;
-use middle::ssa::ssa_traits::*;
-use middle::ssa::ssastorage::SSAStorage;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::ssa_traits::*;
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use either::*;
 
@@ -36,7 +36,6 @@ pub enum CombinableOpConstInfo {
     Right(u64),
 }
 
-use self::CombinableOpConstInfo as COCI;
 
 #[derive(Debug)]
 pub struct CombineChange {
@@ -315,6 +314,8 @@ fn make_opinfo_node(
     sub_node: SSAValue,
     ssa: &mut SSAStorage,
 ) -> Option<SSAValue> {
+    use self::CombinableOpConstInfo as COCI;
+
     let ret = ssa.insert_op(opinfo.0, vt, None)?;
     match opinfo.1 {
         COCI::Unary => {
@@ -342,7 +343,7 @@ fn make_opinfo_node(
 fn simplify_opinfo(info: &CombinableOpInfo) -> Option<Option<CombinableOpInfo>> {
     use self::CombinableOpConstInfo as COCI;
     use self::CombinableOpInfo as COI;
-    use middle::ir::MOpcode::*;
+    use crate::middle::ir::MOpcode::*;
 
     match info {
         COI(OpAdd, COCI::Left(0))
@@ -373,6 +374,8 @@ fn extract_opinfo(
     cur_node: SSAValue,
     ssa: &SSAStorage,
 ) -> Option<Either<(SSAValue, CombinableOpInfo, ValueInfo), u64>> {
+    use self::CombinableOpConstInfo as COCI;
+
     // bail if non-`NodeType::Op`
     let (cur_opcode, cur_vt) = extract_opcode(cur_node, ssa)?;
     let cur_operands = ssa.operands_of(cur_node);
@@ -419,6 +422,8 @@ fn extract_opcode(node: SSAValue, ssa: &SSAStorage) -> Option<(MOpcode, ValueInf
 
 impl fmt::Debug for CombinableOpInfo {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        use self::CombinableOpConstInfo as COCI;
+
         match self.1 {
             COCI::Unary => fmt.write_fmt(format_args!("-> ({:?} .)", self.0)),
             COCI::Left(c) => fmt.write_fmt(format_args!("-> ({:#x} {:?} .)", c, self.0)),

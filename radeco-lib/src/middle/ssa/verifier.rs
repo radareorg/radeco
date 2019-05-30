@@ -21,7 +21,7 @@ use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::SSA;
 use super::ssastorage::SSAStorage;
 
-use middle::ir::{MArity, MOpcode};
+use crate::middle::ir::{MArity, MOpcode};
 
 pub type VResult<T> = result::Result<(), SSAErr<T>>;
 
@@ -296,7 +296,7 @@ impl Verify for SSAStorage {
             check!(op != exi || self.is_phi(*exi), SSAErr::BackUse(*exi, *op));
             let low_exi = LOW.get(exi).cloned().unwrap();
             if !DFN.contains_key(op) {
-                try!(self.verify_SCC(op, timestamp, DFN, LOW, stack));
+                self.verify_SCC(op, timestamp, DFN, LOW, stack)?;
                 let low_op = LOW.get(op).cloned().unwrap();
                 if low_op < low_exi {
                     LOW.insert(*exi, low_op);
@@ -365,11 +365,11 @@ where
     let blocks = ssa.blocks();
     for block in blocks.iter() {
         // assert the qualities of the block first.
-        try!(ssa.verify_block(block));
+        ssa.verify_block(block)?;
         // Iterate through each node in the block and assert their properties.
         let exprs = ssa.exprs_in(*block);
         for expr in exprs.iter() {
-            try!(ssa.verify_expr(expr));
+            ssa.verify_expr(expr)?;
         }
     }
 
@@ -386,6 +386,6 @@ where
         return Err(SSAErr::Other("No register state node found"));
     }
     let register = register.unwrap();
-    try!(ssa.verify_SCC(&register, &mut timestamp, &mut DFN, &mut LOW, &mut stack));
+    ssa.verify_SCC(&register, &mut timestamp, &mut DFN, &mut LOW, &mut stack)?;
     Ok(())
 }

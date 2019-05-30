@@ -15,7 +15,7 @@ use r2pipe::r2::R2;
 
 pub trait Source {
     fn functions(&mut self) -> Result<Vec<FunctionInfo>, &'static str>;
-    fn instructions_at(&mut self, u64) -> Result<Vec<LOpInfo>, &'static str>;
+    fn instructions_at(&mut self, _: u64) -> Result<Vec<LOpInfo>, &'static str>;
     fn register_profile(&mut self) -> Result<LRegInfo, &'static str>;
     fn flags(&mut self) -> Result<Vec<LFlagInfo>, &'static str>;
     fn section_map(&mut self) -> Result<Vec<LSectionInfo>, &'static str>;

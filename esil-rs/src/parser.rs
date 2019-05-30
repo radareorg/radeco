@@ -68,7 +68,7 @@ pub trait Parse {
     type OutType: Clone + Debug;
     type ParseError: ToString + Debug;
 
-    fn parse<S, T>(&mut self, unused: S) -> Result<Option<Self::OutType>, Self::ParseError>
+    fn parse<S, T>(&mut self, _: S) -> Result<Option<Self::OutType>, Self::ParseError>
         where S: AsRef<str>,
               T: Tokenize<Token = Self::InType>;
 
@@ -426,7 +426,7 @@ impl Parser {
 #[cfg(test)]
 mod test {
     use super::*;
-    use lexer::*;
+    use crate::lexer::*;
 
     use std::collections::HashMap;
 

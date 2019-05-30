@@ -12,7 +12,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::{Direction, EdgeDirection};
 
 use super::c_cfg_builder;
-use frontend::radeco_containers::RadecoFunction;
+use crate::frontend::radeco_containers::RadecoFunction;
 
 //////////////////////////////////////////////////////////////////////////////
 //// Declaration and implementation for basic C data types.

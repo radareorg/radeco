@@ -7,8 +7,8 @@ mod simple_ast;
 #[cfg(test)]
 mod test;
 
-use middle::regfile::SubRegisterFile;
-use middle::ssa::ssastorage::SSAStorage;
+use crate::middle::regfile::SubRegisterFile;
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use std::sync::Arc;
 

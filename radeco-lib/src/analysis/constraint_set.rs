@@ -13,7 +13,7 @@
 //   R = op1 U op2 => (op1 = R /\ op2 = C) \/ (op1 = C /\ op2 = R)
 //
 
-use middle::ssa::ssa_traits::ValueType;
+use crate::middle::ssa::ssa_traits::ValueType;
 use std::collections::hash_map;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::{Debug, Display, Error, Formatter};

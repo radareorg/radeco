@@ -3,8 +3,8 @@
 //!
 //! NOTE: This module is not stable.
 
-use analysis::matcher::gmatch;
-use middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
+use crate::analysis::matcher::gmatch;
+use crate::middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
 
 #[allow(dead_code)]
 mod patterns {

@@ -4,7 +4,7 @@
 //! [the parser]: ::middle::ir_reader::parser
 //! [`SSAStorage`]: ::middle::ssa::ssastorage::SSAStorage
 
-use middle::ir;
+use crate::middle::ir;
 use std::fmt;
 
 #[derive(Debug)]

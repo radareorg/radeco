@@ -7,8 +7,8 @@
 
 //! Module that holds the struct and trait implementations for the ssa form.
 
-use middle::ir::{MAddress, MOpcode};
-use middle::regfile::SubRegisterFile;
+use crate::middle::ir::{MAddress, MOpcode};
+use crate::middle::regfile::SubRegisterFile;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::visit::{EdgeRef, IntoEdgeReferences};

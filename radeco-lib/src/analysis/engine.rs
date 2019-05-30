@@ -9,22 +9,22 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use analysis::analyzer;
-use analysis::analyzer::{
+use crate::analysis::analyzer;
+use crate::analysis::analyzer::{
     Action, AnalyzerInfo, AnalyzerKind, Change, FuncAnalyzer, ModuleAnalyzer,
 };
-use analysis::arithmetic::{ArithChange, Arithmetic};
-use analysis::copy_propagation::CopyPropagation;
-use analysis::cse::cse::CSE;
-use analysis::cse::ssasort::Sorter;
-use analysis::dce::DCE;
-use analysis::functions::fix_ssa_opcalls::CallSiteFixer;
-use analysis::functions::infer_regusage::Inferer;
-use analysis::inst_combine::Combiner;
-use analysis::interproc::fixcall::CallFixer;
-use analysis::sccp::SCCP;
-use frontend::radeco_containers::{FunctionKind, RadecoFunction, RadecoModule};
-use middle::regfile::SubRegisterFile;
+use crate::analysis::arithmetic::{ArithChange, Arithmetic};
+use crate::analysis::copy_propagation::CopyPropagation;
+use crate::analysis::cse::cse::CSE;
+use crate::analysis::cse::ssasort::Sorter;
+use crate::analysis::dce::DCE;
+use crate::analysis::functions::fix_ssa_opcalls::CallSiteFixer;
+use crate::analysis::functions::infer_regusage::Inferer;
+use crate::analysis::inst_combine::Combiner;
+use crate::analysis::interproc::fixcall::CallFixer;
+use crate::analysis::sccp::SCCP;
+use crate::frontend::radeco_containers::{FunctionKind, RadecoFunction, RadecoModule};
+use crate::middle::regfile::SubRegisterFile;
 
 fn sort_by_requires(analyzers: &Vec<AnalyzerKind>) -> impl Iterator<Item = AnalyzerKind> {
     // Build the dependency graph.

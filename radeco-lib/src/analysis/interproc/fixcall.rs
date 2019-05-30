@@ -16,12 +16,12 @@
 use petgraph::prelude::NodeIndex;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use analysis::cse::ssasort::Sorter;
-use frontend::radeco_containers::RadecoModule;
-use middle::ir::MOpcode;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSAMod, SSA};
-use middle::ssa::ssastorage::SSAStorage;
+use crate::analysis::cse::ssasort::Sorter;
+use crate::frontend::radeco_containers::RadecoModule;
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{SSAMod, SSA};
+use crate::middle::ssa::ssastorage::SSAStorage;
 
 use super::digstack;
 

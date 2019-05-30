@@ -1,4 +1,4 @@
-use middle::regfile::RegisterId;
+use crate::middle::regfile::RegisterId;
 
 use vec_map::{self, VecMap};
 

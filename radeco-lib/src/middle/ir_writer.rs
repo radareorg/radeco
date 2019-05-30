@@ -6,12 +6,12 @@
 //! The text based
 //! representation is inspired from (and probably similar) LLVM IR.
 
-use frontend::radeco_containers::RadecoFunction;
-use middle::ir::MOpcode;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{SSAWalk, ValueInfo, SSA};
-use middle::ssa::ssastorage::{NodeData, SSAStorage};
-use middle::ssa::utils;
+use crate::frontend::radeco_containers::RadecoFunction;
+use crate::middle::ir::MOpcode;
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{SSAWalk, ValueInfo, SSA};
+use crate::middle::ssa::ssastorage::{NodeData, SSAStorage};
+use crate::middle::ssa::utils;
 use petgraph::graph::NodeIndex;
 
 use std::collections::HashMap;

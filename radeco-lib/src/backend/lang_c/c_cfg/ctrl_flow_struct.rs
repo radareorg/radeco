@@ -1,7 +1,7 @@
 use super::{ActionEdge, ActionNode, CCFGEdge, CCFGNode, CCFGRef, ValueEdge, CCFG};
-use backend::ctrl_flow_struct as flstr;
-use backend::ctrl_flow_struct::ast_context::{AstContext, AstContextMut};
-use backend::lang_c::c_ast::{self, CAST};
+use crate::backend::ctrl_flow_struct as flstr;
+use crate::backend::ctrl_flow_struct::ast_context::{AstContext, AstContextMut};
+use crate::backend::lang_c::c_ast::{self, CAST};
 
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::visit::EdgeRef;

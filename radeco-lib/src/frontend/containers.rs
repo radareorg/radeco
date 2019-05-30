@@ -3,15 +3,15 @@
 #![allow(deprecated)]
 #![deprecated(since="0.2.0", note="Replace with `radeco_containers`")]
 
-use frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
+use crate::frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
 
-use frontend::source::Source;
-use frontend::ssaconstructor::SSAConstruct;
-use middle::ir::MOpcode;
-use middle::regfile::SubRegisterFile;
-use middle::ssa::cfg_traits::CFG;
-use middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, SSA};
-use middle::ssa::ssastorage::{SSAStorage, Walker};
+use crate::frontend::source::Source;
+use crate::frontend::ssaconstructor::SSAConstruct;
+use crate::middle::ir::MOpcode;
+use crate::middle::regfile::SubRegisterFile;
+use crate::middle::ssa::cfg_traits::CFG;
+use crate::middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk, SSA};
+use crate::middle::ssa::ssastorage::{SSAStorage, Walker};
 
 use petgraph::graph::NodeIndex;
 
@@ -504,11 +504,11 @@ pub trait RFunction {
     fn modifides(&self) -> Vec<(usize, &<Self::B as RBindings>::BTy)>;
     fn call_convention(&self) -> String;
 
-    fn set_args(&mut self, &[<Self::B as RBindings>::Idx]);
-    fn set_locals(&mut self, &[(<Self::B as RBindings>::Idx, LocalInfo)]);
-    fn set_returns(&mut self, &[<Self::B as RBindings>::Idx]);
-    fn set_modifides(&mut self, &[<Self::B as RBindings>::Idx]);
-    fn set_preserved(&mut self, &[<Self::B as RBindings>::Idx]);
+    fn set_args(&mut self, _: &[<Self::B as RBindings>::Idx]);
+    fn set_locals(&mut self, _: &[(<Self::B as RBindings>::Idx, LocalInfo)]);
+    fn set_returns(&mut self, _: &[<Self::B as RBindings>::Idx]);
+    fn set_modifides(&mut self, _: &[<Self::B as RBindings>::Idx]);
+    fn set_preserved(&mut self, _: &[<Self::B as RBindings>::Idx]);
 
     fn call_sites(
         &self,
@@ -527,12 +527,12 @@ pub trait RModule<'b> {
     type FnRef: Copy + Clone + fmt::Debug + hash::Hash + Eq + Into<u64> + From<u64>;
     type RFn: RFunction;
 
-    fn callees_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
-    fn callers_of(&self, &Self::FnRef) -> Vec<Self::FnRef>;
+    fn callees_of(&self, _: &Self::FnRef) -> Vec<Self::FnRef>;
+    fn callers_of(&self, _: &Self::FnRef) -> Vec<Self::FnRef>;
     fn functions(&self) -> Vec<Self::FnRef>;
 
-    fn function_by_ref(&self, &Self::FnRef) -> Option<&Self::RFn>;
-    fn function_by_ref_mut(&mut self, &Self::FnRef) -> Option<&mut Self::RFn>;
+    fn function_by_ref(&self, _: &Self::FnRef) -> Option<&Self::RFn>;
+    fn function_by_ref_mut(&mut self, _: &Self::FnRef) -> Option<&mut Self::RFn>;
 
     // Expose raw `Source`
     fn source(&'b mut self) -> &Option<&'b mut Source>;

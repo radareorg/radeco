@@ -1,6 +1,6 @@
 //! Defines structs and methods to deal with imports and dynamic linking
 
-use frontend::radeco_containers::RadecoFunction;
+use crate::frontend::radeco_containers::RadecoFunction;
 use std::borrow::Cow;
 use std::cell::RefCell;
 
