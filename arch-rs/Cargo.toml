@@ -9,4 +9,4 @@ lazy_static = "0.2"
 git = "https://github.com/radare/radare2-r2pipe-api"
 
 [dependencies.r2pipe]
-git = "https://github.com/radare/r2pipe.rs"
+git = "https://github.com/radareorg/r2pipe.rs"
