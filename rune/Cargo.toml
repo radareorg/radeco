@@ -1,0 +1,37 @@
+[package]
+name = "rune"
+version = "0.1.0"
+authors = ["Sushant <sushant.dinesh94@gmail.com>"]
+
+[features]
+default=[]
+
+[[bin]]
+name = "runec"
+path = "runec/main.rs"
+
+[dependencies]
+petgraph = "*"
+rustc-serialize = "*"
+clippy = {version = "*", optional = true}
+regex = "*"
+docopt = "*"
+rustyline = "*"
+serde = "*"
+serde_derive = "*"
+serde_json = "*"
+
+[dependencies.libsmt]
+git = "https://github.com/sushant94/libsmt.rs"
+
+[dependencies.radeco-lib]
+git = "https://github.com/radare/radeco-lib"
+
+[dependencies.esil]
+git = "https://github.com/radare/esil-rs"
+
+[dependencies.r2pipe]
+git = "https://github.com/radare/r2pipe.rs"
+
+[dependencies.r2api]
+git = "https://github.com/radare/radare2-r2pipe-api"
