@@ -1,0 +1,12 @@
+[package]
+name = "arch"
+version = "0.1.0"
+
+[dependencies]
+lazy_static = "0.2"
+
+[dependencies.r2api]
+git = "https://github.com/radare/radare2-r2pipe-api"
+
+[dependencies.r2pipe]
+git = "https://github.com/radare/r2pipe.rs"

@@ -1,0 +1,16 @@
+clone_depth: 1
+environment:
+  matrix:
+  - TARGET: i686-pc-windows-msvc
+  - TARGET: x86_64-pc-windows-msvc
+install:
+- curl -sSf -o rustup-init.exe https://win.rustup.rs/
+- rustup-init.exe -y --default-host %TARGET% --default-toolchain nightly
+- set PATH=%PATH%;%USERPROFILE%\.cargo\bin
+- rustc -Vv
+- cargo -Vv
+build_script:
+- cargo build -vv
+test_script:
+- cargo test -vv
+deploy: off
