@@ -21,7 +21,7 @@ rust:
   - nightly
 
 notifications:
-  irc: chat.freenode.net#radare-rsoc
+  irc: chat.freenode.net#radeco
   email: false
 os:
   - linux
