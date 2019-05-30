@@ -1,5 +1,5 @@
-use utils::*;
-use cc::calling_convention::*;
+use crate::utils::*;
+use crate::cc::calling_convention::*;
 
 /****************************
  * cdecl calling convention *
