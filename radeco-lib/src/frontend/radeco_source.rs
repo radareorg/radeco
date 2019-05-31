@@ -545,8 +545,8 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
 #[cfg(test)]
 mod test {
 
-    use frontend::radeco_containers::*;
-    use frontend::radeco_source::*;
+    use crate::frontend::radeco_containers::*;
+    use crate::frontend::radeco_source::*;
     use std::rc::Rc;
 
     #[test]

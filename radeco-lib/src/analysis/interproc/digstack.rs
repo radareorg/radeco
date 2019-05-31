@@ -279,11 +279,11 @@ mod test {
     use std::fs::File;
     use std::io::prelude::*;
 
-    use analysis::analyzer::{all, FuncAnalyzer};
-    use analysis::dce::DCE;
-    use frontend::radeco_containers::RadecoFunction;
-    use frontend::ssaconstructor::SSAConstruct;
-    use middle::regfile::SubRegisterFile;
+    use crate::analysis::analyzer::{all, FuncAnalyzer};
+    use crate::analysis::dce::DCE;
+    use crate::frontend::radeco_containers::RadecoFunction;
+    use crate::frontend::ssaconstructor::SSAConstruct;
+    use crate::middle::regfile::SubRegisterFile;
 
     const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
     const BIN_LS_INSTRUCTIONS: &'static str = "test_files/bin_ls_instructions.json";

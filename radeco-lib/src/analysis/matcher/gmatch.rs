@@ -501,11 +501,11 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::matcher::gmatch;
-    use middle::ir::{MAddress, MOpcode};
-    use middle::ssa::cfg_traits::CFGMod;
-    use middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
-    use middle::ssa::ssastorage::{NodeData, SSAStorage};
+    use crate::analysis::matcher::gmatch;
+    use crate::middle::ir::{MAddress, MOpcode};
+    use crate::middle::ssa::cfg_traits::CFGMod;
+    use crate::middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
+    use crate::middle::ssa::ssastorage::{NodeData, SSAStorage};
 
     #[test]
     fn parse_expr() {

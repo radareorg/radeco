@@ -103,12 +103,12 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::analyzer::{all, FuncAnalyzer};
-    use analysis::dce::DCE;
-    use analysis::interproc::summary;
-    use frontend::radeco_containers::ProjectLoader;
-    use frontend::radeco_source::FileSource;
-    use middle::ir_writer;
+    use crate::analysis::analyzer::{all, FuncAnalyzer};
+    use crate::analysis::dce::DCE;
+    use crate::analysis::interproc::summary;
+    use crate::frontend::radeco_containers::ProjectLoader;
+    use crate::frontend::radeco_source::FileSource;
+    use crate::middle::ir_writer;
     use std::rc::Rc;
 
     #[test]

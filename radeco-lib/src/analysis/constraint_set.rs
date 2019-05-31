@@ -287,7 +287,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> Display for ConstraintSet<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use middle::ssa::ssa_traits::ValueType;
+    use crate::middle::ssa::ssa_traits::ValueType;
 
     #[test]
     fn scalar_union_reference_is_reference() {

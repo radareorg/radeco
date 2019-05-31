@@ -923,11 +923,11 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use analysis::analyzer::{all, FuncAnalyzer};
-    use analysis::dce::DCE;
-    use analysis::sccp::SCCP;
-    use middle::dot;
-    use middle::ir_writer;
+    use crate::analysis::analyzer::{all, FuncAnalyzer};
+    use crate::analysis::dce::DCE;
+    use crate::analysis::sccp::SCCP;
+    use crate::middle::dot;
+    use crate::middle::ir_writer;
     use r2api::structs::{LFunctionInfo, LRegInfo};
     use serde_json;
     use std::fs::File;

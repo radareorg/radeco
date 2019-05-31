@@ -671,16 +671,16 @@ impl<'a> CCFGDataMap<'a> {
 
 #[cfg(test)]
 mod test {
-    use backend::lang_c::c_ast;
-    use backend::lang_c::c_cfg;
-    use backend::lang_c::c_cfg_builder::{CCFGBuilder, CCFGDataMap, SSARef, CCFG};
-    use frontend::radeco_containers::RadecoFunction;
-    use frontend::radeco_source::SourceErr;
-    use middle::ir::MOpcode;
-    use middle::ir_reader;
-    use middle::regfile::SubRegisterFile;
-    use middle::ssa::ssa_traits::{SSAWalk, SSA};
-    use middle::ssa::utils;
+    use crate::backend::lang_c::c_ast;
+    use crate::backend::lang_c::c_cfg;
+    use crate::backend::lang_c::c_cfg_builder::{CCFGBuilder, CCFGDataMap, SSARef, CCFG};
+    use crate::frontend::radeco_containers::RadecoFunction;
+    use crate::frontend::radeco_source::SourceErr;
+    use crate::middle::ir::MOpcode;
+    use crate::middle::ir_reader;
+    use crate::middle::regfile::SubRegisterFile;
+    use crate::middle::ssa::ssa_traits::{SSAWalk, SSA};
+    use crate::middle::ssa::utils;
     use r2api::structs::LRegInfo;
     use serde_json;
     use std::collections::HashMap;
@@ -781,7 +781,7 @@ mod test {
 
     struct CCFGDataMapVerifier {}
 
-    type Verifier = Fn(SSARef, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
+    type Verifier = dyn Fn(SSARef, &mut CCFG, &mut CCFGDataMap) -> Result<(), String>;
     impl CCFGDataMapVerifier {
         const DELIM: &'static str = "; ";
 
@@ -995,7 +995,7 @@ mod test {
     #[test]
     fn c_cfg_data_map_test() {
         for file in FILES.iter() {
-            let mut rfn = load("./test_files/bin1_main_ssa");
+            let rfn = load("./test_files/bin1_main_ssa");
             let mut datamap = CCFGDataMap::new(&rfn);
             let mut ccfg = c_cfg::CCFG::new(rfn.name.as_ref());
             CCFGDataMapVerifier::verify_datamap(&mut datamap, &mut ccfg, &HashMap::new())
@@ -1006,7 +1006,7 @@ mod test {
     #[test]
     fn c_cfg_builder_test() {
         for file in FILES.iter() {
-            let mut rfn = load("./test_files/bin1_main_ssa");
+            let rfn = load("./test_files/bin1_main_ssa");
             let dummy_map = HashMap::new();
             let mut builder = CCFGBuilder::new(&rfn, &dummy_map);
             let data_graph = CCFGDataMap::recover_data(&rfn, &mut builder.cfg, &dummy_map);
