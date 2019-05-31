@@ -98,13 +98,13 @@ lazy_static! {
 
 #[test]
 fn check_ssa_parse() {
-    use middle::ir::MOpcode::*;
-    use middle::ir::WidthSpec;
-    use middle::regfile::RegisterId;
-    use middle::ssa::cfg_traits::*;
-    use middle::ssa::ssa_traits::*;
-    use middle::ssa::ssastorage::NodeData;
-    use middle::ssa::utils;
+    use crate::middle::ir::MOpcode::*;
+    use crate::middle::ir::WidthSpec;
+    use crate::middle::regfile::RegisterId;
+    use crate::middle::ssa::cfg_traits::*;
+    use crate::middle::ssa::ssa_traits::*;
+    use crate::middle::ssa::ssastorage::NodeData;
+    use crate::middle::ssa::utils;
     use std::collections::HashSet;
 
     let ssa = super::parse_il(SSA_TXT, REGISTER_FILE.clone());

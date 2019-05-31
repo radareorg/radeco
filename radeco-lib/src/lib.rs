@@ -43,7 +43,7 @@
 #![feature(slice_patterns)]
 #![feature(try_trait)]
 //#![cfg_attr(test, feature(plugin))]
-#![cfg(test)] #![macro_use] extern crate quickcheck_macros;
+#[cfg(test)] #[macro_use] extern crate quickcheck_macros;
 
 extern crate petgraph;
 extern crate regex;
@@ -61,8 +61,6 @@ extern crate vec_map;
 
 #[cfg(test)]
 extern crate quickcheck;
-//#[macro_use(quickcheck)]
-//extern crate quickcheck_macros;
 
 #[cfg(feature = "trace_log")]
 #[macro_use]

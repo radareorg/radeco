@@ -500,7 +500,7 @@ impl<'a> CallFixer<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use frontend::radeco_containers::RadecoModule;
+    use crate::frontend::radeco_containers::RadecoModule;
 
     #[test]
     #[ignore]
