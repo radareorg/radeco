@@ -1,5 +1,5 @@
 extern crate lalrpop;
 
 fn main() {
-    lalrpop::process_root().unwrap();
+    lalrpop::Configuration::new().process_file("src/middle/ir_reader/parser.lalrpop").unwrap();
 }
