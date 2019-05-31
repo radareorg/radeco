@@ -257,7 +257,7 @@ pub trait SSA: CFG {
     fn block_for(&self, i: Self::ValueRef) -> Option<Self::ActionRef>;
 
     /// Get the actual NodeData.
-    fn node_data(&self, i: Self::ValueRef) -> Result<NodeData, Box<Debug>>;
+    fn node_data(&self, i: Self::ValueRef) -> Result<NodeData, Box<dyn Debug>>;
 
     /// Get const information, as a pack of get_node_data on a OpConst node.
     fn constant(&self, i: Self::ValueRef) -> Option<u64>;

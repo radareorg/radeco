@@ -22,7 +22,7 @@ use std::{fmt, hash, sync, thread};
 pub struct RadecoModule<'a, F: RFunction> {
     pub functions: HashMap<u64, F>,
     fname: HashMap<String, u64>,
-    pub src: Option<&'a mut Source>,
+    pub src: Option<&'a mut dyn Source>,
     pub regfile: Option<SubRegisterFile>,
 }
 
@@ -304,7 +304,7 @@ fn analyze_memory(rfn: &mut DefaultFnTy) {
                         let mem_loc = args
                             .get(1)
                             .expect("Load/Store has to have source/destination");
-                        let mut bind = if seen_l.contains_key(mem_loc) {
+                        let bind = if seen_l.contains_key(mem_loc) {
                             seen_l.get_mut(mem_loc).expect("This can never panic")
                         } else {
                             let h = hash_subtree(ssa, mem_loc);
@@ -535,7 +535,7 @@ pub trait RModule<'b> {
     fn function_by_ref_mut(&mut self, _: &Self::FnRef) -> Option<&mut Self::RFn>;
 
     // Expose raw `Source`
-    fn source(&'b mut self) -> &Option<&'b mut Source>;
+    fn source(&'b mut self) -> &Option<&'b mut dyn Source>;
 }
 
 impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
@@ -570,7 +570,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
         self.functions.get_mut(fref)
     }
 
-    fn source(&'a mut self) -> &Option<&'a mut Source> {
+    fn source(&'a mut self) -> &Option<&'a mut dyn Source> {
         &self.src
     }
 }

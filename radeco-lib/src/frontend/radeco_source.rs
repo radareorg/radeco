@@ -19,7 +19,7 @@ use r2api::structs::{
 #[derive(Debug)]
 pub enum SourceErr {
     SrcErr(&'static str),
-    OtherErr(Box<Error>),
+    OtherErr(Box<dyn Error>),
 }
 
 impl fmt::Display for SourceErr {

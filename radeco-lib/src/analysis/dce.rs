@@ -70,7 +70,7 @@ impl DCE {
     }
 
     // Sweeps away the un-marked nodes
-    fn sweep<T: FnMut(Box<Change>) -> Action>(&self, ssa: &mut SSAStorage, mut policy: T) {
+    fn sweep<T: FnMut(Box<dyn Change>) -> Action>(&self, ssa: &mut SSAStorage, mut policy: T) {
         for node in &ssa.values() {
             if !ssa.is_marked(node) {
                 match policy(Box::new(RemoveValue(*node))) {
@@ -138,11 +138,11 @@ impl Analyzer for DCE {
 }
 
 impl FuncAnalyzer for DCE {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(
+    fn analyze<T: FnMut(Box<dyn Change>) -> Action>(
         &mut self,
         rfn: &mut RadecoFunction,
         policy: Option<T>,
-    ) -> Option<Box<AnalyzerResult>> {
+    ) -> Option<Box<dyn AnalyzerResult>> {
         self.mark(rfn.ssa_mut());
         self.sweep(
             rfn.ssa_mut(),

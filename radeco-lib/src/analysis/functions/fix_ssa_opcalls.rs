@@ -47,11 +47,11 @@ impl Analyzer for CallSiteFixer {
 }
 
 impl ModuleAnalyzer for CallSiteFixer {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(
+    fn analyze<T: FnMut(Box<dyn Change>) -> Action>(
         &mut self,
         rmod: &mut RadecoModule,
         _policy: Option<T>,
-    ) -> Option<Box<AnalyzerResult>> {
+    ) -> Option<Box<dyn AnalyzerResult>> {
         for rfun in rmod.functions.values_mut() {
             go_fn(rfun, &rmod.callgraph);
         }
