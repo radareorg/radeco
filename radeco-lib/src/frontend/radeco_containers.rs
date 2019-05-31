@@ -74,7 +74,7 @@ pub mod loader_defaults {
 
     /// Use symbol information to identify functions
     pub fn strat_use_symbols(
-        _source: Option<&Rc<Source>>,
+        _source: Option<&Rc<dyn Source>>,
         _fl: &FLResult,
         rmod: &RadecoModule,
     ) -> FLResult {
@@ -101,7 +101,7 @@ pub mod loader_defaults {
 
     /// Use analysis that `Source` provides to identify functions
     pub fn strat_use_source(
-        source: Option<&Rc<Source>>,
+        source: Option<&Rc<dyn Source>>,
         fl: &FLResult,
         _rmod: &RadecoModule,
     ) -> FLResult {
@@ -168,21 +168,21 @@ pub struct RadecoProject {
 pub type CallGraph = Graph<u64, CallContextInfo>;
 pub trait CGInfo {
     // Return a list of callers to function at offset, along with their callsites
-    fn callers<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a>;
+    fn callers<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a>;
     // Return (callsite, call target)
-    fn callees<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a>;
+    fn callees<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a>;
 }
 
 impl CGInfo for CallGraph {
     // Return a list of callers to function at offset, along with their callsites
-    fn callers<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a> {
+    fn callers<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a> {
         box self
             .edges_directed(idx, Direction::Incoming)
             .map(|er| (er.weight().csite, er.target()))
     }
 
     // Return (callsite, call target)
-    fn callees<'a>(&'a self, idx: NodeIndex) -> Box<Iterator<Item = (u64, NodeIndex)> + 'a> {
+    fn callees<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a> {
         box self
             .edges_directed(idx, Direction::Outgoing)
             .map(|er| (er.weight().csite, er.target()))
@@ -210,7 +210,7 @@ pub struct RadecoModule {
     /// Map of functions loaded
     pub functions: BTreeMap<u64, RadecoFunction>,
     /// Source used to load this module
-    pub source: Option<Rc<Source>>,
+    pub source: Option<Rc<dyn Source>>,
 }
 
 impl fmt::Debug for RadecoModule {
@@ -411,7 +411,7 @@ pub struct ProjectLoader<'a> {
     path: Cow<'static, str>,
     load_library_path: Option<Cow<'static, str>>,
     filter_modules: Option<fn(&RadecoModule) -> bool>,
-    source: Option<Rc<Source>>,
+    source: Option<Rc<dyn Source>>,
     mloader: Option<ModuleLoader<'a>>,
 }
 
@@ -452,7 +452,7 @@ impl<'a> ProjectLoader<'a> {
 
     /// Set the source to use for loading. This is propagated to every `ModuleLoader`
     /// unless it is reconfigured.
-    pub fn source(mut self, source: Rc<Source>) -> ProjectLoader<'a> {
+    pub fn source(mut self, source: Rc<dyn Source>) -> ProjectLoader<'a> {
         self.source = Some(source);
         self
     }
@@ -619,7 +619,7 @@ impl<'f> Iterator for FunctionIterMut<'f> {
 #[derive(Default)]
 /// Module-level loader used to construct a `RadecoModule`
 pub struct ModuleLoader<'a> {
-    source: Option<Rc<Source>>,
+    source: Option<Rc<dyn Source>>,
     floader: Option<FunctionLoader<'a>>,
     filter: Option<fn(&RadecoFunction) -> bool>,
     build_callgraph: bool,
@@ -640,7 +640,7 @@ impl<'a> ModuleLoader<'a> {
     //  4. Optionally load datarefs
     //  5. Optionally load local var information for functions
     /// Setup `Source` for `ModuleLoader`
-    pub fn source<'b: 'a>(mut self, src: Rc<Source>) -> ModuleLoader<'a> {
+    pub fn source<'b: 'a>(mut self, src: Rc<dyn Source>) -> ModuleLoader<'a> {
         self.source = Some(src);
         self
     }
@@ -778,7 +778,7 @@ impl<'a> ModuleLoader<'a> {
     }
 
     /// Kick everything off and load module information based on config and defaults
-    pub fn load(&mut self, src: Rc<Source>) -> RadecoModule {
+    pub fn load(&mut self, src: Rc<dyn Source>) -> RadecoModule {
         let source = if self.source.is_some() {
             self.source.as_ref().unwrap()
         } else {
@@ -956,7 +956,7 @@ impl<'a> ModuleLoader<'a> {
 
             if self.load_locals {
                 for info in &aux_info {
-                    if let Some(mut rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
+                    if let Some(rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
                         let locals_res = self.source.as_ref().map(|s| s.locals_of(rfn.offset));
                         let mut locals = match locals_res {
                             Some(Ok(_locals)) => _locals
@@ -1017,8 +1017,8 @@ impl<'a> ModuleLoader<'a> {
 /// Breaks down `RadecoModule` into functions
 /// Performs low-level function identification.
 pub struct FunctionLoader<'a> {
-    source: Option<Rc<Source>>,
-    strategies: Vec<&'a PredicatedLoader>,
+    source: Option<Rc<dyn Source>>,
+    strategies: Vec<&'a dyn PredicatedLoader>,
 }
 
 pub trait PredicatedLoader {
@@ -1031,7 +1031,7 @@ pub trait PredicatedLoader {
     /// Function to execute to breakdown the `RadecoModule`
     fn strategy(
         &self,
-        source: Option<&Rc<Source>>,
+        source: Option<&Rc<dyn Source>>,
         last: &FLResult,
         rmod: &RadecoModule,
     ) -> FLResult;
@@ -1039,11 +1039,11 @@ pub trait PredicatedLoader {
 
 impl<T> PredicatedLoader for T
 where
-    T: Fn(Option<&Rc<Source>>, &FLResult, &RadecoModule) -> FLResult,
+    T: Fn(Option<&Rc<dyn Source>>, &FLResult, &RadecoModule) -> FLResult,
 {
     fn strategy(
         &self,
-        source: Option<&Rc<Source>>,
+        source: Option<&Rc<dyn Source>>,
         last: &FLResult,
         rmod: &RadecoModule,
     ) -> FLResult {
@@ -1062,7 +1062,7 @@ pub struct FLResult {
 
 impl<'a> FunctionLoader<'a> {
     /// Add a function identification strategy to the pipeline
-    pub fn strategy<'b: 'a>(mut self, strat: &'b PredicatedLoader) -> FunctionLoader<'a> {
+    pub fn strategy<'b: 'a>(mut self, strat: &'b dyn PredicatedLoader) -> FunctionLoader<'a> {
         self.strategies.push(strat);
         self
     }

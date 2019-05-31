@@ -115,12 +115,12 @@ pub enum Action {
 }
 
 /// Short-hand policy to apply all the `Change`s.
-pub fn all(_change: Box<Change>) -> Action {
+pub fn all(_change: Box<dyn Change>) -> Action {
     Action::Apply
 }
 
 /// Short-hand policy to skip all the `Changes`s.
-pub fn none(_change: Box<Change>) -> Action {
+pub fn none(_change: Box<dyn Change>) -> Action {
     Action::Skip
 }
 
@@ -132,11 +132,11 @@ pub trait FuncAnalyzer: Analyzer {
     /// As `Change`s are applied, the IR is not the same as before, thus `Change`s previously
     /// discarded could be proposed again by the `Analyer`. On the other hand an `Analyzer` is
     /// not expected to propose again a `Change` if all the previous other `Change`s were skipped.
-    fn analyze<T: FnMut(Box<Change>) -> Action>(
+    fn analyze<T: FnMut(Box<dyn Change>) -> Action>(
         &mut self,
         func: &mut RadecoFunction,
         policy: Option<T>,
-    ) -> Option<Box<AnalyzerResult>>;
+    ) -> Option<Box<dyn AnalyzerResult>>;
 }
 
 /// An `Analyzer` that takes a module.
@@ -147,11 +147,11 @@ pub trait ModuleAnalyzer: Analyzer {
     /// As `Change`s are applied, the IR is not the same as before, thus `Change`s previously
     /// discarded could be proposed again by the `Analyer`. On the other hand an `Analyzer` is
     /// not expected to propose again a `Change` if all the previous other `Change`s were skipped.
-    fn analyze<T: FnMut(Box<Change>) -> Action>(
+    fn analyze<T: FnMut(Box<dyn Change>) -> Action>(
         &mut self,
         module: &mut RadecoModule,
         policy: Option<T>,
-    ) -> Option<Box<AnalyzerResult>>;
+    ) -> Option<Box<dyn AnalyzerResult>>;
 }
 
 /// Get all the available `FuncAnalyzer`s

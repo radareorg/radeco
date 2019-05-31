@@ -96,7 +96,7 @@ impl Combiner {
     /// Returns `Err(CombErr::NoComb)` if no simplification can occur.
     /// Returns `Err(CombErr::Skip)` if the policy function returned `Action::Skip`.
     /// Returns `Err(CombErr::Abort)` if the policy function returned `Action::Abort`.
-    fn visit_node<T: FnMut(Box<Change>) -> Action>(
+    fn visit_node<T: FnMut(Box<dyn Change>) -> Action>(
         &mut self,
         cur_node: SSAValue,
         ssa: &mut SSAStorage,
@@ -168,7 +168,7 @@ impl Combiner {
     /// Returns `Err(CombErr::NoComb)` if no combination or simplification exists.
     /// Returns `Err(CombErr::Skip)` if the policy function returned `Action::Skip`.
     /// Returns `Err(CombErr::Abort)` if the policy funcion returned `Action::Abort`.
-    fn make_combined_node<T: FnMut(Box<Change>) -> Action>(
+    fn make_combined_node<T: FnMut(Box<dyn Change>) -> Action>(
         &self,
         cur_node: SSAValue,
         cur_opinfo: &CombinableOpInfo,
@@ -278,11 +278,11 @@ impl Analyzer for Combiner {
 }
 
 impl FuncAnalyzer for Combiner {
-    fn analyze<T: FnMut(Box<Change>) -> Action>(
+    fn analyze<T: FnMut(Box<dyn Change>) -> Action>(
         &mut self,
         func: &mut RadecoFunction,
         policy: Option<T>,
-    ) -> Option<Box<AnalyzerResult>> {
+    ) -> Option<Box<dyn AnalyzerResult>> {
         let ssa = func.ssa_mut();
         let mut policy = policy.expect("A policy function must be provided");
         for node in ssa.inorder_walk() {

@@ -642,7 +642,7 @@ impl CCFG {
 /// 4. The destination node of GotoDst edge is ActionNode.
 pub struct CCFGVerifier {}
 
-type Verifier = Fn(CCFGRef, &CCFG) -> Result<(), String>;
+type Verifier = dyn Fn(CCFGRef, &CCFG) -> Result<(), String>;
 impl CCFGVerifier {
     const DELIM: &'static str = "; ";
     pub fn verify(cast: &CCFG) -> Result<(), String> {

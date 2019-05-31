@@ -925,7 +925,7 @@ impl SSA for SSAStorage {
         None
     }
 
-    fn node_data(&self, i: Self::ValueRef) -> Result<TNodeData, Box<Debug>> {
+    fn node_data(&self, i: Self::ValueRef) -> Result<TNodeData, Box<dyn Debug>> {
         match self.g.node_weight(i) {
             Some(&NodeData::Op(ref opc, vt)) => Ok(TNodeData {
                 vt: vt,

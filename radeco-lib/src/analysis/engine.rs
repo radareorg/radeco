@@ -62,8 +62,8 @@ pub trait Engine: Any + Debug {
         &self,
         rmod: &mut RadecoModule,
         regfile: &SubRegisterFile,
-    ) -> Option<Box<EngineResult>>;
-    fn run_func(&self, rfn: &mut RadecoFunction) -> Option<Box<EngineResult>>;
+    ) -> Option<Box<dyn EngineResult>>;
+    fn run_func(&self, rfn: &mut RadecoFunction) -> Option<Box<dyn EngineResult>>;
 }
 
 /// Radeco's default engine.
@@ -85,7 +85,7 @@ impl Engine for RadecoEngine {
         &self,
         rmod: &mut RadecoModule,
         regfile: &SubRegisterFile,
-    ) -> Option<Box<EngineResult>> {
+    ) -> Option<Box<dyn EngineResult>> {
         radeco_trace!("run_module");
 
         // Analyze preserved for all functions.
@@ -113,7 +113,7 @@ impl Engine for RadecoEngine {
         None
     }
 
-    fn run_func(&self, rfn: &mut RadecoFunction) -> Option<Box<EngineResult>> {
+    fn run_func(&self, rfn: &mut RadecoFunction) -> Option<Box<dyn EngineResult>> {
         radeco_trace!("run_func: {}", rfn.name);
 
         // There is no code for imported/relocated functions.
@@ -126,7 +126,7 @@ impl Engine for RadecoEngine {
         let mut arithmetic = Arithmetic::new();
         arithmetic.analyze(
             rfn,
-            Some(|change: Box<Change>| {
+            Some(|change: Box<dyn Change>| {
                 let change = change.as_any().downcast_ref::<ArithChange>().unwrap();
                 if change.new_expr.contains("OpEq")
                     || change.new_expr.contains("OpGt")

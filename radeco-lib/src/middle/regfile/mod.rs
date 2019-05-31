@@ -62,7 +62,7 @@ pub struct SubRegisterFile {
     pub type_info: HashMap<String, String>,
 }
 
-pub struct RegisterIter(Box<Iterator<Item = (usize, String)>>);
+pub struct RegisterIter(Box<dyn Iterator<Item = (usize, String)>>);
 
 impl<'a> IntoIterator for &'a SubRegisterFile {
     type Item = (usize, String);
