@@ -1,6 +1,4 @@
 use petgraph::graph::NodeIndex;
-use petgraph::graph::Graph;
-use petgraph::Direction;
 
 use std::collections::BTreeMap;
 use std::cmp::Ordering;
@@ -8,16 +6,14 @@ use std::cmp::Ordering;
 use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
 use libsmt::backends::backend::SMTBackend;
 use libsmt::logics::qf_abv;
-use libsmt::logics::qf_abv::QF_ABV_Fn::BVOps;
+
 use libsmt::theories::bitvec::OpCodes::*;
 use libsmt::theories::core::OpCodes::*;
-use libsmt::theories::{integer, array_ex, bitvec, core};
-use libsmt::backends::z3::Z3;
 
 use r2api::structs::Endian;
 
-use memory::memory::Memory;
-use utils::utils::simplify_constant;
+use crate::memory::memory::Memory;
+use crate::utils::utils::simplify_constant;
 
 #[derive(Copy, Clone, Debug)]
 pub struct MemRange {
@@ -118,7 +114,7 @@ impl SegMem {
             // let int2 = solver.assert(ZeroExtend(ext), &[int1]);
             // let int3 = solver.new_const(Const(shift, width as usize));
             // let int4 = solver.assert(BvShl, &[int2, int3]);
-            
+
             let r = MemRange::new(start, end);
             let m = MemBlock::new(r, Some(int1));
 
@@ -134,13 +130,13 @@ impl Memory for SegMem {
 
     fn new(address_width: usize, endian: Endian) -> SegMem {
         SegMem {
-            addr_width: address_width, 
+            addr_width: address_width,
             endian: endian,
             segments: BTreeMap::new(),
         }
     }
 
-    fn init_memory(&mut self, solver: &mut SMTLib2<qf_abv::QF_ABV>) {
+    fn init_memory(&mut self, _solver: &mut SMTLib2<qf_abv::QF_ABV>) {
         self.segments = BTreeMap::new();
     }
 
@@ -151,9 +147,9 @@ impl Memory for SegMem {
         let read_range = MemRange::new(addr, addr+(read_size/8) as u64);
 
         let mem = self.segments.clone();
-        let mut ranges: Vec<MemRange> = mem.keys().cloned().collect();
+        let ranges: Vec<MemRange> = mem.keys().cloned().collect();
 
-        let mut pos = match ranges.binary_search(&&read_range) {
+        let pos = match ranges.binary_search(&&read_range) {
             Ok(0) | Err(0) => 0,
             Ok(pos) | Err(pos) => pos - 1,
         };
@@ -226,7 +222,7 @@ impl Memory for SegMem {
                     // create free var till current.start
                     low  = 0;
                     high = (current.start - ptr)*8;
-                    
+
                     let int = self.read_segment(cov, ptr, current.start,
                                                 low, high, width,
                                                 None, solver);
@@ -269,11 +265,11 @@ impl Memory for SegMem {
 }
 
 mod test {
-    use super::*;
+
 
     #[test]
     fn check_read() {
-        let mut z3: Z3 = Default::default(); 
+        let mut z3: Z3 = Default::default();
         let mut solver = SMTLib2::new(Some(qf_abv::QF_ABV));
         let mut mem = SegMem::new(64, Endian::Big);
 
@@ -290,7 +286,7 @@ mod test {
 
         let c   = solver.new_const(Const(0x7970, 16));
         let cmp = solver.assert(Cmp, &[var, c]);
-        
+
         println!("{}", solver.generate_asserts());
 
         panic!("ZZ");

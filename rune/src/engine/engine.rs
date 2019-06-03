@@ -14,7 +14,7 @@ pub trait Engine: Sized {
 
 pub trait Configure {
     type For: Engine;
-    fn configure(&mut Self::For) -> EngineResult<()> {
+    fn configure(_: &mut Self::For) -> EngineResult<()> {
         Ok(())
     }
 }

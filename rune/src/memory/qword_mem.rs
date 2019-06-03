@@ -1,12 +1,12 @@
 use petgraph::graph::NodeIndex;
 
-use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
+use libsmt::backends::smtlib2::{SMTLib2};
 use libsmt::backends::backend::SMTBackend;
 use libsmt::logics::qf_abv;
 use libsmt::theories::{array_ex, bitvec, core};
 use r2api::structs::Endian;
 
-use memory::memory::Memory;
+use crate::memory::memory::Memory;
 
 // Not using address_width/endianness
 #[derive(Clone, Debug)]
@@ -61,7 +61,7 @@ impl Memory for QWordMemory {
     fn write(&mut self,
                  addr: NodeIndex,
                  data: NodeIndex,
-                 write_size: usize,
+                 _write_size: usize,
                  solver: &mut SMTLib2<qf_abv::QF_ABV>) {
         if self.map.is_none() {
             self.init_memory(solver);

@@ -1,9 +1,9 @@
 //! `PathExplorer` that works by exploring the CFG in Breadth First Order.
 use std::collections::VecDeque;
 
-use explorer::explorer::{PathExplorer};
-use engine::rune::RuneControl;
-use context::context::{Context, RegisterRead};
+use crate::explorer::explorer::{PathExplorer};
+use crate::engine::rune::RuneControl;
+use crate::context::context::{Context, RegisterRead};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum BranchType {

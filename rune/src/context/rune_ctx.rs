@@ -1,6 +1,6 @@
 //! Define break;
 
-use r2api::structs::LRegInfo;
+
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
@@ -9,14 +9,14 @@ use libsmt::backends::backend::SMTBackend;
 use libsmt::logics::qf_abv;
 use libsmt::theories::{array_ex, bitvec, core};
 
-use memory::memory::Memory;
-use memory::qword_mem::QWordMemory;
+use crate::memory::memory::Memory;
 
-use regstore::regstore::{RegStore, RegEntry, RegStoreAPI};
+
+use crate::regstore::regstore::{RegStore, RegStoreAPI};
 //use regstore::regfile::RuneRegFile;
 
-use utils::utils::Key;
-use context::context::{Context, ContextAPI, Evaluate, RegisterRead, RegisterWrite, MemoryRead, MemoryWrite};
+
+use crate::context::context::{Context, ContextAPI, Evaluate, RegisterRead, RegisterWrite, MemoryRead, MemoryWrite};
 
 #[derive(Clone, Debug)]
 pub struct RuneContext<Mem, Reg>
@@ -81,7 +81,7 @@ impl<Mem, Reg> Context for RuneContext<Mem, Reg>
         self.solver.solve(p).expect("No satisfying solution.")
     }
 
-    fn var_named<T: AsRef<str>>(&self, var: T) -> Option<NodeIndex> {
+    fn var_named<T: AsRef<str>>(&self, _var: T) -> Option<NodeIndex> {
         None
     }
 }
@@ -240,17 +240,16 @@ where Mem: Memory,
 
 mod test {
     use super::*;
-    use context::context::{Context, ContextAPI, Evaluate, MemoryRead, MemoryWrite, RegisterRead,
-                           RegisterWrite};
+    
 
     use libsmt::logics::qf_abv;
     use libsmt::backends::smtlib2::SMTLib2;
-    use libsmt::backends::backend::SMTBackend;
-    use libsmt::theories::{bitvec, core};
-    use libsmt::backends::z3;
+    
+    
+    
 
-    use memory::seg_mem::SegMem;
-    use regstore::regfile::RuneRegFile;
+    use crate::memory::seg_mem::SegMem;
+    use crate::regstore::regfile::RuneRegFile;
 
     use r2api::structs::Endian;
 
@@ -263,6 +262,6 @@ mod test {
 		let mut smt = SMTLib2::new(Some(qf_abv::QF_ABV));
 		mem.init_memory(&mut smt);
 
-        let mut ctx = RuneContext::new(Some(0x9000), mem, regstore, smt);
+        let _ctx = RuneContext::new(Some(0x9000), mem, regstore, smt);
     }
 }

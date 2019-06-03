@@ -1,17 +1,17 @@
 use std::fs::File;
 use std::io::prelude::*;
 
-use r2api::structs::LRegInfo;
+
 use std::collections::HashMap;
 
 use serde_json::{to_string, from_reader};
-use utils::utils::{Key, new_rune_ctx};
+use crate::utils::utils::{Key, new_rune_ctx};
 
-use context::context::Context;
-use context::rune_ctx::RuneContext;
-use memory::qword_mem::QWordMemory;
-use memory::seg_mem::SegMem;
-use regstore::regfile::RuneRegFile;
+
+use crate::context::rune_ctx::RuneContext;
+
+use crate::memory::seg_mem::SegMem;
+use crate::regstore::regfile::RuneRegFile;
 
 use r2pipe::r2::R2;
 
