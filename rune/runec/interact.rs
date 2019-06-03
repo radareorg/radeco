@@ -11,7 +11,7 @@ use rune::regstore::regfile::RuneRegFile;
 use libsmt::theories::{bitvec, core};
 use libsmt::logics::qf_abv::QF_ABV_Fn;
 use libsmt::backends::z3;
-use console::Console;
+use crate::console::Console;
 
 use std::process;
 

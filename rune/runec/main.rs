@@ -23,8 +23,8 @@ use rune::explorer::interactive::Command;
 use rune::engine::rune::Rune;
 use rune::engine::engine::Engine;
 
-use interact::InteractiveExplorer;
-use console::Console;
+use crate::interact::InteractiveExplorer;
+use crate::console::Console;
 
 use r2pipe::r2::R2;
 use r2api::api_trait::R2Api;
@@ -62,7 +62,7 @@ fn main() {
     let mut stream = R2::new(Some(args.get_str("<file>"))).expect("Unable to spawn r2");
     stream.init();
 
-    let lreginfo = stream.reg_info().expect("Unable to retrieve register info.");
+    let _lreginfo = stream.reg_info().expect("Unable to retrieve register info.");
 
     let c: Console = Default::default();
     let mut is: RInitialState = RInitialState::new();

@@ -1,10 +1,10 @@
-use libsmt::backends::backend::SMTBackend;
-use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
+
+use libsmt::backends::smtlib2::{SMTLib2};
 use libsmt::logics::qf_abv;
 use r2api::structs::Endian;
 
 use std::fmt::Debug;
-use std::hash::Hash;
+
 
 pub trait Memory: Clone + Debug {
     type VarRef;

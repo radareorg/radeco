@@ -20,7 +20,7 @@ pub trait InstructionStream {
     type Index: Debug + Clone;
 
     fn new() -> Self;
-    fn at(&mut self, Self::Index) -> Option<Self::Output>;
+    fn at(&mut self, _: Self::Index) -> Option<Self::Output>;
 }
 
 

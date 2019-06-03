@@ -1,18 +1,18 @@
 //! Utilities and other miscellaneous functions for `RuneContext`
 
 use r2pipe::r2::R2;
-use r2api::structs::LRegInfo;
+
 use r2api::api_trait::R2Api;
 
-use context::rune_ctx::RuneContext;
-use context::context::{ContextAPI};
+use crate::context::rune_ctx::RuneContext;
+use crate::context::context::{ContextAPI};
 
-use memory::memory::Memory;
-use memory::qword_mem::QWordMemory;
-use memory::seg_mem::SegMem;
+use crate::memory::memory::Memory;
 
-use regstore::regstore::RegStore;
-use regstore::regfile::RuneRegFile;
+use crate::memory::seg_mem::SegMem;
+
+use crate::regstore::regstore::RegStore;
+use crate::regstore::regfile::RuneRegFile;
 
 use petgraph::graph::NodeIndex;
 
@@ -20,7 +20,7 @@ use libsmt::backends::smtlib2::SMTLib2;
 use libsmt::logics::qf_abv;
 use libsmt::logics::qf_abv::QF_ABV_Fn::BVOps;
 use libsmt::theories::bitvec::OpCodes::*;
-use libsmt::theories::core::OpCodes::*;
+
 
 use std::collections::HashMap;
 
@@ -109,7 +109,7 @@ pub fn new_rune_ctx(
     ip: Option<u64>,
     syms: Option<HashMap<Key, u64>>,
     consts: Option<HashMap<Key, (u64, u64)>>,
-    mut r2: &mut R2) -> RuneContext<SegMem, RuneRegFile> {
+    r2: &mut R2) -> RuneContext<SegMem, RuneRegFile> {
 
     let mut lreginfo = r2.reg_info().unwrap();
     let rregfile     = RuneRegFile::new(&mut lreginfo);
@@ -117,9 +117,9 @@ pub fn new_rune_ctx(
     let bin      = r2.bin_info().unwrap().bin.unwrap();
     let bits     = bin.bits.unwrap();
     let endian   = bin.endian.unwrap();
-    let mut rmem = SegMem::new(bits, endian);
+    let rmem = SegMem::new(bits, endian);
 
-    let mut smt = SMTLib2::new(Some(qf_abv::QF_ABV));
+    let smt = SMTLib2::new(Some(qf_abv::QF_ABV));
     
     let mut ctx = RuneContext::new(ip, rmem, rregfile, smt);
 

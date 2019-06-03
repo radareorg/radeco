@@ -6,27 +6,27 @@ extern crate r2api;
 use std::collections::HashMap;
 
 use r2pipe::r2::R2;
-use r2api::structs::LRegInfo;
+
 use r2api::api_trait::R2Api;
 
 use rune::explorer::directed::DirectedExplorer;
 use rune::explorer::explorer::PathExplorer;
 
-use rune::context::rune_ctx::RuneContext;
-use rune::context::context::{ContextAPI};
+
+
 
 use rune::memory::memory::Memory;
-use rune::memory::seg_mem::SegMem;
+
 
 use rune::regstore::regstore::RegStore;
-use rune::regstore::regfile::RuneRegFile;
+
 
 use rune::engine::engine::Engine;
 use rune::engine::rune::Rune;
 
 use rune::utils::utils::{new_rune_ctx, Key};
 
-use libsmt::backends::smtlib2::SMTLib2;
+
 
 fn main() {
     // Stream
@@ -45,7 +45,7 @@ fn main() {
     consts.insert(Key::Reg(String::from("rbp")), (bp as u64, 64 as u64));
 
     // Context
-    let mut ctx = new_rune_ctx(Some(ip), Some(syms), Some(consts), &mut stream);
+    let ctx = new_rune_ctx(Some(ip), Some(syms), Some(consts), &mut stream);
 
     // Explorer
     let mut explorer = DirectedExplorer::new();

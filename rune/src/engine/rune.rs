@@ -2,10 +2,10 @@
 
 use r2api::structs::LOpInfo;
 
-use context::context::{Context, RegisterRead};
-use explorer::explorer::PathExplorer;
-use stream::InstructionStream;
-use engine::engine::{Engine, EngineError, EngineResult};
+use crate::context::context::{Context, RegisterRead};
+use crate::explorer::explorer::PathExplorer;
+use crate::stream::InstructionStream;
+use crate::engine::engine::{Engine, EngineError, EngineResult};
 use esil::lexer::{Token, Tokenizer};
 use esil::parser::{Parse, Parser};
 
