@@ -221,7 +221,6 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
                 let token_opt = match p.parse::<_, Tokenizer>(esil) {
                     Ok(token_opt_) => token_opt_,
                     Err(_err) => {
-                        // FIXME: Implement proper error reporting!
                         panic!("ERROR tokenizing!");
                         continue;
                     }
@@ -235,7 +234,6 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
                         match p.fetch_operands(token) {
                             Ok(operands_opt) => operands_opt,
                             Err(_err) => {
-                                // FIXME: Implement proper error reporting!
                                 panic!("Error fetching operands!");
                                 continue;
                             }

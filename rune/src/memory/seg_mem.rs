@@ -3,7 +3,7 @@ use petgraph::graph::NodeIndex;
 use std::collections::BTreeMap;
 use std::cmp::Ordering;
 
-use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
+use libsmt::backends::smtlib2::SMTLib2;
 use libsmt::backends::backend::SMTBackend;
 use libsmt::logics::qf_abv;
 
@@ -157,29 +157,29 @@ impl Memory for SegMem {
         let mut iterator = ranges.split_at(pos).1.iter().peekable();
 
         let width = read_range.get_width() as u64;
-        let START = read_range.start;
-        let END   = read_range.end;
+        let start = read_range.start;
+        let end   = read_range.end;
 
         let mut low:  u64;
         let mut high: u64;
 
         let mut result = solver.new_const(Const(0, width as usize));
 
-        let mut ptr = START;
-        let mut cov = 0;
+        let mut ptr = start;
+        let mut cov;
 
-        while ptr != END {
-            cov = (ptr - START)*8;
+        while ptr != end {
+            cov = (ptr - start)*8;
             if let Some(&current) = iterator.peek() {
-                if current.start == START && current.end == END {
+                if current.start == start && current.end == end {
                     // current is the mem requested
                     let node     = mem.get(&current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
 
                     result = node_idx;
 
-                    ptr = END;
-                } else if current.start == ptr && current.end <= END {
+                    ptr = end;
+                } else if current.start == ptr && current.end <= end {
                     // Use current
                     let node     = mem.get(&current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
@@ -188,22 +188,22 @@ impl Memory for SegMem {
 
                     ptr = current.end;
                     iterator.next();
-                } else if current.contains(ptr) && current.contains(END) {
+                } else if current.contains(ptr) && current.contains(end) {
                     // extract entire
                     let node     = mem.get(&current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
 
                     low  = (ptr - current.start)*8;
-                    high = (END - current.start)*8;
+                    high = (end - current.start)*8;
 
-                    let int = self.read_segment(cov, ptr, END,
+                    let int = self.read_segment(cov, ptr, end,
                                                 low, high, width,
                                                 Some(node_idx), solver);
                     result  = solver.assert(BvOr, &[result, int]);
 
-                    ptr = END;
+                    ptr = end;
                     iterator.next();
-                } else if current.contains(ptr) && !current.contains(END) {
+                } else if current.contains(ptr) && !current.contains(end) {
                     // extract till end of current
                     let node     = mem.get(&current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
@@ -218,7 +218,7 @@ impl Memory for SegMem {
 
                     ptr = current.end;
                     iterator.next();
-                } else if current.start < END && current.end >= END {
+                } else if current.start < end && current.end >= end {
                     // create free var till current.start
                     low  = 0;
                     high = (current.start - ptr)*8;
@@ -232,26 +232,26 @@ impl Memory for SegMem {
                 } else {
                     // create free var till end
                     low  = 0;
-                    high = (END - ptr)*8;
+                    high = (end - ptr)*8;
 
-                    let int = self.read_segment(cov, ptr, END,
+                    let int = self.read_segment(cov, ptr, end,
                                                 low, high, width,
                                                 None, solver);
                     result  = solver.assert(BvOr, &[result, int]);
 
-                    ptr = END;
+                    ptr = end;
                 }
             } else {
                 // create free var till end
                 low  = 0;
-                high = (END - ptr)*8;
+                high = (end - ptr)*8;
 
-                let int = self.read_segment(cov, ptr, END,
+                let int = self.read_segment(cov, ptr, end,
                                             low, high, width,
                                             None, solver);
                 result  = solver.assert(BvOr, &[result, int]);
 
-                ptr = END;
+                ptr = end;
             }
         }
         println!("{}", solver.generate_asserts());
@@ -266,12 +266,20 @@ impl Memory for SegMem {
 
 mod test {
 
-
     #[test]
     fn check_read() {
+        use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
+        use libsmt::backends::backend::SMTBackend;
+        use libsmt::backends::z3::Z3;
+        use libsmt::theories::bitvec::OpCodes::Const;
+        use libsmt::theories::core::OpCodes::*;
+        use libsmt::logics::qf_abv;
+        use r2api::structs::Endian;
+        use super::{SegMem, Memory};
+
         let mut z3: Z3 = Default::default();
         let mut solver = SMTLib2::new(Some(qf_abv::QF_ABV));
-        let mut mem = SegMem::new(64, Endian::Big);
+        let mut mem: SegMem = Memory::new(64, Endian::Big);
 
         let addr = solver.new_const(Const(0x9000, 64));
         let data = solver.new_const(Const(0x70, 8));

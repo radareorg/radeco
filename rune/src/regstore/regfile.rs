@@ -6,7 +6,7 @@ use crate::regstore::regstore::{RegStore, RegStoreAPI, RegEntry};
 use r2api::structs::LRegInfo;
 use libsmt::backends::smtlib2::{SMTLib2};
 use libsmt::logics::qf_abv;
-use libsmt::theories::{array_ex, bitvec, core};
+use libsmt::theories::bitvec;
 use libsmt::backends::backend::SMTBackend;
 
 #[derive(Clone, Debug, Default)]

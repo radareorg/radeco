@@ -1,20 +1,17 @@
 //! Define break;
 
-
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
 use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
 use libsmt::backends::backend::SMTBackend;
 use libsmt::logics::qf_abv;
-use libsmt::theories::{array_ex, bitvec, core};
+use libsmt::theories::bitvec;
 
 use crate::memory::memory::Memory;
 
-
 use crate::regstore::regstore::{RegStore, RegStoreAPI};
 //use regstore::regfile::RuneRegFile;
-
 
 use crate::context::context::{Context, ContextAPI, Evaluate, RegisterRead, RegisterWrite, MemoryRead, MemoryWrite};
 
