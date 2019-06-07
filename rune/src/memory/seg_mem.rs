@@ -297,7 +297,6 @@ mod test {
 
         println!("{}", solver.generate_asserts());
 
-        panic!("ZZ");
     }
 }
 
