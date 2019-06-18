@@ -21,7 +21,7 @@ use rustyline::completion::{Completer, FilenameCompleter};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
-use rustyline::{CompletionType, Config, EditMode, Editor, Helper};
+use rustyline::{CompletionType, Config, Context, EditMode, Editor, Helper};
 use std::fs;
 use std::process;
 
@@ -64,7 +64,7 @@ struct Completes {
 impl Helper for Completes {}
 
 impl Hinter for Completes {
-    fn hint(&self, _line: &str, _pos: usize) -> Option<String> {
+    fn hint(&self, _line: &str, _pos: usize, _ctx: &Context<'_>) -> Option<String> {
         None
     }
 }
@@ -73,7 +73,7 @@ impl Highlighter for Completes {}
 
 impl Completer for Completes {
     type Candidate = String;
-    fn complete(&self, line: &str, _pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
+    fn complete(&self, line: &str, _pos: usize, ctx: &Context<'_>) -> rustyline::Result<(usize, Vec<String>)> {
         let cmds = vec![
             command::HELP,
             command::LOAD,
@@ -128,7 +128,7 @@ impl Completer for Completes {
             });
         }
         if line.starts_with("load") {
-            match self.file_completer.complete(line, _pos) {
+            match self.file_completer.complete(line, _pos, ctx) {
                 Ok((n, ss)) => {
                     let mut completed_lines = ss
                         .into_iter()
