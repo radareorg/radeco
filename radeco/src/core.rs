@@ -159,7 +159,7 @@ fn decompile_priv(
 pub fn load_proj_by_path(path: &str, max_it: u32) -> RadecoProject {
     let mut p = ProjectLoader::new().path(path).load();
     let regfile = p.regfile().clone();
-    for mut xy in p.iter_mut() {
+    for xy in p.iter_mut() {
         let engine = RadecoEngine::new(max_it);
         engine.run_module(xy.module, &*regfile.clone());
     }
@@ -181,7 +181,7 @@ pub fn load_project_by_r2pipe(r2p: R2Pipe, max_it: u32) -> RadecoProject {
     let r2w = Rc::new(RefCell::new(r2));
     let mut p = ProjectLoader::new().source(Rc::new(r2w)).load();
     let regfile = p.regfile().clone();
-    for mut xy in p.iter_mut() {
+    for xy in p.iter_mut() {
         let engine = RadecoEngine::new(max_it);
         engine.run_module(xy.module, &*regfile.clone());
     }
