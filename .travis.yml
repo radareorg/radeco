@@ -3,6 +3,7 @@ dist: xenial
 language: rust
 # No environment varibles by default
 env:
+# Necessary for `travis-cargo coveralls --no-sudo`
 addons:
   apt:
     packages:
@@ -25,15 +26,16 @@ notifications:
   email: false
 os:
   - linux
+
+before_install:
+  # Install all required dependencies (radare2)
+  - ./scripts/install-dependencies.sh
+
 before_script:
+  # Load travis-cargo
   - |
     pip install 'travis-cargo<0.2' --user &&
     export PATH=$HOME/.local/bin:$PATH
-  # Clone and build radare2
-  - |
-      export CC=gcc-7 && export CXX=g++7 &&
-      git clone https://github.com/radare/radare2.git &&
-      cd ./radare2 && ./sys/install.sh && cd ../
   # Clone and build capstone
   - |
       export CC=gcc-7 && export CXX=g++7 &&
@@ -43,18 +45,25 @@ before_script:
   - |
       rustup component add rustfmt
 
+# the main build
 script:
   - |
     travis-cargo build &&
     travis-cargo test &&
-    chmod 644 src/middle/ir_reader/parser.rs &&
-    rustfmt src/middle/ir_reader/parser.rs
+    chmod 644 radeco-lib/src/middle/ir_reader/parser.rs &&
+    rustfmt radeco-lib/src/middle/ir_reader/parser.rs
     travis-cargo fmt -- -- --check &&
     travis-cargo bench
+
 after_success:
+  # Upload the documentation from the build with stable (automatically only actually
+  # runs on the master branch, not individual PRs)
   - travis-cargo --only nightly coveralls --no-sudo --verify
+  # Measure code coverage and upload to coveralls.io
   - travis-cargo --only nightly doc-upload
+
 env:
   global:
+  # Override the default `--features unstable` used for the nightly branch (optional)
   - TRAVIS_CARGO_NIGHTLY_FEATURE=""
   - secure:"6Hai838Ii8T5f9g2HvioILGulY3aoH6gEQudAzeRW/EwJYyIS3dnd+dqzklxZg5NzDfS2iqcVc8KplevRviR6WLdGnpAWNyLqni+hJepNgpJESPH4g7jYYlmVK7VCXvhWKNpoYXd3Gjx6CLCpF2NVX3cnSKAgPz1SMMWm+ulAI8Bqj6NnG53fme6siQwyajVdKcsvawim2JlDtIl0sTsJDpAYr7ivQvc1MCjvLY1PUV5cUEGhnOJFv3RQS32gklGvk96FKFyb0kiPIsCvIIL4ZzeP8SpiJyW1DYNlUqMvxGwSzie8mowdNvh3gbzj9ll7y9B1bTYbaYY8ETLbqDtBZF52rC+4Cnxkbj9275ij7lvJcfr1wBvN1DxVmUnfWyWUBi2aQpNePmKJvMxLSlKW+U5diQrf/NS34gmblccv1aPQszT11Le5kVhZm4KEXQWvh/L4+NO/DOWRmHvBjHH+Ov/sHx59jbgd/OYsiIQ0WIWKaCIT/oU3w6jTBCeKzX7arw0k8hQlNdOKOJCdjAHsI50kln2yXm4rJnVnXaX7spJP1v00csbK95fjxn8dp/f4L6gWrBQzmeKTLjrMFQQTHAx+JC3Oigt28eKwkJVIo9cO25wdUD52rjPPTOMqVHONqpHq735sMYfDItKAG7FmQ427ZgfQRuRblvjijcexBM="
