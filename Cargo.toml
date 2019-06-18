@@ -1,8 +1,9 @@
 [workspace]
 members = [
-	"radeco-lib",
-	"esil-rs",
 	"arch-rs",
+	"esil-rs",
+	"radeco-lib",
+	"radeco",
 	"rune"
 ]
 exclude = [
