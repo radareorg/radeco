@@ -1,18 +1,17 @@
-# radeco-lib
+# Radeco
 
 [![Appveyor Status](https://ci.appveyor.com/api/projects/status/t8dujay25g31sxia?svg=true)](https://ci.appveyor.com/project/radare/radeco-lib-8ycg0)
 [![Build Status](https://travis-ci.org/radareorg/radeco-lib.svg?branch=master)](https://travis-ci.org/radareorg/radeco-lib)
 [![Coverage Status](https://coveralls.io/repos/github/radare/radeco-lib/badge.svg?branch=master)](https://coveralls.io/github/radare/radeco-lib?branch=master)
 
-A radare2 based binary analysis framework
-
+A radare2 based binary analysis framework consisting from the Radeco client, in `./radeco/` directory, `./radeco-lib/` - library where whole high-level logic is located, `./arch-rs/` to abstract the architectures intricacies, `./esil-rs/` to parse the radare2 ESIL, and `./rune/` to perform symbolic execution on top of ESIL. Radeco uses its own intermediate representation,
+which also has a text representation - RadecoIL.
 
 ### Is this ready yet?
 
 Nope. There is still a ton of work to do before this can be considered ready.
 That said, parts of the library are already stable enough to write your own
 analysis passes and use in your projects.
-
 
 ## Usage
 
@@ -24,14 +23,10 @@ To include in your rust project, add to Cargo.toml:
 
 ```
 [dependencies.radeco-lib]
-git = "https://github.com/radare/radeco-lib"
+git = "https://github.com/radare/radeco"
 ```
 
 See examples for usage.
-
-## Development
-
-Additional features to build with to help development.
 
 ### Trace Log
 
@@ -60,7 +55,7 @@ PROFILER.lock().unwrap().start("./my-prof.profile").unwrap();
 PROFILER.lock().unwrap().stop().unwrap();
 ```
 
-## Project layout
+## Radeco-lib project layout
 
 ```
 src/
