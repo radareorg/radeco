@@ -1,7 +1,7 @@
 # Radeco
 
-[![Appveyor Status](https://ci.appveyor.com/api/projects/status/t8dujay25g31sxia?svg=true)](https://ci.appveyor.com/project/radare/radeco-lib-8ycg0)
-[![Build Status](https://travis-ci.org/radareorg/radeco-lib.svg?branch=master)](https://travis-ci.org/radareorg/radeco-lib)
+[![Appveyor Status](https://ci.appveyor.com/api/projects/status/t8dujay25g31sxia?svg=true)](https://ci.appveyor.com/project/radare/radeco-lib-8ycg0
+[![Build Status](https://travis-ci.org/radareorg/radeco.svg?branch=master)](https://travis-ci.org/radareorg/radeco)
 [![Coverage Status](https://coveralls.io/repos/github/radare/radeco-lib/badge.svg?branch=master)](https://coveralls.io/github/radare/radeco-lib?branch=master)
 
 A radare2 based binary analysis framework consisting from the Radeco client, in `./radeco/` directory, `./radeco-lib/` - library where whole high-level logic is located, `./arch-rs/` to abstract the architectures intricacies, `./esil-rs/` to parse the radare2 ESIL, and `./rune/` to perform symbolic execution on top of ESIL. Radeco uses its own intermediate representation,
