@@ -1,9 +1,13 @@
-sudo: true
+sudo: required
 dist: xenial
 language: rust
+
+# Cache cargo symbols for faster build
+cache: cargo
+
 # No environment varibles by default
 env:
-# Necessary for `travis-cargo coveralls --no-sudo`
+# Dependencies of kcov, used by coveralls coverage plugin
 addons:
   apt:
     packages:
@@ -32,10 +36,12 @@ before_install:
   - ./scripts/install-dependencies.sh
 
 before_script:
-  # Load travis-cargo
+  # Load cargo-travis
   - |
-    pip install 'travis-cargo<0.2' --user &&
     export PATH=$HOME/.local/bin:$PATH
+    cargo install cargo-update || echo "cargo-update already installed"
+    cargo install cargo-travis || echo "cargo-travis already installed"
+    cargo install-update -a # update outdated cached binaries
   # Clone and build capstone
   - |
       export CC=gcc-7 && export CXX=g++7 &&
@@ -48,22 +54,21 @@ before_script:
 # the main build
 script:
   - |
-    travis-cargo build &&
-    travis-cargo test &&
+    cargo build &&
+    cargo test &&
     chmod 644 radeco-lib/src/middle/ir_reader/parser.rs &&
     rustfmt radeco-lib/src/middle/ir_reader/parser.rs
-    travis-cargo fmt -- -- --check &&
-    travis-cargo bench
+    cargo fmt -- -- --check &&
+    cargo bench
+    cargo doc
 
 after_success:
   # Upload the documentation from the build with stable (automatically only actually
   # runs on the master branch, not individual PRs)
-  - travis-cargo --only nightly coveralls --no-sudo --verify
+  - cargo --only nightly coveralls
   # Measure code coverage and upload to coveralls.io
-  - travis-cargo --only nightly doc-upload
+  - cargo --only nightly doc-upload
 
 env:
   global:
-  # Override the default `--features unstable` used for the nightly branch (optional)
-  - TRAVIS_CARGO_NIGHTLY_FEATURE=""
   - secure:"6Hai838Ii8T5f9g2HvioILGulY3aoH6gEQudAzeRW/EwJYyIS3dnd+dqzklxZg5NzDfS2iqcVc8KplevRviR6WLdGnpAWNyLqni+hJepNgpJESPH4g7jYYlmVK7VCXvhWKNpoYXd3Gjx6CLCpF2NVX3cnSKAgPz1SMMWm+ulAI8Bqj6NnG53fme6siQwyajVdKcsvawim2JlDtIl0sTsJDpAYr7ivQvc1MCjvLY1PUV5cUEGhnOJFv3RQS32gklGvk96FKFyb0kiPIsCvIIL4ZzeP8SpiJyW1DYNlUqMvxGwSzie8mowdNvh3gbzj9ll7y9B1bTYbaYY8ETLbqDtBZF52rC+4Cnxkbj9275ij7lvJcfr1wBvN1DxVmUnfWyWUBi2aQpNePmKJvMxLSlKW+U5diQrf/NS34gmblccv1aPQszT11Le5kVhZm4KEXQWvh/L4+NO/DOWRmHvBjHH+Ov/sHx59jbgd/OYsiIQ0WIWKaCIT/oU3w6jTBCeKzX7arw0k8hQlNdOKOJCdjAHsI50kln2yXm4rJnVnXaX7spJP1v00csbK95fjxn8dp/f4L6gWrBQzmeKTLjrMFQQTHAx+JC3Oigt28eKwkJVIo9cO25wdUD52rjPPTOMqVHONqpHq735sMYfDItKAG7FmQ427ZgfQRuRblvjijcexBM="
