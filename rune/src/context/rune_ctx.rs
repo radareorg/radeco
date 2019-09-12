@@ -237,13 +237,9 @@ where Mem: Memory,
 
 mod test {
     use super::*;
-    
 
     use libsmt::logics::qf_abv;
     use libsmt::backends::smtlib2::SMTLib2;
-    
-    
-    
 
     use crate::memory::seg_mem::SegMem;
     use crate::regstore::regfile::RuneRegFile;
@@ -251,7 +247,7 @@ mod test {
     use r2api::structs::Endian;
 
     // #[test]
-    fn teting_memory_my_dude() {
+    fn testing_memory_my_dude() {
         let mut lreginfo = Default::default();
         let regstore = RuneRegFile::new(&mut lreginfo);
 
