@@ -48,8 +48,7 @@ before_script:
       git clone https://github.com/aquynh/capstone.git &&
       cd ./capstone && ./make.sh && sudo ./make.sh install && cd ../
   # Install rustfmt
-  - |
-      rustup component add rustfmt
+  - rustup component add rustfmt || echo "rustfmt install failed"
 
 # the main build
 script:
@@ -58,7 +57,7 @@ script:
     cargo test &&
     chmod 644 radeco-lib/src/middle/ir_reader/parser.rs &&
     rustfmt radeco-lib/src/middle/ir_reader/parser.rs
-    cargo fmt -- -- --check &&
+    cargo fmt -- -- --check
     cargo bench
     cargo doc
 
