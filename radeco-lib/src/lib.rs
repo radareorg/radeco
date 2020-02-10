@@ -42,7 +42,6 @@
 #![feature(box_syntax)]
 #![feature(slice_patterns)]
 #![feature(try_trait)]
-#![feature(custom_attribute)]
 //#[cfg(test)] #[macro_use] extern crate quickcheck_macros;
 
 extern crate petgraph;
