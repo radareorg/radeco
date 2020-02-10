@@ -2,6 +2,10 @@ sudo: required
 dist: xenial
 language: rust
 
+branches:
+  only:
+  - master
+
 # Cache cargo symbols for faster build
 cache: cargo
 

@@ -1,4 +1,9 @@
 clone_depth: 1
+
+branches:
+  only:
+    - master
+
 environment:
   matrix:
     # Allow failure for stable channel because
