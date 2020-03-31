@@ -21,6 +21,7 @@ use rustyline::completion::{Completer, FilenameCompleter};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
+use rustyline::validate::Validator;
 use rustyline::{CompletionType, Config, Context, EditMode, Editor, Helper};
 use std::fs;
 use std::process;
@@ -60,6 +61,8 @@ pub const MAX_ITERATIONS: u32 = 100;
 struct Completes {
     file_completer: FilenameCompleter,
 }
+
+impl Validator for Completes {}
 
 impl Helper for Completes {}
 

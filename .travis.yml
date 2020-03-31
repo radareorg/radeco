@@ -77,8 +77,8 @@ before_script:
 # the main build
 script:
     - |
-        cargo build --verbose --no-default-features &&
-        cargo test --verbose --no-default-features &&
+        cargo build --verbose &&
+        cargo test --verbose &&
         chmod 644 radeco-lib/src/middle/ir_reader/parser.rs &&
         if [ "${CHECKFMT}" == "1" ]; then
             rustfmt radeco-lib/src/middle/ir_reader/parser.rs
