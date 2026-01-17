@@ -6,7 +6,6 @@
 extern crate rune;
 extern crate libsmt;
 extern crate docopt;
-extern crate rustc_serialize;
 extern crate r2pipe;
 extern crate r2api;
 
@@ -15,6 +14,8 @@ mod console;
 
 use std::process::exit;
 use docopt::Docopt;
+
+use serde::{Deserialize, Serialize};
 
 use rune::utils::utils::{Key, ValType, SAssignment};
 use rune::utils::state::RInitialState;
@@ -27,7 +28,7 @@ use crate::interact::InteractiveExplorer;
 use crate::console::Console;
 
 use r2pipe::r2::R2;
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 
 static USAGE: &'static str = "
 runec. Interactive console for rune.
@@ -41,7 +42,7 @@ Options:
   -p                                     Load a previous configuration of state
 ";
 
-#[derive(Debug, Clone, RustcDecodable)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Args {
     flag_help: bool,
     flag_project: bool,
@@ -60,7 +61,7 @@ fn main() {
     }
 
     let mut stream = R2::new(Some(args.get_str("<file>"))).expect("Unable to spawn r2");
-    stream.init();
+    stream.init().expect("Unable to initialize the stream");
 
     let _lreginfo = stream.reg_info().expect("Unable to retrieve register info.");
 

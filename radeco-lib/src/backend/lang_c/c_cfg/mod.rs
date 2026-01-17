@@ -789,7 +789,7 @@ pub struct CASTConverter<'a> {
 }
 
 impl<'a> CASTConverter<'a> {
-    pub fn new(cfg: &CCFG) -> CASTConverter {
+    pub fn new(cfg: &CCFG) -> CASTConverter<'_> {
         CASTConverter {
             ast: CAST::new(&cfg.fname),
             cfg: cfg,

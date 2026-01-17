@@ -103,7 +103,7 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
             .callgraph
             .neighbors_directed(rfn.cgid(), Direction::Outgoing)
             .detach();
-        for (csi, callee) in cgwalker.next(&rmod.callgraph) {
+        while let Some((csi, callee)) = cgwalker.next(&rmod.callgraph) {
             let csite = rmod.callgraph[csi].csite;
             // Get args of callee
             let callee_off = rmod.callgraph[callee];

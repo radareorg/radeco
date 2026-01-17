@@ -33,10 +33,10 @@ impl<V> RegisterMap<V> {
     pub fn remove(&mut self, key: RegisterId) -> Option<V> {
         self.map.remove(key.to_usize())
     }
-    pub fn iter(&self) -> Iter<V> {
+    pub fn iter(&self) -> Iter<'_, V> {
         self.into_iter()
     }
-    pub fn iter_mut(&mut self) -> IterMut<V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, V> {
         self.into_iter()
     }
 }

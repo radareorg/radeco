@@ -217,7 +217,7 @@ where
                 if comment.len() < reg_len {
                     return false;
                 }
-                comment.split_off(reg_len);
+                let _ = comment.split_off(reg_len);
                 // Attition: Comment may be in format as: reg@address.offset
 
                 if comment == reg {

@@ -4,3 +4,4 @@ Cargo.lock
 outputs
 *.dot
 *.orig
+radare2-r2pipe-api

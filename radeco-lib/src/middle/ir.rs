@@ -153,7 +153,7 @@ impl MOpcode {
         self.info().1
     }
 
-    pub fn to_string(&self) -> Cow<str> {
+    pub fn to_string(&self) -> Cow<'_, str> {
         self.info().0
     }
 
@@ -191,7 +191,7 @@ impl MOpcode {
         }
     }
 
-    fn info(&self) -> (Cow<str>, MArity) {
+    fn info(&self) -> (Cow<'_, str>, MArity) {
         match *self {
             MOpcode::OpAdd => (Cow::from("OpAdd"), MArity::Binary),
             MOpcode::OpAnd => (Cow::from("OpAnd"), MArity::Binary),

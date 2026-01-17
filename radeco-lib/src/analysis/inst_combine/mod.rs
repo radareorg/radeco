@@ -49,6 +49,21 @@ pub struct CombineChange {
     res: Either<(Option<CombinableOpInfo>, SSAValue), u64>,
 }
 
+impl CombineChange {
+    /// Gets the combine change SSA node.
+    pub const fn node(&self) -> SSAValue {
+        self.node
+    }
+
+    /// Left: The node and one of its args were combined. The tuple contains: the
+    /// structure of the combined node (if the node is a no-op then `None` is present)
+    /// and the index of the non-const operand of the combined node.
+    /// Right: The node and its args were combined into a constant value.
+    pub const fn res(&self) -> &Either<(Option<CombinableOpInfo>, SSAValue), u64> {
+        &self.res
+    }
+}
+
 impl Change for CombineChange {
     fn as_any(&self) -> &dyn Any {
         self

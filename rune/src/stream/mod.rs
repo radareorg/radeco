@@ -8,12 +8,13 @@ use std::hash::Hash;
 use std::io::prelude::*;
 use std::fs::File;
 
-use rustc_serialize::{Decodable};
-use rustc_serialize::json;
+use serde::{Deserialize, Serialize};
 
 use r2pipe::r2::R2;
 use r2api::structs::LOpInfo;
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
+
+pub trait Decodable: for<'a> Deserialize<'a> + Serialize {}
 
 pub trait InstructionStream {
     type Output: Debug + Clone;
@@ -33,7 +34,7 @@ impl InstructionStream for R2 {
     }
 
     fn at(&mut self, addr: u64) -> Option<Self::Output> {
-        let addr_ = format!("{}", addr);
+        let addr_ = format!("{addr}");
         Some(self.insts(Some(1), Some(&addr_)).unwrap()[0].clone())
     }
 }
@@ -42,10 +43,10 @@ impl InstructionStream for R2 {
 // This is useful for tests, debug and other smaller applications.
 // Maintains a HashMap from address to LOpInfo that it should provide
 // when asked for that address.
-#[derive(Clone, Debug, RustcDecodable, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct FileStream<I, Op>
-    where I: Debug + Clone + Decodable + Hash + PartialEq + Eq,
-          Op: Debug + Clone + Decodable
+    where I: Debug + Clone + Hash + PartialEq + Eq,
+          Op: Debug + Clone
 {
     insts: HashMap<I, Op>,
 }
@@ -59,7 +60,7 @@ impl<I, Op> FileStream<I, Op>
         let mut f = File::open(fname).expect("Failed to open file");
         let mut s = String::new();
         f.read_to_string(&mut s).expect("Failed to read from file");
-        self.insts = json::decode(&s).expect("Failed to decode json");
+        self.insts = serde_json::from_str::<HashMap<I, Op>>(&s).expect("Failed to decode json");
     }
 }
 

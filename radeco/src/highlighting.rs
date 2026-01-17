@@ -4,8 +4,8 @@ use syntect::parsing::SyntaxSet;
 use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 
 lazy_static! {
-    static ref SYNTAX_SET: SyntaxSet = { SyntaxSet::load_defaults_newlines() };
-    static ref THEME_SET: ThemeSet = { ThemeSet::load_defaults() };
+    static ref SYNTAX_SET: SyntaxSet = SyntaxSet::load_defaults_newlines();
+    static ref THEME_SET: ThemeSet = ThemeSet::load_defaults();
 }
 
 pub fn print_highlighted(code: &str) {
@@ -14,6 +14,6 @@ pub fn print_highlighted(code: &str) {
     for line in LinesWithEndings::from(code) {
         let ranges: Vec<(Style, &str)> = h.highlight(line, &SYNTAX_SET);
         let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
-        print!("{}", escaped);
+        print!("{escaped}");
     }
 }

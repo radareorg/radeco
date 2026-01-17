@@ -38,11 +38,6 @@
 
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
-#![feature(box_patterns)]
-#![feature(box_syntax)]
-#![feature(slice_patterns)]
-#![feature(try_trait)]
-//#[cfg(test)] #[macro_use] extern crate quickcheck_macros;
 
 extern crate petgraph;
 extern crate regex;

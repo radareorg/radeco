@@ -535,7 +535,7 @@ pub trait RModule<'b> {
     fn function_by_ref_mut(&mut self, _: &Self::FnRef) -> Option<&mut Self::RFn>;
 
     // Expose raw `Source`
-    fn source(&'b mut self) -> &Option<&'b mut dyn Source>;
+    fn source(&'b mut self) -> &'b Option<&'b mut dyn Source>;
 }
 
 impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
@@ -570,7 +570,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
         self.functions.get_mut(fref)
     }
 
-    fn source(&'a mut self) -> &Option<&'a mut dyn Source> {
+    fn source(&'a mut self) -> &'a Option<&'a mut dyn Source> {
         &self.src
     }
 }
@@ -588,7 +588,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({ |x| x.1.is_argument() })
+            .filter(|x| x.1.is_argument())
             .collect()
     }
 
@@ -596,7 +596,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({ |x| x.1.is_local() })
+            .filter(|x| x.1.is_local())
             .collect()
     }
 
@@ -604,7 +604,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({ |x| x.1.is_return() })
+            .filter(|x| x.1.is_return())
             .collect()
     }
 
@@ -612,7 +612,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         self.bindings
             .bindings()
             .enumerate()
-            .filter({ |x| x.1.is_modified() })
+            .filter(|x| x.1.is_modified())
             .collect()
     }
 

@@ -91,7 +91,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
             let constraint = self.set.pop_front().expect("Cannot be `None`");
             // Match to see if this is an Eq constraint or an assert
             let res = match constraint {
-                Constraint::Equality(_, box _) => self.solve_eq(&constraint),
+                Constraint::Equality(_, _) => self.solve_eq(&constraint),
                 Constraint::Assertion(_) => self.solve_assert(&constraint),
                 Constraint::AssertEquivalence(_) => self.solve_equivalence(&constraint),
                 _ => false,
@@ -131,18 +131,18 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
 
     fn solve_eq(&mut self, constraint: &Constraint<T>) -> bool {
         match *constraint {
-            Constraint::Equality(ni, box ref cs) => {
-                match *cs {
+            Constraint::Equality(ni, ref cs) => {
+                match **cs {
                     Constraint::Value(vt) => {
                         self.bindings.insert(ni, vt);
                         true
                     }
-                    Constraint::Union(op1, op2) => {
+                    Constraint::Union(op1, ref op2) => {
                         match self.bvalue(ni) {
                             ValueType::Scalar => {
                                 // Both, op1 and op2, are scalars
                                 self.bindings.insert(op1, ValueType::Scalar);
-                                self.bindings.insert(op2, ValueType::Scalar);
+                                self.bindings.insert(*op2, ValueType::Scalar);
                                 true
                             }
                             ValueType::Reference => {
@@ -154,13 +154,13 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                                             Box::new(Constraint::Value(ValueType::Reference)),
                                         )),
                                         Box::new(Constraint::Equality(
-                                            op2,
+                                            *op2,
                                             Box::new(Constraint::Value(ValueType::Scalar)),
                                         )),
                                     )),
                                     Box::new(Constraint::And(
                                         Box::new(Constraint::Equality(
-                                            op2,
+                                            *op2,
                                             Box::new(Constraint::Value(ValueType::Reference)),
                                         )),
                                         Box::new(Constraint::Equality(
@@ -175,7 +175,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                             ValueType::Unresolved => {
                                 // Look at the Union
                                 let op1_vt = self.bvalue(op1);
-                                let op2_vt = self.bvalue(op2);
+                                let op2_vt = self.bvalue(*op2);
                                 let (vt, retval) = match (op1_vt, op2_vt) {
                                     (ValueType::Invalid, _)
                                     | (_, ValueType::Invalid)
@@ -184,7 +184,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                                     }
 
                                     (ValueType::Reference, _) => {
-                                        self.bindings.insert(op2, ValueType::Scalar);
+                                        self.bindings.insert(*op2, ValueType::Scalar);
                                         (ValueType::Reference, true)
                                     }
 
@@ -214,29 +214,37 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     fn solve_assert(&mut self, constraint: &Constraint<T>) -> bool {
         // Will be of the form, Assertion(<inner>)
         // inner will be of the form Or(<c1>, <c2>)
-        if let &Constraint::Assertion(box Constraint::Or(box ref c1, box ref c2)) = constraint {
-            // c1, c2 will be of the form And(Eq(ci1), Eq(ci2))
-            [c1, c2].iter().any(|&ci| {
-                if let Constraint::And(
-                    box Constraint::Equality(op1, box Constraint::Value(vt1)),
-                    box Constraint::Equality(op2, box Constraint::Value(vt2)),
-                ) = *ci
-                {
-                    if self.bvalue(op1) == vt1 {
-                        self.bindings.insert(op2, vt2);
-                        true
-                    } else if self.bvalue(op2) == vt2 {
-                        self.bindings.insert(op1, vt1);
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+        match constraint {
+            &Constraint::Assertion(ref c) => match **c {
+                Constraint::Or(ref c1, ref c2) => {
+                    // c1, c2 will be of the form And(Eq(ci1), Eq(ci2))
+                    [c1, c2].iter().any(|&ci| {
+                        match **ci {
+                            Constraint::And(ref bc1, ref bc2) => match (&**bc1, &**bc2) {
+                                (Constraint::Equality(op1, bvt1), Constraint::Equality(op2, bvt2)) => match (&**bvt1, &**bvt2) {
+                                    (Constraint::Value(vt1), Constraint::Value(vt2)) => {
+                                        if &self.bvalue(*op1) == vt1 {
+                                            self.bindings.insert(*op2, *vt2);
+                                            true
+                                        } else if &self.bvalue(*op2) == vt2 {
+                                            self.bindings.insert(*op1, *vt1);
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    _ => false,
+                                }
+                                _ => false,
+
+                            }
+                            _ => false,
+                        }
+                    })
                 }
-            })
-        } else {
-            false
+                _ => false,
+            }
+            _ => false,
         }
     }
 
@@ -248,17 +256,17 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
 impl<T: Debug + Clone + Copy> Display for Constraint<T> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         let s = match *self {
-            Constraint::Union(op1, op2) => format!("{:?} U {:?}", op1, op2),
-            Constraint::Equality(op1, box ref op2) => format!("{:?} = {}", op1, op2),
+            Constraint::Union(op1, ref op2) => format!("{:?} U {:?}", op1, op2),
+            Constraint::Equality(op1, ref op2) => format!("{:?} = {}", op1, *op2),
             Constraint::AssertEquivalence(ref ops) => {
                 ops.iter().fold("Assert ".to_owned(), |mut acc, s| {
                     acc.push_str(&format!("{:?} = ", s));
                     acc
                 })
             }
-            Constraint::Assertion(box ref op) => format!("Assert {}", op),
-            Constraint::Or(box ref op1, box ref op2) => format!("{} \\/ {}", op1, op2),
-            Constraint::And(box ref op1, box ref op2) => format!("{} /\\ {}", op1, op2),
+            Constraint::Assertion(ref op) => format!("Assert {}", *op),
+            Constraint::Or(ref op1, ref op2) => format!("{} \\/ {}", *op1, *op2),
+            Constraint::And(ref op1, ref op2) => format!("{} /\\ {}", *op1, *op2),
             Constraint::Value(ref vt) => format!("{:?}", vt),
         };
         write!(f, "{}", s)

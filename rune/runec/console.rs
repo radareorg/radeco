@@ -2,6 +2,7 @@
 
 extern crate rustyline;
 use self::rustyline::error::ReadlineError;
+use self::rustyline::history::FileHistory;
 use self::rustyline::Editor;
 
 use std::io::{self, Write};
@@ -67,7 +68,7 @@ impl Console {
     pub fn read_command(&self) -> Vec<Command> {
         let mut repeat: u32 = 1;
         let mut cmd: Command;
-        let mut r = Editor::<()>::new();
+        let mut r = Editor::<(), FileHistory>::new().expect("unable to create rustyline Editor");
 
         if let Err(_) = r.load_history("history.txt") {
             self.print_info("No history found.");
@@ -79,7 +80,10 @@ impl Console {
 
             match readline {
                 Ok(buffer) => {
-                    r.add_history_entry(buffer.clone());
+                    if let Err(err) = r.add_history_entry(buffer.clone()) {
+                        println!("(!) Error adding history entry: {err}");
+                        continue;
+                    }
                     cmd = From::from(buffer.to_owned());
 
                     if cmd.is_chainable() {

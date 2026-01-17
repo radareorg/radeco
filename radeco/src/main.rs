@@ -1,4 +1,3 @@
-#![feature(box_patterns)]
 #[cfg(feature = "trace_log")]
 extern crate env_logger;
 
