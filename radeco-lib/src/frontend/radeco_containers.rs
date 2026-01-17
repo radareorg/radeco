@@ -43,9 +43,9 @@ use petgraph::Direction;
 
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 use r2api::structs::{
-    LCCInfo, LEntryInfo, LExportInfo, LOpInfo, LRelocInfo, LSectionInfo, LStringInfo, LSymbolInfo,
+    LCCInfo, LEntry, LExportInfo, LOpInfo, LRelocInfo, LSectionInfo, LStringInfo, LSymbolInfo,
     LSymbolType, LVarInfo,
 };
 
@@ -176,16 +176,16 @@ pub trait CGInfo {
 impl CGInfo for CallGraph {
     // Return a list of callers to function at offset, along with their callsites
     fn callers<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a> {
-        box self
+        Box::new(self
             .edges_directed(idx, Direction::Incoming)
-            .map(|er| (er.weight().csite, er.target()))
+            .map(|er| (er.weight().csite, er.target())))
     }
 
     // Return (callsite, call target)
     fn callees<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a> {
-        box self
+        Box::new(self
             .edges_directed(idx, Direction::Outgoing)
-            .map(|er| (er.weight().csite, er.target()))
+            .map(|er| (er.weight().csite, er.target())))
     }
 }
 
@@ -203,7 +203,7 @@ pub struct RadecoModule {
     exports: Vec<LExportInfo>,
     relocs: Vec<LRelocInfo>,
     libs: Vec<String>,
-    entrypoint: Vec<LEntryInfo>,
+    entrypoint: Vec<LEntry>,
     // Information from early/low-level analysis
     /// Call graph for current module
     pub callgraph: CallGraph,
@@ -404,6 +404,16 @@ pub struct RadecoFunction {
     pub kind: FunctionKind,
 }
 
+impl RadecoFunction {
+    // Gets whether the Radeco function is recursive.
+    pub const fn is_recursive(&self) -> bool {
+        match self.is_recursive {
+            Some(true) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Default)]
 /// Top-level loader used to initialize a `RadecoProject`
 pub struct ProjectLoader<'a> {
@@ -478,7 +488,7 @@ impl<'a> ProjectLoader<'a> {
             let mut r2 = R2::new(Some(&self.path)).expect("Unable to open r2");
             let _ = r2.raw("e bin.minstr=1".to_string());
             //New r2 process is launched thus it needs to analyze
-            r2.analyze_all();
+            r2.analyze_all().expect("analysis error");
             let r2w = Rc::new(RefCell::new(r2));
             self.source = Some(Rc::new(r2w));
         };
@@ -948,7 +958,7 @@ impl<'a> ModuleLoader<'a> {
 
             if self.load_datarefs {
                 for info in &aux_info {
-                    if let Some(mut rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
+                    if let Some(rfn) = rmod.functions.get_mut(&info.offset.unwrap()) {
                         rfn.datarefs = info.datarefs.clone().unwrap_or_default();
                     }
                 }

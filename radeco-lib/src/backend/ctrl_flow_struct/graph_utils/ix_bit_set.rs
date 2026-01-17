@@ -40,7 +40,7 @@ impl<Ix: IndexLike> IxBitSet<Ix> {
         IxBitSet(BitSet::with_capacity(nbits), PhantomData)
     }
 
-    pub fn iter(&self) -> Iter<Ix> {
+    pub fn iter(&self) -> Iter<'_, Ix> {
         Iter(self.0.iter(), PhantomData)
     }
 

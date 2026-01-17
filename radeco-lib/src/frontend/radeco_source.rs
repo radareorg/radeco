@@ -10,9 +10,9 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 use r2api::structs::{
-    FunctionInfo, LCCInfo, LEntryInfo, LExportInfo, LFlagInfo, LFunctionInfo, LImportInfo, LOpInfo,
+    FunctionInfo, LCCInfo, LEntry, LExportInfo, LFlagInfo, LFunctionInfo, LImportInfo, LOpInfo,
     LRegInfo, LRelocInfo, LSectionInfo, LStringInfo, LSymbolInfo, LVarInfo,
 };
 
@@ -60,7 +60,7 @@ pub trait Source {
     fn libraries(&self) -> Result<Vec<String>, SourceErr> {
         unimplemented!()
     }
-    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
+    fn entrypoint(&self) -> Result<Vec<LEntry>, SourceErr> {
         unimplemented!()
     }
     fn disassemble_function(&self, _name: &str) -> Result<Vec<LOpInfo>, SourceErr> {
@@ -140,7 +140,7 @@ pub trait Source {
     }
 }
 
-// Cause R2Api requires borrowing mutably, while `Source` takes self which
+// Cause R2PApi requires borrowing mutably, while `Source` takes self which
 // is immutable.
 // The only problem with this is that r2pipe is not thread safe, therefore
 // using `r2` from multiple threads will cause results to be inconsistent.
@@ -155,10 +155,10 @@ pub trait Source {
 // sense to have some sort of cached information so that concurrent reads can occur. This should
 // be invalidated whenever some information is exported back to radare or some analysis is run on
 // r2.
-pub type WrappedR2Api<R> = Rc<RefCell<R>>;
+pub type WrappedR2PApi<R> = Rc<RefCell<R>>;
 
 // Implementation of `Source` trait for R2.
-impl<R: R2Api> Source for WrappedR2Api<R> {
+impl<R: R2PApi> Source for WrappedR2PApi<R> {
     fn functions(&self) -> Result<Vec<FunctionInfo>, SourceErr> {
         Ok(self.try_borrow_mut()?.fn_list()?)
     }
@@ -205,8 +205,10 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
         Ok(self.try_borrow_mut()?.libraries()?)
     }
 
-    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
-        Ok(self.try_borrow_mut()?.entrypoint()?)
+    fn entrypoint(&self) -> Result<Vec<LEntry>, SourceErr> {
+        self.try_borrow_mut()
+            .map_err(SourceErr::from)
+            .and_then(|mut s| s.entry().map_err(SourceErr::from))
     }
 
     fn disassemble_n_bytes(&self, n: u64, at: u64) -> Result<Vec<LOpInfo>, SourceErr> {
@@ -238,7 +240,9 @@ impl<R: R2Api> Source for WrappedR2Api<R> {
     }
 
     fn raw(&self, cmd: String) -> Result<String, SourceErr> {
-        Ok(self.try_borrow_mut()?.raw(cmd))
+        self.try_borrow_mut()
+            .map_err(SourceErr::from)
+            .and_then(|mut s| s.raw(cmd).map_err(SourceErr::from))
     }
 
     fn send(&self, s: String) -> Result<(), SourceErr> {
@@ -355,7 +359,7 @@ impl Source for FileSource {
         Ok(serde_json::from_str(&self.read_file(suffix::LIBRARY)?)?)
     }
 
-    fn entrypoint(&self) -> Result<Vec<LEntryInfo>, SourceErr> {
+    fn entrypoint(&self) -> Result<Vec<LEntry>, SourceErr> {
         Ok(serde_json::from_str(&self.read_file(suffix::ENTRY)?)?)
     }
 
@@ -398,8 +402,8 @@ impl Source for FileSource {
     }
 }
 
-impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
-    fn from(r2: WrappedR2Api<R>) -> FileSource {
+impl<R: R2PApi> From<WrappedR2PApi<R>> for FileSource {
+    fn from(r2: WrappedR2PApi<R>) -> FileSource {
         let bin_info = r2.borrow_mut().bin_info().expect("Failed to load bin_info");
         let fname = bin_info.core.unwrap().file.unwrap();
         let fname = Path::new(&fname).file_stem().unwrap();
@@ -531,7 +535,7 @@ impl<R: R2Api> From<WrappedR2Api<R>> for FileSource {
             {
                 let entry = r2
                     .borrow_mut()
-                    .entrypoint()
+                    .entry()
                     .expect("Unable to load entry info from r2");
                 let json_str = serde_json::to_string(&entry).expect("Failed to encode to json");
                 fsource.write_file(suffix::ENTRY, &json_str);

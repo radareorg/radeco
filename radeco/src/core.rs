@@ -167,12 +167,12 @@ pub fn load_proj_by_path(path: &str, max_it: u32) -> RadecoProject {
 }
 
 pub fn load_proj_tcp(url: &str, max_it: u32) -> Result<RadecoProject, &'static str> {
-    let r2p = R2Pipe::tcp(url)?;
+    let r2p = R2Pipe::tcp(url).map_err(|_| "error creating project from TCP URL")?;
     Ok(load_project_by_r2pipe(r2p, max_it))
 }
 
 pub fn load_proj_http(url: &str, max_it: u32) -> Result<RadecoProject, &'static str> {
-    let r2p = R2Pipe::http(url)?;
+    let r2p = R2Pipe::http(url);
     Ok(load_project_by_r2pipe(r2p, max_it))
 }
 

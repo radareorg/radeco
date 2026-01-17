@@ -13,7 +13,6 @@ path = "runec/main.rs"
 
 [dependencies]
 petgraph = "*"
-rustc-serialize = "*"
 clippy = {version = "*", optional = true}
 regex = "*"
 docopt = "*"
@@ -37,4 +36,5 @@ path = "../esil-rs"
 git = "https://github.com/radareorg/r2pipe.rs"
 
 [dependencies.r2api]
+package = "r2papi"
 git = "https://github.com/radare/radare2-r2pipe-api"

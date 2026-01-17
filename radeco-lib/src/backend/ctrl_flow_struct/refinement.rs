@@ -497,11 +497,12 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
 
     gen_rule! {rule_While, |self, body| {
         if let Seq(mut seq) = body {
-            if let Some(&Cond(c, box Break, None)) = seq.first() {
-                seq.remove(0);
-                Ok(Loop(PreChecked(self.cctx.mk_not(c)), Box::new(mk_seq_vec(seq))))
-            } else {
-                Err(Seq(seq))
+            match seq.first() {
+                Some(&Cond(c, ref b, None)) if matches!(**b, Break) => {
+                    seq.remove(0);
+                    Ok(Loop(PreChecked(self.cctx.mk_not(c)), Box::new(mk_seq_vec(seq))))
+                }
+                _ => Err(Seq(seq)),
             }
         } else {
             Err(body)
@@ -510,11 +511,12 @@ impl<'cd, A: AstContext> LoopRefiner<'cd, A> {
 
     gen_rule! {rule_DoWhile, |self, body| {
         if let Seq(mut seq) = body {
-            if let Some(&Cond(c, box Break, None)) = seq.last() {
-                seq.pop();
-                Ok(Loop(PostChecked(self.cctx.mk_not(c)), Box::new(mk_seq_vec(seq))))
-            } else {
-                Err(Seq(seq))
+            match seq.last() {
+                Some(&Cond(c, ref b, None)) if matches!(**b, Break) => {
+                    seq.pop();
+                    Ok(Loop(PostChecked(self.cctx.mk_not(c)), Box::new(mk_seq_vec(seq))))
+                }
+                _ => Err(Seq(seq)),
             }
         } else {
             Err(body)

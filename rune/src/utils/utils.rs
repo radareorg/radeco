@@ -2,7 +2,7 @@
 
 use r2pipe::r2::R2;
 
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 
 use crate::context::rune_ctx::RuneContext;
 use crate::context::context::{ContextAPI};

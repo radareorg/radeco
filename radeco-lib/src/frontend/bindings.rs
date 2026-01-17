@@ -45,7 +45,7 @@ pub trait RBind {
     fn is_unknown(&self) -> bool;
 
     fn add_refs(&mut self, _: Vec<Self::SSARef>);
-    fn refs(&self) -> ::std::slice::Iter<Self::SSARef>;
+    fn refs(&self) -> ::std::slice::Iter<'_, Self::SSARef>;
 }
 
 /// Trait that describes variable bindings for a function.
@@ -59,8 +59,8 @@ pub trait RBindings {
     fn binding(&self, _: &Self::Idx) -> Option<&Self::BTy>;
     fn binding_mut(&mut self, _: &Self::Idx) -> Option<&mut Self::BTy>;
 
-    fn bindings(&self) -> RBinds<Self::BTy>;
-    fn bindings_mut(&mut self) -> RBindsMut<Self::BTy>;
+    fn bindings(&self) -> RBinds<'_, Self::BTy>;
+    fn bindings_mut(&mut self) -> RBindsMut<'_, Self::BTy>;
 }
 
 #[derive(Debug)]
@@ -125,13 +125,13 @@ impl<BTy: RBind> RBindings for RadecoBindings<BTy> {
         self.binds.get_mut(*idx)
     }
 
-    fn bindings(&self) -> RBinds<BTy> {
+    fn bindings(&self) -> RBinds<'_, BTy> {
         RBinds {
             binds: self.binds.iter(),
         }
     }
 
-    fn bindings_mut(&mut self) -> RBindsMut<BTy> {
+    fn bindings_mut(&mut self) -> RBindsMut<'_, BTy> {
         RBindsMut {
             binds: self.binds.iter_mut(),
         }
@@ -148,6 +148,13 @@ pub struct Binding<T: fmt::Debug + Clone> {
     // Node indices in the function ssa that corresponds to this binding.
     ssa_refs: Vec<T>,
     set: HashSet<VarSet>,
+}
+
+impl<T: fmt::Debug + Clone> Binding<T> {
+    /// Gets the dynamic data type of the binding.
+    pub fn dty(&self) -> VarDataType {
+        self.dty
+    }
 }
 
 impl<'a, T: 'a + RBind> Iterator for RBindsMut<'a, T> {
@@ -345,7 +352,7 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
         self.ssa_refs.extend(refs);
     }
 
-    fn refs(&self) -> ::std::slice::Iter<T> {
+    fn refs(&self) -> ::std::slice::Iter<'_, T> {
         self.ssa_refs.iter()
     }
 }

@@ -222,7 +222,6 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
                     Ok(token_opt_) => token_opt_,
                     Err(_err) => {
                         panic!("ERROR tokenizing!");
-                        continue;
                     }
                 };
                 if let Some(ref token) = token_opt {
@@ -235,7 +234,6 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
                             Ok(operands_opt) => operands_opt,
                             Err(_err) => {
                                 panic!("Error fetching operands!");
-                                continue;
                             }
                         }
                     };

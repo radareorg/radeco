@@ -9,7 +9,7 @@ use std::process;
 
 use serde_json;
 
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 use r2api::structs::{FunctionInfo, LFlagInfo, LOpInfo, LRegInfo, LSectionInfo, LStringInfo};
 use r2pipe::r2::R2;
 
@@ -98,7 +98,7 @@ pub trait Source {
 // Implementation of `Source` trait for R2.
 impl Source for R2
 where
-    R2: R2Api,
+    R2: R2PApi,
 {
     fn functions(&mut self) -> Result<Vec<FunctionInfo>, &'static str> {
         match self.fn_list() {
@@ -149,7 +149,8 @@ where
     }
 
     fn send(&mut self, s: &str) {
-        self.send(s);
+        // FIXME: this function should bubble-up the error
+        let _ = self.send(s);
     }
 }
 
