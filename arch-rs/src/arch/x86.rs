@@ -1,8 +1,6 @@
 use r2api::structs::Endian;
 
-use crate::arch::arch::*;
-use crate::cc::calling_convention::*;
-use crate::regfile::regfile::*;
+use super::*;
 
 /********************
  * x86 architecture *

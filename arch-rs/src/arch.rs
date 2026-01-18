@@ -3,7 +3,9 @@
 use r2api::structs::Endian;
 
 use crate::cc::calling_convention::*;
-use crate::regfile::regfile::*;
+use crate::regfile::*;
+
+pub mod x86;
 
 /// Defines a generic trait which all architectures have to implement,
 /// over and above their own specifics

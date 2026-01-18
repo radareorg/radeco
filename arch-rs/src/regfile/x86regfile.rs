@@ -2,8 +2,7 @@ use r2api::structs::LRegInfo;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use crate::regfile::regfile::*;
-use crate::utils::*;
+use super::*;
 
 /// Basic X86Register structure
 #[derive(Clone, Debug, Hash)]
@@ -26,12 +25,12 @@ impl X86Register {
         parent: Option<AbstractRegister>,
     ) -> X86Register {
         X86Register {
-            name: name,
-            regtype: regtype,
-            offset: offset,
-            width: width,
-            is_whole: is_whole,
-            parent: parent,
+            name,
+            regtype,
+            offset,
+            width,
+            is_whole,
+            parent,
         }
     }
 }
@@ -103,6 +102,13 @@ pub struct X86RegisterFile {
     available_abstract_regs: Vec<AbstractRegister>,
 }
 
+impl X86RegisterFile {
+    /// Gets a reference to the register file aliases.
+    pub const fn aliases(&self) -> &HashMap<String, String> {
+        &self.aliases
+    }
+}
+
 impl RegisterFile for X86RegisterFile {
     type Reg = X86Register;
 
@@ -124,28 +130,27 @@ impl RegisterFile for X86RegisterFile {
         reg: &X86Register,
     ) -> Result<AbstractRegister, RegFileError> {
         if let Some(abs) = abs_reg {
-            let idx = self.available_abstract_regs.iter().position(|&t| t == abs);
-            if idx.is_none() {
-                let _ = self.available_abstract_regs.remove(idx.unwrap());
+            if let Some(avail_reg) = self.available_abstract_regs.iter().find(|&&t| t == abs) {
+                self.registers
+                    .get_mut(avail_reg)
+                    .ok_or(RegFileError::RegisterNotFound)
+                    .map(|abs_reg| {
+                        *abs_reg = reg.clone();
+                        abs
+                    })
+            } else {
                 self.absregmap.insert(reg.name.clone(), abs);
                 self.registers.insert(abs, reg.clone());
                 Ok(abs)
-            } else {
-                *self
-                    .registers
-                    .get_mut(&self.available_abstract_regs[idx.unwrap()])
-                    .unwrap() = reg.clone();
-                Ok(abs)
             }
         } else {
-            let abs = self.available_abstract_regs.pop();
-            if let Some(abs_reg) = abs {
-                self.absregmap.insert(reg.name.clone(), abs_reg);
-                self.registers.insert(abs_reg, reg.clone());
-                Ok(abs_reg)
-            } else {
-                Err(RegFileError::OutOfAbstractRegisters)
-            }
+            self.available_abstract_regs
+                .pop()
+                .inspect(|&abs_reg| {
+                    self.absregmap.insert(reg.name.clone(), abs_reg);
+                    self.registers.insert(abs_reg, reg.clone());
+                })
+                .ok_or(RegFileError::OutOfAbstractRegisters)
         }
     }
 
@@ -242,10 +247,10 @@ impl X86RegisterFile {
         }
 
         Ok(X86RegisterFile {
-            absregmap: absregmap,
+            absregmap,
             registers: regmap,
-            aliases: aliases,
-            available_abstract_regs: available_abstract_regs,
+            aliases,
+            available_abstract_regs,
         })
     }
 }
