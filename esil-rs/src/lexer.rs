@@ -82,78 +82,69 @@ pub enum Token {
 
 impl Token {
     pub fn is_binary(&self) -> bool {
-        match *self {
+        matches!(
+            self,
             Token::ECmp
-            | Token::ELt
-            | Token::EGt
-            | Token::EEq
-            | Token::ELsl
-            | Token::ELsr
-            | Token::ERor
-            | Token::ERol
-            | Token::EAnd
-            | Token::EOr
-            | Token::EMul
-            | Token::EXor
-            | Token::EAdd
-            | Token::ESub
-            | Token::EDiv
-            | Token::EMod
-            | Token::EPoke(_) => true,
-            _ => false,
-        }
+                | Token::ELt
+                | Token::EGt
+                | Token::EEq
+                | Token::ELsl
+                | Token::ELsr
+                | Token::ERor
+                | Token::ERol
+                | Token::EAnd
+                | Token::EOr
+                | Token::EMul
+                | Token::EXor
+                | Token::EAdd
+                | Token::ESub
+                | Token::EDiv
+                | Token::EMod
+                | Token::EPoke(_)
+        )
     }
 
     pub fn is_unary(&self) -> bool {
-        match *self {
-            Token::EPop | Token::ENeg | Token::EIf | Token::EPeek(_) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Token::EPop | Token::ENeg | Token::EIf | Token::EPeek(_)
+        )
     }
 
     pub fn is_arity_zero(&self) -> bool {
-        match *self {
-            Token::EDump | Token::ENop | Token::EEndIf => true,
-            _ => false,
-        }
+        matches!(self, Token::EDump | Token::ENop | Token::EEndIf)
     }
 
     pub fn is_implemented(&self) -> bool {
-        match *self {
+        !matches!(
+            self,
             Token::ETodo
-            | Token::EInterrupt
-            | Token::EGoto
-            | Token::EBreak
-            | Token::EClear
-            | Token::ETrap => false,
-            _ => true,
-        }
+                | Token::EInterrupt
+                | Token::EGoto
+                | Token::EBreak
+                | Token::EClear
+                | Token::ETrap
+        )
     }
 
     pub fn is_meta(&self) -> bool {
-        match *self {
-            Token::EOld | Token::EOld_ | Token::ECur | Token::ELastsz | Token::EAddress => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Token::EOld | Token::EOld_ | Token::ECur | Token::ELastsz | Token::EAddress
+        )
     }
 
     pub fn should_set_vars(&self) -> bool {
-        match *self {
-            Token::ECmp | Token::EEq | Token::EPoke(_) | Token::EGt | Token::ELt => true,
-            _ => false,
-        }
+        matches!(
+            *self,
+            Token::ECmp | Token::EEq | Token::EPoke(_) | Token::EGt | Token::ELt
+        )
     }
 
     pub fn updates_result(&self) -> bool {
         // If it an operator
-        if self.is_binary() || self.is_unary() || self.is_arity_zero() {
-            match *self {
-                Token::EEq | Token::EPoke(_) => false,
-                _ => true,
-            }
-        } else {
-            false
-        }
+        (self.is_binary() || self.is_unary() || self.is_arity_zero())
+            && !matches!(*self, Token::EEq | Token::EPoke(_))
     }
 }
 
@@ -168,7 +159,7 @@ impl Tokenize for Tokenizer {
     type Token = Token;
     fn tokenize<T: AsRef<str>>(esil: T) -> VecDeque<Self::Token> {
         let mut tokens = VecDeque::new();
-        for t in esil.as_ref().split(",").into_iter() {
+        for t in esil.as_ref().split(",") {
             tokens.extend(match t {
                 "$" => vec![Token::EInterrupt],
                 "==" => vec![Token::ECmp],
@@ -715,8 +706,8 @@ impl Tokenize for Tokenizer {
                                 }
                             }
                         }
-                    } else if t.starts_with("0x") {
-                        match u64::from_str_radix(t.trim_start_matches("0x"), 16) {
+                    } else if let Some(h) =  t.strip_prefix("0x") {
+                        match u64::from_str_radix(h, 16) {
                             Ok(v) => vec![Token::EConstant(v)],
                             Err(_) => vec![Token::EInvalid],
                         }
@@ -743,7 +734,7 @@ mod test {
 
     #[test]
     fn esil_basic() {
-        let op = vec![Token::EAdd];
+        let op = [Token::EAdd];
         assert_eq!(op[0], Tokenizer::tokenize("+")[0]);
     }
 
@@ -758,7 +749,7 @@ mod test {
     #[test]
     fn u64_max_int() {
         assert_eq!(
-            Token::EConstant(u64::max_value()),
+            Token::EConstant(u64::MAX),
             Tokenizer::tokenize("18446744073709551615")[0]
         );
     }
@@ -767,28 +758,28 @@ mod test {
     fn u64_min_int() {
         assert_eq!(
             Token::EConstant(0),
-            Tokenizer::tokenize(format!("{}", u64::min_value()))[0]
+            Tokenizer::tokenize(format!("{}", u64::MIN))[0]
         );
     }
 
     #[test]
     fn i64_min_int() {
         assert_eq!(
-            Token::EConstant(i64::min_value() as u64),
-            Tokenizer::tokenize(format!("{}", i64::min_value()))[0]
+            Token::EConstant(i64::MIN as u64),
+            Tokenizer::tokenize(format!("{}", i64::MIN))[0]
         );
     }
 
     #[test]
     fn i64_max_int() {
         assert_eq!(
-            Token::EConstant(i64::max_value() as u64),
-            Tokenizer::tokenize(format!("{}", i64::max_value()))[0]
+            Token::EConstant(i64::MAX as u64),
+            Tokenizer::tokenize(format!("{}", i64::MAX))[0]
         );
     }
 
     #[test]
     fn utf8_internal_prefix() {
-        Tokenizer::tokenize(str::from_utf8(&vec![0x24, 0xda, 0x91]).unwrap());
+        Tokenizer::tokenize(str::from_utf8(&[0x24, 0xda, 0x91]).unwrap());
     }
 }
