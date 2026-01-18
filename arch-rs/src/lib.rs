@@ -6,17 +6,6 @@ extern crate r2api;
 #[macro_use]
 pub mod utils;
 
-pub mod arch {
-    pub mod arch;
-    pub mod x86;
-}
-
-pub mod cc {
-    pub mod calling_convention;
-    pub mod cdecl;
-}
-
-pub mod regfile {
-    pub mod regfile;
-    pub mod x86regfile;
-}
+pub mod arch;
+pub mod cc;
+pub mod regfile;

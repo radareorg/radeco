@@ -3,6 +3,8 @@ use crate::utils::*;
 use r2api::structs::LRegInfo;
 use std::collections::HashMap;
 
+pub mod x86regfile;
+
 /// Register Type
 #[derive(Clone, Debug, Copy, Hash)]
 pub enum RegType {
