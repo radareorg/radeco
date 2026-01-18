@@ -8,7 +8,7 @@
 use crate::lexer::{Token, Tokenize};
 
 use std::collections::{HashMap, VecDeque};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 /// Enumeration of errors that occur in the ESIL parser
 #[derive(Debug, Clone)]
@@ -22,25 +22,27 @@ pub enum ParserError {
     UnknownOperandSize,
 }
 
-impl ToString for ParserError {
-    fn to_string(&self) -> String {
+impl Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserError::InvalidPop => "Invalid ESIL pop!".to_string(),
+            ParserError::InvalidPop => write!(f, "Invalid ESIL pop!"),
             ParserError::TooMany(Token::PCopy(_)) => {
-                "Request to `PCopy` too many elements!".to_string()
+                write!(f, "Request to `PCopy` too many elements!")
             }
             ParserError::TooMany(Token::PPop(_)) => {
-                "Request to `PPop` too many elements!".to_string()
+                write!(f, "Request to `PPop` too many elements!")
             }
-            ParserError::TooMany(t) => format!("Request to `{:?}` too many elements!", t),
-            ParserError::InvalidOpcode => "Invalid ESIL opcode!".to_string(),
-            ParserError::InsufficientOperands => "Insufficient operands!".to_string(),
-            ParserError::Unimplemented => "Unimplemented".to_string(),
-            ParserError::InvalidDup => "Invalid use of EDup!".to_string(),
-            ParserError::UnknownOperandSize => "Unknown operand size".to_string(),
+            ParserError::TooMany(t) => write!(f, "Request to `{t:?}` too many elements!"),
+            ParserError::InvalidOpcode => write!(f, "Invalid ESIL opcode!"),
+            ParserError::InsufficientOperands => write!(f, "Insufficient operands!"),
+            ParserError::Unimplemented => write!(f, "Unimplemented"),
+            ParserError::InvalidDup => write!(f, "Invalid use of EDup!"),
+            ParserError::UnknownOperandSize => write!(f, "Unknown operand size"),
         }
     }
 }
+
+impl std::error::Error for ParserError {}
 
 #[derive(Debug, Clone)]
 pub struct Parser {
@@ -67,6 +69,8 @@ pub struct Parser {
     pub lastsz: Option<Token>,
 }
 
+type OptionPair<T> = (Option<T>, Option<T>);
+
 pub trait Parse {
     type InType: Clone + Debug + PartialEq;
     type OutType: Clone + Debug;
@@ -80,7 +84,7 @@ pub trait Parse {
     fn fetch_operands(
         &mut self,
         t: &Self::InType,
-    ) -> Result<(Option<Self::OutType>, Option<Self::OutType>), Self::ParseError>;
+    ) -> Result<OptionPair<Self::OutType>, Self::ParseError>;
 
     fn push(&mut self, t: Self::InType);
 }
@@ -123,10 +127,11 @@ impl Parse for Parser {
                 | Token::IConstant(_)
                 | Token::IAddress(_) => {
                     let mut internal_q = self.evaluate_internal(&token)?;
-                    //self.skip_esil_set += internal_q.len() + 1;
                     while let Some(i) = internal_q.pop_back() {
                         // count the number of operations to skip for.
-                        self.tokens.as_mut().map(|v| v.push_front(i));
+                        if let Some(v) = self.tokens.as_mut() {
+                            v.push_front(i);
+                        }
                     }
                 }
                 // Esil Operands
@@ -148,7 +153,7 @@ impl Parse for Parser {
                     if *n > len {
                         return Err(ParserError::TooMany(Token::PCopy(*n)));
                     }
-                    self.tstack.extend((&self.stack[len - n..]).iter().cloned());
+                    self.tstack.extend(self.stack[len - n..].iter().cloned());
                 }
                 Token::PPop(ref n) => {
                     // Pops 'n' elements from the tstack to the esil stack.
@@ -157,7 +162,7 @@ impl Parse for Parser {
                     if *n > len {
                         return Err(ParserError::TooMany(Token::PPop(*n)));
                     }
-                    self.stack.extend((&self.tstack[len - n..]).iter().cloned());
+                    self.stack.extend(self.tstack[len - n..].iter().cloned());
                     self.tstack.truncate(len - n);
                 }
                 // Not in use _yet_.
@@ -196,10 +201,7 @@ impl Parse for Parser {
         self.stack.push(t);
     }
 
-    fn fetch_operands(
-        &mut self,
-        t: &Token,
-    ) -> Result<(Option<Token>, Option<Token>), Self::ParseError> {
+    fn fetch_operands(&mut self, t: &Token) -> Result<OptionPair<Token>, Self::ParseError> {
         let result = if t.is_binary() {
             match (self.pop_op(), self.pop_op()) {
                 (Ok(lhs), Ok(rhs)) => (lhs, rhs),
@@ -257,7 +259,7 @@ impl Parser {
         Parser {
             stack: Vec::new(),
             tstack: Vec::new(),
-            ident_map: ident_map,
+            ident_map,
             skip_esil_set: 0,
             default_size: default_size.unwrap_or(64),
             last_op: None,
@@ -287,7 +289,7 @@ impl Parser {
         let genmask = |bit: u64| {
             // ( 1 << bit ) - 1
             if bit == 64 {
-                u64::max_value()
+                u64::MAX
             } else {
                 (1 << bit) - 1
             }
@@ -454,7 +456,7 @@ impl Parser {
     }
 
     fn pop_op(&mut self) -> Result<Option<Token>, ParserError> {
-        if self.stack.len() > 0 {
+        if !self.stack.is_empty() {
             Ok(self.stack.pop())
         } else {
             Err(ParserError::InsufficientOperands)
@@ -512,7 +514,7 @@ mod test {
 
             expression.clear();
             for expr in &p.stack {
-                if let &Token::EIdentifier(ref s) = expr {
+                if let Token::EIdentifier(s) = expr {
                     expression.push_str(s);
                 }
             }
