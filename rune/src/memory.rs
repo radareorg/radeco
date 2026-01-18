@@ -4,6 +4,9 @@ use r2api::structs::Endian;
 
 use std::fmt::Debug;
 
+pub mod qword_mem;
+pub mod seg_mem;
+
 pub trait Memory: Clone + Debug {
     type VarRef;
 

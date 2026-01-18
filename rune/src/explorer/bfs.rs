@@ -1,9 +1,9 @@
 //! `PathExplorer` that works by exploring the CFG in Breadth First Order.
 use std::collections::VecDeque;
 
-use crate::context::context::{Context, RegisterRead};
+use super::PathExplorer;
+use crate::context::{Context, RegisterRead};
 use crate::engine::rune::RuneControl;
-use crate::explorer::explorer::PathExplorer;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum BranchType {
@@ -19,10 +19,7 @@ struct SavedState<C: Context> {
 
 impl<C: Context> SavedState<C> {
     fn new(ctx: C, b: BranchType) -> SavedState<C> {
-        SavedState {
-            ctx: ctx,
-            branch: b,
-        }
+        SavedState { ctx, branch: b }
     }
 }
 

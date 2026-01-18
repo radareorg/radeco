@@ -8,14 +8,9 @@ use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
 use libsmt::logics::qf_abv;
 use libsmt::theories::bitvec;
 
-use crate::memory::memory::Memory;
-
-use crate::regstore::regstore::{RegStore, RegStoreAPI};
-//use regstore::regfile::RuneRegFile;
-
-use crate::context::context::{
-    Context, ContextAPI, Evaluate, MemoryRead, MemoryWrite, RegisterRead, RegisterWrite,
-};
+use super::{Context, ContextAPI, Evaluate, MemoryRead, MemoryWrite, RegisterRead, RegisterWrite};
+use crate::memory::Memory;
+use crate::regstore::{RegStore, RegStoreAPI};
 
 #[derive(Clone, Debug)]
 pub struct RuneContext<Mem, Reg>
@@ -239,15 +234,16 @@ where
     ) -> RuneContext<Mem, Reg> {
         RuneContext {
             ip: ip.unwrap_or(0),
-            mem: mem,
-            regstore: regstore,
-            solver: solver,
+            mem,
+            regstore,
+            solver,
             e_old: None,
             e_cur: None,
         }
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
 

@@ -1,11 +1,11 @@
 //! `DirectedExplorer`, an implementation of a `PathExplorer` which allows directed symbolic
 //! execution
 
+use super::PathExplorer;
 use crate::engine::rune::RuneControl;
-use crate::explorer::explorer::PathExplorer;
 
-use crate::context::context::{Context, Evaluate, RegisterRead};
 use crate::context::rune_ctx::RuneContext;
+use crate::context::{Context, Evaluate, RegisterRead};
 
 use crate::memory::seg_mem::SegMem;
 use crate::regstore::regfile::RuneRegFile;
@@ -82,12 +82,12 @@ impl PathExplorer for DirectedExplorer {
             match *direction {
                 BranchType::True => {
                     let one = ctx.define_const(1, 64);
-                    ctx.eval(core::OpCodes::Cmp, &[condition, one]);
+                    ctx.eval(core::OpCodes::Cmp, [condition, one]);
                     RuneControl::ExploreTrue
                 }
                 BranchType::False => {
                     let zero = ctx.define_const(0, 64);
-                    ctx.eval(core::OpCodes::Cmp, &[condition, zero]);
+                    ctx.eval(core::OpCodes::Cmp, [condition, zero]);
                     RuneControl::ExploreFalse
                 }
                 _ => panic!("Invalid branch type found!"),

@@ -3,11 +3,10 @@ use std::io::prelude::*;
 
 use std::collections::HashMap;
 
-use crate::utils::utils::{new_rune_ctx, Key};
 use serde_json::{from_reader, to_string};
 
+use super::{new_rune_ctx, Key};
 use crate::context::rune_ctx::RuneContext;
-
 use crate::memory::seg_mem::SegMem;
 use crate::regstore::regfile::RuneRegFile;
 

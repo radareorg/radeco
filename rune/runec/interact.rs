@@ -1,10 +1,10 @@
 //! `PathExplorer` that allows interactive exploration
 
-use rune::context::context::{Context, Evaluate, MemoryRead, RegisterRead};
 use rune::context::rune_ctx::RuneContext;
+use rune::context::{Context, Evaluate, MemoryRead, RegisterRead};
 use rune::engine::rune::RuneControl;
-use rune::explorer::explorer::PathExplorer;
 use rune::explorer::interactive::Command;
+use rune::explorer::PathExplorer;
 use rune::memory::seg_mem::SegMem;
 use rune::regstore::regfile::RuneRegFile;
 
@@ -88,9 +88,9 @@ impl InteractiveExplorer {
             };
 
             let op_2 = {
-                if tokens[2].len() > 2 && &tokens[2][0..2] == "0x" {
+                if let Some(h) = tokens[2].strip_prefix("0x") {
                     let const_v =
-                        u64::from_str_radix(&tokens[2][2..], 16).expect("Invalid base16 Integer");
+                        u64::from_str_radix(h, 16).expect("Invalid base16 Integer");
                     ctx.define_const(const_v, 64)
                 } else {
                     ctx.reg_read(tokens[2])
@@ -174,12 +174,12 @@ impl PathExplorer for InteractiveExplorer {
             match cmd {
                 Command::FollowTrue => {
                     let one = ctx.define_const(1, 64);
-                    ctx.eval(core::OpCodes::Cmp, &[condition, one]);
+                    ctx.eval(core::OpCodes::Cmp, [condition, one]);
                     RuneControl::ExploreTrue
                 }
                 Command::FollowFalse => {
                     let zero = ctx.define_const(0, 64);
-                    ctx.eval(core::OpCodes::Cmp, &[condition, zero]);
+                    ctx.eval(core::OpCodes::Cmp, [condition, zero]);
                     RuneControl::ExploreFalse
                 }
                 _ => panic!("Incompatible command"),

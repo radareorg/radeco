@@ -1,6 +1,6 @@
 //! Defines Commands available to the Explorer.
 
-use crate::utils::utils::{convert_to_u64, to_assignment, Key, SAssignment, ValType};
+use crate::utils::{convert_to_u64, to_assignment, Key, SAssignment, ValType};
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Command {
@@ -32,10 +32,7 @@ impl Command {
     }
 
     pub fn is_set(&self) -> bool {
-        match *self {
-            Command::SetVar(_) | Command::SetContext(_) => true,
-            _ => false,
-        }
+        matches!(self, Command::SetVar(_) | Command::SetContext(_))
     }
 
     pub fn is_chainable(&self) -> bool {

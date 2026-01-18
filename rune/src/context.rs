@@ -7,6 +7,8 @@ use std::collections::HashMap;
 
 use libsmt::backends::smtlib2::SMTProc;
 
+pub mod rune_ctx;
+
 pub trait Context:
     Clone
     + Debug

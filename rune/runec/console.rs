@@ -6,18 +6,17 @@ use self::rustyline::history::FileHistory;
 use self::rustyline::Editor;
 
 use std::io::{self, Write};
-use std::iter;
 
 use rune::explorer::interactive::Command;
 
-static PROMPT: &'static str = "\x1b[1;32m>>>\x1b[0m ";
-static OUTPUT: &'static str = "< ";
-static ASSERT_HELP: &'static str = "
+static PROMPT: &str = "\x1b[1;32m>>>\x1b[0m ";
+static OUTPUT: &str = "< ";
+static ASSERT_HELP: &str = "
 Adding assertions:
 <operation> <register> <reg/const in hex>
 Valid operations: =, >, <, <=, >=
 ";
-static HELP: &'static str = "runec help menu:
+static HELP: &str = "runec help menu:
 
 Branch Follow Commands:
   t     Follow `True` branch
@@ -70,7 +69,7 @@ impl Console {
         let mut cmd: Command;
         let mut r = Editor::<(), FileHistory>::new().expect("unable to create rustyline Editor");
 
-        if let Err(_) = r.load_history("history.txt") {
+        if r.load_history("history.txt").is_err() {
             self.print_info("No history found.");
         }
 
@@ -111,16 +110,17 @@ impl Console {
                     break;
                 }
                 Err(err) => {
-                    println!("[!] Error: {:?}", err);
+                    if !self.out_prompt.is_empty() {
+                        self.print_out_prompt();
+                    }
+                    println!("[!] Error: {err:?}");
                     repeat = 1;
                     continue;
                 }
             }
         }
         r.save_history("history.txt").unwrap();
-        iter::repeat(cmd)
-            .take(repeat as usize + 1)
-            .collect::<Vec<_>>()
+        std::iter::repeat_n(cmd, repeat as usize + 1).collect::<Vec<_>>()
     }
 
     pub fn readline(&self) -> io::Result<String> {
@@ -132,7 +132,12 @@ impl Console {
 
     pub fn print_prompt(&self) {
         print!("{}", self.prompt);
-        io::stdout().flush().ok().expect("Could not flush stdout");
+        io::stdout().flush().expect("Could not flush stdout");
+    }
+
+    pub fn print_out_prompt(&self) {
+        print!("{}", self.out_prompt);
+        io::stdout().flush().expect("Could not flush stdout");
     }
 
     pub fn print_help(&self) {
@@ -144,14 +149,14 @@ impl Console {
     }
 
     pub fn print_success(&self, s: &str) {
-        println!("[$] {}", s);
+        println!("[$] {s}");
     }
 
     pub fn print_error(&self, s: &str) {
-        println!("[!] {}", s);
+        println!("[!] {s}");
     }
 
     pub fn print_info(&self, s: &str) {
-        println!("[*] {}", s);
+        println!("[*] {s}");
     }
 }
