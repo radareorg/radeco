@@ -5,7 +5,7 @@
 //! make the decompiled output easier to read and add more sugaring.
 
 use std::collections::HashMap;
-use std::{default, fmt, iter};
+use std::{default, fmt};
 
 use petgraph::graph::{EdgeIndex, Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -15,7 +15,7 @@ use super::c_cfg_builder;
 use crate::frontend::radeco_containers::RadecoFunction;
 
 //////////////////////////////////////////////////////////////////////////////
-//// Declaration and implementation for basic C data types.
+/// Declaration and implementation for basic C data types.
 //////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, PartialEq)]
@@ -30,8 +30,8 @@ impl Ty {
     pub fn new(base: BTy, signed: bool, long: u8) -> Ty {
         Ty {
             base_type: base,
-            signed: signed,
-            long: long,
+            signed,
+            long,
         }
     }
 
@@ -94,7 +94,7 @@ impl fmt::Display for BTy {
 }
 
 //////////////////////////////////////////////////////////////////////////////
-//// Declaration and implementation for C AST (Nodes and Edge Types).
+/// Declaration and implementation for C AST (Nodes and Edge Types).
 //////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
@@ -146,18 +146,18 @@ pub enum Expr {
 enum CASTEdge {
     /// Used to ensure ordering of statements within a function. Lower index corresponds to a
     /// statement that should appear earlier in the output.
-    StatementOrd(u64),
+    Statement(u64),
     /// Used to ensure ordering of operands in an expression. Operands are ordered from lower to
     /// higher index.
-    OpOrd(u8),
-    BlockOrd(u64),
+    Op(u8),
+    Block(u64),
 }
 
 #[derive(Clone, Debug)]
 pub struct CAST {
     /// Internal graph that stores the AST.
     ast: Graph<CASTNode, CASTEdge>,
-    /// Numbering of StatementOrd edges
+    /// Numbering of Statement edges
     eidx: u64,
     /// Identifier for the function header.
     fn_head: NodeIndex,
@@ -186,14 +186,11 @@ impl default::Default for CAST {
 const INDENT_UNIT: char = ' ';
 const INDENT_SHIFT: u8 = 4;
 fn format_with_indent(string: &str, depth: usize) -> String {
-    iter::repeat(INDENT_UNIT)
-        .take(depth * INDENT_SHIFT as usize)
-        .collect::<String>()
-        + string
+    std::iter::repeat_n(INDENT_UNIT, depth * INDENT_SHIFT as usize).collect::<String>() + string
 }
 
 //////////////////////////////////////////////////////////////////////////////
-//// Implementation to manipulate the C AST effectively.
+// Implementation to manipulate the C AST effectively.
 //////////////////////////////////////////////////////////////////////////////
 
 impl CAST {
@@ -216,8 +213,8 @@ impl CAST {
         fname_map: &HashMap<u64, String>,
         strings: &HashMap<u64, String>,
     ) -> CAST {
-        let cfg = c_cfg_builder::recover_c_cfg(&rfn, &fname_map, &strings);
-        cfg.to_c_ast()
+        let cfg = c_cfg_builder::recover_c_cfg(rfn, fname_map, strings);
+        cfg.as_c_ast()
     }
 
     fn next_edge_idx(&mut self) -> u64 {
@@ -226,10 +223,10 @@ impl CAST {
     }
 
     fn get_statement_ord(&self, e: EdgeIndex) -> u64 {
-        if let CASTEdge::StatementOrd(idx) = self.ast[e] {
+        if let CASTEdge::Statement(idx) = self.ast[e] {
             idx
         } else {
-            u64::max_value()
+            u64::MAX
         }
     }
 
@@ -237,25 +234,19 @@ impl CAST {
         let mut args = self
             .ast
             .edges_directed(*node, EdgeDirection::Outgoing)
-            .filter(|x| {
-                if let CASTEdge::OpOrd(_) = *x.weight() {
-                    true
-                } else {
-                    false
-                }
-            })
+            .filter(|x| matches!(x.weight(), CASTEdge::Op(_)))
             .collect::<Vec<_>>();
         args.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::OpOrd(idx) = *a.weight() {
+            let idx1 = if let CASTEdge::Op(idx) = *a.weight() {
                 idx
             } else {
-                u8::max_value()
+                u8::MAX
             };
 
-            let idx2 = if let CASTEdge::OpOrd(idx) = *b.weight() {
+            let idx2 = if let CASTEdge::Op(idx) = *b.weight() {
                 idx
             } else {
-                u8::max_value()
+                u8::MAX
             };
 
             idx1.cmp(&idx2)
@@ -269,13 +260,13 @@ impl CAST {
         let idx = self.next_edge_idx();
         if !is_implicit {
             self.ast
-                .add_edge(self.fn_head, operator, CASTEdge::StatementOrd(idx));
+                .add_edge(self.fn_head, operator, CASTEdge::Statement(idx));
         }
         for (i, n) in operands.iter().enumerate() {
             if let Some(edx) = self.ast.find_edge(self.fn_head, *n) {
                 self.ast.remove_edge(edx);
             }
-            self.ast.add_edge(operator, *n, CASTEdge::OpOrd(i as u8));
+            self.ast.add_edge(operator, *n, CASTEdge::Op(i as u8));
         }
         operator
     }
@@ -290,17 +281,17 @@ impl CAST {
         };
         let while_h = self.ast.add_node(CASTNode::While);
         self.ast
-            .add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
-        self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
+            .add_edge(self.fn_head, while_h, CASTEdge::Statement(idx));
+        self.ast.add_edge(while_h, condition, CASTEdge::Op(0));
         let node = self.ast.add_node(CASTNode::Block);
-        self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
+        self.ast.add_edge(while_h, node, CASTEdge::Op(1));
         for (i, n) in body.iter().enumerate() {
             let e = self
                 .ast
                 .find_edge(self.fn_head, *n)
                 .expect("This cannot be `None`");
             self.ast.remove_edge(e);
-            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+            self.ast.add_edge(node, *n, CASTEdge::Block(i as u64));
         }
         while_h
     }
@@ -315,17 +306,17 @@ impl CAST {
         };
         let while_h = self.ast.add_node(CASTNode::DoWhile);
         self.ast
-            .add_edge(self.fn_head, while_h, CASTEdge::StatementOrd(idx));
-        self.ast.add_edge(while_h, condition, CASTEdge::OpOrd(0));
+            .add_edge(self.fn_head, while_h, CASTEdge::Statement(idx));
+        self.ast.add_edge(while_h, condition, CASTEdge::Op(0));
         let node = self.ast.add_node(CASTNode::Block);
-        self.ast.add_edge(while_h, node, CASTEdge::OpOrd(1));
+        self.ast.add_edge(while_h, node, CASTEdge::Op(1));
         for (i, n) in body.iter().enumerate() {
             let e = self
                 .ast
                 .find_edge(self.fn_head, *n)
                 .expect("This cannot be `None`");
             self.ast.remove_edge(e);
-            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+            self.ast.add_edge(node, *n, CASTEdge::Block(i as u64));
         }
         while_h
     }
@@ -345,31 +336,30 @@ impl CAST {
         };
         let if_h = self.ast.add_node(CASTNode::If);
         self.ast
-            .add_edge(self.fn_head, if_h, CASTEdge::StatementOrd(idx));
-        self.ast.add_edge(if_h, condition, CASTEdge::OpOrd(0));
+            .add_edge(self.fn_head, if_h, CASTEdge::Statement(idx));
+        self.ast.add_edge(if_h, condition, CASTEdge::Op(0));
 
         let node = self.ast.add_node(CASTNode::Block);
-        self.ast.add_edge(if_h, node, CASTEdge::OpOrd(1));
+        self.ast.add_edge(if_h, node, CASTEdge::Op(1));
         for (i, n) in body.iter().enumerate() {
             let e = self
                 .ast
                 .find_edge(self.fn_head, *n)
                 .expect("This cannot be `None`");
             self.ast.remove_edge(e);
-            self.ast.add_edge(node, *n, CASTEdge::BlockOrd(i as u64));
+            self.ast.add_edge(node, *n, CASTEdge::Block(i as u64));
         }
 
         if let Some(elses) = else_condition {
             let else_node = self.ast.add_node(CASTNode::Block);
-            self.ast.add_edge(if_h, else_node, CASTEdge::OpOrd(2));
+            self.ast.add_edge(if_h, else_node, CASTEdge::Op(2));
             for (i, n) in elses.into_iter().enumerate() {
                 let e = self
                     .ast
                     .find_edge(self.fn_head, n)
                     .expect("This cannot be `None`");
                 self.ast.remove_edge(e);
-                self.ast
-                    .add_edge(else_node, n, CASTEdge::BlockOrd(i as u64));
+                self.ast.add_edge(else_node, n, CASTEdge::Block(i as u64));
             }
         }
         if_h
@@ -381,8 +371,8 @@ impl CAST {
             .map(|arg_opt| {
                 if let Some(arg) = arg_opt {
                     match self.ast.node_weight(arg) {
-                        Some(&CASTNode::Var(ref v)) => v.clone(),
-                        Some(&CASTNode::Constant(_, ref c)) => c.clone(),
+                        Some(CASTNode::Var(v)) => v.clone(),
+                        Some(CASTNode::Constant(_, c)) => c.clone(),
                         _ => "unknown".to_string(),
                     }
                 } else {
@@ -395,15 +385,15 @@ impl CAST {
             .add_node(CASTNode::Call(func_name.to_string(), args_str));
         let idx = self.next_edge_idx();
         self.ast
-            .add_edge(self.fn_head, call_node, CASTEdge::StatementOrd(idx));
+            .add_edge(self.fn_head, call_node, CASTEdge::Statement(idx));
         call_node
     }
 
     pub fn ret(&mut self, value: Option<NodeIndex>) -> NodeIndex {
         let value_str = if let Some(_value) = value {
             match self.ast.node_weight(_value) {
-                Some(&CASTNode::Var(ref v)) => v.clone(),
-                Some(&CASTNode::Constant(_, ref c)) => c.clone(),
+                Some(CASTNode::Var(v)) => v.clone(),
+                Some(CASTNode::Constant(_, c)) => c.clone(),
                 _ => "unknown".to_string(),
             }
         } else {
@@ -412,7 +402,7 @@ impl CAST {
         let ret_node = self.ast.add_node(CASTNode::Return(value_str));
         let idx = self.next_edge_idx();
         self.ast
-            .add_edge(self.fn_head, ret_node, CASTEdge::StatementOrd(idx));
+            .add_edge(self.fn_head, ret_node, CASTEdge::Statement(idx));
         ret_node
     }
 
@@ -420,7 +410,7 @@ impl CAST {
         let goto_n = self.ast.add_node(CASTNode::Goto(label.to_string()));
         let idx = self.next_edge_idx();
         self.ast
-            .add_edge(self.fn_head, goto_n, CASTEdge::StatementOrd(idx));
+            .add_edge(self.fn_head, goto_n, CASTEdge::Statement(idx));
         goto_n
     }
 
@@ -428,7 +418,7 @@ impl CAST {
         let label = self.ast.add_node(CASTNode::Label(label.to_string()));
         let idx = self.next_edge_idx();
         self.ast
-            .add_edge(self.fn_head, label, CASTEdge::StatementOrd(idx));
+            .add_edge(self.fn_head, label, CASTEdge::Statement(idx));
         label
     }
 
@@ -436,7 +426,7 @@ impl CAST {
         let break_n = self.ast.add_node(CASTNode::Break);
         let idx = self.next_edge_idx();
         self.ast
-            .add_edge(self.fn_head, break_n, CASTEdge::StatementOrd(idx));
+            .add_edge(self.fn_head, break_n, CASTEdge::Statement(idx));
         break_n
     }
 
@@ -446,32 +436,31 @@ impl CAST {
         let mut var_decls = Vec::new();
         for (i, v) in vars.iter().enumerate() {
             let vn = self.ast.add_node(CASTNode::Var(v.clone()));
-            self.ast.add_edge(decl, vn, CASTEdge::OpOrd(i as u8));
+            self.ast.add_edge(decl, vn, CASTEdge::Op(i as u8));
             var_decls.push(vn);
         }
         let idx = self.next_edge_idx();
         if !is_implicit {
             self.ast
-                .add_edge(self.fn_head, decl, CASTEdge::StatementOrd(idx));
+                .add_edge(self.fn_head, decl, CASTEdge::Statement(idx));
         }
         var_decls
     }
 
     pub fn function_args(&mut self, args: &[(Ty, String)]) -> Vec<NodeIndex> {
         let mut arg_nodes = Vec::new();
-        for (i, &(ref t, ref named)) in args.iter().enumerate() {
+        for (i, (t, named)) in args.iter().enumerate() {
             let decl = self.ast.add_node(CASTNode::Declaration(t.clone()));
-            self.ast
-                .add_edge(self.fn_head, decl, CASTEdge::OpOrd(i as u8));
+            self.ast.add_edge(self.fn_head, decl, CASTEdge::Op(i as u8));
             let arg_node = self.ast.add_node(CASTNode::Var(named.clone()));
-            self.ast.add_edge(decl, arg_node, CASTEdge::OpOrd(0));
+            self.ast.add_edge(decl, arg_node, CASTEdge::Op(0));
             arg_nodes.push(arg_node);
         }
         arg_nodes
     }
 
     fn emit_c(&self, node: &NodeIndex, indent: usize, is_nested_expr: bool) -> String {
-        let comment = self.comments.get(&node).cloned();
+        let comment = self.comments.get(node).cloned();
         let mut result = match self.ast[*node] {
             CASTNode::FunctionHeader(_) => unimplemented!(),
             CASTNode::If => {
@@ -500,10 +489,7 @@ impl CAST {
                 };
 
                 format!(
-                    "{}{}{}{}",
-                    condition,
-                    true_body,
-                    format!("\n{}", false_body),
+                    "{condition}{true_body}\n{false_body}{}",
                     format_with_indent("}", indent)
                 )
             }
@@ -653,15 +639,14 @@ impl CAST {
                 format!("{}return {}", format_with_indent("", indent), &value)
             }
             CASTNode::Call(ref func, ref args) => {
-                format!("{}({})", format_with_indent(&func, indent), args.join(", "))
+                format!("{}({})", format_with_indent(func, indent), args.join(", "))
             }
             CASTNode::Block => {
                 let mut ns = self
                     .ast
                     .edges_directed(*node, Direction::Outgoing)
-                    .into_iter()
                     .filter_map(|x| match x.weight() {
-                        CASTEdge::BlockOrd(i) => Some((i, x.target())),
+                        CASTEdge::Block(i) => Some((i, x.target())),
                         _ => None,
                     })
                     .collect::<Vec<_>>();
@@ -676,13 +661,13 @@ impl CAST {
         let semicolon = self
             .ast
             .node_weight(*node)
-            .map_or(false, |n| Self::has_semicolon(&n, is_nested_expr));
+            .is_some_and(|n| Self::has_semicolon(n, is_nested_expr));
         if semicolon {
             result = format!("{};", result);
         }
 
-        if comment.is_some() {
-            format!("{}\t//{}", result, &comment.unwrap())
+        if let Some(comment) = comment.as_ref() {
+            format!("{result}\t//{comment}")
         } else {
             result
         }
@@ -720,7 +705,7 @@ impl CAST {
                 if let CASTNode::Declaration(ref ty) = self.ast[arg] {
                     for op in self.ast.edges_directed(arg, EdgeDirection::Outgoing) {
                         if let CASTNode::Var(ref name) = self.ast[op.target()] {
-                            arg_s = format!("{} {}", ty.to_string(), name);
+                            arg_s = format!("{} {}", ty, name);
                         }
                     }
                 }
@@ -734,25 +719,19 @@ impl CAST {
         let mut edges = self
             .ast
             .edges_directed(self.fn_head, EdgeDirection::Outgoing)
-            .filter(|x| {
-                if let CASTEdge::StatementOrd(_) = *x.weight() {
-                    true
-                } else {
-                    false
-                }
-            })
+            .filter(|x| matches!(x.weight(), CASTEdge::Statement(_)))
             .collect::<Vec<_>>();
         edges.sort_by(|a, b| {
-            let idx1 = if let CASTEdge::StatementOrd(idx) = *a.weight() {
+            let idx1 = if let CASTEdge::Statement(idx) = *a.weight() {
                 idx
             } else {
-                u64::max_value()
+                u64::MAX
             };
 
-            let idx2 = if let CASTEdge::StatementOrd(idx) = *b.weight() {
+            let idx2 = if let CASTEdge::Statement(idx) = *b.weight() {
                 idx
             } else {
-                u64::max_value()
+                u64::MAX
             };
 
             idx1.cmp(&idx2)
@@ -763,7 +742,7 @@ impl CAST {
             result.push_str(&(format!("{}\n", line)));
         }
 
-        result.push_str("}");
+        result.push('}');
         result
     }
 }

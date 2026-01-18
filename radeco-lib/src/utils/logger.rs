@@ -17,7 +17,7 @@
 //!
 //! Check minidec/main.rs for an example of the same
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 pub enum Event<'a, T: 'a + Debug> {
     /// external -> internal
@@ -40,19 +40,19 @@ pub enum Event<'a, T: 'a + Debug> {
     SSAQueryInternal(&'a T),
 }
 
-impl<'a, T: Debug> ToString for Event<'a, T> {
-    fn to_string(&self) -> String {
+impl<'a, T: Debug> Display for Event<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            Event::SSAInsertNode(i) => format!("{}|{:?}", "ssa_insert_node", i),
-            Event::SSARemoveNode(i) => format!("{}|{:?}", "ssa_remove_node", i),
-            Event::SSAReplaceNode(i, j) => format!("{}|{:?}|{:?}", "ssa_replace", i, j),
-            Event::SSAInsertEdge(i, j) => format!("{}|{:?}|{:?}", "ssa_insert_edge", i, j),
-            Event::SSARemoveEdge(i, j) => format!("{}|{:?}|{:?}", "ssa_remove_edge", i, j),
-            Event::SSAUpdateEdge(i, j) => format!("{}|{:?}|{:?}", "ssa_update_edge", i, j),
-            Event::SSAMarkNode(i) => format!("{}|{:?}", "ssa_mark_node", i),
-            Event::SSAClearMark(i) => format!("{}|{:?}", "ssa_clear_mark", i),
-            Event::SSAQueryExternal(i) => format!("{}|{:?}", "ssa_query_external", i),
-            Event::SSAQueryInternal(i) => format!("{}|{:?}", "ssa_query_internal", i),
+            Event::SSAInsertNode(i) => write!(f, "ssa_insert_node|{i:?}"),
+            Event::SSARemoveNode(i) => write!(f, "ssa_remove_node|{i:?}"),
+            Event::SSAReplaceNode(i, j) => write!(f, "ssa_replace|{i:?}|{j:?}"),
+            Event::SSAInsertEdge(i, j) => write!(f, "ssa_insert_edge|{i:?}|{j:?}"),
+            Event::SSARemoveEdge(i, j) => write!(f, "ssa_remove_edge|{i:?}|{j:?}"),
+            Event::SSAUpdateEdge(i, j) => write!(f, "ssa_update_edge|{i:?}|{j:?}"),
+            Event::SSAMarkNode(i) => write!(f, "ssa_mark_node|{i:?}"),
+            Event::SSAClearMark(i) => write!(f, "ssa_clear_mark|{i:?}"),
+            Event::SSAQueryExternal(i) => write!(f, "ssa_query_external|{i:?}"),
+            Event::SSAQueryInternal(i) => write!(f, "ssa_query_internal|{i:?}"),
         }
     }
 }
@@ -79,6 +79,8 @@ macro_rules! radeco_warn {
         if cfg!(feature = "trace_log") {
             #[cfg(feature="trace_log")]
             warn!("{}", $t.to_string());
+        } else {
+            let _ = &$t;
         }
     });
     ($fmt:expr, $($arg:tt)*) => ({
@@ -95,6 +97,8 @@ macro_rules! radeco_err {
         if cfg!(feature = "trace_log") {
             #[cfg(feature="trace_log")]
             warn!("{}", $t.to_string());
+        } else {
+            let _ = &$t;
         }
     });
     ($fmt:expr, $($arg:tt)*) => ({

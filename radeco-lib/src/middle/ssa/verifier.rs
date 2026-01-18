@@ -194,10 +194,7 @@ impl Verify for SSAStorage {
 
                     let opfilter = |&x: &NodeIndex| -> bool {
                         if let Some(op) = self.opcode(x) {
-                            match op {
-                                MOpcode::OpLoad | MOpcode::OpStore => false,
-                                _ => true,
-                            }
+                            !matches!(op, MOpcode::OpLoad | MOpcode::OpStore)
                         } else {
                             true
                         }
@@ -221,7 +218,7 @@ impl Verify for SSAStorage {
                     // TODO: We do not consider OpStore and OpLoad's width now.
                     operands.retain(&opfilter);
 
-                    if n == 0 || operands.len() == 0 {
+                    if n == 0 || operands.is_empty() {
                         return Ok(());
                     }
                     match opcode {

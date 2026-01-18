@@ -33,11 +33,7 @@ pub struct SubRegister {
 
 impl SubRegister {
     fn new(base: u64, shift: u64, width: u64) -> SubRegister {
-        SubRegister {
-            base: base,
-            shift: shift,
-            width: width,
-        }
+        SubRegister { base, shift, width }
     }
 }
 
@@ -64,7 +60,7 @@ pub struct SubRegisterFile {
 
 pub struct RegisterIter(Box<dyn Iterator<Item = (usize, String)>>);
 
-impl<'a> IntoIterator for &'a SubRegisterFile {
+impl IntoIterator for &SubRegisterFile {
     type Item = (usize, String);
     type IntoIter = RegisterIter;
     fn into_iter(self) -> RegisterIter {
@@ -180,11 +176,7 @@ impl SubRegisterFile {
 
     pub fn get_width(&self, id: RegisterId) -> Option<u64> {
         if let Some(name) = self.get_name(id) {
-            if let Some(subreg) = self.named_registers.get(name) {
-                Some(subreg.width)
-            } else {
-                None
-            }
+            self.named_registers.get(name).map(|subreg| subreg.width)
         } else {
             None
         }
@@ -275,14 +267,14 @@ impl SubRegisterFile {
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RegisterId(u8);
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 impl RegisterId {
     // TODO: make these private everything uses the new RegisterId API
     pub fn to_u8(&self) -> u8 { self.0 }
     pub fn from_u8(i: u8) -> Self { RegisterId(i) }
     pub fn to_usize(&self) -> usize { self.0 as usize }
     pub fn from_usize(i: usize) -> Self {
-        assert!(i <= u8::max_value() as usize);
+        assert!(i <= u8::MAX as usize);
         RegisterId(i as u8)
     }
 }
@@ -293,7 +285,7 @@ impl RegisterId {
 ///
 /// This should only be used for imported functions that we can't analyze to
 /// find a more specific calling convention.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 fn callconv_name_to_preserved_list(cc_name: &str) -> &'static [&'static str] {
     // see https://github.com/radare/radare2/tree/master/libr/anal/d
     // for what `cc_name` can be

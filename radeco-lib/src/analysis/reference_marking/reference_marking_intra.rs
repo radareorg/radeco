@@ -44,11 +44,7 @@ impl ReferenceMarker {
             let base = section.vaddr.unwrap();
             let size = section.vsize.unwrap();
             // XXX: Hack!
-            if base > 0 && base <= val && val < base + size {
-                true
-            } else {
-                false
-            }
+            base > 0 && base <= val && val < base + size
         })
     }
 
@@ -132,7 +128,7 @@ impl ReferenceMarker {
                             // Special case for load/store
                             let operands = ssa.operands_of(idx);
                             // Operand 0 is "mem", this is not a reference
-                            if let Some(op0) = operands.get(0) {
+                            if let Some(op0) = operands.first() {
                                 self.cs.add_eq(*op0, ValueType::Scalar);
                             }
                             // Operand 1 is a reference
@@ -217,11 +213,11 @@ impl ReferenceMarker {
         sections: Arc<Vec<LSectionInfo>>,
     ) -> ReferenceMarker {
         let mut refmarker = ReferenceMarker {
-            regfile: regfile,
-            sections: sections,
+            regfile,
+            sections,
             cs: ConstraintSet::default(),
         };
-        let _bn = refmarker.add_constraints(rfn.ssa());
+        refmarker.add_constraints(rfn.ssa());
         refmarker.resolve_references_iterative(rfn);
         refmarker
     }

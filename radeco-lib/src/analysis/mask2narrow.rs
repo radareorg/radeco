@@ -32,10 +32,7 @@ pub fn run(ssa: &mut SSAStorage) {
         .blocks()
         .into_iter()
         .flat_map(|b| ssa.exprs_in(b))
-        .filter(|&e| match ssa.opcode(e) {
-            Some(MOpcode::OpAnd) => true,
-            _ => false,
-        })
+        .filter(|&e| matches!(ssa.opcode(e), Some(MOpcode::OpAnd)))
         .collect::<Vec<_>>();
 
     for node in it {

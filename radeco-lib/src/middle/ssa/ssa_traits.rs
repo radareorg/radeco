@@ -11,8 +11,8 @@
 //!
 //! # Design
 //!  * `SSA` - Analogous to `CFG` this trait provides __accessors__ to
-//!  the data: Methods to enumerate operations, discovered connected operations,
-//!  determine which operation a basic block is in. etc.
+//!    the data: Methods to enumerate operations, discovered connected operations,
+//!    determine which operation a basic block is in. etc.
 //!
 //!  * `SSAMod` - This trait provides methods to __manipulate__ operation nodes.
 //!
@@ -110,10 +110,7 @@ macro_rules! reference {
 
 impl ValueInfo {
     pub fn new(vty: ValueType, width: ir::WidthSpec) -> ValueInfo {
-        ValueInfo {
-            vty: vty,
-            width: width,
-        }
+        ValueInfo { vty, width }
     }
 
     pub fn width(&self) -> &ir::WidthSpec {
@@ -180,9 +177,9 @@ pub enum NodeType {
 impl fmt::Display for NodeType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
-            &NodeType::Op(ref op) => format!("{}", op),
+            NodeType::Op(op) => format!("{}", op),
             &NodeType::Phi => "Phi".to_owned(),
-            &NodeType::Comment(ref s) => s.clone(),
+            NodeType::Comment(s) => s.clone(),
             // Don't care about these
             _ => String::new(),
         };
@@ -337,7 +334,6 @@ pub trait SSAMod: SSA + CFGMod {
 /// implementation that would work out of the box. Since these methods are only extras and do not
 /// add any major functionality, but rather just convinence or display glitter, the user must not
 /// be burdened with implementing this. All methods must return `Option<T>` to ensure this.
-
 pub trait SSAExtra: SSA {
     fn mark(&mut self, _: &Self::ValueRef) {}
     fn clear_mark(&mut self, _: &Self::ValueRef) {}

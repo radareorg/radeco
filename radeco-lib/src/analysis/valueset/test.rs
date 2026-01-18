@@ -93,21 +93,21 @@ fn test_urange_membership() {
                                     4,
                                     11,
                                     12,
-                                    u64::min_value(),
-                                    u64::max_value(),
-                                    i64::max_value() as u64,
-                                    i64::min_value() as u64]);
+                                    u64::MIN,
+                                    u64::MAX,
+                                    i64::MAX as u64,
+                                    i64::MIN as u64]);
 }
 
 #[test]
 fn test_srange_membership() {
     let s5_5 = SIntRange { min: -5, max: 5 };
     confirm_valueset_contains(&s5_5,
-                              &[u64::max_value() - 4, u64::max_value(), u64::min_value(), 5]);
+                              &[u64::MAX - 4, u64::MAX, u64::MIN, 5]);
     confirm_valueset_contains_not(&s5_5,
-                                  &[u64::max_value() - 5,
-                                    i64::max_value() as u64,
-                                    i64::min_value() as u64,
+                                  &[u64::MAX - 5,
+                                    i64::MAX as u64,
+                                    i64::MIN as u64,
                                     6]);
 }
 
@@ -138,30 +138,30 @@ fn test_uintmultiple_conversions() {
                21,
                22,
                23,
-               (u64::max_value() - 11),
-               (u64::max_value() - 10),
-               (u64::max_value() - 9),
-               (u64::max_value() - 8),
-               (u64::max_value() - 7),
-               (u64::max_value() - 6),
-               (u64::max_value() - 5),
-               (u64::max_value() - 4),
-               (u64::max_value() - 3),
-               (u64::max_value() - 2),
-               (u64::max_value() - 1),
-               (u64::max_value() - 0),
-               (i64::max_value() - 0) as u64,
-               (i64::max_value() - 1) as u64,
-               (i64::max_value() - 2) as u64,
-               (i64::max_value() - 3) as u64,
-               (i64::max_value() - 4) as u64,
-               (i64::max_value() - 5) as u64,
-               (i64::min_value() + 0) as u64,
-               (i64::min_value() + 1) as u64,
-               (i64::min_value() + 2) as u64,
-               (i64::min_value() + 3) as u64,
-               (i64::min_value() + 4) as u64,
-               (i64::min_value() + 5) as u64];
+               (u64::MAX - 11),
+               (u64::MAX - 10),
+               (u64::MAX - 9),
+               (u64::MAX - 8),
+               (u64::MAX - 7),
+               (u64::MAX - 6),
+               (u64::MAX - 5),
+               (u64::MAX - 4),
+               (u64::MAX - 3),
+               (u64::MAX - 2),
+               (u64::MAX - 1),
+               (u64::MAX - 0),
+               (i64::MAX - 0) as u64,
+               (i64::MAX - 1) as u64,
+               (i64::MAX - 2) as u64,
+               (i64::MAX - 3) as u64,
+               (i64::MAX - 4) as u64,
+               (i64::MAX - 5) as u64,
+               (i64::MIN + 0) as u64,
+               (i64::MIN + 1) as u64,
+               (i64::MIN + 2) as u64,
+               (i64::MIN + 3) as u64,
+               (i64::MIN + 4) as u64,
+               (i64::MIN + 5) as u64];
 
 
     let empty = UIntMultiple {

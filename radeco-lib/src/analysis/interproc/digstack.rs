@@ -41,13 +41,10 @@ pub fn backward_analysis(ssa: &SSAStorage, sp_name: String) -> HashMap<LValueRef
             continue;
         }
 
-        let base = stack_offset
-            .get(&node)
-            .map(|x| x.clone())
-            .unwrap_or_else(|| {
-                radeco_err!("node not found from stack_offset");
-                0
-            });
+        let base = stack_offset.get(&node).copied().unwrap_or_else(|| {
+            radeco_err!("node not found from stack_offset");
+            0
+        });
         let args = ssa.operands_of(node);
 
         let users = ssa.uses_of(node);
@@ -172,13 +169,10 @@ fn generic_frontward_analysis(
                 MOpcode::OpZeroExt(_) | MOpcode::OpNarrow(_) => {
                     let args = ssa.operands_of(*node);
                     if stack_offset.contains_key(&args[0]) {
-                        let num = stack_offset
-                            .get(&args[0])
-                            .unwrap_or_else(|| {
-                                radeco_err!("Stack offset not found");
-                                &0
-                            })
-                            .clone();
+                        let num = *stack_offset.get(&args[0]).unwrap_or_else(|| {
+                            radeco_err!("Stack offset not found");
+                            &0
+                        });
                         stack_offset.insert(*node, num);
                         continue;
                     }
@@ -230,13 +224,12 @@ fn generic_frontward_analysis(
                     if !stack_offset.contains_key(&args[opcode_arg as usize]) {
                         continue;
                     }
-                    let base = stack_offset
+                    let base = *stack_offset
                         .get(&args[opcode_arg as usize])
                         .unwrap_or_else(|| {
                             radeco_err!("Stack offset not found");
                             &0
-                        })
-                        .clone() as i64;
+                        });
                     stack_offset.insert(*node, base + (opcode_arg - const_arg) * (num as i64));
                     continue;
                 }
@@ -250,13 +243,10 @@ fn generic_frontward_analysis(
             let mut nums: Vec<i64> = Vec::new();
             for arg in &args {
                 if stack_offset.contains_key(arg) {
-                    let num = stack_offset
-                        .get(arg)
-                        .unwrap_or_else(|| {
-                            radeco_err!("Stack offset not found");
-                            &0
-                        })
-                        .clone();
+                    let num = *stack_offset.get(arg).unwrap_or_else(|| {
+                        radeco_err!("Stack offset not found");
+                        &0
+                    });
                     if !nums.contains(&num) {
                         nums.push(num);
                     }

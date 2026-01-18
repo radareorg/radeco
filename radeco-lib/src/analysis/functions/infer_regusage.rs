@@ -74,7 +74,7 @@ impl ModuleAnalyzer for Inferer {
                 let imp_rfn = imp_info.rfn.borrow();
                 let regusage = self.reginfo.r2callconv_to_register_usage(
                     imp_rfn.callconv.as_ref()?, // ignore imports without callconvs
-                    &*imp_rfn.callconv_name,
+                    &imp_rfn.callconv_name,
                 )?;
                 Some((imp_addr, regusage))
             });
@@ -93,7 +93,7 @@ impl ModuleAnalyzer for Inferer {
         for fn_ni in rmod.callgraph.node_indices() {
             // ... and start a dfs on it
             dfs_wi.inner_mut().move_to(fn_ni);
-            while let Some(fn_to_anal) = dfs_wi.next() {
+            for fn_to_anal in dfs_wi.by_ref() {
                 let fn_addr = rmod.callgraph[fn_to_anal];
 
                 // ignore functions already in `call_convs` (probably because its an import)
@@ -126,7 +126,7 @@ impl ModuleAnalyzer for Inferer {
 impl Inferer {
     pub fn new(reginfo: SubRegisterFile) -> Inferer {
         Inferer {
-            reginfo: reginfo,
+            reginfo,
             analyzed: HashSet::new(),
         }
     }
@@ -134,7 +134,7 @@ impl Inferer {
     /// Using the callconv info we've gathered so far, patch-up call sites to
     /// to remove arguments that the callee doesn't read and make values in
     /// callee-saved registers be preserved across the call.
-    fn patch_fn(&self, fn_addr: u64, fn_map: &mut BTreeMap<u64, RadecoFunction>) -> () {
+    fn patch_fn(&self, fn_addr: u64, fn_map: &mut BTreeMap<u64, RadecoFunction>) {
         radeco_trace!("patching calls in fn: {}", fn_map[&fn_addr].name);
         for node in fn_map[&fn_addr].ssa().inorder_walk() {
             if let Ok(NodeType::Op(ir::MOpcode::OpCall)) =

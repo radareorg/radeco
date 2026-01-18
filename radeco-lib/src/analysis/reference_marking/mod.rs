@@ -41,11 +41,6 @@ impl Transfer for ReferenceMarker {
 }
 
 // XXX: Move to intra-
-impl Default for ReferenceMarkerInfo {
-    fn default() -> ReferenceMarkerInfo {
-        ReferenceMarkerInfo(HashMap::new())
-    }
-}
 
 // XXX: Move to intra-
 /// Defines how to merge `ReferenceMarkerInfo` from two different callsites.
@@ -97,7 +92,7 @@ impl Eval for ReferenceMarkerInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ReferenceMarkerInfo(HashMap<NodeIndex, ValueType>);
 
 impl Propagate for ReferenceMarker {
@@ -136,7 +131,7 @@ impl Propagate for ReferenceMarker {
     ) -> Option<ReferenceMarkerInfo> {
         Some(ReferenceMarkerInfo(
             rfn.bindings()
-                .into_iter()
+                .iter()
                 .filter(|x| x.btype.is_argument() || x.btype.is_return())
                 .map(|x| (x.idx, analyzer.cs.bvalue(x.idx)))
                 .collect(),

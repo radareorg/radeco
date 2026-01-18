@@ -60,8 +60,8 @@ impl DotAttrBlock {
                     "".to_owned()
                 } else {
                     let mut t = " [".to_string();
-                    for &(ref k, ref v) in attrs {
-                        t.push_str(&*format!(" {}={}", k, v));
+                    for (k, v) in attrs {
+                        t.push_str(&format!(" {}={}", k, v));
                     }
                     t.push_str(" ]");
                     t
@@ -127,7 +127,7 @@ pub trait GraphDot {
 
 pub fn emit_dot<T: GraphDot>(g: &T) -> String {
     let mut result = String::new();
-    result.push_str(&*g.configure());
+    result.push_str(&g.configure());
 
     // Node configurations
     {
@@ -146,12 +146,12 @@ pub fn emit_dot<T: GraphDot>(g: &T) -> String {
         }
 
         for (k, v) in &clustermap {
-            result.push_str(&*format!("subgraph cluster_{} {{\n", k.to_index()));
+            result.push_str(&format!("subgraph cluster_{} {{\n", k.to_index()));
             result.push_str("style=filled;\n");
             result.push_str("fillcolor=gray;\n");
             result.push_str("rankdir=TB;\n");
             for node in v.iter() {
-                result.push_str(&*g.node_attrs(node).bake());
+                result.push_str(g.node_attrs(node).bake());
             }
             result.push_str("}\n");
         }

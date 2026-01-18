@@ -284,10 +284,7 @@ impl ConstraintSet {
     fn inner_type(&self, ptr_node: NodeIndex) -> NodeIndex {
         self.g
             .edges_directed(ptr_node, EdgeDirection::Outgoing)
-            .find(|x| match *x.weight() {
-                ConstraintEdge::Ptr => true,
-                _ => false,
-            })
+            .find(|x| matches!(x.weight(), ConstraintEdge::Ptr))
             .expect("Inner type of `Ptr` cannot be `None`")
             .source() // TODO .source() or .target() ?
     }

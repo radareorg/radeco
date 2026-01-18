@@ -18,7 +18,7 @@ use crate::middle::ir::MOpcode;
 use crate::middle::ssa::cfg_traits::CFG;
 
 ///////////////////////////////////////////////////////////////////////////////
-//// Implementation of GraphDot to emit Dot for SSAStorage.
+// Implementation of GraphDot to emit Dot for SSAStorage.
 ///////////////////////////////////////////////////////////////////////////////
 
 impl GraphDot for SSAStorage {
@@ -127,11 +127,7 @@ impl GraphDot for SSAStorage {
         let target = edge.target();
 
         prefix.push_str(&format!("n{} -> n{}", src.index(), target.index()));
-        let target_is_bb = if let NodeData::BasicBlock(_, _) = self.g[edge.target()] {
-            true
-        } else {
-            false
-        };
+        let target_is_bb = matches!(self.g[edge.target()], NodeData::BasicBlock(_, _));
         let attr = match *edge.weight() {
             EdgeData::Control(_) if !target_is_bb => vec![("color".to_string(), "red".to_string())],
             EdgeData::Control(i) => {
@@ -177,15 +173,12 @@ impl GraphDot for SSAStorage {
                 let mut attrs = Vec::new();
                 let mut r = String::new();
                 let addr = self.addr(i);
-                if addr.is_some() {
-                    r.push_str(&format!(
-                        "<<font color=\"grey50\">{}: </font>",
-                        addr.as_ref().unwrap()
-                    ))
+                if let Some(addr) = addr.as_ref() {
+                    r.push_str(&format!("<<font color=\"grey50\">{addr}: </font>"))
                 }
                 r.push_str(&format!("\"[i{}] {:?}\"", w, opc));
                 if addr.is_some() {
-                    r.push_str(">");
+                    r.push('>');
                 }
 
                 attrs.push(("style".to_owned(), "filled".to_owned()));

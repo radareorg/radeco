@@ -37,6 +37,12 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
     uses_policy: true,
 };
 
+impl Default for DCE {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DCE {
     pub fn new() -> Self {
         DCE {}

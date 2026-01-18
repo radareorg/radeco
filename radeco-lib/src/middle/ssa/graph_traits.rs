@@ -14,8 +14,8 @@
 //! # Design
 //!
 //!  * `Graph` - This acts as the base trait upon which the
-//!  whole SSA form is build. The `Graph` trait provides functions to the
-//!  Basic Graph Operation.
+//!    whole SSA form is build. The `Graph` trait provides functions to the
+//!    Basic Graph Operation.
 //!
 //!  The above traits are generic over indexes that are used to refer to edges
 //!  and nodes in a graph.
@@ -45,10 +45,7 @@ pub struct EdgeInfo<T: Eq + Hash + Clone + Copy + Debug> {
 
 impl<T: Eq + Hash + Clone + Copy + Debug> EdgeInfo<T> {
     pub fn new(source: T, target: T) -> EdgeInfo<T> {
-        EdgeInfo {
-            source: source,
-            target: target,
-        }
+        EdgeInfo { source, target }
     }
 }
 
@@ -62,8 +59,8 @@ pub struct ConditionInfo<T: Eq + Hash + Clone + Copy + Debug> {
 impl<T: Eq + Hash + Clone + Copy + Debug> ConditionInfo<T> {
     pub fn new(true_side: T, false_side: T) -> ConditionInfo<T> {
         ConditionInfo {
-            true_side: true_side,
-            false_side: false_side,
+            true_side,
+            false_side,
         }
     }
 }

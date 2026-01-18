@@ -53,29 +53,29 @@ impl RegisterUsage {
         !self.preserves[reg_id.to_usize()]
     }
 
-    pub fn set_ignored(&mut self, reg_id: RegisterId) -> () {
+    pub fn set_ignored(&mut self, reg_id: RegisterId) {
         self.ignores.set(reg_id.to_usize(), true)
     }
-    pub fn set_read(&mut self, reg_id: RegisterId) -> () {
+    pub fn set_read(&mut self, reg_id: RegisterId) {
         self.ignores.set(reg_id.to_usize(), false)
     }
-    pub fn set_preserved(&mut self, reg_id: RegisterId) -> () {
+    pub fn set_preserved(&mut self, reg_id: RegisterId) {
         self.preserves.set(reg_id.to_usize(), true)
     }
-    pub fn set_clobbered(&mut self, reg_id: RegisterId) -> () {
+    pub fn set_clobbered(&mut self, reg_id: RegisterId) {
         self.preserves.set(reg_id.to_usize(), false)
     }
 
-    pub fn set_all_ignored(&mut self) -> () {
+    pub fn set_all_ignored(&mut self) {
         self.ignores.set_range(.., true)
     }
-    pub fn set_all_read(&mut self) -> () {
+    pub fn set_all_read(&mut self) {
         self.ignores.set_range(.., false)
     }
-    pub fn set_all_preserved(&mut self) -> () {
+    pub fn set_all_preserved(&mut self) {
         self.preserves.set_range(.., true)
     }
-    pub fn set_all_clobbered(&mut self) -> () {
+    pub fn set_all_clobbered(&mut self) {
         self.preserves.set_range(.., false)
     }
 }

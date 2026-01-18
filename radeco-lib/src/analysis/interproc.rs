@@ -1,3 +1,10 @@
+// Copyright (c) 2015, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! Fills out the call summary information for `RFunction`
 
 use crate::analysis::analyzer::{
@@ -9,6 +16,11 @@ use crate::frontend::radeco_containers::RadecoModule;
 use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Debug;
+
+mod digstack;
+pub mod fixcall;
+pub mod summary;
+pub mod transfer;
 
 #[derive(Debug)]
 pub struct InterProcAnalyzer<T>
@@ -28,6 +40,15 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
     requires: REQUIRES,
     uses_policy: false,
 };
+
+impl<T> Default for InterProcAnalyzer<T>
+where
+    T: InterProcAnalysis + Debug,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<T> InterProcAnalyzer<T>
 where
@@ -49,7 +70,7 @@ where
         let callees = rmod
             .function(func_addr)
             .map(|rfn| rmod.callees_of(rfn))
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
 
         for (call, _) in callees {
             self.analyze_function(rmod, call);

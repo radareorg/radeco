@@ -12,12 +12,12 @@
 //! # Design
 //!
 //!  * `CFG` - This acts as the base trait upon which the
-//!  whole SSA form is build. The `CFG` trait provides __accessors__ to the
-//!  Basic Blocks of the program as well as the Control Flow edges that
-//!  connect these blocks.
+//!    whole SSA form is build. The `CFG` trait provides __accessors__ to the
+//!    Basic Blocks of the program as well as the Control Flow edges that
+//!    connect these blocks.
 //!
 //!  * `CFGMod` - This trait provides methods to __manipulate__ the Control
-//!  Flow Graph.
+//!    Flow Graph.
 //!
 //!  The above traits are generic over indexes that are used to refer to edges
 //!  and nodes in a CFG. `CFG::ActionRef` represents the type that is used

@@ -8,7 +8,7 @@
 //! Implements `InternalIndex` used for `DomTree`.
 
 use petgraph::graph::NodeIndex;
-use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+use std::cmp::{Eq, Ordering, PartialEq, PartialOrd};
 use std::hash::{Hash, Hasher};
 use std::ops::Index;
 
@@ -20,10 +20,7 @@ pub struct InternalIndex {
 
 impl InternalIndex {
     pub fn new(index: usize, n: NodeIndex) -> InternalIndex {
-        InternalIndex {
-            index: index,
-            external: n,
-        }
+        InternalIndex { index, external: n }
     }
 
     pub fn external(&self) -> NodeIndex {
@@ -36,8 +33,8 @@ impl InternalIndex {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//// Trait implementations to ensure InternalIndex
-//// behaves like InternalIndex::index (usize)
+// Trait implementations to ensure InternalIndex
+// behaves like InternalIndex::index (usize)
 ///////////////////////////////////////////////////////////////////////////////
 
 impl PartialEq for InternalIndex {
@@ -64,11 +61,5 @@ impl Index<InternalIndex> for Vec<InternalIndex> {
 impl PartialOrd for InternalIndex {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.index.partial_cmp(&other.index)
-    }
-}
-
-impl Ord for InternalIndex {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.index.cmp(&other.index)
     }
 }

@@ -96,6 +96,12 @@ pub struct Combiner {
     combine_candidates: HashMap<SSAValue, (SSAValue, CombinableOpInfo)>,
 }
 
+impl Default for Combiner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Combiner {
     pub fn new() -> Self {
         Combiner {
@@ -369,11 +375,11 @@ fn simplify_opinfo(info: &CombinableOpInfo) -> Option<Option<CombinableOpInfo>> 
         | COI(OpOr, COCI::Right(0))
         | COI(OpXor, COCI::Left(0))
         | COI(OpXor, COCI::Right(0)) => Some(None),
-        COI(OpAdd, COCI::Left(c)) | COI(OpAdd, COCI::Right(c)) if *c > u64::max_value() / 2 => {
+        COI(OpAdd, COCI::Left(c)) | COI(OpAdd, COCI::Right(c)) if *c > u64::MAX / 2 => {
             let c = OpSub.eval_binop(0, *c).unwrap();
             Some(Some(COI(OpSub, COCI::Right(c))))
         }
-        COI(OpSub, COCI::Right(c)) if *c > u64::max_value() / 2 => {
+        COI(OpSub, COCI::Right(c)) if *c > u64::MAX / 2 => {
             let c = OpSub.eval_binop(0, *c).unwrap();
             Some(Some(COI(OpAdd, COCI::Left(c))))
         }
@@ -393,12 +399,12 @@ fn extract_opinfo(
     // bail if non-`NodeType::Op`
     let (cur_opcode, cur_vt) = extract_opcode(cur_node, ssa)?;
     let cur_operands = ssa.operands_of(cur_node);
-    match cur_operands.as_slice() {
-        &[sub_node] => {
+    match *cur_operands.as_slice() {
+        [sub_node] => {
             let cur_opinfo = CombinableOpInfo(cur_opcode, COCI::Unary);
             Some(Left((sub_node, cur_opinfo, cur_vt)))
         }
-        &[sub_node1, sub_node2] => {
+        [sub_node1, sub_node2] => {
             match (ssa.constant(sub_node1), ssa.constant(sub_node2)) {
                 (Some(c1), Some(c2)) => {
                     // this is const_prop's job, but we can do this here too

@@ -103,7 +103,7 @@ where
 {
     pub fn new(ssa: &'a mut S) -> GraphMatcher<'a, I, S> {
         GraphMatcher {
-            ssa: ssa,
+            ssa,
             seen: HashMap::new(),
             hash_subtrees: HashMap::new(),
             foo: PhantomData,
@@ -184,16 +184,15 @@ where
         }
 
         let node_h = self.hash_data(root);
-        let result: String;
-        if !argh.is_empty() {
-            result = format!("({} {})", node_h, argh);
+        let result = if !argh.is_empty() {
+            format!("({node_h} {argh})")
         } else {
-            result = node_h;
-        }
+            node_h
+        };
 
         // Cache the result.
         self.hash_subtrees.insert(root, result.clone());
-        return result;
+        result
     }
 
     fn hash_data(&self, ni: S::ValueRef) -> String {
@@ -345,17 +344,17 @@ where
         block: &S::ActionRef,
         addr: &mut MAddress,
     ) -> S::ValueRef {
-        let opcode = if t.starts_with("#x") {
+        let opcode = if let Some(t) = t.strip_prefix("#x") {
             Some(MOpcode::OpConst(
-                u64::from_str_radix(&t[2..], 16).expect("Invalid hex integer"),
+                u64::from_str_radix(t, 16).expect("Invalid hex integer"),
             ))
-        } else if t.starts_with("OpNarrow") {
+        } else if let Some(t) = t.strip_prefix("OpNarrow") {
             Some(MOpcode::OpNarrow(
-                u16::from_str_radix(&t[8..], 10).expect("Invalid decimal integer"),
+                t.parse::<u16>().expect("Invalid decimal integer"),
             ))
-        } else if t.starts_with("OpZeroExt") {
+        } else if let Some(t) = t.strip_prefix("OpZeroExt") {
             Some(MOpcode::OpZeroExt(
-                u16::from_str_radix(&t[7..], 10).expect("Invalid decimal integer"),
+                t.parse::<u16>().expect("Invalid decimal integer"),
             ))
         } else {
             match t {
@@ -438,7 +437,7 @@ where
             t_
         };
 
-        let replace_root = if r.current().as_ref().map_or(false, |x| x.starts_with('%')) {
+        let replace_root = if r.current().as_ref().is_some_and(|x| x.starts_with('%')) {
             *bindings
                 .get(r.current().as_ref().unwrap())
                 .unwrap_or_else(|| {
@@ -477,7 +476,7 @@ where
                 *bindings.get(&current).unwrap_or_else(|| {
                     radeco_err!("Unknown Binding");
                     //TODO
-                    None.unwrap()
+                    panic!()
                 })
             } else {
                 self.map_token_to_node(&current, &block, &mut address)

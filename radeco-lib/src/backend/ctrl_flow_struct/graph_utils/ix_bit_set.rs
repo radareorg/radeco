@@ -76,7 +76,7 @@ impl<Ix: IndexLike> FromIterator<Ix> for IxBitSet<Ix> {
 }
 
 impl<Ix: IndexLike> Extend<Ix> for IxBitSet<Ix> {
-    fn extend<I: IntoIterator<Item = Ix>>(&mut self, iter: I) -> () {
+    fn extend<I: IntoIterator<Item = Ix>>(&mut self, iter: I) {
         for i in iter {
             self.insert(i);
         }
@@ -92,7 +92,7 @@ impl<'a, Ix: IndexLike + Copy + 'a> FromIterator<&'a Ix> for IxBitSet<Ix> {
 }
 
 impl<'a, Ix: IndexLike + Copy + 'a> Extend<&'a Ix> for IxBitSet<Ix> {
-    fn extend<I: IntoIterator<Item = &'a Ix>>(&mut self, iter: I) -> () {
+    fn extend<I: IntoIterator<Item = &'a Ix>>(&mut self, iter: I) {
         for &i in iter {
             self.insert(i);
         }

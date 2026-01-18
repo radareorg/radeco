@@ -294,8 +294,8 @@ impl<'cd, T> Context<'cd, T> {
         old_var: VarRef<'cd, T>,
         new_var: VarRef<'cd, T>,
     ) -> Condition<'cd, T> {
-        match cond.0 {
-            &Var(inv, vr) => {
+        match *cond.0 {
+            Var(inv, vr) => {
                 if vr == old_var {
                     Condition(
                         self.store.mk_cond(Var(inv, new_var)),
@@ -305,7 +305,7 @@ impl<'cd, T> Context<'cd, T> {
                     cond
                 }
             }
-            &Expr(op, ref opn_v) => self.store_expr(
+            Expr(op, ref opn_v) => self.store_expr(
                 op,
                 opn_v
                     .iter()
@@ -318,9 +318,9 @@ impl<'cd, T> Context<'cd, T> {
 
 impl<'cd, T> Condition<'cd, T> {
     fn expr_op(self) -> Option<Op> {
-        match self.0 {
-            &Var(_, _) => None,
-            &Expr(op, _) => Some(op),
+        match *self.0 {
+            Var(_, _) => None,
+            Expr(op, _) => Some(op),
         }
     }
 
@@ -335,31 +335,31 @@ impl<'cd, T> Condition<'cd, T> {
         self.is_annihilator(Op::And)
     }
     fn is_annihilator(self, for_op: Op) -> bool {
-        match self.0 {
-            &Var(_, _) => false,
-            &Expr(op, ref opn_v) => op.dual() == for_op && opn_v.is_empty(),
+        match *self.0 {
+            Var(_, _) => false,
+            Expr(op, ref opn_v) => op.dual() == for_op && opn_v.is_empty(),
         }
     }
 
     pub fn complexity(self) -> usize {
         match self.0 {
             &Var(_, _) => 1,
-            &Expr(_, ref opn_v) => opn_v.iter().map(|opn| opn.complexity()).sum(),
+            Expr(_, opn_v) => opn_v.iter().map(|opn| opn.complexity()).sum(),
         }
     }
 
     pub fn contains_var(self, find_var: VarRef<'cd, T>) -> bool {
         match self.0 {
             &Var(_, vr) => vr == find_var,
-            &Expr(_, ref opn_v) => opn_v.iter().any(|opn| opn.contains_var(find_var)),
+            Expr(_, opn_v) => opn_v.iter().any(|opn| opn.contains_var(find_var)),
         }
     }
 
     pub fn fold<F: Folder<T>>(self, mut folder: F) -> F::Output {
-        match self.0 {
-            &Var(inv, vr) => folder.var(inv == Negation::Normal, vr.0),
-            &Expr(Op::And, ref opn_v) => folder.and(opn_v.iter().cloned()),
-            &Expr(Op::Or, ref opn_v) => folder.or(opn_v.iter().cloned()),
+        match *self.0 {
+            Var(inv, vr) => folder.var(inv == Negation::Normal, vr.0),
+            Expr(Op::And, ref opn_v) => folder.and(opn_v.iter().cloned()),
+            Expr(Op::Or, ref opn_v) => folder.or(opn_v.iter().cloned()),
         }
     }
 }
@@ -488,7 +488,7 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                             // ==> `And{Or{..o1}, -var, ..a1}`
 
                             // `Or{-var, ..o2}` == `-var`
-                            debug_assert!(p2_opn.expr_op() == None);
+                            debug_assert!(p2_opn.expr_op().is_none());
 
                             // technically, we did this:
                             // self.opn_v.remove(&p2_opn);
@@ -505,7 +505,7 @@ impl<'cd, T> ExprBuilder<'cd, T> {
                             // ==> `And{var, Or{..o2}, ..a1}`
 
                             // `Or{var, ..o1}` == `var`
-                            debug_assert!(p1_opn.expr_op() == None);
+                            debug_assert!(p1_opn.expr_op().is_none());
 
                             // TODO: inefficient
                             let _removed = self.opn_v.remove(&p2_opn);
@@ -552,9 +552,9 @@ impl_copy! {ExprView}
 
 impl<'cd, T> ExprView<'cd, T> {
     fn new(cond: Condition<'cd, T>, op: Op) -> Result<Self, &'cd LinearSet<Condition<'cd, T>>> {
-        match cond.0 {
-            &Var(_, _) => Ok(ExprView { op, cond }),
-            &Expr(c_op, ref c_opn_v) => {
+        match *cond.0 {
+            Var(_, _) => Ok(ExprView { op, cond }),
+            Expr(c_op, ref c_opn_v) => {
                 if c_op == op {
                     Ok(ExprView { op, cond })
                 } else {
@@ -572,7 +572,7 @@ impl<'cd, T> ExprView<'cd, T> {
     fn is_empty(self) -> bool {
         match self.cond.0 {
             &Var(_, _) => false,
-            &Expr(_, ref opn_v) => opn_v.is_empty(),
+            Expr(_, opn_v) => opn_v.is_empty(),
         }
     }
 
@@ -582,7 +582,7 @@ impl<'cd, T> ExprView<'cd, T> {
     {
         match self.cond.0 {
             &Var(_, _) => func(self.cond, FoundOpn(self.op, None))?,
-            &Expr(_, ref opn_v) => {
+            Expr(_, opn_v) => {
                 for &opn in opn_v {
                     func(opn, FoundOpn(self.op, Some((opn_v, opn))))?
                 }

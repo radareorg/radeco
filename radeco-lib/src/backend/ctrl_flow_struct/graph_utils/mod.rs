@@ -37,7 +37,7 @@ where
 struct DfsState<G, F>
 where
     G: IntoEdges + Visitable,
-    F: FnMut(DfsEvent<G>) -> (),
+    F: FnMut(DfsEvent<G>),
 {
     graph: G,
     discovered: G::Map,
@@ -48,10 +48,10 @@ where
 impl<G, F> DfsState<G, F>
 where
     G: IntoEdges + Visitable,
-    F: FnMut(DfsEvent<G>) -> (),
+    F: FnMut(DfsEvent<G>),
 {
     /// https://docs.rs/petgraph/0.4.12/src/petgraph/visit/dfsvisit.rs.html#164-189
-    fn go_rec(&mut self, u: G::NodeId) -> () {
+    fn go_rec(&mut self, u: G::NodeId) {
         if self.discovered.visit(u) {
             (self.visitor)(DfsEvent::Discover(u));
             for e in self.graph.edges(u) {
@@ -75,10 +75,10 @@ where
 #[allow(unused_imports)]
 use petgraph;
 /// Like [`petgraph::visit::depth_first_search`], but with edges.
-pub fn depth_first_search<G, F>(graph: G, start: G::NodeId, visitor: F) -> ()
+pub fn depth_first_search<G, F>(graph: G, start: G::NodeId, visitor: F)
 where
     G: IntoEdges + Visitable,
-    F: FnMut(DfsEvent<G>) -> (),
+    F: FnMut(DfsEvent<G>),
 {
     DfsState {
         graph,

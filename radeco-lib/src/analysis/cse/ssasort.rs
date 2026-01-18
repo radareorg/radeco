@@ -46,7 +46,7 @@ where
         Sorter {
             sorted: HashMap::new(),
             record: HashMap::new(),
-            ssa: ssa,
+            ssa,
             foo: PhantomData,
         }
     }
@@ -82,7 +82,7 @@ where
                 return result;
             }
         }
-        return Ordering::Equal;
+        Ordering::Equal
     }
 
     fn return_value(&mut self, order: Ordering, op1: T::ValueRef, op2: T::ValueRef) -> Ordering {
@@ -146,9 +146,7 @@ where
 
         // Equal and not opcode node
         match priority1.0 {
-            PUNDEFINED => {
-                return self.return_value(Ordering::Equal, op1, op2);
-            }
+            PUNDEFINED => self.return_value(Ordering::Equal, op1, op2),
             PPHI | PCOMMENT => {
                 let addr1 = self.ssa.address(op1).unwrap_or_else(|| {
                     radeco_err!("No address information found");
@@ -158,11 +156,11 @@ where
                     radeco_err!("No address information found");
                     MAddress::new(0, 0)
                 });
-                return self.return_value(addr1.cmp(&addr2), op1, op2);
+                self.return_value(addr1.cmp(&addr2), op1, op2)
             }
             _ => {
                 let order = self.compare_operands(op1, op2);
-                return self.return_value(order, op1, op2);
+                self.return_value(order, op1, op2)
             } // Opcode:
               //  For zero, opc could only be OpConst or OpInvalid.
               //  For Unary and Binary, we should consider their operands. Because

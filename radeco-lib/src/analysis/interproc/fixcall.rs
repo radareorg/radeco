@@ -42,9 +42,9 @@ impl<'a> CallFixer<'a> {
         sp_name: Option<String>,
     ) -> CallFixer<'a> {
         CallFixer {
-            bp_name: bp_name,
-            sp_name: sp_name,
-            rmod: rmod,
+            bp_name,
+            sp_name,
+            rmod,
             sp_offsets: HashMap::new(),
         }
     }
@@ -52,10 +52,7 @@ impl<'a> CallFixer<'a> {
     // Make a ROUNDED analyze for the RadecoModule.
     pub fn rounded_analysis(&mut self) {
         let functions = self.rmod.functions.clone();
-        let matched_func_vec: Vec<u64> = functions
-            .iter()
-            .map(|(fn_addr, _)| fn_addr.clone())
-            .collect();
+        let matched_func_vec: Vec<u64> = functions.keys().copied().collect();
         // Do the first analysis.
         radeco_trace!("CallFixer|Do the first analysis.");
         for fn_addr in &matched_func_vec {
@@ -99,9 +96,9 @@ impl<'a> CallFixer<'a> {
         let (entry_store, exit_load) = {
             let rfn = self.rmod.functions.get(rfn_addr).unwrap();
             let ssa = rfn.ssa();
-            let sp_name = self.sp_name.clone().unwrap_or(String::new());
-            let bp_name = self.bp_name.clone().unwrap_or(String::new());
-            let stack_offset = digstack::rounded_analysis(&ssa, sp_name, bp_name);
+            let sp_name = self.sp_name.clone().unwrap_or_default();
+            let bp_name = self.bp_name.clone().unwrap_or_default();
+            let stack_offset = digstack::rounded_analysis(ssa, sp_name, bp_name);
             // Here, we check the assumption we made in first analysis.
             // If the SP is not balanced, we will throw a WARN or PANIC.
             // TODO: if the SP is not balanced, please UNDO the fix.
@@ -178,16 +175,16 @@ impl<'a> CallFixer<'a> {
 
             // analysis entry block
             let entry_store = {
-                let sp_name = self.sp_name.clone().unwrap_or(String::new());
-                let bp_name = self.bp_name.clone().unwrap_or(String::new());
-                let entry_offset = digstack::frontward_analysis(&ssa, sp_name, bp_name);
+                let sp_name = self.sp_name.clone().unwrap_or_default();
+                let bp_name = self.bp_name.clone().unwrap_or_default();
+                let entry_offset = digstack::frontward_analysis(ssa, sp_name, bp_name);
                 self.analysis_entry_store(ssa, entry_offset)
             };
 
             // analysis exit blocks
             let exit_load = {
-                let sp_name = self.sp_name.clone().unwrap_or(String::new());
-                let exit_offset = digstack::backward_analysis(&ssa, sp_name);
+                let sp_name = self.sp_name.clone().unwrap_or_default();
+                let exit_offset = digstack::backward_analysis(ssa, sp_name);
                 self.analysis_exit_load(ssa, exit_offset)
             };
             (entry_store, exit_load)
@@ -200,7 +197,7 @@ impl<'a> CallFixer<'a> {
     // Fix the call_site with the callees' preserved register,
     // which will make later analysis much easier.
     pub fn fix(&mut self, rfn_addr: &u64) {
-        if self.rmod.functions.get(rfn_addr).is_none() {
+        if !self.rmod.functions.contains_key(rfn_addr) {
             radeco_err!("RadecoFunction Not Found!");
             return;
         }
@@ -248,7 +245,7 @@ impl<'a> CallFixer<'a> {
         }
     }
 
-    /// Below is helper function.
+    // Below is helper function.
 
     // Before we calcluate, we have to finger out the SP offset between entry node
     // and exit bode. The reason cause this difference is that in SSA form, we didn't
@@ -298,7 +295,7 @@ impl<'a> CallFixer<'a> {
         // Store data into RadecoFunction
         {
             let rfn = self.rmod.functions.get_mut(rfn_addr).unwrap();
-            for bind in rfn.bindings_mut().into_iter() {
+            for bind in rfn.bindings_mut().iter_mut() {
                 if preserves.contains(bind.name()) {
                     bind.mark_preserved();
                 }
@@ -351,13 +348,10 @@ impl<'a> CallFixer<'a> {
                             continue;
                         }
 
-                        let base = exit_offset
-                            .get(&operands[1])
-                            .unwrap_or_else(|| {
-                                radeco_err!("Invalid operands: {:?}", operands[1]);
-                                &0
-                            })
-                            .clone();
+                        let base = *exit_offset.get(&operands[1]).unwrap_or_else(|| {
+                            radeco_err!("Invalid operands: {:?}", operands[1]);
+                            &0
+                        });
                         let names = ssa.registers(arg);
                         for name in names {
                             radeco_trace!("CallFixer|Found {:?} with {:?}", name, base);
@@ -426,7 +420,7 @@ impl<'a> CallFixer<'a> {
             let mut preserves: Vec<String> = Vec::new();
             if let Some(rfn) = self.rmod.functions.get(&callee) {
                 // Callee is man made function
-                for bind in rfn.bindings().into_iter() {
+                for bind in rfn.bindings().iter() {
                     if bind.is_preserved() {
                         preserves.push(bind.name().to_string());
                     }
@@ -434,7 +428,7 @@ impl<'a> CallFixer<'a> {
                 result.push((node, preserves));
             } else {
                 // Callee is library function
-                let bp_name = vec![self.sp_name.clone().unwrap_or(String::new())];
+                let bp_name = vec![self.sp_name.clone().unwrap_or_default()];
                 result.push((node, bp_name));
             }
         }
@@ -470,11 +464,8 @@ impl<'a> CallFixer<'a> {
                 break;
             }
 
-            match ssa.opcode(node) {
-                Some(MOpcode::OpConst(_)) => {
-                    continue;
-                }
-                _ => {}
+            if let Some(MOpcode::OpConst(_)) = ssa.opcode(node) {
+                continue;
             }
             for arg in ssa.operands_of(node) {
                 println!("\tArg_Id: {:?}", arg);

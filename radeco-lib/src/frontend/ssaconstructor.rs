@@ -28,7 +28,7 @@ use r2api::structs::{LOpInfo, LRegInfo};
 // use regex::Regex;
 use std::borrow::Cow;
 use std::sync::Arc;
-use std::{cmp, fmt, u64};
+use std::{cmp, fmt};
 
 pub type VarId = usize;
 
@@ -77,7 +77,7 @@ where
     pub fn new(ssa: &'a mut T, regfile: &'a SubRegisterFile) -> SSAConstruct<'a, T> {
         let mut sc = SSAConstruct {
             phiplacer: PhiPlacer::new(ssa, regfile),
-            regfile: regfile,
+            regfile,
             intermediates: Vec::new(),
             nesting: Vec::new(),
             instruction_offset: 0,
@@ -132,19 +132,19 @@ where
         if var.is_none() {
             return None;
         }
-        let ret = match *var.as_ref().expect("This cannot be `None`") {
+        let ret = match *var.as_ref()? {
             // Since ESIL has no concept of intermediates, the identifier spotted by parser
             // has to be a register.
             Token::ERegister(ref name) | Token::EIdentifier(ref name) => {
-                if self.replace_pc
-                    && name == self.regfile.alias_info.get("PC").unwrap()
-                    && length.is_some()
-                {
-                    // PC is a constant value at given address
-                    let value = address.address + length.unwrap();
-                    self.phiplacer.add_const(address, value, None)
-                } else {
-                    self.phiplacer.read_register(address, name)
+                match length {
+                    Some(length)
+                        if self.replace_pc && Some(name) == self.regfile.alias_info.get("PC") =>
+                    {
+                        // PC is a constant value at given address
+                        let value = address.address + length;
+                        self.phiplacer.add_const(address, value, None)
+                    }
+                    _ => self.phiplacer.read_register(address, name),
                 }
             }
             // We arrive at this case only when we have popped an operand that we have pushed
@@ -423,42 +423,41 @@ where
         };
 
         // Insert `widen` cast of the two are not of same size and rhs is_some.
-        if rhs.is_some() {
-            let (lhs, rhs) = match lhs_size.cmp(&rhs_size) {
-                cmp::Ordering::Greater => {
-                    let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(lhs_size));
-                    let casted_rhs =
-                        self.phiplacer
-                            .add_op(&MOpcode::OpZeroExt(lhs_size), address, vt);
-                    self.phiplacer
-                        .op_use(&casted_rhs, 0, rhs.as_ref().expect(""));
-                    self.phiplacer.propagate_reginfo(&casted_rhs);
-                    (lhs.expect("lhs cannot be `None`"), casted_rhs)
-                }
-                cmp::Ordering::Less => {
-                    let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(rhs_size));
-                    let casted_lhs =
-                        self.phiplacer
-                            .add_op(&MOpcode::OpZeroExt(rhs_size), address, vt);
-                    self.phiplacer.op_use(
-                        &casted_lhs,
-                        0,
-                        lhs.as_ref().expect("lhs cannot be `None`"),
-                    );
-                    self.phiplacer.propagate_reginfo(&casted_lhs);
-                    (casted_lhs, rhs.expect(""))
-                }
-                cmp::Ordering::Equal => (lhs.expect(""), rhs.expect("")),
-            };
-            let op_node_ = self.phiplacer.add_op(&op, address, vt);
-            self.phiplacer.op_use(&op_node_, 0, &lhs);
-            self.phiplacer.op_use(&op_node_, 1, &rhs);
-            Some(op_node_)
-        } else {
-            // There is only one operand, that is lhs. No need for cast.
-            let op_node_ = self.phiplacer.add_op(&op, address, vt);
-            self.phiplacer.op_use(&op_node_, 0, lhs.as_ref().expect(""));
-            Some(op_node_)
+        match (lhs, rhs) {
+            (Some(lhs), Some(rhs)) => {
+                let (lhs, rhs) = match lhs_size.cmp(&rhs_size) {
+                    cmp::Ordering::Greater => {
+                        let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(lhs_size));
+                        let casted_rhs =
+                            self.phiplacer
+                                .add_op(&MOpcode::OpZeroExt(lhs_size), address, vt);
+                        self.phiplacer.op_use(&casted_rhs, 0, &rhs);
+                        self.phiplacer.propagate_reginfo(&casted_rhs);
+                        (lhs, casted_rhs)
+                    }
+                    cmp::Ordering::Less => {
+                        let vt = ValueInfo::new_unresolved(ir::WidthSpec::from(rhs_size));
+                        let casted_lhs =
+                            self.phiplacer
+                                .add_op(&MOpcode::OpZeroExt(rhs_size), address, vt);
+                        self.phiplacer.op_use(&casted_lhs, 0, &lhs);
+                        self.phiplacer.propagate_reginfo(&casted_lhs);
+                        (casted_lhs, rhs)
+                    }
+                    cmp::Ordering::Equal => (lhs, rhs),
+                };
+                let op_node_ = self.phiplacer.add_op(&op, address, vt);
+                self.phiplacer.op_use(&op_node_, 0, &lhs);
+                self.phiplacer.op_use(&op_node_, 1, &rhs);
+                Some(op_node_)
+            }
+            (Some(lhs), _) => {
+                // There is only one operand, that is lhs. No need for cast.
+                let op_node_ = self.phiplacer.add_op(&op, address, vt);
+                self.phiplacer.op_use(&op_node_, 0, &lhs);
+                Some(op_node_)
+            }
+            _ => None,
         }
     }
 
@@ -515,7 +514,7 @@ where
                 self.regfile
                     .named_registers
                     .iter()
-                    .map(|(n, v)| (n.clone(), v.width as u64))
+                    .map(|(n, v)| (n.clone(), v.width))
                     .collect(),
             ),
             Some(64),
@@ -693,7 +692,7 @@ where
             }
 
             // Handle returns separately
-            if op.optype.as_ref().map_or(false, |ty| ty == "ret") {
+            if op.optype.as_ref().is_some_and(|ty| ty == "ret") {
                 self.phiplacer.add_return(current_address, UNCOND_EDGE);
                 self.needs_new_block = true;
                 continue;

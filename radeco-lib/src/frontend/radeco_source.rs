@@ -25,8 +25,8 @@ pub enum SourceErr {
 impl fmt::Display for SourceErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &SourceErr::SrcErr(s) => write!(f, "{}", s),
-            &SourceErr::OtherErr(ref e) => write!(f, "{}", e),
+            &SourceErr::SrcErr(s) => write!(f, "{s}"),
+            SourceErr::OtherErr(e) => write!(f, "{e}"),
         }
     }
 }
@@ -164,7 +164,7 @@ impl<R: R2PApi> Source for WrappedR2PApi<R> {
     }
 
     fn instructions_at(&self, address: u64) -> Result<Vec<LOpInfo>, SourceErr> {
-        if let Ok(fn_info) = self.try_borrow_mut()?.function(&format!("{}", address)) {
+        if let Ok(fn_info) = self.try_borrow_mut()?.function(format!("{address}")) {
             fn_info
                 .ops
                 .ok_or(SourceErr::SrcErr("No Instructions found"))
@@ -269,7 +269,7 @@ pub struct FileSource {
 impl FileSource {
     fn read_file(&self, suffix: &str) -> Result<String, SourceErr> {
         let mut path = PathBuf::from(&self.dir);
-        path.push(&format!("{}_{}.json", self.base_name, suffix));
+        path.push(format!("{}_{}.json", self.base_name, suffix));
         let mut f = File::open(path)?;
         let mut json_str = String::new();
         let _ = f.read_to_string(&mut json_str)?;
@@ -278,7 +278,7 @@ impl FileSource {
 
     fn write_file(&mut self, suffix: &str, data: &str) {
         let mut path = PathBuf::from(&self.dir);
-        path.push(&format!("{}_{}.json", self.base_name, suffix));
+        path.push(format!("{}_{}.json", self.base_name, suffix));
         let mut f = File::create(path).expect("Failed to open file");
         f.write_all(data.to_string().as_bytes())
             .expect("Failed to read file");
@@ -286,21 +286,21 @@ impl FileSource {
 }
 
 mod suffix {
-    pub const FUNCTION: &'static str = "function";
-    pub const FUNCTION_INFO: &'static str = "fn_info";
-    pub const INSTRUCTIONS: &'static str = "insts";
-    pub const REGISTER: &'static str = "register_profile";
-    pub const FLAG: &'static str = "flags";
-    pub const SECTION: &'static str = "sections";
-    pub const STRING: &'static str = "strings";
-    pub const SYMBOL: &'static str = "symbols";
-    pub const IMPORT: &'static str = "imports";
-    pub const EXPORT: &'static str = "exports";
-    pub const RELOC: &'static str = "relocs";
-    pub const LIBRARY: &'static str = "libraries";
-    pub const LOCAL: &'static str = "locals";
-    pub const CCINFO: &'static str = "ccinfo";
-    pub const ENTRY: &'static str = "entrypoint";
+    pub const FUNCTION: &str = "function";
+    pub const FUNCTION_INFO: &str = "fn_info";
+    pub const INSTRUCTIONS: &str = "insts";
+    pub const REGISTER: &str = "register_profile";
+    pub const FLAG: &str = "flags";
+    pub const SECTION: &str = "sections";
+    pub const STRING: &str = "strings";
+    pub const SYMBOL: &str = "symbols";
+    pub const IMPORT: &str = "imports";
+    pub const EXPORT: &str = "exports";
+    pub const RELOC: &str = "relocs";
+    pub const LIBRARY: &str = "libraries";
+    pub const LOCAL: &str = "locals";
+    pub const CCINFO: &str = "ccinfo";
+    pub const ENTRY: &str = "entrypoint";
 }
 
 impl FileSource {
@@ -408,7 +408,7 @@ impl<R: R2PApi> From<WrappedR2PApi<R>> for FileSource {
         let fname = bin_info.core.unwrap().file.unwrap();
         let fname = Path::new(&fname).file_stem().unwrap();
         let mut dir = PathBuf::from(".");
-        dir.push(&fname);
+        dir.push(fname);
         fs::create_dir_all(&dir).expect("Failed to create directory");
         let mut fsource = FileSource {
             dir: dir.to_str().unwrap().to_owned(),
@@ -443,7 +443,7 @@ impl<R: R2PApi> From<WrappedR2PApi<R>> for FileSource {
                             ops: Some(ops),
                             size: f.size,
                         })
-                        .expect(&format!("Failed to load instructions @ {}", name));
+                        .unwrap_or_else(|_| panic!("Failed to load instructions @ {}", name));
                     let json_str =
                         serde_json::to_string(&result).expect("Failed to encode to json");
                     let suffix = format!("{}_{}", suffix::FUNCTION, name);

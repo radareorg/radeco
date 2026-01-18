@@ -31,6 +31,12 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
 #[derive(Debug)]
 pub struct CallSiteFixer;
 
+impl Default for CallSiteFixer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CallSiteFixer {
     pub fn new() -> Self {
         CallSiteFixer
@@ -60,7 +66,7 @@ impl ModuleAnalyzer for CallSiteFixer {
     }
 }
 
-fn go_fn(rfun: &mut RadecoFunction, callgraph: &CallGraph) -> () {
+fn go_fn(rfun: &mut RadecoFunction, callgraph: &CallGraph) {
     let _fn_addr = rfun.offset;
     let call_site_addr_to_target_addr: HashMap<u64, u64> = callgraph
         .callees(rfun.cgid())
@@ -69,13 +75,13 @@ fn go_fn(rfun: &mut RadecoFunction, callgraph: &CallGraph) -> () {
     let ssa = rfun.ssa_mut();
     for node in ssa.inorder_walk() {
         if let Ok(NodeType::Op(ir::MOpcode::OpCall)) = ssa.node_data(node).map(|x| x.nt) {
-            fix_call_site(ssa, node, &call_site_addr_to_target_addr).unwrap_or_else(|| {
+            if fix_call_site(ssa, node, &call_site_addr_to_target_addr).is_none() {
                 radeco_err!(
                     "failed to fix call site {:?} in function at {:#X}",
                     node,
                     _fn_addr
                 )
-            });
+            }
         }
     }
 }
