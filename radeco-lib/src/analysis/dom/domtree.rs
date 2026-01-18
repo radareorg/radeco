@@ -483,8 +483,8 @@ mod test {
         let count = g.node_count();
 
         let mut dfs = DFSVisitor::new();
-        for i in 0..count {
-            dfs.dfs(&g, n[i]);
+        for node in n.iter().take(count).cloned() {
+            dfs.dfs(&g, node);
         }
 
         let order = vec![4, 5, 1, 12, 11, 10, 9, 6, 0, 3, 2, 7, 8];
@@ -526,7 +526,7 @@ mod test {
         g.add_edge(n3, n7, 0);
         g.add_edge(n7, n1, 0);
 
-        let dom = DomTree::build_dom_tree(&mut g, n0);
+        let dom = DomTree::build_dom_tree(&g, n0);
         let doms_n1 = [n1, n7, n2, n0];
         let doms_n9 = [n9, n6, n5, n4, n2, n0];
         let doms_n3 = [n3, n2, n0];
@@ -556,7 +556,7 @@ mod test {
         g.add_edge(e, f, 0);
         g.add_edge(f, _g, 0);
 
-        let mut dom = DomTree::build_dom_tree(&mut g, a);
+        let mut dom = DomTree::build_dom_tree(&g, a);
         dom.compute_dominance_frontier();
 
         let res = dom.dom_frontier(f).unwrap();

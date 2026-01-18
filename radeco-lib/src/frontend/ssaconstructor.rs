@@ -933,7 +933,7 @@ mod test {
     use std::io::prelude::*;
     use std::sync::Arc;
 
-    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+    const REGISTER_PROFILE: &str = "test_files/x86_register_profile.json";
 
     fn before_test(reg_profile: &mut LRegInfo, instructions: &mut LFunctionInfo, from: &str) {
         // Enable for debugging only.
@@ -941,11 +941,11 @@ mod test {
         let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
-        *reg_profile = serde_json::from_str(&*s).unwrap();
+        *reg_profile = serde_json::from_str(&s).unwrap();
         let mut instruction_file = File::open(from).unwrap();
         let mut s = String::new();
         instruction_file.read_to_string(&mut s).unwrap();
-        *instructions = serde_json::from_str(&*s).unwrap();
+        *instructions = serde_json::from_str(&s).unwrap();
     }
 
     #[test]
@@ -1017,7 +1017,7 @@ mod test {
         {
             let regfile = Arc::new(SubRegisterFile::new(&reg_profile));
             rfn.ssa_mut().regfile = regfile.clone();
-            let mut constructor = SSAConstruct::new(rfn.ssa_mut(), &*regfile);
+            let mut constructor = SSAConstruct::new(rfn.ssa_mut(), &regfile);
             constructor.run(instructions.ops.unwrap().as_slice());
         }
 

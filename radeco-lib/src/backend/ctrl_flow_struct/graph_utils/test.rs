@@ -4,6 +4,7 @@ use petgraph::prelude::{Outgoing, StableDiGraph};
 use petgraph::visit::IntoEdgeReferences;
 
 use quickcheck::TestResult;
+use quickcheck_macros::quickcheck;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::iter::FromIterator;
@@ -206,11 +207,7 @@ where
     G: IntoEdgeReferences,
     G::NodeId: Eq + Hash,
 {
-    let order_idx: HashMap<_, _> = topo_order
-        .into_iter()
-        .enumerate()
-        .map(|(i, n)| (n, i))
-        .collect();
+    let order_idx: HashMap<_, _> = topo_order.iter().enumerate().map(|(i, n)| (n, i)).collect();
     graph
         .edge_references()
         .all(|e| order_idx[&e.source()] < order_idx[&e.target()])

@@ -255,7 +255,7 @@ mod test {
 
     use r2api::structs::Endian;
 
-    // #[test]
+    #[test]
     fn testing_memory_my_dude() {
         let mut lreginfo = Default::default();
         let regstore = RuneRegFile::new(&mut lreginfo);

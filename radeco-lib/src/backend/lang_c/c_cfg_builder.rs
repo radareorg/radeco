@@ -706,7 +706,7 @@ mod test {
                     _ => {}
                 }
             }
-            if errors.len() > 0 {
+            if !errors.is_empty() {
                 Err(errors.join(Self::DELIM))
             } else {
                 Ok(())
@@ -723,7 +723,7 @@ mod test {
                     errors.push(err);
                 }
             }
-            if errors.len() > 0 {
+            if !errors.is_empty() {
                 Err(errors.join(Self::DELIM))
             } else {
                 Ok(())
@@ -846,7 +846,7 @@ mod test {
                 }
             }
 
-            if errors.len() > 0 {
+            if !errors.is_empty() {
                 Err(errors.join(Self::DELIM))
             } else {
                 Ok(())
@@ -859,7 +859,7 @@ mod test {
             name: String,
         ) -> Result<(), String> {
             let mut errors = Vec::new();
-            if datamap.var_map.get(&node).is_none() {
+            if !datamap.var_map.contains_key(&node) {
                 let err = format!("Invalid register node: {:?}", node);
                 errors.push(err);
             }
@@ -870,7 +870,7 @@ mod test {
                 let err = format!("Invalid register name: {:?}", name);
                 errors.push(err);
             }
-            if errors.len() > 0 {
+            if !errors.is_empty() {
                 Err(errors.join(Self::DELIM))
             } else {
                 Ok(())
@@ -898,7 +898,7 @@ mod test {
                     }
                 }
             }
-            if errors.len() > 0 {
+            if !errors.is_empty() {
                 Err(errors.join(Self::DELIM))
             } else {
                 Ok(())
@@ -917,12 +917,8 @@ mod test {
                     errors.push(err);
                 }
             }
-            if errors.len() > 0 {
-                Err(format!(
-                    "{} @ {}",
-                    errors.join(Self::DELIM),
-                    name.to_string()
-                ))
+            if !errors.is_empty() {
+                Err(format!("{} @ {}", errors.join(Self::DELIM), name))
             } else {
                 Ok(())
             }
@@ -937,8 +933,8 @@ mod test {
             let expr = c_ast::Expr::Add;
             let operand_nodes = datamap
                 .var_map
-                .iter()
-                .map(|(n, _)| *n)
+                .keys()
+                .copied()
                 .filter(|n| *n != node)
                 .take(2)
                 .collect();
@@ -946,7 +942,7 @@ mod test {
             // by handle
             datamap.var_map.remove(&node);
             datamap.handle(node, operand_nodes, expr, cfg);
-            if datamap.var_map.get(&node).is_none() {
+            if !datamap.var_map.contains_key(&node) {
                 Err(format!("Failed to handle binary operator: {:?}", node))
             } else {
                 Ok(())
@@ -981,7 +977,7 @@ mod test {
         rfn
     }
 
-    const FILES: [&'static str; 2] = ["./test_files/bin1_main_ssa", "./test_files/loopy_main_ssa"];
+    const FILES: [&str; 2] = ["./test_files/bin1_main_ssa", "./test_files/loopy_main_ssa"];
 
     #[test]
     fn c_cfg_data_map_test() {
@@ -990,7 +986,7 @@ mod test {
             let mut datamap = CCFGDataMap::new(&rfn);
             let mut ccfg = c_cfg::CCFG::new(rfn.name.as_ref());
             CCFGDataMapVerifier::verify_datamap(&mut datamap, &mut ccfg, &HashMap::new())
-                .expect(&format!("CASTBDataMap verification failed {}", file));
+                .unwrap_or_else(|_| panic!("CASTBDataMap verification failed {}", file));
         }
     }
 
@@ -1003,7 +999,7 @@ mod test {
             let data_graph = CCFGDataMap::recover_data(&rfn, &mut builder.cfg, &dummy_map);
             builder.datamap = data_graph;
             CCFGBuilderVerifier::verify(&mut builder)
-                .expect(&format!("CCFGBuilder verification failed {}", file));
+                .unwrap_or_else(|_| panic!("CCFGBuilder verification failed {}", file));
         }
     }
 }

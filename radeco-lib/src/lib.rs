@@ -39,7 +39,7 @@
 #![doc(html_root_url = "https://radare.github.io/radeco-lib/")]
 #![doc(html_logo_url = "http://rada.re/r/img/r2logo3.png")]
 
-extern crate petgraph;
+//extern crate petgraph;
 extern crate regex;
 extern crate serde_json;
 

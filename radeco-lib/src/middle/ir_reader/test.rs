@@ -6,7 +6,7 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 const SSA_TXT: &str = "\
 define-fun sym.foo(unknown) -> unknown {
     entry-register-state:
@@ -86,12 +86,12 @@ define-fun sym.foo(unknown) -> unknown {
         $mem = %34;
 }
 ";
-const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
+const REGISTER_PROFILE: &str = "test_files/x86_register_profile.json";
 
 lazy_static! {
     static ref REGISTER_FILE: Arc<SubRegisterFile> = {
         let s = ::std::fs::read_to_string(REGISTER_PROFILE).unwrap();
-        let reg_profile = serde_json::from_str(&*s).unwrap();
+        let reg_profile = serde_json::from_str(&s).unwrap();
         Arc::new(SubRegisterFile::new(&reg_profile))
     };
 }

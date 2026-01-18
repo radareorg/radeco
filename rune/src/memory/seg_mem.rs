@@ -353,14 +353,14 @@ mod test {
     fn check_read() {
         use super::{Memory, SegMem};
         use libsmt::backends::backend::SMTBackend;
-        use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
+        use libsmt::backends::smtlib2::SMTLib2;
         use libsmt::backends::z3::Z3;
         use libsmt::logics::qf_abv;
         use libsmt::theories::bitvec::OpCodes::Const;
         use libsmt::theories::core::OpCodes::*;
         use r2api::structs::Endian;
 
-        let mut z3: Z3 = Default::default();
+        let _z3: Z3 = Default::default();
         let mut solver = SMTLib2::new(Some(qf_abv::QF_ABV));
         let mut mem: SegMem = Memory::new(64, Endian::Big);
 
@@ -376,7 +376,7 @@ mod test {
         let var = mem.read(addr, 16, &mut solver);
 
         let c = solver.new_const(Const(0x7970, 16));
-        let cmp = solver.assert(Cmp, &[var, c]);
+        let _cmp = solver.assert(Cmp, &[var, c]);
 
         println!("{}", solver.generate_asserts());
     }

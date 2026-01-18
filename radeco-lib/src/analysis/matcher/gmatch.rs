@@ -629,28 +629,17 @@ mod test {
         }
 
         grep_and_replace!(&mut ssa, "(OpAdd %1, %2)" => "(OpSub %1, %2)");
-        let sub_node = ssa.inorder_walk().last().expect("No last node!");
+        let sub_node = ssa.inorder_walk().next_back().expect("No last node!");
         let args = ssa.operands_of(sub_node);
 
-        assert!({
-            match ssa.g[sub_node] {
-                NodeData::Op(MOpcode::OpSub, _) => true,
-                _ => false,
-            }
-        });
-
-        assert!({
-            match ssa.g[args[0]] {
-                NodeData::Op(MOpcode::OpConst(1), _) => true,
-                _ => false,
-            }
-        });
-
-        assert!({
-            match ssa.g[args[1]] {
-                NodeData::Op(MOpcode::OpConst(2), _) => true,
-                _ => false,
-            }
-        });
+        assert!(matches!(ssa.g[sub_node], NodeData::Op(MOpcode::OpSub, _)));
+        assert!(matches!(
+            ssa.g[args[0]],
+            NodeData::Op(MOpcode::OpConst(1), _)
+        ));
+        assert!(matches!(
+            ssa.g[args[1]],
+            NodeData::Op(MOpcode::OpConst(2), _)
+        ));
     }
 }

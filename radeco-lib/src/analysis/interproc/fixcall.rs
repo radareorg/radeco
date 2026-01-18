@@ -498,16 +498,13 @@ mod test {
     fn analysis_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
-        let matched_func_vec: Vec<u64> = functions
-            .iter()
-            .map(|(fn_addr, _)| fn_addr.clone())
-            .collect();
+        let matched_func_vec: Vec<u64> = functions.keys().copied().collect();
 
         // Analyze preserved for all functions.
         {
             let mut callfixer = CallFixer::new(&mut rmod, None, None);
             for func in &matched_func_vec {
-                callfixer.analysis(&func);
+                callfixer.analysis(func);
             }
         }
     }
@@ -517,19 +514,16 @@ mod test {
     fn fix_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
-        let matched_func_vec: Vec<u64> = functions
-            .iter()
-            .map(|(fn_addr, _)| fn_addr.clone())
-            .collect();
+        let matched_func_vec: Vec<u64> = functions.keys().copied().collect();
 
         // Analyze preserved for all functions.
         {
             let mut callfixer = CallFixer::new(&mut rmod, None, None);
             for func in &matched_func_vec {
-                callfixer.analysis(&func);
+                callfixer.analysis(func);
             }
             for func in &matched_func_vec {
-                callfixer.fix(&func);
+                callfixer.fix(func);
             }
         }
     }
@@ -539,22 +533,19 @@ mod test {
     fn reanalysis_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
-        let matched_func_vec: Vec<u64> = functions
-            .iter()
-            .map(|(fn_addr, _)| fn_addr.clone())
-            .collect();
+        let matched_func_vec: Vec<u64> = functions.keys().copied().collect();
 
         // Analyze preserved for all functions.
         {
             let mut callfixer = CallFixer::new(&mut rmod, None, None);
             for func in &matched_func_vec {
-                callfixer.analysis(&func);
+                callfixer.analysis(func);
             }
             for func in &matched_func_vec {
-                callfixer.fix(&func);
+                callfixer.fix(func);
             }
             for func in &matched_func_vec {
-                callfixer.reanalysis(&func);
+                callfixer.reanalysis(func);
             }
         }
     }

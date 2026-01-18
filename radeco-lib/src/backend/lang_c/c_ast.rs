@@ -781,7 +781,7 @@ mod test {
         let test_args = args
             .iter()
             .chain(vars.iter())
-            .map(|n| Some(n.clone()))
+            .map(|n| Some(*n))
             .collect::<Vec<_>>();
         let _ = c_ast.call_func("test_func", test_args);
         let _ = c_ast.ret(None);

@@ -46,7 +46,7 @@ impl AstContextMut for StringAst {
     }
 
     fn mk_cond_from_bool_var(&mut self, var: &String) -> String {
-        format!("{}", var)
+        var.to_string()
     }
 
     fn mk_var_assign(&mut self, var: &String, val: u64) -> String {
