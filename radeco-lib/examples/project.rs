@@ -4,7 +4,7 @@ extern crate r2api;
 extern crate r2pipe;
 extern crate radeco_lib;
 
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 use r2pipe::R2;
 use radeco_lib::frontend::radeco_containers::{FunctionLoader, ModuleLoader, ProjectLoader};
 use radeco_lib::frontend::radeco_source::Source;
@@ -15,8 +15,8 @@ use std::rc::Rc;
 fn main() {
     {
         let mut r2 = R2::new(Some("/bin/ls")).expect("Failed to load r2");
-        r2.analyze();
-        let src: Rc<Source> = Rc::new(Rc::new(RefCell::new(r2)));
+        r2.analyze().expect("error during R2 analysis");
+        let src: Rc<dyn Source> = Rc::new(Rc::new(RefCell::new(r2)));
         let p = ProjectLoader::default()
             .path("/bin/ls")
             .source(Rc::clone(&src))

@@ -139,11 +139,11 @@ mod test {
         let fsource = FileSource::open("./test_files/ct1_sccp_ex/ct1_sccp_ex");
         let mut rproj = ProjectLoader::new().source(Rc::new(fsource)).load();
         for mut xy in rproj.iter_mut() {
-            let mut rmod = &mut xy.module;
+            let rmod = &mut xy.module;
             {
                 let mut analyzer: InterProcAnalyzer<summary::CallSummary> =
                     InterProcAnalyzer::new();
-                analyzer.analyze(&mut rmod, Some(all));
+                analyzer.analyze(rmod, Some(all));
             }
 
             for (ref addr, ref mut rfn) in rmod.functions.iter_mut() {

@@ -2,7 +2,7 @@ extern crate arch;
 extern crate r2api;
 extern crate r2pipe;
 
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 use r2pipe::r2::R2;
 
 use arch::regfile::x86regfile::*;
@@ -11,7 +11,7 @@ fn main() {
     let path = "/bin/ls";
     // Open a new r2 session
     let mut r2 = R2::new(Some(path)).expect("Failed to spawn r2");
-    r2.init();
+    r2.init().expect("error during R2 init");
 
     // Get register information
     let reg_info = r2.reg_info().unwrap();

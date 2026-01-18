@@ -275,21 +275,20 @@ mod test {
     use crate::frontend::ssaconstructor::SSAConstruct;
     use crate::middle::regfile::SubRegisterFile;
 
-    const REGISTER_PROFILE: &'static str = "test_files/x86_register_profile.json";
-    const BIN_LS_INSTRUCTIONS: &'static str = "test_files/bin_ls_instructions.json";
-    const CT1_INSTRUCTIONS: &'static str = "test_files/ct1_instructions.json";
+    const REGISTER_PROFILE: &str = "test_files/x86_register_profile.json";
+    const BIN_LS_INSTRUCTIONS: &str = "test_files/bin_ls_instructions.json";
+    const CT1_INSTRUCTIONS: &str = "test_files/ct1_instructions.json";
 
     #[test]
     fn bin_ls_test() {
-        let instructions: LFunctionInfo;
         let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
-        let reg_profile = serde_json::from_str(&*s).unwrap();
+        let reg_profile = serde_json::from_str(&s).unwrap();
         let mut instruction_file = File::open(BIN_LS_INSTRUCTIONS).unwrap();
         let mut s = String::new();
         instruction_file.read_to_string(&mut s).unwrap();
-        instructions = serde_json::from_str(&*s).unwrap();
+        let instructions: LFunctionInfo = serde_json::from_str(&s).unwrap();
         let mut rfn = RadecoFunction::default();
 
         {
@@ -308,15 +307,14 @@ mod test {
 
     #[test]
     fn ct1_test() {
-        let instructions: LFunctionInfo;
         let mut register_profile = File::open(REGISTER_PROFILE).unwrap();
         let mut s = String::new();
         register_profile.read_to_string(&mut s).unwrap();
-        let reg_profile = serde_json::from_str(&*s).unwrap();
+        let reg_profile = serde_json::from_str(&s).unwrap();
         let mut instruction_file = File::open(CT1_INSTRUCTIONS).unwrap();
         let mut s = String::new();
         instruction_file.read_to_string(&mut s).unwrap();
-        instructions = serde_json::from_str(&*s).unwrap();
+        let instructions: LFunctionInfo = serde_json::from_str(&s).unwrap();
         let mut rfn = RadecoFunction::default();
 
         {

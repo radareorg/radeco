@@ -7,24 +7,20 @@ use std::collections::HashMap;
 
 use r2pipe::r2::R2;
 
-use r2api::api_trait::R2Api;
+use r2api::api_trait::R2PApi;
 
 use rune::explorer::directed::DirectedExplorer;
-use rune::explorer::explorer::PathExplorer;
+use rune::explorer::PathExplorer;
 
-use rune::memory::memory::Memory;
-
-use rune::regstore::regstore::RegStore;
-
-use rune::engine::engine::Engine;
 use rune::engine::rune::Rune;
+use rune::engine::Engine;
 
-use rune::utils::utils::{new_rune_ctx, Key};
+use rune::utils::{new_rune_ctx, Key};
 
 fn main() {
     // Stream
     let mut stream = R2::new(Some("bins/a.out")).expect("Could not open the file.");
-    stream.init();
+    stream.init().expect("error during R2 stream init");
 
     let bp = 0x5000;
     let ip = 0x004004fa;
