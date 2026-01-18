@@ -1,4 +1,3 @@
-use base64;
 use r2pipe::{R2Pipe, R2};
 use radeco_lib::analysis::engine::{Engine, RadecoEngine};
 use radeco_lib::backend::lang_c::c_cfg::ctrl_flow_struct;
@@ -15,7 +14,7 @@ use std::rc::Rc;
 use std::str;
 
 thread_local!(
-    pub static PROJ: RefCell<Option<RadecoProject>> = RefCell::new(None);
+    pub static PROJ: RefCell<Option<RadecoProject>> = const { RefCell::new(None) };
 );
 
 pub fn fn_list(proj: &RadecoProject) -> Vec<String> {
@@ -30,8 +29,7 @@ pub fn get_function<'a>(name: &str, proj: &'a RadecoProject) -> Option<&'a Radec
     proj.iter()
         .map(|i| i.module)
         .flat_map(|rmod| rmod.functions.values())
-        .filter(|rfn| rfn.name == name)
-        .next()
+        .find(|rfn| rfn.name == name)
 }
 
 pub fn get_function_mut<'a>(
@@ -41,12 +39,11 @@ pub fn get_function_mut<'a>(
     proj.iter_mut()
         .map(|i| i.module)
         .flat_map(|rmod| rmod.functions.values_mut())
-        .filter(|rfn| rfn.name == name)
-        .next()
+        .find(|rfn| rfn.name == name)
 }
 
 pub fn fn_rename(old_f: &str, new_f: &str, proj: &mut RadecoProject) {
-    if let Some(_) = get_function(new_f, proj) {
+    if get_function(new_f, proj).is_some() {
         println!("there is already a function called: {}", new_f);
         return;
     }
@@ -76,7 +73,7 @@ pub fn analyze(rfn: &mut RadecoFunction, max_it: u32) {
     engine.run_func(rfn);
 }
 
-pub fn analyze_all_functions<'a>(proj: &'a mut RadecoProject, max_it: u32) {
+pub fn analyze_all_functions(proj: &mut RadecoProject, max_it: u32) {
     let rfns = proj
         .iter_mut()
         .map(|i| i.module)
@@ -97,11 +94,11 @@ pub fn emit_dot(ssa: &SSAStorage) -> String {
     dot::emit_dot(ssa)
 }
 
-pub fn decompile_all_functions<'a>(proj: &'a RadecoProject) -> String {
+pub fn decompile_all_functions(proj: &RadecoProject) -> String {
     let mut decompiled_funcs = Vec::new();
-    let funcs = fn_list(&proj);
+    let funcs = fn_list(proj);
     for f in &funcs {
-        match decompile(f, &proj) {
+        match decompile(f, proj) {
             Ok(res) => {
                 decompiled_funcs.push(res);
             }
@@ -113,11 +110,11 @@ pub fn decompile_all_functions<'a>(proj: &'a RadecoProject) -> String {
     decompiled_funcs.join("\n")
 }
 
-pub fn decompile<'a>(name: &str, proj: &'a RadecoProject) -> Result<String, String> {
-    if let Some(rfn) = get_function(name, &proj) {
+pub fn decompile(name: &str, proj: &RadecoProject) -> Result<String, String> {
+    if let Some(rfn) = get_function(name, proj) {
         let rmod = proj.iter().map(|i| i.module).next().unwrap();
-        let func_name_map = func_names(&rmod);
-        let strings = strings(&rmod);
+        let func_name_map = func_names(rmod);
+        let strings = strings(rmod);
         decompile_priv(rfn, &func_name_map, &strings)
     } else {
         Err(format!("{} is not found.", name))
@@ -161,7 +158,7 @@ pub fn load_proj_by_path(path: &str, max_it: u32) -> RadecoProject {
     let regfile = p.regfile().clone();
     for xy in p.iter_mut() {
         let engine = RadecoEngine::new(max_it);
-        engine.run_module(xy.module, &*regfile.clone());
+        engine.run_module(xy.module, &regfile.clone());
     }
     p
 }
@@ -183,7 +180,7 @@ pub fn load_project_by_r2pipe(r2p: R2Pipe, max_it: u32) -> RadecoProject {
     let regfile = p.regfile().clone();
     for xy in p.iter_mut() {
         let engine = RadecoEngine::new(max_it);
-        engine.run_module(xy.module, &*regfile.clone());
+        engine.run_module(xy.module, &regfile.clone());
     }
     p
 }
@@ -198,7 +195,7 @@ pub fn func_names(rmod: &RadecoModule) -> HashMap<u64, String> {
 pub fn strings(rmod: &RadecoModule) -> HashMap<u64, String> {
     rmod.strings()
         .iter()
-        .filter(|ref s| s.paddr.is_some() && s.string.is_some())
+        .filter(|s| s.paddr.is_some() && s.string.is_some())
         .cloned()
         .map(|s| {
             let (addr, _s) = (s.vaddr.unwrap(), s.string.unwrap());

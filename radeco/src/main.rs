@@ -26,8 +26,8 @@ use std::fs;
 use std::process;
 
 mod scheme {
-    pub const HTTP: &'static str = "http://";
-    pub const TCP: &'static str = "tcp://";
+    pub const HTTP: &str = "http://";
+    pub const TCP: &str = "tcp://";
 
     pub fn is_http(url: &str) -> bool {
         url.starts_with(HTTP)
@@ -40,7 +40,7 @@ mod scheme {
 
 // On unix platforms you can use ANSI escape sequences
 #[cfg(unix)]
-const PROMPT: &'static str = "\x1b[1;32m>>\x1b[0m ";
+const PROMPT: &str = "\x1b[1;32m>>\x1b[0m ";
 // File seperator for *nix based platforms
 #[cfg(unix)]
 const FILE_SP: char = '/';
@@ -115,9 +115,9 @@ impl Completer for Completes {
                     let mut line_tokens = line.split(' ');
                     line_tokens.next(); // drop the command.
 
-                    let to_compl = line_tokens.last().unwrap_or("");
+                    let to_compl = line_tokens.next_back().unwrap_or("");
 
-                    let mut funcs: Vec<String> = core::fn_list(&proj)
+                    let mut funcs: Vec<String> = core::fn_list(proj)
                         .iter()
                         .filter(|f| f.len() > to_compl.len())
                         .filter(|f| &f[0..to_compl.len()] == to_compl)
@@ -125,7 +125,7 @@ impl Completer for Completes {
                             format!(
                                 "{}{}{}",
                                 line,
-                                if to_compl.len() == 0 { " " } else { "" },
+                                if to_compl.is_empty() { " " } else { "" },
                                 &f[to_compl.len()..f.len()]
                             )
                         })
@@ -135,21 +135,18 @@ impl Completer for Completes {
             });
         }
         if line.starts_with("load") {
-            match self.file_completer.complete(line, _pos, ctx) {
-                Ok((n, ss)) => {
-                    let mut completed_lines = ss
-                        .into_iter()
-                        .map(|s| {
-                            if let Some(sep_loc) = line.rfind(FILE_SP) {
-                                format!("{}{}", &line[..sep_loc + 1], s.display)
-                            } else {
-                                format!("{}{}", &line[..n], s.display)
-                            }
-                        })
-                        .collect();
-                    ret.append(&mut completed_lines);
-                }
-                Err(_) => {}
+            if let Ok((n, ss)) = self.file_completer.complete(line, _pos, ctx) {
+                let mut completed_lines = ss
+                    .into_iter()
+                    .map(|s| {
+                        if let Some(sep_loc) = line.rfind(FILE_SP) {
+                            format!("{}{}", &line[..sep_loc + 1], s.display)
+                        } else {
+                            format!("{}{}", &line[..n], s.display)
+                        }
+                    })
+                    .collect();
+                ret.append(&mut completed_lines);
             }
         }
 
@@ -157,7 +154,7 @@ impl Completer for Completes {
     }
 }
 
-const SEP: &'static str = "END";
+const SEP: &str = "END";
 
 fn main() {
     #[cfg(feature = "trace_log")]
@@ -243,16 +240,16 @@ fn main() {
 }
 
 mod command {
-    pub const HELP: &'static str = "help";
-    pub const LOAD: &'static str = "load";
-    pub const CONNECT: &'static str = "connect";
-    pub const FNLIST: &'static str = "fn_list";
-    pub const ANALYZE: &'static str = "analyze";
-    pub const DOT: &'static str = "dot";
-    pub const IR: &'static str = "ir";
-    pub const DECOMPILE: &'static str = "decompile";
-    pub const FUNC_RENAME: &'static str = "fn_rn";
-    pub const QUIT: &'static str = "quit";
+    pub const HELP: &str = "help";
+    pub const LOAD: &str = "load";
+    pub const CONNECT: &str = "connect";
+    pub const FNLIST: &str = "fn_list";
+    pub const ANALYZE: &str = "analyze";
+    pub const DOT: &str = "dot";
+    pub const IR: &str = "ir";
+    pub const DECOMPILE: &str = "decompile";
+    pub const FUNC_RENAME: &str = "fn_rn";
+    pub const QUIT: &str = "quit";
 
     pub fn help() {
         let width = 30;
@@ -298,10 +295,7 @@ mod command {
 
     /// Returns true if `cmd` requires a function as parameter.
     pub fn requires_func(cmd: &str) -> bool {
-        match cmd {
-            ANALYZE | DOT | IR | DECOMPILE | FUNC_RENAME => true,
-            _ => false,
-        }
+        matches!(cmd, ANALYZE | DOT | IR | DECOMPILE | FUNC_RENAME)
     }
 }
 
@@ -331,9 +325,9 @@ fn cmd(line: String, highlight: bool, max_it: u32) {
                 }
             }
             (Some(command::CONNECT), Some(url), _) => {
-                let p_opt = if scheme::is_http(&url) {
+                let p_opt = if scheme::is_http(url) {
                     core::load_proj_http(&url[scheme::HTTP.len()..], max_it)
-                } else if scheme::is_tcp(&url) {
+                } else if scheme::is_tcp(url) {
                     core::load_proj_tcp(&url[scheme::TCP.len()..], max_it)
                 } else {
                     Err("Invalid url")
@@ -360,7 +354,7 @@ fn cmd(line: String, highlight: bool, max_it: u32) {
                 core::analyze_all_functions(proj, max_it);
             }
             (Some(command::FNLIST), _, _) => {
-                let funcs = core::fn_list(&proj);
+                let funcs = core::fn_list(proj);
                 println!("{}", funcs.join("\n"));
             }
             // TODO Show list of dependency information of analyses
@@ -373,28 +367,28 @@ fn cmd(line: String, highlight: bool, max_it: u32) {
                 }
             }
             (Some(command::DOT), Some(f), _) => {
-                if let Some(rfn) = core::get_function(f, &proj) {
+                if let Some(rfn) = core::get_function(f, proj) {
                     println!("{}", core::emit_dot(rfn.ssa()));
                 } else {
                     println!("{} is not found", f);
                 }
             }
             (Some(command::IR), Some(f), _) => {
-                if let Some(rfn) = core::get_function(f, &proj) {
+                if let Some(rfn) = core::get_function(f, proj) {
                     println!("{}", core::emit_ir(rfn));
                 } else {
                     println!("{} is not found", f);
                 }
             }
             (Some(command::DECOMPILE), Some("*"), _) => {
-                let decompiled = core::decompile_all_functions(&proj);
+                let decompiled = core::decompile_all_functions(proj);
                 if highlight {
                     highlighting::print_highlighted(&decompiled);
                 } else {
                     println!("{}", decompiled);
                 }
             }
-            (Some(command::DECOMPILE), Some(f), _) => match core::decompile(f, &proj) {
+            (Some(command::DECOMPILE), Some(f), _) => match core::decompile(f, proj) {
                 Ok(res) => {
                     if highlight {
                         highlighting::print_highlighted(&res);

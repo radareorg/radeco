@@ -49,7 +49,7 @@ pub fn parse_args() -> (Option<String>, Option<String>, bool, bool, bool, u32) {
     let max_it = match matches.value_of("max-iterations") {
         Some(s) => {
             // TODO -> Implement error management.
-            match u32::from_str_radix(s.trim(), 10) {
+            match s.trim().parse::<u32>() {
                 Ok(max_it) => max_it,
                 Err(_) => {
                     eprintln!("max-iterations must be a deciamal number");
