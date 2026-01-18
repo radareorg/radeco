@@ -35,7 +35,7 @@ fn main() {
     if cargo_lock_path.exists() {
         let lock_buf = read_to_string(cargo_lock_path).ok().unwrap();
         let deps = parse_dependencies(&lock_buf);
-        for &(ref crate_name, ref crate_version) in deps.iter() {
+        for (crate_name, crate_version) in deps.iter() {
             if crate_name == "radeco-lib" {
                 version_str = format!("{}, radeco-lib - v{}", version_str, crate_version);
             }
