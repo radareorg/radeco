@@ -117,9 +117,9 @@ impl CCFG {
         let unknown = g.add_node(CCFGNode::Unknown);
         CCFG {
             fname: fn_name.to_string(),
-            entry: entry,
-            unknown: unknown,
-            g: g,
+            entry,
+            unknown,
+            g,
             vars: HashSet::new(),
             consts: HashSet::new(),
             exprs: Vec::new(),
@@ -176,8 +176,7 @@ impl CCFG {
         // TODO check whether there are more than two derefed nodes
         self.g
             .edges_directed(node, Direction::Incoming)
-            .filter(|e| *e.weight() == CCFGEdge::Value(ValueEdge::DeRef))
-            .next()
+            .find(|e| *e.weight() == CCFGEdge::Value(ValueEdge::DeRef))
             .map(|e| e.source())
     }
 
@@ -236,12 +235,9 @@ impl CCFG {
         }
         self.g
             .add_edge(prev_action, call_node, CCFGEdge::Action(ActionEdge::Normal));
-        if ret_val.is_some() {
-            self.g.add_edge(
-                call_node,
-                ret_val.unwrap(),
-                CCFGEdge::Value(ValueEdge::FuncVal),
-            );
+        if let Some(ret_val) = ret_val {
+            self.g
+                .add_edge(call_node, ret_val, CCFGEdge::Value(ValueEdge::FuncVal));
         }
         call_node
     }
@@ -250,7 +246,7 @@ impl CCFG {
         let e = self
             .g
             .find_edge(prev_action, next_action)
-            .map(|x| (x, self.g.edge_weight(x).map(|a| a.clone())));
+            .map(|x| (x, self.g.edge_weight(x).cloned()));
         match e {
             Some((idx, Some(CCFGEdge::Action(_)))) => {
                 self.g.remove_edge(idx);
@@ -269,7 +265,6 @@ impl CCFG {
         let ns = self
             .g
             .edges_directed(node, Direction::Incoming)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(_) => Some(e.id()),
                 _ => None,
@@ -291,10 +286,10 @@ impl CCFG {
     ) -> CCFGRef {
         let node = self.g.add_node(CCFGNode::Action(ActionNode::If));
         self.remove_incoming_actions(if_then);
-        if if_else.is_some() {
-            self.remove_incoming_actions(if_else.unwrap());
+        if let Some(if_else) = if_else {
+            self.remove_incoming_actions(if_else);
             self.g
-                .add_edge(node, if_else.unwrap(), CCFGEdge::Action(ActionEdge::IfElse));
+                .add_edge(node, if_else, CCFGEdge::Action(ActionEdge::IfElse));
         }
         self.g
             .add_edge(node, if_then, CCFGEdge::Action(ActionEdge::IfThen));
@@ -315,7 +310,6 @@ impl CCFG {
         let es = self
             .g
             .edges_directed(prev, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(ActionEdge::Normal) => Some((e.target(), e.id())),
                 _ => None,
@@ -335,9 +329,9 @@ impl CCFG {
     /// Add ActionNode of return statement
     pub fn add_return(&mut self, ret_val: Option<CCFGRef>, prev_action: CCFGRef) -> CCFGRef {
         let node = self.g.add_node(CCFGNode::Action(ActionNode::Return));
-        if ret_val.is_some() {
+        if let Some(ret_val) = ret_val {
             self.g
-                .add_edge(node, ret_val.unwrap(), CCFGEdge::Value(ValueEdge::RetVal));
+                .add_edge(node, ret_val, CCFGEdge::Value(ValueEdge::RetVal));
         }
         self.g
             .add_edge(prev_action, node, CCFGEdge::Action(ActionEdge::Normal));
@@ -348,7 +342,6 @@ impl CCFG {
         let es = self
             .g
             .edges_directed(next, Direction::Incoming)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(ActionEdge::Normal) => Some((e.source(), e.id())),
                 _ => None,
@@ -359,8 +352,8 @@ impl CCFG {
         }
         let goto_node = if let Some(&(prev, idx)) = es.first() {
             self.g.remove_edge(idx);
-            let goto_node = self.add_goto(dst, label_str, prev);
-            goto_node
+
+            self.add_goto(dst, label_str, prev)
         } else {
             let entry = self.entry;
             self.add_goto(dst, label_str, entry)
@@ -398,7 +391,6 @@ impl CCFG {
     fn next_action(&self, idx: CCFGRef) -> Option<CCFGRef> {
         self.g
             .edges_directed(idx, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Action(ActionEdge::Normal) => Some(e.target()),
                 _ => None,
@@ -411,9 +403,8 @@ impl CCFG {
             let ns = self
                 .g
                 .edges_directed(node, Direction::Outgoing)
-                .into_iter()
                 .collect::<Vec<_>>();
-            neighbors_by_edge(&ns, edge).first().map(|e| e.clone())
+            neighbors_by_edge(&ns, edge).first().copied()
         };
         let next_normal = move |node| next_node(node, &CCFGEdge::Action(ActionEdge::Normal));
         let mut first = next_node(idx, action_type);
@@ -422,7 +413,7 @@ impl CCFG {
             ret.push(n);
             first = next_normal(n);
         }
-        if ret.len() > 0 {
+        if !ret.is_empty() {
             Some(ret)
         } else {
             None
@@ -436,11 +427,7 @@ impl CCFG {
         }
         let if_then = self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfThen));
         let if_else = self.gather_actions(idx, &CCFGEdge::Action(ActionEdge::IfElse));
-        if if_then.is_some() {
-            Some((if_then.unwrap(), if_else))
-        } else {
-            None
-        }
+        if_then.map(|if_then| (if_then, if_else))
     }
 
     // Returns value node which represents condition used by If statement
@@ -449,17 +436,13 @@ impl CCFG {
             Some(&CCFGNode::Action(ActionNode::If)) => {}
             _ => return None,
         }
-        let ns = self
-            .g
-            .edges_directed(idx, Direction::Outgoing)
-            .into_iter()
-            .collect();
+        let ns = self.g.edges_directed(idx, Direction::Outgoing).collect();
         let expr = {
             let tmp = neighbors_by_edge(&ns, &CCFGEdge::Value(ValueEdge::Conditional));
             if tmp.len() > 1 {
                 radeco_warn!("More than one expressions found: If");
             }
-            tmp.first().map(|e| e.clone())
+            tmp.first().copied()
         };
         expr
     }
@@ -472,7 +455,6 @@ impl CCFG {
         let goto_dsts = self
             .g
             .edges_directed(idx, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Action(ActionEdge::GotoDst) => Some(e.target()),
                 _ => None,
@@ -490,21 +472,17 @@ impl CCFG {
         if self.g.node_weight(idx) != Some(&CCFGNode::Action(ActionNode::Assignment)) {
             return None;
         }
-        let ns = self
-            .g
-            .edges_directed(idx, Direction::Outgoing)
-            .into_iter()
-            .collect();
+        let ns = self.g.edges_directed(idx, Direction::Outgoing).collect();
         let src = neighbors_by_edge(&ns, &CCFGEdge::Value(ValueEdge::AssignSrc))
             .first()
-            .map(|e| e.clone());
+            .copied();
         let dst = neighbors_by_edge(&ns, &CCFGEdge::Value(ValueEdge::AssignDst))
             .first()
-            .map(|e| e.clone());
-        if src.is_some() && dst.is_some() {
-            return Some((dst.unwrap(), src.unwrap()));
-        };
-        None
+            .copied();
+        match (dst, src) {
+            (Some(dst), Some(src)) => Some((dst, src)),
+            _ => None,
+        }
     }
 
     // Returns arguments of function call
@@ -518,7 +496,6 @@ impl CCFG {
         let mut args = self
             .g
             .edges_directed(idx, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::Arg(o)) => Some((o, e.target())),
                 _ => None,
@@ -540,7 +517,6 @@ impl CCFG {
         let ret = self
             .g
             .edges_directed(idx, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::FuncVal) => Some(e.target()),
                 _ => None,
@@ -549,7 +525,7 @@ impl CCFG {
         if ret.len() > 1 {
             radeco_warn!("More than one variable found for FuncVal");
         }
-        ret.first().map(|x| *x)
+        ret.first().copied()
     }
 
     // Returns value node of the return value of a return statement
@@ -563,7 +539,6 @@ impl CCFG {
         let ret_val = self
             .g
             .edges_directed(idx, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::RetVal) => Some(e.target()),
                 _ => None,
@@ -580,7 +555,6 @@ impl CCFG {
         let mut operands = self
             .g
             .edges_directed(expr, Direction::Outgoing)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 &CCFGEdge::Value(ValueEdge::Operand(i)) => Some((i, e.target())),
                 _ => None,
@@ -590,10 +564,10 @@ impl CCFG {
         operands.into_iter().map(|(_, n)| n).collect::<Vec<_>>()
     }
 
-    pub fn to_c_ast(&self) -> CAST {
-        let mut converter = CASTConverter::new(&self);
+    pub fn as_c_ast(&self) -> CAST {
+        let mut converter = CASTConverter::new(self);
         converter.init();
-        converter.to_c_ast_body(self.entry);
+        converter.as_c_ast_body(self.entry);
         converter.ast
     }
 
@@ -606,17 +580,17 @@ impl CCFG {
     }
 
     pub fn is_assign_node(&self, node: CCFGRef) -> bool {
-        match self.g.node_weight(node) {
-            Some(&CCFGNode::Action(ActionNode::Assignment)) => true,
-            _ => false,
-        }
+        matches!(
+            self.g.node_weight(node),
+            Some(&CCFGNode::Action(ActionNode::Assignment))
+        )
     }
 
     pub fn is_call_node(&self, node: CCFGRef) -> bool {
-        match self.g.node_weight(node) {
-            Some(&CCFGNode::Action(ActionNode::Call(_))) => true,
-            _ => false,
-        }
+        matches!(
+            self.g.node_weight(node),
+            Some(&CCFGNode::Action(ActionNode::Call(_)))
+        )
     }
 
     pub fn dot_str(&self) -> String {
@@ -626,7 +600,6 @@ impl CCFG {
     pub fn preds_of(&self, node: CCFGRef) -> Vec<NodeIndex> {
         self.g
             .edges_directed(node, Direction::Incoming)
-            .into_iter()
             .filter_map(|e| match e.weight() {
                 CCFGEdge::Action(ActionEdge::Normal) => Some(e.source()),
                 _ => None,
@@ -661,12 +634,8 @@ impl CCFGVerifier {
                 errors.push(msg);
             }
         }
-        if errors.len() > 0 {
-            Err(format!(
-                "{} @ {}",
-                errors.join(Self::DELIM),
-                name.to_string()
-            ))
+        if !errors.is_empty() {
+            Err(format!("{} @ {}", errors.join(Self::DELIM), name))
         } else {
             Ok(())
         }
@@ -681,18 +650,12 @@ impl CCFGVerifier {
         let normal_actions = cast
             .g
             .edges_directed(node, Direction::Outgoing)
-            .filter(|e| match e.weight() {
-                &CCFGEdge::Action(ActionEdge::Normal) => true,
-                _ => false,
-            });
+            .filter(|e| matches!(e.weight(), &CCFGEdge::Action(ActionEdge::Normal)));
         let length = normal_actions.count();
         if length <= 1 {
             Ok(())
         } else {
-            Err(format!(
-                "There are {} next normal actions @ {:?}",
-                length, node
-            ))
+            Err(format!("There are {length} next normal actions @ {node:?}"))
         }
     }
 
@@ -738,7 +701,7 @@ impl CCFGVerifier {
                 }
             }
         }
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             Err(errors.join(Self::DELIM))
         } else {
             Ok(())
@@ -771,7 +734,7 @@ impl CCFGVerifier {
                 }
             }
         }
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             Err(errors.join(Self::DELIM))
         } else {
             Ok(())
@@ -792,7 +755,7 @@ impl<'a> CASTConverter<'a> {
     pub fn new(cfg: &CCFG) -> CASTConverter<'_> {
         CASTConverter {
             ast: CAST::new(&cfg.fname),
-            cfg: cfg,
+            cfg,
             node_map: HashMap::new(),
             visited: HashSet::new(),
         }
@@ -874,45 +837,44 @@ impl<'a> CASTConverter<'a> {
         }
     }
 
-    fn to_c_ast_body(&mut self, current_node: CCFGRef) {
+    fn as_c_ast_body(&mut self, current_node: CCFGRef) {
         if self.visited.contains(&current_node) {
             return;
         };
         self.visited.insert(current_node);
-        if let Some(ref l) = self.cfg.label_map.get(&current_node) {
+        if let Some(l) = self.cfg.label_map.get(&current_node) {
             self.ast.label(l);
         };
-        let ast_node = self.to_c_ast_single(current_node);
-        if let Ok(_) = ast_node {
-            self.node_map.insert(current_node, ast_node.unwrap());
-        }
-        if let Err(_err) = ast_node {
-            radeco_err!(_err);
+        match self.as_c_ast_single(current_node) {
+            Ok(ast_node) => {
+                let _ = self.node_map.insert(current_node, ast_node);
+            }
+            Err(err) => radeco_err!(err),
         }
 
-        if let Some(ref comment) = self.cfg.debug_info.get(&current_node) {
+        if let Some(comment) = self.cfg.debug_info.get(&current_node) {
             if let Some(&node) = self.node_map.get(&current_node) {
                 self.ast.comment_at(node, comment);
             }
         }
 
         if let Some(n) = self.cfg.next_action(current_node) {
-            self.to_c_ast_body(n);
+            self.as_c_ast_body(n);
         };
     }
 
-    pub fn to_c_ast_single(&mut self, current_node: CCFGRef) -> Result<CASTRef, &'static str> {
+    pub fn as_c_ast_single(&mut self, current_node: CCFGRef) -> Result<CASTRef, &'static str> {
         let idx = self.cfg.g.node_weight(current_node).cloned();
         match idx {
             Some(CCFGNode::Action(ActionNode::Assignment)) => {
-                self.to_c_ast_assignment(current_node)
+                self.as_c_ast_assignment(current_node)
             }
             Some(CCFGNode::Action(ActionNode::Call(ref name))) => {
-                self.to_c_ast_call(current_node, name)
+                self.as_c_ast_call(current_node, name)
             }
-            Some(CCFGNode::Action(ActionNode::Return)) => self.to_c_ast_return(current_node),
-            Some(CCFGNode::Action(ActionNode::If)) => self.to_c_ast_if(current_node),
-            Some(CCFGNode::Action(ActionNode::Goto)) => self.to_c_ast_goto(current_node),
+            Some(CCFGNode::Action(ActionNode::Return)) => self.as_c_ast_return(current_node),
+            Some(CCFGNode::Action(ActionNode::If)) => self.as_c_ast_if(current_node),
+            Some(CCFGNode::Action(ActionNode::Goto)) => self.as_c_ast_goto(current_node),
             Some(CCFGNode::Entry) | Some(CCFGNode::Action(ActionNode::BasicBlock)) => {
                 // fallthrough
                 Err("TODO")
@@ -924,10 +886,10 @@ impl<'a> CASTConverter<'a> {
         }
     }
 
-    fn to_c_ast_assignment(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+    fn as_c_ast_assignment(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
         let tmp = self.cfg.assignment(node).and_then(|(d, s)| {
             match (self.node_map.get(&d), self.node_map.get(&s)) {
-                (Some(&x), Some(&y)) => Some((x.clone(), y.clone())),
+                (Some(&x), Some(&y)) => Some((x, y)),
                 _ => None,
             }
         });
@@ -935,18 +897,18 @@ impl<'a> CASTConverter<'a> {
             let ret = self.ast.expr(c_ast::Expr::Assign, &[dst, src], false);
             Ok(ret)
         } else {
-            Err("CASTConverter::to_c_ast_assignment")
+            Err("CASTConverter::as_c_ast_assignment")
         }
     }
 
-    fn to_c_ast_call(&mut self, node: CCFGRef, name: &str) -> Result<CASTRef, &'static str> {
+    fn as_c_ast_call(&mut self, node: CCFGRef, name: &str) -> Result<CASTRef, &'static str> {
         let args = self
             .cfg
             .args_call(node)
-            .unwrap_or(Vec::new())
+            .unwrap_or_default()
             .into_iter()
             .map(|arg| {
-                let ret = self.node_map.get(&arg).map(|a| *a);
+                let ret = self.node_map.get(&arg).copied();
                 if ret.is_none() {
                     radeco_warn!("Error args_call");
                 }
@@ -956,7 +918,7 @@ impl<'a> CASTConverter<'a> {
         let ret_node_opt = self
             .cfg
             .func_val(node)
-            .and_then(|x| self.node_map.get(&x).map(|a| *a));
+            .and_then(|x| self.node_map.get(&x).copied());
         let mut node = self.ast.call_func(name, args);
         if let Some(ret_node) = ret_node_opt {
             node = self.ast.expr(c_ast::Expr::Assign, &[ret_node, node], false);
@@ -964,25 +926,25 @@ impl<'a> CASTConverter<'a> {
         Ok(node)
     }
 
-    fn to_c_ast_return(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+    fn as_c_ast_return(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
         let opt = self
             .cfg
             .ret_val(node)
             .and_then(|n| self.node_map.get(&n))
-            .map(|n| *n);
+            .copied();
         Ok(self.ast.ret(opt))
     }
 
-    fn to_c_ast_if(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+    fn as_c_ast_if(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
         let cond = self.cfg.branch_condition(node).unwrap_or(self.cfg.unknown);
-        let branches = self.cfg.branch(node).map(|x| x.clone());
+        let branches = self.cfg.branch(node);
         if let Some((if_then, if_else)) = branches {
             for n in if_then.iter() {
-                self.to_c_ast_body(*n);
+                self.as_c_ast_body(*n);
             }
-            if if_else.is_some() {
-                for n in if_else.as_ref().unwrap().iter() {
-                    self.to_c_ast_body(*n);
+            if let Some(if_else) = if_else.as_ref() {
+                for n in if_else.iter().cloned() {
+                    self.as_c_ast_body(n);
                 }
             }
             // TODO avoid unwrap
@@ -1002,12 +964,12 @@ impl<'a> CASTConverter<'a> {
         }
     }
 
-    fn to_c_ast_goto(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
+    fn as_c_ast_goto(&mut self, node: CCFGRef) -> Result<CASTRef, &'static str> {
         let dst_opt = self
             .cfg
             .goto(node)
             .and_then(|d| self.cfg.label_map.get(&d))
-            .map(|d| d.clone());
+            .cloned();
         if dst_opt.is_none() {
             radeco_warn!("Error Goto");
         };
@@ -1040,7 +1002,7 @@ mod test {
         let assn = cfg.assign(x, y, entry);
         let _ = cfg.call_func("func", &[z, w], assn, None);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1060,7 +1022,7 @@ mod test {
         let expr = cfg.expr(&[x, y], c_ast::Expr::Add);
         let _assn = cfg.assign(x, expr, entry);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1077,7 +1039,7 @@ mod test {
         let entry = cfg.entry;
         let _call_f = cfg.call_func("func", &[x], entry, Some(y));
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1108,7 +1070,7 @@ mod test {
         let _call_test2 = cfg.call_func("test2", &[], call_f, None);
         let _ = cfg.conditional(x, assn, Some(call_f), entry);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1128,7 +1090,7 @@ mod test {
         let y = cfg.var("y", None);
         let assn = cfg.assign(x, y, entry);
         let _ = cfg.add_goto(entry, "L1", assn);
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
         println!("{}", output);
     }
@@ -1144,7 +1106,7 @@ mod test {
         let x = cfg.var("x", None);
         let _ = cfg.add_return(Some(x), entry);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1166,7 +1128,7 @@ mod test {
         let ret = cfg.add_return(Some(x), assn);
         let _ = cfg.insert_goto(entry, assn, ret, "L1");
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1204,7 +1166,7 @@ mod test {
         let if_node = cfg.conditional(cond, break_goto, None, f_call);
         let _ = cfg.add_return(None, if_node);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1243,7 +1205,7 @@ mod test {
         let if_node = cfg.conditional(cond, f_call1, None, f_call);
         let _ = cfg.add_return(None, if_node);
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 
@@ -1265,7 +1227,7 @@ mod test {
         let _v = cfg.var("v", Some(Ty::new(BTy::Void, true, 0)));
         let _f = cfg.var("f", Some(Ty::new(BTy::Ptr(Box::new(BTy::Float)), true, 0)));
         CCFGVerifier::verify(&cfg).expect("CCFG verification failed");
-        let output = cfg.to_c_ast().print();
+        let output = cfg.as_c_ast().print();
         println!("{}", output);
     }
 }

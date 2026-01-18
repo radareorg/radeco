@@ -1,3 +1,10 @@
+// Copyright (c) 2026, The Radare Project. All rights reserved.
+// See the COPYING file at the top-level directory of this distribution.
+// Licensed under the BSD 3-Clause License:
+// <http://opensource.org/licenses/BSD-3-Clause>
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! Common Subexpression Elimination (CSE)
 //!
 //! This module implements methods and structs to perform CSE.
@@ -20,6 +27,8 @@ use crate::middle::ssa::ssa_traits::SSA;
 use crate::middle::ssa::ssa_traits::{NodeType, SSAMod, SSAWalk};
 use crate::middle::ssa::ssastorage::SSAStorage;
 
+pub mod ssasort;
+
 #[derive(Debug)]
 pub struct CSE {
     exprs: HashMap<String, Vec<<SSAStorage as SSA>::ValueRef>>,
@@ -35,6 +44,12 @@ pub const INFO: AnalyzerInfo = AnalyzerInfo {
     requires: REQUIRES,
     uses_policy: true,
 };
+
+impl Default for CSE {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl CSE {
     pub fn new() -> CSE {
@@ -139,10 +154,7 @@ impl FuncAnalyzer for CSE {
                 }
 
                 if !replaced {
-                    self.exprs
-                        .entry(hs.clone())
-                        .or_insert_with(Vec::new)
-                        .push(expr);
+                    self.exprs.entry(hs.clone()).or_default().push(expr);
                     self.hashed.insert(expr, hs.clone());
                 }
             }

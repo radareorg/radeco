@@ -38,13 +38,13 @@ use super::abstract_set::{Inum, Unum, _BITS};
 // Avoid integet overflow when k equls to _BITS
 macro_rules! min_in_k_bits {
     ($k:expr) => {
-        (Inum::min_value()) >> (_BITS - ($k))
+        (Inum::MIN) >> (_BITS - ($k))
     };
 }
 
 macro_rules! max_in_k_bits {
     ($k:expr) => {
-        (Inum::max_value()) >> (_BITS - ($k))
+        (Inum::MAX) >> (_BITS - ($k))
     };
 }
 
@@ -195,7 +195,7 @@ where
 fn ntz(_x: Inum) -> u8 {
     let x = _x as Unum;
     let mut n: u8 = 0;
-    let mut y = (!x) & x.wrapping_add(Unum::max_value());
+    let mut y = (!x) & x.wrapping_add(Unum::MAX);
     while y != 0 {
         n += 1;
         y >>= 1;
@@ -239,12 +239,12 @@ fn max_or(_a: Inum, _b: Inum, _c: Inum, _d: Inum) -> Inum {
 
     while m != 0 {
         if (b & d & m) != 0 {
-            temp = (b ^ m) | m.wrapping_add(Unum::max_value());
+            temp = (b ^ m) | m.wrapping_add(Unum::MAX);
             if temp >= a {
                 b = temp;
                 break;
             }
-            temp = (d ^ m) | m.wrapping_add(Unum::max_value());
+            temp = (d ^ m) | m.wrapping_add(Unum::MAX);
             if temp >= c {
                 d = temp;
                 break;
@@ -278,7 +278,7 @@ impl StridedInterval {
         } else {
             let k = if k > _BITS { _BITS } else { k };
             StridedInterval {
-                k: k,
+                k,
                 s: 1,
                 lb: min_in_k_bits!(k),
                 ub: max_in_k_bits!(k),
@@ -289,10 +289,10 @@ impl StridedInterval {
     // XXX: Generate StridedInterval only by new and from
     pub fn new(k: u8, s: Inum, lb: Inum, ub: Inum) -> Self {
         let mut si = StridedInterval {
-            k: k,
-            s: s,
-            lb: lb,
-            ub: ub,
+            k,
+            s,
+            lb,
+            ub,
         };
         si.validate();
         si
@@ -349,8 +349,8 @@ impl StridedInterval {
         if s != 0 {
             // Avoid overflow
             //  e.g.
-            //      ub = Inum::max_value()
-            //      lb = Inum::min_value()
+            //      ub = Inum::MAX
+            //      lb = Inum::MIN
             //      s = 1
             ub -= ((ub % s + s) % s - (lb % s + s) % s + s) % s;
             if ub == lb {
@@ -401,7 +401,7 @@ impl From<(u8, Inum)> for StridedInterval {
             let n = number_k.1;
             k = if (k > _BITS) || (k == 0) { _BITS } else { k };
             StridedInterval {
-                k: k,
+                k,
                 s: 0,
                 lb: n_in_k_bits!(n, k),
                 ub: n_in_k_bits!(n, k),
@@ -412,16 +412,10 @@ impl From<(u8, Inum)> for StridedInterval {
 
 impl Container<Inum> for StridedInterval {
     fn contains(&self, object: &Inum) -> bool {
-        if self.is_empty() {
-            false
-        } else if (*object < self.lb) || (*object > self.ub) {
+        if self.is_empty() || (*object < self.lb) || (*object > self.ub){
             false
         } else if self.s == 0 {
-            if self.lb == *object {
-                true
-            } else {
-                false
-            }
+            self.lb == *object
         } else if (*object % self.s == self.lb % self.s)
             || (*object % self.s == self.lb % self.s + self.s)
         {
@@ -617,8 +611,7 @@ impl Mul for StridedInterval {
             }
         } else {
             // Both are set
-            let _poles = vec![
-                (
+            let _poles = [(
                     BigInt::from(self.lb) * BigInt::from(other.lb),
                     self.lb,
                     other.lb,
@@ -637,8 +630,7 @@ impl Mul for StridedInterval {
                     BigInt::from(self.ub) * BigInt::from(other.ub),
                     self.ub,
                     other.ub,
-                ),
-            ];
+                )];
 
             // Similar with above code
             let _max = _poles
@@ -877,8 +869,8 @@ impl BitAnd for StridedInterval {
         }
         // In most common situation, bitand work as a mask.
         // Thus, we take care of this special case.
-        if self.k == other.k {
-            if self.constant().is_some() || other.constant().is_some() {
+        if self.k == other.k
+            && (self.constant().is_some() || other.constant().is_some()) {
                 let (cons_si, set_si) = if self.constant().is_some() {
                     (&self, &other)
                 } else {
@@ -889,13 +881,12 @@ impl BitAnd for StridedInterval {
                     if n == 0 {
                         return StridedInterval::from((self.k, 0));
                     } else if n == -1 {
-                        return set_si.clone();
+                        return *set_si;
                     } else {
                         return *set_si % StridedInterval::from((self.k, n + 1));
                     }
                 }
             }
-        }
         !((!self) | (!other))
     }
 }
@@ -915,10 +906,10 @@ impl BitOr for StridedInterval {
             StridedInterval::new(self.k, 0, self.lb | other.lb, self.lb | other.lb)
         } else if self.constant() == Some(0) {
             // self is 0
-            other.clone()
+            other
         } else if other.constant() == Some(0) {
             // other is 0
-            self.clone()
+            self
         } else if (self.constant() == Some(-1)) || (other.constant() == Some(-1)) {
             // constant is -1
             StridedInterval::from((self.k, -1))
@@ -1069,7 +1060,7 @@ impl Shr for StridedInterval {
             for i in 0..self.k {
                 if other.contains(&(i as Inum)) {
                     let temp = if i == 0 {
-                        self.clone()
+                        self
                     } else {
                         _shr_one / StridedInterval::from((self.k, 1 << (i - 1)))
                     };
@@ -1244,9 +1235,9 @@ impl AbstractSet for StridedInterval {
 
     fn join(&self, other: &Self) -> Self {
         if self.is_empty() {
-            other.clone()
+            *other
         } else if other.is_empty() {
-            self.clone()
+            *self
         } else if self.k != other.k {
             radeco_err!("Join two strided intervals with different radices");
             StridedInterval::default()
@@ -1267,9 +1258,9 @@ impl AbstractSet for StridedInterval {
 
     fn widen(&self, other: &Self) -> Self {
         if self.is_empty() {
-            other.clone()
+            *other
         } else if other.is_empty() {
-            self.clone()
+            *self
         } else if self.k != other.k {
             radeco_err!("Widen two strided intervals with different radices");
             StridedInterval::default()
@@ -1291,7 +1282,7 @@ impl AbstractSet for StridedInterval {
 
     fn remove_lower_bound(&self) -> Self {
         if self.is_empty() {
-            self.clone()
+            *self
         } else {
             let min = min_in_k_bits!(self.k);
             let ub_mod_s = self.ub % self.s;
@@ -1303,7 +1294,7 @@ impl AbstractSet for StridedInterval {
     }
 
     fn set_lower_bound(&self, x: Inum) -> Self {
-        let mut si = self.clone();
+        let mut si = *self;
         if self.is_empty() {
             si
         } else if x > si.ub {
@@ -1324,14 +1315,14 @@ impl AbstractSet for StridedInterval {
 
     fn remove_upper_bound(&self) -> Self {
         if self.is_empty() {
-            self.clone()
+            *self
         } else {
             StridedInterval::new(self.k, self.s, self.lb, max_in_k_bits!(self.k))
         }
     }
 
     fn set_upper_bound(&self, x: Inum) -> Self {
-        let mut si = self.clone();
+        let mut si = *self;
         if self.is_empty() {
             si
         } else if x < si.lb {
@@ -1347,12 +1338,12 @@ impl AbstractSet for StridedInterval {
     fn narrow(&self, k: u8) -> Self {
         if self.is_empty() {
             radeco_warn!("Empty StridedInterval cannot be narrow");
-            self.clone()
+            *self
         } else if k > self.k {
             radeco_warn!("StridedInterval cannot be narrowed to a bigger bits");
-            self.clone()
+            *self
         } else if k == self.k {
-            self.clone()
+            *self
         } else {
             // all numbers in si should be positive in self.k-bits-filed
             let mut si = *self & StridedInterval::from((self.k, mask_in_k_bits!(k)));
@@ -1384,7 +1375,7 @@ impl AbstractSet for StridedInterval {
     }
 
     fn sign_extend(&self, k: u8) -> Self {
-        let mut si = self.clone();
+        let mut si = *self;
         if self.is_empty() {
             radeco_warn!("Empty StridedInterval cannot be extended");
             si
@@ -1399,54 +1390,50 @@ impl AbstractSet for StridedInterval {
     }
 
     fn zero_extend(&self, k: u8) -> Self {
-        let mut si = self.clone();
-        if self.is_empty() {
-            radeco_warn!("Empty StridedInterval cannot be narrow");
+        let mut si = *self;
+        if self.is_empty() || k <= self.k {
+            if self.is_empty() {
+                radeco_warn!("Empty StridedInterval cannot be narrow");
+            } else if k < self.k {
+                radeco_warn!("StridedInterval cannot be extended to a smaller bits");
+            }
+
             si
-        } else if k < self.k {
-            radeco_warn!("StridedInterval cannot be extended to a smaller bits");
+        } else if si.ub < 0 {
+            // all number in si is negative
+            si.lb = n_in_k_bits!(si.lb & mask_in_k_bits!(si.k), k);
+            si.ub = n_in_k_bits!(si.ub & mask_in_k_bits!(si.k), k);
+            si.k = k;
+            si.validate();
             si
-        } else if k == self.k {
+        } else if si.lb >= 0 {
+            // all number in si is non-negative
+            // thus we can change the k-bits directly
+            si.k = k;
+            si.validate();
             si
         } else {
-            if si.ub < 0 {
-                // all number in si is negative
-                si.lb = n_in_k_bits!(si.lb & mask_in_k_bits!(si.k), k);
-                si.ub = n_in_k_bits!(si.ub & mask_in_k_bits!(si.k), k);
-                si.k = k;
-                si.validate();
-                si
-            } else if si.lb >= 0 {
-                // all number in si is non-negative
-                // thus we can change the k-bits directly
-                si.k = k;
-                si.validate();
-                si
-            } else {
-                // number is si are both negative and positive in k-bits-filed
-                let pos_si = StridedInterval::new(k, si.s, si.ub % si.s, si.ub);
-                let neg_si = StridedInterval::new(
-                    k,
-                    si.s,
-                    n_in_k_bits!(si.lb & mask_in_k_bits!(si.k), k),
-                    n_in_k_bits!(Inum::from(-1) & mask_in_k_bits!(si.k), k),
-                );
-                pos_si.join(&neg_si)
-            }
+            // number is si are both negative and positive in k-bits-filed
+            let pos_si = StridedInterval::new(k, si.s, si.ub % si.s, si.ub);
+            let neg_si = StridedInterval::new(
+                k,
+                si.s,
+                n_in_k_bits!(si.lb & mask_in_k_bits!(si.k), k),
+                n_in_k_bits!(Inum::from(-1) & mask_in_k_bits!(si.k), k),
+            );
+            pos_si.join(&neg_si)
         }
     }
 
     fn constant(&self) -> Option<Inum> {
-        if self.is_empty() {
-            None
-        } else if (self.s != 0) || (self.lb != self.ub) {
+        if self.is_empty() || (self.s != 0) || (self.lb != self.ub) {
             None
         } else {
             Some(self.lb)
         }
     }
 
-    // XXX: overflow when capacity > Inum::max_value()
+    // XXX: overflow when capacity > Inum::MAX
     fn capacity(&self) -> Inum {
         if self.is_empty() {
             0
@@ -1495,7 +1482,7 @@ mod test {
             false,
             check_overflow!((0 as Inum).checked_add(0xdeadbeef), 64)
         );
-        assert_eq!(true, check_overflow!(Inum::max_value().checked_add(1), 64));
+        assert_eq!(true, check_overflow!(Inum::MAX.checked_add(1), 64));
         assert_eq!(true, check_overflow!((100 as Inum).checked_add(100), 8));
     }
 
@@ -1503,7 +1490,7 @@ mod test {
     fn strided_interval_test_basicfn() {
         assert_eq!(ntz(0x0001000), 12);
         assert_eq!(ntz(0x0), 64);
-        assert_eq!(ntz(Inum::min_value()), 63);
+        assert_eq!(ntz(Inum::MIN), 63);
         assert_eq!(
             min_or(0x0000101, 0x0001001, 0x0010011, 0x0101001),
             0x0010101
@@ -1537,8 +1524,8 @@ mod test {
             StridedInterval {
                 k: _BITS,
                 s: 1,
-                lb: Inum::min_value(),
-                ub: Inum::max_value()
+                lb: Inum::MIN,
+                ub: Inum::MAX
             },
             StridedInterval::default_k(_BITS)
         );
@@ -1691,7 +1678,7 @@ mod test {
         let op2 = StridedInterval::from(a);
         assert_eq!(StridedInterval::default(), op1 * op2);
 
-        let op1 = StridedInterval::new(_BITS, 2, Inum::max_value() - 2, Inum::max_value());
+        let op1 = StridedInterval::new(_BITS, 2, Inum::MAX - 2, Inum::MAX);
         let op2 = StridedInterval::from(2);
         assert_eq!(StridedInterval::new(_BITS, 4, -6, -2), op1 * op2);
 
@@ -1780,7 +1767,7 @@ mod test {
 
         // Divided by one constat
         let op1 = StridedInterval::new(_BITS, 20, -41, 1);
-        let op2 = StridedInterval::from(Inum::min_value());
+        let op2 = StridedInterval::from(Inum::MIN);
         assert_eq!(op1, op1 % op2);
 
         let op1 = StridedInterval::new(_BITS, 20, -41, 1);
@@ -1816,23 +1803,23 @@ mod test {
         assert_eq!(StridedInterval::new(32, 4, 0, 12), op1 % op2);
 
         let op1 = StridedInterval::new(_BITS, 20, -40, 40);
-        let op2 = StridedInterval::new(_BITS, 1, Inum::min_value(), -1);
+        let op2 = StridedInterval::new(_BITS, 1, Inum::MIN, -1);
         assert_eq!(
-            StridedInterval::new(_BITS, 1, Inum::min_value() + 1, Inum::max_value()),
+            StridedInterval::new(_BITS, 1, Inum::MIN + 1, Inum::MAX),
             op1 % op2
         );
 
         let op1 = StridedInterval::new(_BITS, 20, 0, 40);
-        let op2 = StridedInterval::new(_BITS, 1, Inum::min_value(), -1);
+        let op2 = StridedInterval::new(_BITS, 1, Inum::MIN, -1);
         assert_eq!(
-            StridedInterval::new(_BITS, 1, 0, Inum::max_value()),
+            StridedInterval::new(_BITS, 1, 0, Inum::MAX),
             op1 % op2
         );
 
         let op1 = StridedInterval::new(_BITS, 20, -40, 0);
-        let op2 = StridedInterval::new(_BITS, 1, Inum::min_value(), -1);
+        let op2 = StridedInterval::new(_BITS, 1, Inum::MIN, -1);
         assert_eq!(
-            StridedInterval::new(_BITS, 1, Inum::min_value() + 1, 0),
+            StridedInterval::new(_BITS, 1, Inum::MIN + 1, 0),
             op1 % op2
         );
     }
@@ -1855,12 +1842,12 @@ mod test {
         assert_eq!(op3, op2 & op1);
 
         let op1 = StridedInterval::from(-1);
-        let op2 = StridedInterval::new(_BITS, 1, Inum::min_value(), Inum::max_value() - 1);
+        let op2 = StridedInterval::new(_BITS, 1, Inum::MIN, Inum::MAX - 1);
         assert_eq!(op2, op1 & op2);
         assert_eq!(op2, op2 & op1);
 
         let op1 = StridedInterval::from(0);
-        let op2 = StridedInterval::new(_BITS, 1, Inum::min_value(), Inum::max_value() - 1);
+        let op2 = StridedInterval::new(_BITS, 1, Inum::MIN, Inum::MAX - 1);
         assert_eq!(op1, op1 & op2);
         assert_eq!(op1, op2 & op1);
 
@@ -1870,7 +1857,7 @@ mod test {
         assert_eq!(!op2, op2 ^ op1);
 
         let op1 = StridedInterval::from(-1);
-        let op2 = StridedInterval::new(_BITS, 1, Inum::min_value(), Inum::max_value() - 1);
+        let op2 = StridedInterval::new(_BITS, 1, Inum::MIN, Inum::MAX - 1);
         assert_eq!(!op2, op1 ^ op2);
         assert_eq!(!op2, op2 ^ op1);
 

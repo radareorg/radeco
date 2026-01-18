@@ -92,11 +92,11 @@ where
         ctx: &[(Idx, Idx)],
     ) -> CallContext<Idx, S> {
         CallContext {
-            caller: caller,
-            callee: callee,
-            call_site: call_site,
+            caller,
+            callee,
+            call_site,
             ssa_ref: None,
-            ctx_translate: ctx.into_iter().cloned().collect::<HashMap<_, _>>(),
+            ctx_translate: ctx.iter().cloned().collect::<HashMap<_, _>>(),
         }
     }
 }
@@ -147,10 +147,7 @@ fn ssa_single_fn(
     if let Some(ref callrefs) = f.callrefs {
         rfn.call_ctx = callrefs
             .iter()
-            .filter(|x| match x.call_type {
-                Some(ref c) if c == "C" => true,
-                _ => false,
-            })
+            .filter(|x| matches!(x.call_type, Some(ref c) if c == "C"))
             .map(|x| {
                 let call_site = x.source;
                 let callee = x.target;
@@ -163,10 +160,7 @@ fn ssa_single_fn(
     if let Some(ref callxrefs) = f.codexrefs {
         rfn.callxrefs = callxrefs
             .iter()
-            .filter(|x| match x.call_type {
-                Some(ref c) if c == "C" => true,
-                _ => false,
-            })
+            .filter(|x| matches!(x.call_type, Some(ref c) if c == "C"))
             .map(|x| x.source.expect("Invalid address"))
             .collect::<BTreeSet<_>>()
             .into_iter()
@@ -208,7 +202,7 @@ fn fix_call_info(rfn: &mut DefaultFnTy) {
                     .expect("No address information found")
                     .address;
                 if let Some(info) = call_info.get_mut(&call_site) {
-                    if let Some(arg_node) = ssa.operands_of(*call_node).get(0) {
+                    if let Some(arg_node) = ssa.operands_of(*call_node).first() {
                         let target_node = ssa
                             .insert_const(
                                 info.callee.unwrap_or_else(|| {
@@ -251,7 +245,7 @@ fn hash_subtree(ssa: &SSAStorage, n: &NodeIndex) -> String {
     let len = args.len();
     for (i, arg) in args.iter().enumerate() {
         if i == 0 {
-            result.push_str(" ")
+            result.push(' ')
         }
         if i < len - 1 {
             result = format!("{}{}, ", result, hash_subtree(ssa, arg));
@@ -384,7 +378,7 @@ impl<'a, T: 'a + Source> From<&'a mut T> for RadecoModule<'a, DefaultFnTy> {
     fn from(source: &'a mut T) -> RadecoModule<'a, DefaultFnTy> {
         let reg_info = source.register_profile().unwrap_or_else(|_e| {
             radeco_err!("{:?}", _e);
-            None.unwrap()
+            panic!()
         });
         let mut rmod = RadecoModule::default();
         let mut handles = Vec::new();
@@ -493,6 +487,7 @@ pub trait RFunction {
     type I: Iterator<Item = <Self::SSA as SSA>::ValueRef>;
     type SSA: SSAWalk<Self::I> + SSAMod + SSA;
     type B: RBindings;
+    type CallSite;
 
     fn fn_name(&self) -> String {
         "Unsupported".to_owned()
@@ -510,9 +505,7 @@ pub trait RFunction {
     fn set_modifides(&mut self, _: &[<Self::B as RBindings>::Idx]);
     fn set_preserved(&mut self, _: &[<Self::B as RBindings>::Idx]);
 
-    fn call_sites(
-        &self,
-    ) -> Vec<CallContext<<Self::B as RBindings>::Idx, <Self::SSA as SSA>::ValueRef>>;
+    fn call_sites(&self) -> Vec<Self::CallSite>;
     fn callrefs(&self) -> Vec<u64>;
     fn callxrefs(&self) -> Vec<u64>;
 
@@ -545,7 +538,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
     fn callees_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
         let mut callees = Vec::<Self::FnRef>::new();
         if let Some(c) = self.functions.get(fref) {
-            callees.extend(c.callrefs().iter().cloned().map(Self::FnRef::from));
+            callees.extend(c.callrefs().iter().cloned());
         }
         callees
     }
@@ -553,7 +546,7 @@ impl<'a, F: RFunction> RModule<'a> for RadecoModule<'a, F> {
     fn callers_of(&self, fref: &Self::FnRef) -> Vec<Self::FnRef> {
         let mut callers = Vec::<Self::FnRef>::new();
         if let Some(c) = self.functions.get(fref) {
-            callers.extend(c.callxrefs().iter().cloned().map(Self::FnRef::from));
+            callers.extend(c.callxrefs().iter().cloned());
         }
         callers
     }
@@ -579,6 +572,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
     type I = Walker;
     type SSA = SSAStorage;
     type B = B;
+    type CallSite = CallContext<B::Idx, NodeIndex>;
 
     fn fn_name(&self) -> String {
         self.name.clone()
@@ -630,7 +624,7 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
     }
 
     fn set_locals(&mut self, locals: &[(<Self::B as RBindings>::Idx, LocalInfo)]) {
-        for &(ref arg, ref info) in locals {
+        for (arg, info) in locals {
             if let Some(binding) = self.bindings.binding_mut(arg) {
                 binding.mark_fn_local(info.base, info.offset);
             }
@@ -670,17 +664,12 @@ impl<B: RBindings> RFunction for RadecoFunction<B> {
         &mut self.ssa
     }
 
-    fn call_sites(&self) -> Vec<CallContext<B::Idx, NodeIndex>> {
+    fn call_sites(&self) -> Vec<Self::CallSite> {
         self.call_ctx.clone()
     }
 
     fn callrefs(&self) -> Vec<u64> {
-        self.call_ctx
-            .iter()
-            .map(|x| x.callee)
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
-            .collect()
+        self.call_ctx.iter().filter_map(|x| x.callee).collect()
     }
 
     fn callxrefs(&self) -> Vec<u64> {

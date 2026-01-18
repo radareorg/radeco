@@ -11,7 +11,6 @@
 use std::cmp::Ordering;
 use std::collections::Bound::Included;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::u64;
 
 use crate::middle::ir::{self, MAddress, MOpcode};
 use crate::middle::ssa::graph_traits::{ConditionInfo, EdgeInfo, Graph};
@@ -67,10 +66,10 @@ where
             incomplete_propagation: HashSet::new(),
             index_to_addr: HashMap::new(),
             outputs: HashMap::new(),
-            regfile: regfile,
+            regfile,
             sealed_blocks: HashSet::new(),
-            ssa: ssa,
-            unexplored_addr: u64::max_value() - 1,
+            ssa,
+            unexplored_addr: u64::MAX - 1,
             variable_types: Vec::new(),
         }
     }
@@ -230,7 +229,7 @@ where
         current_addr: Option<MAddress>,
         edge_type: Option<u8>,
     ) -> T::ActionRef {
-        let seen = current_addr.map_or(false, |cur| {
+        let seen = current_addr.is_some_and(|cur| {
             match cur.cmp(&at) {
                 Ordering::Less | Ordering::Equal => false,
                 // Check if `at` is before the first block.
@@ -358,11 +357,8 @@ where
                 for operand_ in &operands {
                     let (i, operand) = *operand_;
                     // If operand is const, it cannot belong to any block.
-                    match self.ssa.opcode(operand) {
-                        Some(MOpcode::OpConst(_)) => {
-                            continue;
-                        }
-                        _ => {}
+                    if let Some(MOpcode::OpConst(_)) = self.ssa.opcode(operand) {
+                        continue;
                     }
                     let operand_addr = self.index_to_addr[&operand];
                     let operand_block = self.block_of(operand_addr).unwrap_or_else(|| {
@@ -419,7 +415,7 @@ where
         let unexplored_addr = MAddress::new(self.unexplored_addr, 0);
 
         // Decrement the unexplored addr so that we have a new unexplored block for next use
-        self.unexplored_addr = self.unexplored_addr - 1;
+        self.unexplored_addr -= 1;
 
         let unexplored_block = self.new_block(unexplored_addr);
 
@@ -628,14 +624,12 @@ where
 
         // Try to recursively remove all phi users, which might have become trivial
         for use_ in users {
-            match self.ssa.node_data(use_) {
-                Ok(NodeData {
-                    vt: _,
-                    nt: NodeType::Phi,
-                }) => {
-                    self.try_remove_trivial_phi(use_);
-                }
-                _ => {}
+            if let Ok(NodeData {
+                vt: _,
+                nt: NodeType::Phi,
+            }) = self.ssa.node_data(use_)
+            {
+                self.try_remove_trivial_phi(use_);
             }
         }
         radeco_trace!("Exiting(2) try_remove_trivial_phi, ret: {:?}", same);
@@ -681,7 +675,7 @@ where
 
     fn add_phi(&mut self, address: &mut MAddress, vt: ValueInfo) -> T::ValueRef {
         let i = self.ssa.insert_phi(vt).unwrap_or_else(|| {
-            ("Cannot insert new phi nodes");
+            radeco_err!("Cannot insert new phi nodes");
             self.ssa.invalid_value().unwrap()
         });
         self.index_to_addr.insert(i, *address);
@@ -707,24 +701,22 @@ where
         let vt = vt_option.unwrap();
         let width = vt.width().get_width().unwrap_or(64);
         if width < 64 {
-            let val: u64 = value & (1 << (width) - 1);
+            let val: u64 = value & (1 << ((width) - 1));
             let const_node = self.ssa.insert_const(val, Some(width)).unwrap_or_else(|| {
                 radeco_err!("Cannot insert new constants");
                 self.ssa.invalid_value().unwrap()
             });
-            let opcode = MOpcode::OpNarrow(width as u16);
+            let opcode = MOpcode::OpNarrow(width);
             let narrow_node = self.add_op(&opcode, address, vt);
             self.op_use(&narrow_node, 0, &const_node);
             narrow_node
         } else {
-            let const_node = self
-                .ssa
+            self.ssa
                 .insert_const(value, Some(width))
                 .unwrap_or_else(|| {
                     radeco_err!("Cannot insert new constants");
                     self.ssa.invalid_value().unwrap()
-                });
-            const_node
+                })
         }
     }
 
@@ -800,7 +792,7 @@ where
 
         if info.shift > 0 {
             let vtype = ValueInfo::new_unresolved(ir::WidthSpec::from(width));
-            let shift_amount_node = self.add_const(address, info.shift as u64, Some(vtype));
+            let shift_amount_node = self.add_const(address, info.shift, Some(vtype));
             let opcode = MOpcode::OpLsr;
             let op_node = self.add_op(&opcode, address, vtype);
             self.op_use(&op_node, 0, &value);
@@ -871,7 +863,7 @@ where
 
         // BUG: If width is not 64, every operation with OpConst will make
         // unbalanced width.
-        let opcode = MOpcode::OpZeroExt(width as u16);
+        let opcode = MOpcode::OpZeroExt(width);
 
         if self.operand_width(&value) < width {
             let opcode_node = self.add_op(&opcode, address, vt);
@@ -881,7 +873,7 @@ where
         }
 
         if info.shift > 0 {
-            let shift_amount_node = self.add_const(address, info.shift as u64, Some(vt));
+            let shift_amount_node = self.add_const(address, info.shift, Some(vt));
             let opcode_node = self.add_op(&MOpcode::OpLsl, address, vt);
             self.op_use(&opcode_node, 0, &value);
             self.op_use(&opcode_node, 1, &shift_amount_node);
@@ -956,8 +948,8 @@ where
         let rhs_size = rhs.map_or(0, |i| self.operand_width(&i));
 
         // Narrowing will happen only if there is one constant and one normal opcode.
-        if lhs.map_or(false, |i| self.ssa.constant(i).is_some())
-            ^ rhs.map_or(false, |i| self.ssa.constant(i).is_some())
+        if lhs.is_some_and(|i| self.ssa.constant(i).is_some())
+            ^ rhs.is_some_and(|i| self.ssa.constant(i).is_some())
         {
             let (victim, victim_size) = if lhs_size < 64 {
                 (rhs, lhs_size)
@@ -970,7 +962,7 @@ where
                     self.ssa.invalid_value().unwrap()
                 });
                 let vtype = ValueInfo::new_unresolved(ir::WidthSpec::from(victim_size));
-                let opc = MOpcode::OpNarrow(victim_size as u16);
+                let opc = MOpcode::OpNarrow(victim_size);
                 let node = self.add_op(&opc, address, vtype);
                 self.op_use(&node, 0, &victim_node);
                 *victim = Some(node);
@@ -1014,14 +1006,14 @@ where
         // Thus, choosing the first operand is enough.
 
         // No arguments, nothing to do.
-        if args.len() == 0 {
+        if args.is_empty() {
             return;
         }
 
         let regnames = self.ssa.registers(args[0]);
         if !regnames.is_empty() {
             for regname in &regnames {
-                self.ssa.set_register(node.clone(), regname.clone());
+                self.ssa.set_register(*node, regname.clone());
                 // Check whether its child nodes are incomplete
             }
             for user in self.ssa.uses_of(*node) {
@@ -1051,7 +1043,7 @@ where
         let blocks = self.ssa.blocks();
         let exit_node = exit_node_err!(self.ssa);
         for block in blocks {
-            if self.ssa.succs_of(block).len() == 0 {
+            if self.ssa.succs_of(block).is_empty() {
                 self.ssa.insert_control_edge(block, exit_node, UNCOND_EDGE);
             }
         }
@@ -1113,7 +1105,7 @@ where
                 if let Ok(ndata) = self.ssa.node_data(*node) {
                     if let NodeType::Op(MOpcode::OpITE) = ndata.nt {
                         let block = self.block_of(addr);
-                        if let Some(cond_node) = self.ssa.operands_of(*node).get(0) {
+                        if let Some(cond_node) = self.ssa.operands_of(*node).first() {
                             self.ssa.set_selector(*cond_node, block.unwrap());
                             self.ssa.remove_value(*node);
                         } else {

@@ -25,7 +25,6 @@ use crate::middle::ssa::ssastorage::SSAStorage;
 
 use std::any::Any;
 use std::collections::{HashMap, VecDeque};
-use std::u64;
 
 #[macro_export]
 macro_rules! node_data_from_g {
@@ -105,6 +104,12 @@ pub struct SCCP {
     expr_val: HashMap<<SSAStorage as SSA>::ValueRef, LatticeValue>,
 }
 
+impl Default for SCCP {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SCCP {
     pub fn new() -> SCCP {
         SCCP {
@@ -145,7 +150,7 @@ impl SCCP {
             // Even these operands are overdefined.
 
             let edge = g.find_edges_between(operand_block, parent_block);
-            if edge.len() == 0 {
+            if edge.is_empty() {
                 continue;
             }
             assert_eq!(edge.len(), 1);
@@ -228,8 +233,8 @@ impl SCCP {
                 let mask = (1 << (size)) - 1;
                 const_val & mask
             }
-            MOpcode::OpMov => const_val as u64,
-            MOpcode::OpNot => !const_val as u64,
+            MOpcode::OpMov => const_val,
+            MOpcode::OpNot => !const_val,
             MOpcode::OpCall => {
                 return LatticeValue::Bottom;
             }
@@ -240,7 +245,7 @@ impl SCCP {
         let ndata = node_data_from_g!(g, i);
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
-            val = val & ((1 << (w)) - 1);
+            val &= (1 << (w)) - 1;
         }
 
         LatticeValue::Const(val)
@@ -286,7 +291,7 @@ impl SCCP {
                 if remained >= rhs_val {
                     lhs_val + rhs_val
                 } else {
-                    (rhs_val - remained - 1) as u64
+                    rhs_val - remained - 1
                 }
             }
             MOpcode::OpSub => {
@@ -295,7 +300,7 @@ impl SCCP {
                 } else {
                     // rhs_val - lhs_val
                     // This will never integer overflow
-                    (u64::MAX - rhs_val + lhs_val + 1) as u64
+                    u64::MAX - rhs_val + lhs_val + 1
                 }
             }
             MOpcode::OpMul => {
@@ -319,7 +324,7 @@ impl SCCP {
         let ndata = node_data_from_g!(g, i);
         let w = ndata.vt.width().get_width().unwrap_or(64);
         if w < 64 {
-            val = val & ((1 << (w)) - 1);
+            val &= (1 << (w)) - 1;
         }
 
         LatticeValue::Const(val)
@@ -332,7 +337,7 @@ impl SCCP {
     ) -> LatticeValue {
         // Do not reason about stores.
         match opcode {
-            MOpcode::OpStore => return LatticeValue::Bottom,
+            MOpcode::OpStore => LatticeValue::Bottom,
             _ => unimplemented!(),
         }
     }
@@ -357,7 +362,7 @@ impl SCCP {
         };
 
         let val = if let MOpcode::OpConst(v) = opcode {
-            LatticeValue::Const(v as u64)
+            LatticeValue::Const(v)
         } else {
             match opcode.arity() {
                 MArity::Unary => self.evaluate_unary_op(g, i, opcode),
@@ -378,9 +383,9 @@ impl SCCP {
         val
     }
 
-    /// ////////////////////////////////////////////////////////////////////////
-    /// / Helper functions.
-    /// ////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
+    // Helper functions.
+    //////////////////////////////////////////////////////////////////////////
 
     fn is_executable(&self, i: &<SSAStorage as CFG>::CFEdgeRef) -> bool {
         self.executable.get(i).cloned().unwrap_or(false)
@@ -423,7 +428,7 @@ impl SCCP {
             return true;
         }
         let incoming = g.incoming_edges(*i);
-        for &(ref edge, _) in &incoming {
+        for (edge, _) in &incoming {
             if self.is_executable(edge) {
                 return true;
             }
@@ -464,12 +469,12 @@ impl FuncAnalyzer for SCCP {
         rfn: &mut RadecoFunction,
         _policy: Option<T>,
     ) -> Option<Box<dyn AnalyzerResult>> {
-        let mut g = rfn.ssa_mut();
+        let g = rfn.ssa_mut();
 
         {
             let entry_node = entry_node_err!(g);
             let edges = g.outgoing_edges(entry_node);
-            for &(ref next, _) in &edges {
+            for (next, _) in &edges {
                 self.cfgwl_push(next);
             }
             for arg in g.operands_of(registers_in_err!(g, entry_node)) {
@@ -487,7 +492,7 @@ impl FuncAnalyzer for SCCP {
                         .target;
                     let phis = g.phis_in(block);
                     for phi in &phis {
-                        let v = self.visit_phi(&mut g, phi);
+                        let v = self.visit_phi(g, phi);
                         self.set_value(phi, v);
                     }
 
@@ -502,14 +507,14 @@ impl FuncAnalyzer for SCCP {
                     // If this is the first visit to the block.
                     if visits == 1 {
                         for expr in g.exprs_in(block) {
-                            let val = self.visit_expression(&mut g, &expr);
+                            let val = self.visit_expression(g, &expr);
                             self.set_value(&expr, val);
                             for use_ in g.uses_of(expr) {
-                                self.ssawl_push(&mut g, &use_);
+                                self.ssawl_push(g, &use_);
                             }
                         }
                         if let Some(selector) = g.selector_in(block) {
-                            let val = self.visit_expression(&mut g, &selector);
+                            let val = self.visit_expression(g, &selector);
                             self.set_value(&selector, val);
                         }
                     }
@@ -526,19 +531,19 @@ impl FuncAnalyzer for SCCP {
                         radeco_err!("Value node doesn't belong to any block");
                         g.invalid_action().unwrap()
                     });
-                    if self.is_block_executable(&mut g, &block_of) {
-                        self.visit_expression(&mut g, &e)
+                    if self.is_block_executable(g, &block_of) {
+                        self.visit_expression(g, &e)
                     } else {
-                        self.get_value(&mut g, &e)
+                        self.get_value(g, &e)
                     }
                 } else {
-                    self.visit_phi(&mut g, &e)
+                    self.visit_phi(g, &e)
                 };
 
-                if t != self.get_value(&mut g, &e) {
+                if t != self.get_value(g, &e) {
                     self.set_value(&e, t);
                     for use_ in &g.uses_of(e) {
-                        self.ssawl_push(&mut g, use_);
+                        self.ssawl_push(g, use_);
                     }
                 }
             } // End of ssawl
@@ -565,7 +570,7 @@ impl FuncAnalyzer for SCCP {
         let mut remove_blocks = Vec::<<SSAStorage as CFG>::ActionRef>::new();
         for block in &blocks {
             let edges = g.outgoing_edges(*block);
-            for &(ref edge, _) in &edges {
+            for (edge, _) in &edges {
                 if !self.is_executable(edge) {
                     remove_edges.push(*edge);
                 }

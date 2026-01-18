@@ -111,7 +111,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
     }
 
     fn solve_equivalence(&mut self, constraint: &Constraint<T>) -> bool {
-        if let &Constraint::AssertEquivalence(ref list) = constraint {
+        if let Constraint::AssertEquivalence(list) = constraint {
             if let Some(found) = list.iter().find(|&var| {
                 // Check if any var has a known value
                 self.bvalue(*var) != ValueType::Unresolved
@@ -215,7 +215,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
         // Will be of the form, Assertion(<inner>)
         // inner will be of the form Or(<c1>, <c2>)
         match constraint {
-            &Constraint::Assertion(ref c) => match **c {
+            Constraint::Assertion(c) => match **c {
                 Constraint::Or(ref c1, ref c2) => {
                     // c1, c2 will be of the form And(Eq(ci1), Eq(ci2))
                     [c1, c2].iter().any(|&ci| match **ci {
@@ -284,7 +284,7 @@ impl<T: Clone + Debug + Hash + Eq + Copy> Display for ConstraintSet<T> {
 
         for constraint in &self.set {
             display_str.push_str(&constraint.to_string());
-            display_str.push_str("\n");
+            display_str.push('\n');
         }
 
         write!(f, "{}", display_str)

@@ -63,9 +63,9 @@ impl<'cd, A: AstContext> Refiner<'cd, A> {
 
         loop {
             let mut combine = None;
-            'l: for (na, &(_, ref wa)) in self.graph.node_references() {
+            'l: for (na, (_, wa)) in self.graph.node_references() {
                 if let &Some(AstNodeC::Break) = wa {
-                    for (nb, &(_, ref wb)) in self.graph.node_references() {
+                    for (nb, (_, wb)) in self.graph.node_references() {
                         if na != nb {
                             if let &Some(AstNodeC::Break) = wb {
                                 // check for code nodes between the two `break`s
@@ -604,7 +604,7 @@ fn contains_break<B, C, V>(ast: &AstNodeC<B, C, V>) -> bool {
     match ast {
         BasicBlock(_) => false,
         Seq(seq) => !seq.iter().all(|a| !contains_break(a)),
-        Cond(_, t, oe) => contains_break(t) || oe.as_ref().map_or(false, |e| contains_break(e)),
+        Cond(_, t, oe) => contains_break(t) || oe.as_ref().is_some_and(|e| contains_break(e)),
         Loop(_, _) => false, // `break` only breaks the nearest loop
         Break => true,
         Switch(_, cases, default) => {
@@ -617,8 +617,8 @@ fn always_breaks<B, C, V>(ast: &AstNodeC<B, C, V>) -> bool {
     use self::AstNodeC::*;
     match ast {
         BasicBlock(_) => false,
-        Seq(seq) => seq.last().map_or(false, |a| always_breaks(a)),
-        Cond(_, t, oe) => always_breaks(t) && oe.as_ref().map_or(false, |e| always_breaks(e)),
+        Seq(seq) => seq.last().is_some_and(|a| always_breaks(a)),
+        Cond(_, t, oe) => always_breaks(t) && oe.as_ref().is_some_and(|e| always_breaks(e)),
         Loop(_, _) => false, // `break` only breaks the nearest loop
         Break => true,
         Switch(_, cases, default) => {

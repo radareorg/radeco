@@ -8,19 +8,18 @@ use crate::middle::ssa::ssa_traits::{SSAMod, SSAWalk, SSA};
 
 #[allow(dead_code)]
 mod patterns {
-    pub const OF: &'static str = "(OpNarrow1 (OpEq (OpAnd (OpLsr (OpAnd (OpXor (OpNot %2), %3), \
-                                  (OpXor %1, %2)), #x3f), #x1), #x1))";
-    pub const PF: &'static str = "(OpNarrow1 (OpAnd (OpMod (OpAnd (OpMul (OpAnd %1, #xff), \
-                                  #x101010101010101), #x8040201008040201), #x1ff), #x1))";
-    pub const SF: &'static str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x40, #x1)))";
-    pub const SF_32: &'static str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x20, #x1)))";
-    pub const CF: &'static str = "(OpNarrow1 (OpGt %2, %1))";
-    pub const ZF: &'static str =
-        "(OpNarrow1 (OpXor #x1, (OpAnd (OpSub %2, %3), #xffffffffffffffff)))";
-    pub const ZF_32: &'static str = "(OpNarrow1 (OpXor #x1, (OpAnd (OpSub %2, %3), #xffffffff)))";
-    pub const BF: &'static str = "(OpNarrow1 (OpLt %2, %1))";
+    pub const OF: &str = "(OpNarrow1 (OpEq (OpAnd (OpLsr (OpAnd (OpXor (OpNot %2), %3), (OpXor \
+                          %1, %2)), #x3f), #x1), #x1))";
+    pub const PF: &str = "(OpNarrow1 (OpAnd (OpMod (OpAnd (OpMul (OpAnd %1, #xff), \
+                          #x101010101010101), #x8040201008040201), #x1ff), #x1))";
+    pub const SF: &str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x40, #x1)))";
+    pub const SF_32: &str = "(OpNarrow1 (OpLsr (OpSub %2, %3), (OpSub #x20, #x1)))";
+    pub const CF: &str = "(OpNarrow1 (OpGt %2, %1))";
+    pub const ZF: &str = "(OpNarrow1 (OpXor #x1, (OpAnd (OpSub %2, %3), #xffffffffffffffff)))";
+    pub const ZF_32: &str = "(OpNarrow1 (OpXor #x1, (OpAnd (OpSub %2, %3), #xffffffff)))";
+    pub const BF: &str = "(OpNarrow1 (OpLt %2, %1))";
 
-    pub const PATTERNS: &'static [(&'static str, &'static str)] = &[
+    pub const PATTERNS: &[(&str, &str)] = &[
         ("(OpXor %1, %1)", "#x0"),
         ("(OpXor %1, #x0)", "%1"),
         ("(OpAnd %1, #x1)", "%1"),
@@ -36,7 +35,7 @@ mod patterns {
             // LE -  of,sf,^,zf,|
             v.push((format!("(OpOr {}, (OpXor {}, (OpNarrow1 #x0)))", ZF, SF), "(OpLt %2, %3)"));
             v.push((format!("(OpOr {}, (OpXor {}, #x0))", ZF_32, SF_32), "(OpLt %2, %3)"));
-            v.push((format!("{}", ZF), "(OpEq %2, %3)"));
+            v.push((ZF.to_string(), "(OpEq %2, %3)"));
             v
         };
     }

@@ -18,20 +18,11 @@ use crate::middle::dot::{DotAttrBlock, GraphDot};
 #[derive(Clone, Debug)]
 /// Depth first visitor that stores pre- and post- order traversal over a
 /// Graph.
+#[derive(Default)]
 pub struct DFSVisitor {
     post_order: Vec<graph::NodeIndex>,
     pre_order: Vec<graph::NodeIndex>,
     visited: Vec<graph::NodeIndex>,
-}
-
-impl default::Default for DFSVisitor {
-    fn default() -> DFSVisitor {
-        DFSVisitor {
-            post_order: Vec::new(),
-            pre_order: Vec::new(),
-            visited: Vec::new(),
-        }
-    }
 }
 
 impl DFSVisitor {
@@ -74,18 +65,10 @@ impl DFSVisitor {
 #[derive(Clone, Debug)]
 /// Wrapper struct that consolidates the `Dom` and `PostDom` information for a
 /// Graph.
+#[derive(Default)]
 pub struct DomInfo {
     dom: Option<DomTree>,
     postdom: Option<DomTree>,
-}
-
-impl default::Default for DomInfo {
-    fn default() -> DomInfo {
-        DomInfo {
-            dom: None,
-            postdom: None,
-        }
-    }
 }
 
 impl DomInfo {
@@ -219,7 +202,7 @@ impl DomTree {
 
     pub fn doms(&self, i: graph::NodeIndex) -> Vec<graph::NodeIndex> {
         assert!(
-            self.idom.len() > 0,
+            !self.idom.is_empty(),
             "Call to DomTree::doms before DomTree::build_dom_tree."
         );
 
@@ -237,7 +220,7 @@ impl DomTree {
 
     pub fn idom(&self, i: graph::NodeIndex) -> graph::NodeIndex {
         assert!(
-            self.idom.len() > 0,
+            !self.idom.is_empty(),
             "Call to DomTree::idom before DomTree::build_dom_tree."
         );
 
@@ -246,15 +229,15 @@ impl DomTree {
         internal_node.external()
     }
 
-    fn intersect(idom: &Vec<InternalIndex>, i: &InternalIndex, j: &InternalIndex) -> InternalIndex {
+    fn intersect(idom: &[InternalIndex], i: &InternalIndex, j: &InternalIndex) -> InternalIndex {
         let mut f1 = *i;
         let mut f2 = *j;
         while f1 != f2 {
             while f1 < f2 {
-                f1 = idom[f1];
+                f1 = idom[f1.index()];
             }
             while f2 < f1 {
-                f2 = idom[f2];
+                f2 = idom[f2.index()];
             }
         }
         f1
@@ -367,7 +350,7 @@ impl DomTree {
 
     pub fn compute_dominance_frontier(&mut self) {
         assert!(
-            self.idom.len() > 0,
+            !self.idom.is_empty(),
             "Call to DomTree::compute_dominance_frontier before DomTree::build_dom_tree."
         );
 
@@ -410,9 +393,9 @@ impl DomTree {
     }
 }
 
-/// ////////////////////////////////////////////////////////////////////////////
-/// / Implementation of Traits to emit dot for dom.
-/// ////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+// Implementation of Traits to emit dot for dom.
+//////////////////////////////////////////////////////////////////////////////
 
 impl GraphDot for DomTree {
     type NodeIndex = graph::NodeIndex;

@@ -15,8 +15,8 @@ use crate::analysis::analyzer::{
 };
 use crate::analysis::arithmetic::{ArithChange, Arithmetic};
 use crate::analysis::copy_propagation::CopyPropagation;
-use crate::analysis::cse::cse::CSE;
 use crate::analysis::cse::ssasort::Sorter;
+use crate::analysis::cse::CSE;
 use crate::analysis::dce::DCE;
 use crate::analysis::functions::fix_ssa_opcalls::CallSiteFixer;
 use crate::analysis::functions::infer_regusage::Inferer;
@@ -32,17 +32,13 @@ fn sort_by_requires(analyzers: &Vec<AnalyzerKind>) -> impl Iterator<Item = Analy
     let mut kind2id = HashMap::new();
 
     for analyzer in analyzers {
-        let n = kind2id
+        let n = *kind2id
             .entry(*analyzer)
-            .or_insert_with(|| graph.add_node(*analyzer))
-            .clone();
+            .or_insert_with(|| graph.add_node(*analyzer));
         let info: &'static AnalyzerInfo = From::from(*analyzer);
 
         for dep in info.requires {
-            let d = kind2id
-                .entry(*dep)
-                .or_insert_with(|| graph.add_node(*dep))
-                .clone();
+            let d = *kind2id.entry(*dep).or_insert_with(|| graph.add_node(*dep));
             graph.add_edge(d, n, ());
         }
     }
@@ -74,9 +70,7 @@ pub struct RadecoEngine {
 
 impl RadecoEngine {
     pub fn new(max_iteration: u32) -> Self {
-        RadecoEngine {
-            max_iteration: max_iteration,
-        }
+        RadecoEngine { max_iteration }
     }
 }
 
@@ -153,7 +147,7 @@ impl Engine for RadecoEngine {
             let mut stable = true;
 
             // Build and run the analyzers.
-            while let Some(analyzer) = analyzers.next() {
+            for analyzer in analyzers.by_ref() {
                 radeco_trace!("running analyzer: {:?}", analyzer);
                 // If the policy is called then there is still something to change, thus this is
                 // not a stable point.

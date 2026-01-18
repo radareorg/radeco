@@ -31,14 +31,13 @@ pub fn load_call_graph(finfos: &[FunctionInfo], rmod: &RadecoModule) -> CallGrap
                     Some(ref c) if c != "CALL" => continue,
                     _ => {}
                 }
-                let mut cctx = CallContextInfo::default();
-                cctx.csite = cs.source.expect("No source for call");
+                let cctx = CallContextInfo {
+                    csite: cs.source.expect("No source for call"),
+                    ..Default::default()
+                };
                 let target = node_map.get(&cs.target.unwrap());
-                match (fnode, target) {
-                    (Some(cn), Some(tn)) => {
-                        cg.add_edge(*cn, *tn, cctx);
-                    }
-                    (_, _) => {}
+                if let (Some(cn), Some(tn)) = (fnode, target) {
+                    cg.add_edge(*cn, *tn, cctx);
                 }
             }
         }
@@ -113,7 +112,7 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
             let callee_info = if let Some(calleefn) = rmod.functions.get(&callee_off) {
                 let mut args = calleefn
                     .bindings()
-                    .into_iter()
+                    .iter()
                     .filter(|x| x.btype.is_argument() || x.btype.is_return())
                     .cloned()
                     .collect::<Vec<_>>();
@@ -126,7 +125,7 @@ pub fn init_call_ctx(rmod: &mut RadecoModule) {
             {
                 let mut args = calleefn
                     .bindings()
-                    .into_iter()
+                    .iter()
                     .filter(|x| x.btype.is_argument() || x.btype.is_return())
                     .cloned()
                     .collect::<Vec<_>>();

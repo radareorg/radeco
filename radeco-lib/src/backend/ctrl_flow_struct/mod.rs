@@ -382,7 +382,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
 
     /// Incrementally adds nodes dominated by the loop to the loop until
     /// there's only one successor or there are no more nodes to add.
-    fn refine_loop(&self, loop_nodes: &mut NodeSet, succ_nodes: &mut NodeSet) -> () {
+    fn refine_loop(&self, loop_nodes: &mut NodeSet, succ_nodes: &mut NodeSet) {
         // reuse this `NodeSet` so we avoid allocating
         let mut new_nodes = NodeSet::new();
         while succ_nodes.len() > 1 {
@@ -399,7 +399,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
             }
 
             // do the removal
-            succ_nodes.difference_with(&loop_nodes);
+            succ_nodes.difference_with(loop_nodes);
 
             if new_nodes.is_empty() {
                 break;
@@ -420,7 +420,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         // replace "normal" exit edges with "break"
         {
             let exit_edges: Vec<_> =
-                graph_utils::edges_from_region_to_node(&self.graph, &loop_nodes, final_succ)
+                graph_utils::edges_from_region_to_node(&self.graph, loop_nodes, final_succ)
                     .collect();
             for exit_edge in exit_edges {
                 let break_node = self.graph.add_node(CfgNode::Code(AstNodeC::Break));
@@ -440,7 +440,7 @@ impl<'cd, A: AstContextMut> ControlFlowGraph<'cd, A> {
         // replace abnormal exit edges with "break"
         for (exit_num, exit_target) in abn_succ_iter.clone() {
             let exit_edges: Vec<_> =
-                graph_utils::edges_from_region_to_node(&self.graph, &loop_nodes, exit_target)
+                graph_utils::edges_from_region_to_node(&self.graph, loop_nodes, exit_target)
                     .collect();
             for exit_edge in exit_edges {
                 let break_node = self.graph.add_node(CfgNode::Code(AstNodeC::Seq(vec![

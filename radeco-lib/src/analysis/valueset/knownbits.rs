@@ -54,15 +54,15 @@ impl KnownBits {
     pub fn as_urange(&self) -> UIntRange {
         let fixedbits = self.zerobits | self.onebits;
         UIntRange {
-            min: (u64::min_value() & !fixedbits) | self.onebits,
-            max: (u64::max_value() & !fixedbits) | self.onebits,
+            min: (u64::MIN & !fixedbits) | self.onebits,
+            max: (u64::MAX & !fixedbits) | self.onebits,
         }
     }
     pub fn as_srange(&self) -> SIntRange {
         let fixedbits = self.zerobits | self.onebits;
         SIntRange {
-            min: ((i64::min_value() as u64 & !fixedbits) | self.onebits) as i64,
-            max: ((i64::max_value() as u64 & !fixedbits) | self.onebits) as i64,
+            min: ((i64::MIN as u64 & !fixedbits) | self.onebits) as i64,
+            max: ((i64::MAX as u64 & !fixedbits) | self.onebits) as i64,
         }
     }
 }

@@ -26,7 +26,7 @@ pub enum WidthSpec {
 impl WidthSpec {
     pub fn get_width(&self) -> Option<u16> {
         match self {
-            &WidthSpec::Known(ref w) => Some(*w),
+            WidthSpec::Known(w) => Some(*w),
             _ => None,
         }
     }
@@ -39,7 +39,7 @@ impl WidthSpec {
 
 impl From<u16> for WidthSpec {
     fn from(other: u16) -> WidthSpec {
-        if other < u16::max_value() {
+        if other < u16::MAX {
             assert!(&[0, 1, 2, 4, 8, 16, 32, 64, 128].contains(&other));
             WidthSpec::Known(other)
         } else {
@@ -57,16 +57,13 @@ pub struct MAddress {
 
 impl MAddress {
     pub fn new(address: u64, offset: u64) -> MAddress {
-        MAddress {
-            address: address,
-            offset: offset,
-        }
+        MAddress { address, offset }
     }
 
     pub fn invalid_address() -> MAddress {
         MAddress {
-            address: u64::max_value(),
-            offset: u64::max_value(),
+            address: u64::MAX,
+            offset: u64::MAX,
         }
     }
 }
@@ -153,42 +150,34 @@ impl MOpcode {
         self.info().1
     }
 
-    pub fn to_string(&self) -> Cow<'_, str> {
+    pub fn as_string(&self) -> Cow<'_, str> {
         self.info().0
     }
 
     pub fn is_commutative(&self) -> bool {
-        match *self {
+        matches!(
+            self,
             MOpcode::OpAdd
-            | MOpcode::OpMul
-            | MOpcode::OpAnd
-            | MOpcode::OpOr
-            | MOpcode::OpXor
-            | MOpcode::OpEq => true,
-            _ => false,
-        }
+                | MOpcode::OpMul
+                | MOpcode::OpAnd
+                | MOpcode::OpOr
+                | MOpcode::OpXor
+                | MOpcode::OpEq
+        )
     }
 
     pub fn has_sideeffects(&self) -> bool {
-        match *self {
-            MOpcode::OpStore
-            | MOpcode::OpJmp
-            | MOpcode::OpCJmp
-            | MOpcode::OpCall
-            | MOpcode::OpITE => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            MOpcode::OpStore | MOpcode::OpJmp | MOpcode::OpCJmp | MOpcode::OpCall | MOpcode::OpITE
+        )
     }
 
     pub fn allowed_in_ssa(&self) -> bool {
-        match *self {
-            MOpcode::OpCJmp
-            | MOpcode::OpITE
-            | MOpcode::OpInvalid
-            | MOpcode::OpJmp
-            | MOpcode::OpNop => false,
-            _ => true,
-        }
+        !matches!(
+            self,
+            MOpcode::OpCJmp | MOpcode::OpITE | MOpcode::OpInvalid | MOpcode::OpJmp | MOpcode::OpNop
+        )
     }
 
     fn info(&self) -> (Cow<'_, str>, MArity) {
@@ -301,6 +290,6 @@ impl MOpcode {
 
 impl fmt::Display for MOpcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.as_string())
     }
 }

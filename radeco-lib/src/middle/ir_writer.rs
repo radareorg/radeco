@@ -53,7 +53,7 @@ pub fn emit_il<O: Write>(output: O, fn_name: Option<String>, ssa: &SSAStorage) -
 pub fn pretty_print_function_proto(rfn: &RadecoFunction) -> String {
     let args = rfn
         .bindings()
-        .into_iter()
+        .iter()
         .filter(|&x| x.btype().is_argument())
         .filter_map(|x| rfn.ssa().node_data(x.idx).map(|v| (x.idx, v.vt)).ok())
         .fold(String::new(), |acc, x| {
@@ -88,7 +88,7 @@ impl<'a, O: Write> IRWriter<'a, O> {
         let mut last = None;
         let entry_node = entry_node_err!(self.ssa);
         let exit_node = exit_node_err!(self.ssa);
-        let fn_name = fn_name.as_ref().map(|s| &**s).unwrap_or("fn_apple");
+        let fn_name = fn_name.as_deref().unwrap_or("fn_apple");
 
         writeln!(self.output, "define-fun {}(unknown) -> unknown {{", fn_name)?;
 
@@ -217,12 +217,12 @@ impl<'a, O: Write> IRWriter<'a, O> {
             OpLsr => self.emit_binop(">>", operands),
             OpNot => {
                 write!(self.output, "!")?;
-                self.emit_opt_operand(operands.get(0).cloned())?;
+                self.emit_opt_operand(operands.first().cloned())?;
                 Ok(())
             }
             OpLoad => {
                 write!(self.output, "Load(")?;
-                self.emit_opt_operand(operands.get(0).cloned())?;
+                self.emit_opt_operand(operands.first().cloned())?;
                 write!(self.output, ", ")?;
                 self.emit_opt_operand(operands.get(1).cloned())?;
                 write!(self.output, ")")?;
@@ -230,7 +230,7 @@ impl<'a, O: Write> IRWriter<'a, O> {
             }
             OpStore => {
                 write!(self.output, "Store(")?;
-                self.emit_opt_operand(operands.get(0).cloned())?;
+                self.emit_opt_operand(operands.first().cloned())?;
                 write!(self.output, ", ")?;
                 self.emit_opt_operand(operands.get(1).cloned())?;
                 write!(self.output, ", ")?;
@@ -239,24 +239,24 @@ impl<'a, O: Write> IRWriter<'a, O> {
                 Ok(())
             }
             OpMov => {
-                self.emit_opt_operand(operands.get(0).cloned())?;
+                self.emit_opt_operand(operands.first().cloned())?;
                 Ok(())
             }
             OpNarrow(wd) => {
                 write!(self.output, "Narrow{}(", wd)?;
-                self.emit_opt_operand(operands.get(0).cloned())?;
+                self.emit_opt_operand(operands.first().cloned())?;
                 write!(self.output, ")")?;
                 Ok(())
             }
             OpSignExt(wd) => {
                 write!(self.output, "SignExt{}(", wd)?;
-                self.emit_opt_operand(operands.get(0).cloned())?;
+                self.emit_opt_operand(operands.first().cloned())?;
                 write!(self.output, ")")?;
                 Ok(())
             }
             OpZeroExt(wd) => {
                 write!(self.output, "ZeroExt{}(", wd)?;
-                self.emit_opt_operand(operands.get(0).cloned())?;
+                self.emit_opt_operand(operands.first().cloned())?;
                 write!(self.output, ")")?;
                 Ok(())
             }
@@ -271,7 +271,7 @@ impl<'a, O: Write> IRWriter<'a, O> {
     }
 
     fn emit_binop(&mut self, op: &str, operands: &[NodeIndex]) -> fmt::Result {
-        self.emit_opt_operand(operands.get(0).cloned())?;
+        self.emit_opt_operand(operands.first().cloned())?;
         write!(self.output, " {} ", op)?;
         self.emit_opt_operand(operands.get(1).cloned())?;
         Ok(())
@@ -333,52 +333,48 @@ impl<'a, O: Write> IRWriter<'a, O> {
         if let Some(successor_blk) = self.ssa.unconditional_block(blk) {
             if let Some(selector) = self.ssa.selector_in(blk) {
                 // indirect jump
-                if self.ssa.exit_node().map_or(false, |en| en != successor_blk) {
+                if self.ssa.exit_node().is_some_and(|en| en != successor_blk) {
                     radeco_warn!("successor of block with indirect jump wasn't exit_node");
                 }
                 write!(self.output, "JMP TO ")?;
                 self.emit_operand(selector)?;
+            } else if self.ssa.exit_node() == Some(successor_blk) {
+                // return
+                write!(self.output, "RETURN")?;
             } else {
-                if self.ssa.exit_node().map_or(false, |en| en == successor_blk) {
-                    // return
-                    write!(self.output, "RETURN")?;
-                } else {
-                    // unconditional jump
-                    write!(self.output, "JMP ")?;
-                    self.emit_jump_tgt(successor_blk)?;
-                }
+                // unconditional jump
+                write!(self.output, "JMP ")?;
+                self.emit_jump_tgt(successor_blk)?;
+            }
+        } else if let Some(blk_cond_info) = self.ssa.conditional_blocks(blk) {
+            // conditional jump
+            if let Some(selector) = self.ssa.selector_in(blk) {
+                write!(self.output, "JMP IF ")?;
+                self.emit_operand(selector)?;
+                write!(self.output, " ")?;
+                self.emit_jump_tgt(blk_cond_info.true_side)?;
+                write!(self.output, " ELSE ")?;
+                self.emit_jump_tgt(blk_cond_info.false_side)?;
+            } else {
+                log_emit_err!(
+                    self,
+                    "block with conditional successors has no selector: {:?} ({:?})",
+                    blk,
+                    self.ssa.g[blk]
+                )?;
             }
         } else {
-            if let Some(blk_cond_info) = self.ssa.conditional_blocks(blk) {
-                // conditional jump
-                if let Some(selector) = self.ssa.selector_in(blk) {
-                    write!(self.output, "JMP IF ")?;
-                    self.emit_operand(selector)?;
-                    write!(self.output, " ")?;
-                    self.emit_jump_tgt(blk_cond_info.true_side)?;
-                    write!(self.output, " ELSE ")?;
-                    self.emit_jump_tgt(blk_cond_info.false_side)?;
-                } else {
-                    log_emit_err!(
-                        self,
-                        "block with conditional successors has no selector: {:?} ({:?})",
-                        blk,
-                        self.ssa.g[blk]
-                    )?;
-                }
-            } else {
-                // non-terminating
-                write!(self.output, "UNREACHABLE")?;
-            }
+            // non-terminating
+            write!(self.output, "UNREACHABLE")?;
         }
-        writeln!(self.output, "")?;
+        writeln!(self.output)?;
         Ok(())
     }
 
     fn emit_jump_tgt(&mut self, tgt: NodeIndex) -> fmt::Result {
         match self.ssa.g[tgt] {
             NodeData::BasicBlock(addr, _) => write!(self.output, "{}", addr),
-            NodeData::DynamicAction => write!(self.output, "{}", "dynamic_action"),
+            NodeData::DynamicAction => write!(self.output, "dynamic_action"),
             _ => log_emit_err!(
                 self,
                 "invalid jump target: {:?} ({:?})",

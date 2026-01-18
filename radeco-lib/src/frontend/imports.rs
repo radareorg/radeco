@@ -4,13 +4,13 @@ use crate::frontend::radeco_containers::RadecoFunction;
 use std::borrow::Cow;
 use std::cell::RefCell;
 
-use std::sync::Arc;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct ImportInfo {
     pub plt: u64,
     pub name: Cow<'static, str>,
-    pub rfn: Arc<RefCell<RadecoFunction>>,
+    pub rfn: Rc<RefCell<RadecoFunction>>,
 }
 
 impl ImportInfo {
@@ -18,9 +18,9 @@ impl ImportInfo {
         let mut rfn = RadecoFunction::default();
         rfn.name = name.clone();
         ImportInfo {
-            plt: plt,
-            name: name,
-            rfn: Arc::new(RefCell::new(rfn)),
+            plt,
+            name,
+            rfn: Rc::new(RefCell::new(rfn)),
         }
     }
 }

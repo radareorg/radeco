@@ -16,6 +16,12 @@ pub struct CopyPropagation {
     skip: Vec<ReplaceValue>,
 }
 
+impl Default for CopyPropagation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CopyPropagation {
     pub fn new() -> Self {
         CopyPropagation { skip: Vec::new() }
@@ -27,7 +33,7 @@ impl CopyPropagation {
             .flat_map(|b| ssa.exprs_in(b))
             .filter_map(|e| match ssa.opcode(e) {
                 Some(MOpcode::OpMov) => {
-                    if let Some(&o) = ssa.operands_of(e).iter().nth(0) {
+                    if let Some(&o) = ssa.operands_of(e).first() {
                         Some(ReplaceValue(o, e))
                     } else {
                         radeco_err!("No operand of `OpMov` found");
@@ -68,7 +74,7 @@ impl FuncAnalyzer for CopyPropagation {
         let mut policy = policy.expect("A policy function must be provided");
         let ssa = func.ssa_mut();
         loop {
-            let copies = CopyPropagation::gather_copies(&ssa)
+            let copies = CopyPropagation::gather_copies(ssa)
                 .into_iter()
                 .filter(|change| !self.skip.contains(change))
                 .collect::<Vec<_>>();

@@ -36,9 +36,7 @@ pub fn recover_c_cfg(
 
 fn ret_value_string(rfn: &RadecoFunction) -> Option<String> {
     let ret_reg_opt = rfn.callconv.clone();
-    if ret_reg_opt.is_none() {
-        return None;
-    }
+    ret_reg_opt.as_ref()?;
     ret_reg_opt.unwrap().ret
 }
 
@@ -60,10 +58,10 @@ impl<'a> CCFGBuilder<'a> {
         let cfg = CCFG::new(rfn.name.as_ref());
         CCFGBuilder {
             last_action: cfg.entry,
-            cfg: cfg,
-            rfn: rfn,
+            cfg,
+            rfn,
             ssa: rfn.ssa(),
-            fname_map: fname_map,
+            fname_map,
             action_map: HashMap::new(),
             datamap: CCFGDataMap::new(rfn),
         }
@@ -82,9 +80,7 @@ impl<'a> CCFGBuilder<'a> {
     // Retrieve CCFG's return value node of function call
     fn return_node(&self, call_node: SSARef) -> Option<SSARef> {
         let ret_reg_name_opt = ret_value_string(self.rfn);
-        if ret_reg_name_opt.is_none() {
-            return None;
-        }
+        ret_reg_name_opt.as_ref()?;
         let ret_reg_name = ret_reg_name_opt.unwrap();
         let reg_map = utils::call_rets(call_node, self.ssa);
         for (idx, (node, _)) in reg_map.into_iter() {
@@ -94,7 +90,7 @@ impl<'a> CCFGBuilder<'a> {
                 }
             }
         }
-        return None;
+        None
     }
 
     fn args_inorder(&self, call_node: SSARef) -> Vec<SSARef> {
@@ -108,7 +104,7 @@ impl<'a> CCFGBuilder<'a> {
             .clone()
             .unwrap()
             .args
-            .unwrap_or(Vec::new())
+            .unwrap_or_default()
             .into_iter()
             .enumerate()
             .map(|(i, s)| (s, i))
@@ -338,10 +334,10 @@ impl<'a> CCFGBuilder<'a> {
 
     fn insert_jump(&mut self, cur_block: SSARef, prev_block: SSARef) {
         if let Some(succ) = self.ssa.unconditional_block(prev_block) {
-            if let Some(_) = self.ssa.selector_in(prev_block) {
+            if self.ssa.selector_in(prev_block).is_some() {
                 // TODO
                 radeco_trace!("CCFGBuilder::insert_jump INDIRET JMP");
-            } else if self.ssa.exit_node().map_or(false, |en| en == succ) {
+            } else if self.ssa.exit_node() == Some(succ) {
                 self.handle_return(cur_block);
             } else {
                 self.handle_goto(cur_block, succ);
@@ -418,7 +414,7 @@ impl<'a> CCFGDataMap<'a> {
     fn new(rfn: &'a RadecoFunction) -> CCFGDataMap<'a> {
         CCFGDataMap {
             ssa: rfn.ssa(),
-            rfn: rfn,
+            rfn,
             var_map: HashMap::new(),
             reg_map: HashMap::new(),
             const_nodes: HashSet::new(),
@@ -459,13 +455,13 @@ impl<'a> CCFGDataMap<'a> {
 
     fn handle(&mut self, ret_node: SSARef, ops: Vec<SSARef>, expr: c_ast::Expr, cfg: &mut CCFG) {
         for op in ops.iter() {
-            if self.var_map.get(&op).cloned().is_none() {
+            if self.var_map.get(op).cloned().is_none() {
                 self.add_regvar(*op, cfg);
             }
         }
         let ops_mapped = ops
             .iter()
-            .map(|op| self.var_map.get(op).map(|n| *n).unwrap_or(cfg.unknown))
+            .map(|op| self.var_map.get(op).copied().unwrap_or(cfg.unknown))
             .collect::<Vec<_>>();
         let expr_node = cfg.expr(ops_mapped.as_slice(), expr.clone());
         radeco_trace!(
@@ -543,15 +539,10 @@ impl<'a> CCFGDataMap<'a> {
 
     fn is_used_by_call_store(&self, node: SSARef) -> bool {
         let opcodes = &[MOpcode::OpCall, MOpcode::OpStore];
-        self.ssa
-            .uses_of(node)
-            .iter()
-            .filter(|&n| {
-                let op = self.ssa.opcode(*n).unwrap_or(MOpcode::OpInvalid);
-                opcodes.contains(&op)
-            })
-            .next()
-            .is_some()
+        self.ssa.uses_of(node).iter().any(|&n| {
+            let op = self.ssa.opcode(n).unwrap_or(MOpcode::OpInvalid);
+            opcodes.contains(&op)
+        })
     }
 
     fn update_values(&mut self, ret_node: SSARef, cfg: &mut CCFG) {

@@ -110,7 +110,7 @@ where
 {
     pub fn new(ssa: &'a T) -> MemorySSA<'a, I, T> {
         MemorySSA {
-            ssa: ssa,
+            ssa,
             g: StableDiGraph::new(),
             associated_blocks: HashMap::new(),
             associated_nodes: HashMap::new(),
@@ -145,35 +145,26 @@ where
     /// Use information from RadecoFunctoin to gather basic variables' information.
     pub fn gather_variables(
         &mut self,
-        datafers: &Vec<u64>,
-        locals: &Vec<LVarInfo>,
-        callrefs: &Vec<NodeIndex>,
+        datafers: &[u64],
+        locals: &[LVarInfo],
+        callrefs: &[NodeIndex],
     ) {
         radeco_trace!("MemorrySSA|Get datafers: {:?}", datafers);
         // datafers is coming from RadecoFunctoin::datafers
-        let mut gvars: Vec<VariableType> = datafers
-            .clone()
-            .iter()
-            .map(|x| VariableType::Global(x.clone()))
-            .collect();
+        let mut gvars: Vec<VariableType> =
+            datafers.iter().cloned().map(VariableType::Global).collect();
         self.variables.append(&mut gvars);
 
         radeco_trace!("MemorrySSA|Get locals: {:?}", locals);
         // locals is coming from RadecoFunctoin::locals
-        let mut lvars: Vec<VariableType> = locals
-            .clone()
-            .iter()
-            .map(|x| VariableType::Local(x.clone()))
-            .collect();
+        let mut lvars: Vec<VariableType> =
+            locals.iter().cloned().map(VariableType::Local).collect();
         self.variables.append(&mut lvars);
 
         radeco_trace!("MemorrySSA|Get callrefs: {:?}", callrefs);
         // callrefs is coming from RadecoFunctoin::call_ctx::ssa_ref
-        let mut evars: Vec<VariableType> = callrefs
-            .clone()
-            .into_iter()
-            .map(|x| VariableType::Extra(x))
-            .collect();
+        let mut evars: Vec<VariableType> =
+            callrefs.iter().cloned().map(VariableType::Extra).collect();
         self.variables.append(&mut evars);
 
         radeco_trace!("MemorrySSA|Gather variables: {:?}", self.variables);
@@ -196,7 +187,7 @@ where
                 }
             }
         }
-        return false;
+        false
     }
 
     // Check reg is a BP/SP register or not
@@ -226,7 +217,7 @@ where
                 }
             }
         }
-        return false;
+        false
     }
     // TODO: Above two functions should be combined into one named check_variables,
     // which could use to check every different variable after VSA.
@@ -403,31 +394,28 @@ where
             radeco_err!("Value node doesn't belong to any block");
             self.ssa.invalid_action().unwrap()
         });
-        self.associated_blocks.insert(mem_node, block.clone());
-        return mem_node;
+        self.associated_blocks.insert(mem_node, block);
+        mem_node
     }
 
     fn add_phi(&mut self, var: VarId, block: &T::ActionRef) -> NodeIndex {
         let phi = self.g.add_node(MemOpcode::Phi);
-        self.associated_blocks.insert(phi, block.clone());
-        self.phi_nodes.insert(phi.clone(), var);
+        self.associated_blocks.insert(phi, *block);
+        self.phi_nodes.insert(phi, var);
         // Map the new phi node with its variable.
-        return phi;
+        phi
     }
 
     fn add_undefined(&mut self) -> NodeIndex {
-        return self.g.add_node(MemOpcode::Undefined);
+        self.g.add_node(MemOpcode::Undefined)
     }
 
     fn is_phi(&self, mem_node: &NodeIndex) -> bool {
-        match self.g[*mem_node] {
-            MemOpcode::Phi => true,
-            _ => false,
-        }
+        matches!(self.g[*mem_node], MemOpcode::Phi)
     }
 
     fn add_use(&mut self, expr: &NodeIndex, arg: &NodeIndex) {
-        if !self.g.find_edge(*expr, *arg).is_none() {
+        if self.g.find_edge(*expr, *arg).is_some() {
             return;
             // In MemorySSA, it's common that add an edge between two nodes
             // which have been connected before.
@@ -507,7 +495,7 @@ where
             block,
             mem_node
         );
-        self.current_def[var].insert(block.clone(), mem_node.clone());
+        self.current_def[var].insert(*block, *mem_node);
     }
 
     // Get the reachable define for var, if it doesn't exist in this block, call
@@ -519,9 +507,9 @@ where
             block
         );
         if let Some(node) = self.current_def[var].get(block) {
-            return node.clone();
+            return *node;
         }
-        return self.read_variable_recursive(var, block);
+        self.read_variable_recursive(var, block)
     }
 
     // Add phi nodes in the basic block, and visit its predecessors.
@@ -540,9 +528,9 @@ where
 
         if !self.sealed_blocks.contains(block) {
             val = self.add_phi(var, block);
-            self.incomplete_phis[var].insert(block.clone(), val);
+            self.incomplete_phis[var].insert(*block, val);
         } else {
-            let preds = self.ssa.preds_of(block.clone());
+            let preds = self.ssa.preds_of(*block);
             if preds.len() == 1 {
                 val = self.read_variable(var, &preds[0]);
             } else {
@@ -553,7 +541,7 @@ where
         }
 
         self.write_variable(var, block, &val);
-        return val;
+        val
     }
 
     // Add phi operands, and try to use try_remove_trivial_phi to delete trivial phi node.
@@ -561,15 +549,15 @@ where
         let preds = self.associated_blocks.get(phi).map_or_else(
             || {
                 radeco_err!("Phi not found!");
-                vec![self.ssa.invalid_action().unwrap().clone()]
+                vec![self.ssa.invalid_action().unwrap()]
             },
-            |block| self.ssa.preds_of(block.clone()),
+            |block| self.ssa.preds_of(*block),
         );
         for pred in &preds {
             let target = self.read_variable(var, pred);
             self.add_use(phi, &target);
         }
-        return self.try_remove_trivial_phi(phi);
+        self.try_remove_trivial_phi(phi)
     }
 
     // Remove trivial phi node, trying to make a minimal SSA.
@@ -584,7 +572,7 @@ where
                 continue;
             }
             if same != NodeIndex::end() {
-                return phi.clone();
+                return *phi;
                 // Is not trivial, then return phi itself.
             }
             same = op;
@@ -616,7 +604,7 @@ where
                 .collect();
             self.current_def[variable] = tmp;
         }
-        self.phi_nodes.remove(&phi);
+        self.phi_nodes.remove(phi);
         // Disconnect the phi node with var.
 
         for user in &users {
@@ -627,18 +615,18 @@ where
                 self.try_remove_trivial_phi(user);
             }
         }
-        return same;
+        same
     }
 
     // Called when block's predecessors finish.
     fn seal_block(&mut self, block: &T::ActionRef) {
         for i in 0..self.variables.len() {
             if self.incomplete_phis[i].contains_key(block) {
-                let val = self.incomplete_phis[i].get(block).unwrap().clone();
-                self.add_phi_operands(i.clone(), &val);
+                let val = *self.incomplete_phis[i].get(block).unwrap();
+                self.add_phi_operands(i, &val);
             }
         }
-        self.sealed_blocks.insert(block.clone());
+        self.sealed_blocks.insert(*block);
     }
 
     // Main function of MemorySSA, generate Memory SSA using the similar way of

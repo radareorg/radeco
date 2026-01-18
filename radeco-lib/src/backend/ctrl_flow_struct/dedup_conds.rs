@@ -5,8 +5,6 @@ use super::ast_context::AstContextMut;
 use super::condition;
 use super::{AstNode, CondContext, CondVar, RegionAstContext};
 
-use std::mem;
-
 /// For every condition that is used more than once, introduces a boolean
 /// variable to store the value of the condition the first time it's used
 /// and replaces all subsequent uses of the condition with the new variable.
@@ -140,10 +138,7 @@ fn place_assign<'cd, B, C, V>(
 
     if is_here {
         // place `assign`
-        *ast = Seq(vec![
-            BasicBlock(assign),
-            mem::replace(ast, AstNodeC::default()),
-        ]);
+        *ast = Seq(vec![BasicBlock(assign), std::mem::take(ast)]);
         Err(())
     } else {
         // continue

@@ -20,7 +20,7 @@ fn load_patterns() -> io::Result<Vec<(String, String)>> {
         let line = line?;
         let line = line.trim();
 
-        if line.len() == 0 || line.starts_with('#') {
+        if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
@@ -74,6 +74,12 @@ pub struct Arithmetic {
     replace_patterns: Vec<(String, String)>,
 }
 
+impl Default for Arithmetic {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Arithmetic {
     pub fn new() -> Self {
         let replace_patterns = load_patterns().unwrap_or_else(|_e| {
@@ -81,9 +87,7 @@ impl Arithmetic {
             Vec::new()
         });
 
-        Arithmetic {
-            replace_patterns: replace_patterns,
-        }
+        Arithmetic { replace_patterns }
     }
 }
 
@@ -111,7 +115,7 @@ impl FuncAnalyzer for Arithmetic {
 
             for m in grep {
                 let action = policy(Box::new(ArithChange {
-                    old: m.get_root().clone(),
+                    old: *m.get_root(),
                     old_expr: old.clone(),
                     new_expr: new.clone(),
                     bindings: m.get_bindings().clone(),

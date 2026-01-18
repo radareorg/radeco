@@ -66,7 +66,7 @@ impl fmt::Display for SSAErr<SSAStorage> {
                 "Found more than one copy of {:#}, with {:?} an {:?}",
                 con, i, j
             ),
-            SSAErr::Other(s) => format!("{}", s),
+            SSAErr::Other(s) => s.to_string(),
         };
         write!(f, "{}.", err)
     }

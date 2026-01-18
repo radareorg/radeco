@@ -33,20 +33,20 @@ impl<'a> Exporter<'a> {
         match ast {
             BasicBlock(b) => b
                 .into_iter()
-                .map(|c| self.conv.to_c_ast_single(c))
+                .map(|c| self.conv.as_c_ast_single(c))
                 .collect(),
             Seq(seq) => {
                 let seq = seq
                     .into_iter()
                     .map(|a| self.go(a))
                     .collect::<Result<Vec<_>, _>>()?;
-                Ok(seq.into_iter().flat_map(|v| v).collect())
+                Ok(seq.into_iter().flatten().collect())
             }
             Cond(c, t, oe) => {
                 let c = c.fold(&mut *self)?;
                 let t = self.go(*t)?;
                 let oe = transpose(oe.map(|e| self.go(*e)))?;
-                Ok(vec![self.conv.ast_mut().new_if(c, t, oe.map(|e| e))])
+                Ok(vec![self.conv.ast_mut().new_if(c, t, oe)])
             }
             Loop(PreChecked(c), b) => {
                 let c = c.fold(&mut *self)?;

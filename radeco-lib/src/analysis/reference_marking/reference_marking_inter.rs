@@ -2,8 +2,8 @@
 //!
 //! Design points:
 //!   - Keep the generic case in mind. The inter-function propagation should, in theory, work
-//!   with any generic intra-function analysis. This allows us reuse code whenever the general
-//!   structure of the analysis is same.
+//!     with any generic intra-function analysis. This allows us reuse code whenever the general
+//!     structure of the analysis is same.
 //!
 
 use crate::frontend::radeco_containers::{
@@ -76,8 +76,8 @@ struct AnalyzerWrapper<T: InterProcAnalysis> {
 impl<T: InterProcAnalysis> AnalyzerWrapper<T> {
     pub fn new(offset: u64, analyzer: T) -> AnalyzerWrapper<T> {
         AnalyzerWrapper {
-            analyzer: analyzer,
-            offset: offset,
+            analyzer,
+            offset,
             should_run: true,
             times_run: 0,
         }
@@ -124,7 +124,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 (caller, T::pull(&mut current_analyzer, current_fn, &rcsite))
             })
         {
-            let ref mut e = infos.entry(caller).or_insert(Vec::new());
+            let e = &mut infos.entry(caller).or_insert(Vec::new());
             if let Some(inf) = info {
                 e.push(inf);
             }
@@ -147,7 +147,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
             callee_info_map.push((callee, T::pull(&mut current_analyzer, current_fn, csite)));
         }
         for (callee, info) in callee_info_map.into_iter() {
-            let ref mut e = infos.entry(callee).or_insert(Vec::new());
+            let e = &mut infos.entry(callee).or_insert(Vec::new());
             if let Some(inf) = info {
                 e.push(inf);
             }
@@ -162,7 +162,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
         // Transfer can be done in (TODO) parallel
         for wrapper in rmod.iter_mut() {
             let (current_offset, current_fn) = wrapper.function;
-            let analyzer = T::transfer(current_fn, Arc::clone(&regfile), Arc::clone(&sections));
+            let analyzer = T::transfer(current_fn, Arc::clone(regfile), Arc::clone(&sections));
             analyzers.push(AnalyzerWrapper::new(*current_offset, analyzer));
         }
 
@@ -185,13 +185,13 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                     &current_fn_node,
                     &current_fn,
                     None,
-                    &callgraph,
+                    callgraph,
                     &mut infos,
                 );
             }
         }
 
-        let mut max_iterations = n_iters.unwrap_or(u64::max_value());
+        let mut max_iterations = n_iters.unwrap_or(u64::MAX);
 
         while !fixpoint && max_iterations > 0 {
             max_iterations -= 1;
@@ -214,7 +214,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                     &current_fn_node,
                     current_fn,
                     Some(current_analyzer),
-                    &callgraph,
+                    callgraph,
                     &mut infos,
                 );
 
@@ -222,7 +222,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                     &current_fn_node,
                     current_fn,
                     Some(current_analyzer),
-                    &callgraph,
+                    callgraph,
                     &mut infos,
                 );
             }
@@ -233,7 +233,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 // XXX: Avoid allocation
                 *infov = vec![infov
                     .iter()
-                    .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, &x))];
+                    .fold(T::Info::default(), |acc, x| T::Info::eval(&acc, x))];
             }
 
             // Push the information down to the analyzers.
@@ -242,7 +242,7 @@ impl<T: InterProcAnalysis> InterProceduralAnalyzer<T> {
                 analyzer_wrapper.should_run = {
                     let info = infos.get(&offset);
                     let analyzer = analyzer_wrapper.analyzer_mut();
-                    if let Some(ref inf) = info {
+                    if let Some(inf) = info {
                         T::push(analyzer, Some(&inf[0]))
                     } else {
                         // Assume that the analyzer should be run.

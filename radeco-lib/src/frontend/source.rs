@@ -65,12 +65,7 @@ pub trait Source {
             radeco_err!("Error: {:?}", _e);
             Vec::new()
         });
-        for flag in flags {
-            if flag.offset == address {
-                return Some(flag);
-            }
-        }
-        None
+        flags.iter().find(|flag| flag.offset == address).cloned()
     }
 
     fn section_of(&mut self, address: u64) -> Option<LSectionInfo> {
@@ -111,7 +106,7 @@ where
     }
 
     fn instructions_at(&mut self, address: u64) -> Result<Vec<LOpInfo>, &'static str> {
-        if let Ok(fn_info) = self.function(&format!("{}", address)) {
+        if let Ok(fn_info) = self.function(format!("{address}")) {
             Ok(fn_info.ops.unwrap_or_default())
         } else {
             Ok(Vec::new())
@@ -172,7 +167,7 @@ pub struct FileSource {
 impl FileSource {
     fn read_file(&self, suffix: &str) -> String {
         let mut path = PathBuf::from(&self.dir);
-        path.push(&format!("{}_{}.json", self.base_name, suffix));
+        path.push(format!("{}_{}.json", self.base_name, suffix));
         let mut f = File::open(path).unwrap_or_else(|_e| {
             radeco_err!("Failed to open file");
             radeco_err!("Error: {:?}", _e);
@@ -189,7 +184,7 @@ impl FileSource {
 
     fn write_file(&mut self, suffix: &str, data: &str) {
         let mut path = PathBuf::from(&self.dir);
-        path.push(&format!("{}_{}.json", self.base_name, suffix));
+        path.push(format!("{}_{suffix}.json", self.base_name));
         let mut f = File::create(path).unwrap_or_else(|_e| {
             radeco_err!("Failed to open file");
             radeco_err!("Error: {:?}", _e);
@@ -204,12 +199,12 @@ impl FileSource {
 }
 
 mod suffix {
-    pub const FUNCTION_INFO: &'static str = "fn_info";
-    pub const INSTRUCTIONS: &'static str = "insts";
-    pub const REGISTER: &'static str = "register_profile";
-    pub const FLAG: &'static str = "flags";
-    pub const SECTION: &'static str = "sections";
-    pub const STRING: &'static str = "strings";
+    pub const FUNCTION_INFO: &str = "fn_info";
+    pub const INSTRUCTIONS: &str = "insts";
+    pub const REGISTER: &str = "register_profile";
+    pub const FLAG: &str = "flags";
+    pub const SECTION: &str = "sections";
+    pub const STRING: &str = "strings";
 }
 
 impl FileSource {
@@ -312,7 +307,7 @@ impl From<R2> for FileSource {
             process::abort();
         });
         let mut dir = PathBuf::from(".");
-        dir.push(&fname);
+        dir.push(fname);
         fs::create_dir_all(&dir).unwrap_or_else(|_e| {
             radeco_err!("Error {:?}", _e);
             process::abort();
@@ -349,7 +344,7 @@ impl From<R2> for FileSource {
                     radeco_err!("Error: {:?}", _e);
                     "Invalid json".to_string()
                 });
-                let suffix = format!("{}_{:#X}", suffix::INSTRUCTIONS, offset);
+                let suffix = format!("{}_{offset:#X}", suffix::INSTRUCTIONS);
                 fsource.write_file(&suffix, &json_str)
             }
 

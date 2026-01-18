@@ -80,18 +80,14 @@ pub mod loader_defaults {
     ) -> FLResult {
         rmod.symbols
             .iter()
-            .filter(|f| {
-                if let Some(LSymbolType::Func) = f.stype {
-                    true
-                } else {
-                    false
-                }
-            })
+            .filter(|f| matches!(f.stype, Some(LSymbolType::Func)))
             .fold(FLResult::default(), |mut acc, s| {
-                let mut rfn = RadecoFunction::default();
-                rfn.name = Cow::from(s.name.as_ref().unwrap().to_owned());
-                rfn.offset = s.vaddr.unwrap();
-                rfn.size = s.size.unwrap();
+                let rfn = RadecoFunction {
+                    name: Cow::from(s.name.as_ref().unwrap().to_owned()),
+                    offset: s.vaddr.unwrap(),
+                    size: s.size.unwrap(),
+                    ..Default::default()
+                };
 
                 acc.functions.insert(rfn.offset, rfn);
                 acc.new += 1;
@@ -106,7 +102,7 @@ pub mod loader_defaults {
         _rmod: &RadecoModule,
     ) -> FLResult {
         // Load function information fom `Source`
-        if let Some(ref src) = source {
+        if let Some(src) = source {
             let mut new_fl = FLResult::default();
 
             // FIXME -> Handle errors properly.
@@ -139,14 +135,16 @@ pub mod loader_defaults {
                     }
                 })
                 .for_each(|(function, kind)| {
-                    let mut rfn = RadecoFunction::default();
-                    rfn.offset = function.offset.unwrap();
-                    rfn.size = function.size.unwrap();
-                    rfn.name = Cow::from(function.name.as_ref().unwrap().to_owned());
-                    rfn.callconv_name = function.calltype.as_ref().unwrap().to_owned();
-                    rfn.kind = kind;
+                    let rfn = RadecoFunction {
+                        offset: function.offset.unwrap(),
+                        size: function.size.unwrap(),
+                        name: Cow::from(function.name.as_ref().unwrap().to_owned()),
+                        callconv_name: function.calltype.as_ref().unwrap().to_owned(),
+                        kind,
+                        ..Default::default()
+                    };
                     new_fl.functions.insert(rfn.offset, rfn);
-                    new_fl.new = new_fl.new + 1;
+                    new_fl.new += 1;
                 });
             new_fl
         } else {
@@ -225,12 +223,12 @@ impl fmt::Debug for RadecoModule {
 pub enum FunctionType {
     /// Function defined in the current binary
     Function,
-    /// Import from another module. Set to u16::max_value() to represent `Unknown`
+    /// Import from another module. Set to u16::MAX to represent `Unknown`
     /// Fixed up when the corresponding library that defines this function is loaded
     Import(u16),
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Default)]
 pub enum BindingType {
     // Arguments - ith argument
     RegisterArgument(usize),
@@ -242,35 +240,27 @@ pub enum BindingType {
     // Return
     Return,
     // Unknown
+    #[default]
     Unknown,
-}
-
-impl Default for BindingType {
-    fn default() -> BindingType {
-        BindingType::Unknown
-    }
 }
 
 impl BindingType {
     pub fn is_argument(&self) -> bool {
-        match *self {
-            BindingType::RegisterArgument(_) | BindingType::StackArgument(_) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            BindingType::RegisterArgument(_) | BindingType::StackArgument(_)
+        )
     }
 
     pub fn is_local(&self) -> bool {
-        match *self {
-            BindingType::RegisterLocal(_, _) | BindingType::StackLocal(_) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            BindingType::RegisterLocal(_, _) | BindingType::StackLocal(_)
+        )
     }
 
     pub fn is_return(&self) -> bool {
-        match *self {
-            BindingType::Return => true,
-            _ => false,
-        }
+        matches!(self, BindingType::Return)
     }
 }
 
@@ -295,11 +285,11 @@ impl VarBinding {
     ) -> VarBinding {
         let name = Cow::from(name.unwrap_or_default());
         VarBinding {
-            name: name,
+            name,
             type_str: ty_str,
-            btype: btype,
-            idx: idx,
-            ridx: ridx,
+            btype,
+            idx,
+            ridx,
             is_preserved: false,
         }
     }
@@ -317,12 +307,8 @@ impl VarBinding {
     }
 
     fn is_matched_reg_local(binding: &VarBinding, reg_name: String, offset: i64) -> bool {
-        match binding.btype {
-            BindingType::RegisterLocal(ref reg, n) if reg.clone() == reg_name && n == offset => {
-                true
-            }
-            _ => false,
-        }
+        matches!(binding.btype,
+            BindingType::RegisterLocal(ref reg, n) if reg.clone() == reg_name && n == offset)
     }
 
     pub fn index(&self) -> NodeIndex {
@@ -338,7 +324,7 @@ impl VarBinding {
     }
 
     pub fn name(&self) -> &str {
-        &*self.name
+        &self.name
     }
 
     pub fn is_preserved(&self) -> bool {
@@ -353,17 +339,12 @@ impl VarBinding {
 pub type VarBindings = Vec<VarBinding>;
 
 /// The type of this function.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FunctionKind {
+    #[default]
     Local,
     Imported,
     Relocated,
-}
-
-impl Default for FunctionKind {
-    fn default() -> Self {
-        FunctionKind::Local
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -409,10 +390,12 @@ pub struct RadecoFunction {
 impl RadecoFunction {
     // Gets whether the Radeco function is recursive.
     pub const fn is_recursive(&self) -> bool {
-        match self.is_recursive {
-            Some(true) => true,
-            _ => false,
-        }
+        matches!(self.is_recursive, Some(true))
+    }
+
+    /// Gets the size of the function in bytes.
+    pub const fn size(&self) -> u64 {
+        self.size
     }
 }
 
@@ -564,7 +547,7 @@ impl<'m> Iterator for ModuleIter<'m> {
     fn next(&mut self) -> Option<ZippedModule<'m>> {
         if let Some(rmod) = self.iter.next() {
             Some(ZippedModule {
-                project: &self.project,
+                project: self.project,
                 module: rmod,
             })
         } else {
@@ -576,11 +559,9 @@ impl<'m> Iterator for ModuleIter<'m> {
 impl<'m> Iterator for ModuleIterMut<'m> {
     type Item = ZippedModuleMut<'m>;
     fn next(&mut self) -> Option<ZippedModuleMut<'m>> {
-        if let Some(rmod) = self.iter.next() {
-            Some(ZippedModuleMut { module: rmod })
-        } else {
-            None
-        }
+        self.iter
+            .next()
+            .map(|rmod| ZippedModuleMut { module: rmod })
     }
 }
 
@@ -620,11 +601,9 @@ impl<'f> Iterator for FunctionIter<'f> {
 impl<'f> Iterator for FunctionIterMut<'f> {
     type Item = ZippedFunctionMut<'f>;
     fn next(&mut self) -> Option<ZippedFunctionMut<'f>> {
-        if let Some(rfn) = self.iter.next() {
-            Some(ZippedFunctionMut { function: rfn })
-        } else {
-            None
-        }
+        self.iter
+            .next()
+            .map(|rfn| ZippedFunctionMut { function: rfn })
     }
 }
 
@@ -740,11 +719,7 @@ impl<'a> ModuleLoader<'a> {
                                 if let Ok(NodeType::Comment(ref s)) =
                                     rfn.ssa().node_data(ridx).map(|n| n.nt)
                                 {
-                                    if s == reg.1 {
-                                        true
-                                    } else {
-                                        false
-                                    }
+                                    s == reg.1
                                 } else {
                                     false
                                 }
@@ -758,11 +733,7 @@ impl<'a> ModuleLoader<'a> {
                                 if let Ok(NodeType::Comment(ref s)) =
                                     rfn.ssa().node_data(ridx).map(|n| n.nt)
                                 {
-                                    if s == reg.1 {
-                                        true
-                                    } else {
-                                        false
-                                    }
+                                    s == reg.1
                                 } else {
                                     false
                                 }
@@ -875,7 +846,7 @@ impl<'a> ModuleLoader<'a> {
             flresult
                 .functions
                 .into_iter()
-                .filter(|&(_, ref v)| filter_fn(v))
+                .filter(|(_, v)| filter_fn(v))
                 .collect()
         } else {
             flresult.functions
@@ -897,7 +868,7 @@ impl<'a> ModuleLoader<'a> {
         for (&imp_addr, imp_info) in &mut rmod.imports {
             let imp_rfn = &mut *imp_info.rfn.borrow_mut();
             imp_rfn.callconv = source.cc_info_of(imp_addr).ok();
-            if let Some(ref f) = rmod.functions.get(&imp_addr) {
+            if let Some(f) = rmod.functions.get(&imp_addr) {
                 imp_rfn.callconv_name = f.callconv_name.clone();
             }
         }
@@ -973,7 +944,7 @@ impl<'a> ModuleLoader<'a> {
                         let mut locals = match locals_res {
                             Some(Ok(_locals)) => _locals
                                 .into_iter()
-                                .map(|l| VarBinding::local(l))
+                                .map(VarBinding::local)
                                 .collect::<Vec<_>>(),
                             Some(Err(_e)) => {
                                 radeco_warn!("{:?}", _e);
@@ -1007,7 +978,7 @@ impl<'a> ModuleLoader<'a> {
             rfn.mark_args();
         }
         // Set source
-        rmod.source = Some(Rc::clone(&source));
+        rmod.source = Some(Rc::clone(source));
 
         rmod
     }
@@ -1087,7 +1058,7 @@ impl<'a> FunctionLoader<'a> {
                 if f.predicate(&acc) {
                     let fl = f.strategy(self.source.as_ref(), &acc, rmod);
                     acc.new += fl.new;
-                    acc.functions.extend(fl.functions.into_iter());
+                    acc.functions.extend(fl.functions);
                 }
                 acc
             })
@@ -1098,6 +1069,12 @@ impl<'a> FunctionLoader<'a> {
         // TODO: Append these to the front
         self.strategies.push(&loader_defaults::strat_use_source);
         self
+    }
+}
+
+impl Default for RadecoProject {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1121,7 +1098,7 @@ impl RadecoProject {
         }
     }
 
-    pub fn nth_module_mut<'a>(&mut self, idx: usize) -> Option<&mut RadecoModule> {
+    pub fn nth_module_mut(&mut self, idx: usize) -> Option<&mut RadecoModule> {
         if self.modules.len() > idx {
             Some(&mut self.modules[idx])
         } else {
@@ -1131,7 +1108,7 @@ impl RadecoProject {
 
     pub fn iter<'a>(&'a self) -> ModuleIter<'a> {
         ModuleIter {
-            project: &self,
+            project: self,
             iter: self.modules.iter(),
         }
     }
@@ -1145,13 +1122,14 @@ impl RadecoProject {
 
 impl RadecoModule {
     pub fn new(path: String) -> RadecoModule {
-        let mut rmod = RadecoModule::default();
-        rmod.name = Cow::from(path.clone());
-        rmod
+        RadecoModule {
+            name: Cow::from(path),
+            ..Default::default()
+        }
     }
 
     pub fn name(&self) -> &str {
-        &*self.name
+        &self.name
     }
 
     pub fn function(&self, offset: u64) -> Option<&RadecoFunction> {
@@ -1177,7 +1155,7 @@ impl RadecoModule {
 
     pub fn iter<'a>(&'a self) -> FunctionIter<'a> {
         FunctionIter {
-            module: &self,
+            module: self,
             iter: self.functions.iter(),
         }
     }
@@ -1241,7 +1219,6 @@ impl RadecoFunction {
     pub fn call_sites(&self, call_graph: &CallGraph) -> Vec<CallContextInfo> {
         call_graph
             .edges_directed(self.cgid, Direction::Outgoing)
-            .into_iter()
             .map(|e| e.weight().clone())
             .collect()
     }
@@ -1258,7 +1235,7 @@ impl RadecoFunction {
         self.bindings
             .iter()
             .filter(|vb| vb.btype.is_local())
-            .map(|vb| vb.clone())
+            .cloned()
             .collect::<Vec<_>>()
     }
 
@@ -1280,7 +1257,7 @@ impl RadecoFunction {
 
     pub fn set_returns(&mut self, returns: &Vec<usize>) {
         for i in returns {
-            if let Some(ref mut var) = self.bindings.iter_mut().nth(*i) {
+            if let Some(ref mut var) = self.bindings.get_mut(*i) {
                 var.btype = BindingType::Return;
             }
         }
@@ -1334,7 +1311,7 @@ impl RadecoFunction {
                 Some(MOpcode::OpStore) | Some(MOpcode::OpLoad) => {
                     let dst = ssa.operands_of(node)[1];
                     let bindings = self.retrieve_binding(dst);
-                    if bindings.len() > 0 {
+                    if !bindings.is_empty() {
                         self.binding_map.insert(dst, bindings);
                     }
                 }
@@ -1344,11 +1321,9 @@ impl RadecoFunction {
     }
 
     pub fn local_at(&self, node: NodeIndex, forward: bool) -> Option<VarBindings> {
-        let next = self.ssa.replaced_map.get(&node).cloned();
-        if next.is_some() && forward {
-            self.binding_map.get(&next.unwrap()).cloned()
-        } else {
-            self.binding_map.get(&node).cloned()
+        match self.ssa.replaced_map.get(&node).cloned() {
+            Some(next) if forward => self.binding_map.get(&next).cloned(),
+            _ => self.binding_map.get(&node).cloned(),
         }
     }
 }

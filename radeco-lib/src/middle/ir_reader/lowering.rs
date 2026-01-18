@@ -12,12 +12,11 @@ use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fmt::Write;
-use std::mem;
 
 pub type Result<T> = ::std::result::Result<T, LoweringError>;
 
 /// Lowers [AST](sast) into the provided [`SSAStorage`]
-pub fn lower_simpleast<'a>(ssa: &'a mut SSAStorage, sfn: sast::Function) -> Result<()> {
+pub fn lower_simpleast(ssa: &mut SSAStorage, sfn: sast::Function) -> Result<()> {
     LowerSsa::new(ssa)?.lower_function(sfn)
 }
 
@@ -95,7 +94,7 @@ impl<'a> LowerSsa<'a> {
 
         self.lower_final_reg_state(sfn.final_reg_state)?;
 
-        for (phi, sops) in mem::replace(&mut self.phi_operands, Vec::new()) {
+        for (phi, sops) in std::mem::take(&mut self.phi_operands) {
             for sop in sops.into_iter().rev() {
                 let op = self.lower_operand(sop)?;
                 self.ssa.phi_use(phi, op);

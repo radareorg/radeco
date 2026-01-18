@@ -15,9 +15,9 @@ use petgraph::visit::{EdgeRef, IntoEdgeReferences};
 use petgraph::EdgeDirection;
 use std::cmp::{Ordering, PartialEq, PartialOrd};
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::default;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
-use std::{default, u64};
 
 use super::cfg_traits::{CFGMod, CFG};
 use super::graph_traits::{ConditionInfo, EdgeInfo, Graph};
@@ -30,7 +30,7 @@ use utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
 /// SSA
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AdditionalData {
     comments: Option<String>,
     flag: Option<String>,
@@ -40,17 +40,6 @@ pub struct AdditionalData {
 
 impl AdditionalData {
     fn new() -> AdditionalData {
-        AdditionalData {
-            comments: None,
-            flag: None,
-            mark: false,
-            color: None,
-        }
-    }
-}
-
-impl default::Default for AdditionalData {
-    fn default() -> AdditionalData {
         AdditionalData {
             comments: None,
             flag: None,
@@ -202,7 +191,6 @@ impl SSAStorage {
     pub fn constants(&self) -> HashMap<NodeIndex, u64> {
         self.g
             .node_indices()
-            .into_iter()
             .filter_map(|n| match self.g.node_weight(n) {
                 Some(&NodeData::Op(MOpcode::OpConst(v), _)) => Some((n, v)),
                 _ => None,
@@ -211,9 +199,9 @@ impl SSAStorage {
     }
 }
 
-/// //////////////////////////////////////////////////////////////////////////
-/// //// Revised API for SSAStorage.
-/// //////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+// Revised API for SSAStorage.
+/////////////////////////////////////////////////////////////////////////////
 
 /// Regulate all access to SSAStorage, especially insertions and deletions
 /// through this API to prevent stablemap from being out of sync.
@@ -299,15 +287,12 @@ impl Graph for SSAStorage {
             .neighbors_directed(i, EdgeDirection::Outgoing)
             .detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            match self.g.edge_weight(edge) {
-                Some(&EdgeData::RegisterInfo) => {
-                    if othernode == j {
-                        self.g.remove_edge(edge);
-                        continue;
-                    }
-                    self.insert_edge(j, othernode, EdgeData::RegisterInfo);
+            if let Some(&EdgeData::RegisterInfo) = self.g.edge_weight(edge) {
+                if othernode == j {
+                    self.g.remove_edge(edge);
+                    continue;
                 }
-                _ => {}
+                self.insert_edge(j, othernode, EdgeData::RegisterInfo);
             }
             self.g.remove_edge(edge);
         }
@@ -448,27 +433,23 @@ impl Graph for SSAStorage {
     }
 }
 
-/// ////////////////////////////////////////////////////////////////////////////
-/// / Implementation of CFG for SSAStorage.
-/// ////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+// Implementation of CFG for SSAStorage.
+///////////////////////////////////////////////////////////////////////////////
 
 impl CFG for SSAStorage {
     type ActionRef = <SSAStorage as Graph>::GraphNodeRef;
     type CFEdgeRef = <SSAStorage as Graph>::GraphEdgeRef;
 
     fn is_block(&self, node: Self::ActionRef) -> bool {
-        if let Some(&NodeData::BasicBlock(_, _)) = self.g.node_weight(node) {
-            true
-        } else {
-            false
-        }
+        matches!(self.g.node_weight(node), Some(&NodeData::BasicBlock(_, _)))
     }
 
     fn is_action(&self, action: Self::ActionRef) -> bool {
-        match self.g.node_weight(action) {
-            Some(&NodeData::BasicBlock(_, _)) | Some(&NodeData::DynamicAction) => true,
-            _ => false,
-        }
+        matches!(
+            self.g.node_weight(action),
+            Some(&NodeData::BasicBlock(_, _)) | Some(&NodeData::DynamicAction)
+        )
     }
 
     fn blocks(&self) -> Vec<Self::ActionRef> {
@@ -605,7 +586,7 @@ impl CFG for SSAStorage {
     }
 
     fn starting_address(&self, si: Self::ActionRef) -> Option<MAddress> {
-        if let Some(&NodeData::BasicBlock(ref addr, _)) = self.g.node_weight(si) {
+        if let Some(NodeData::BasicBlock(addr, _)) = self.g.node_weight(si) {
             Some(*addr)
         } else if let Some(&NodeData::DynamicAction) = self.g.node_weight(si) {
             Some(MAddress::new(u64::MAX, 0))
@@ -732,7 +713,7 @@ impl CFGMod for SSAStorage {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//// Implementation of SSA for SSAStorage.
+// Implementation of SSA for SSAStorage.
 ///////////////////////////////////////////////////////////////////////////////
 
 impl SSA for SSAStorage {
@@ -740,18 +721,12 @@ impl SSA for SSAStorage {
 
     fn is_expr(&self, exi: Self::ValueRef) -> bool {
         let i = exi;
-        match self.g.node_weight(i) {
-            Some(&NodeData::Op(_, _)) => true,
-            _ => false,
-        }
+        matches!(self.g.node_weight(i), Some(&NodeData::Op(_, _)))
     }
 
     fn is_phi(&self, exi: Self::ValueRef) -> bool {
         let i = exi;
-        match self.g.node_weight(i) {
-            Some(&NodeData::Phi(_, _)) => true,
-            _ => false,
-        }
+        matches!(self.g.node_weight(i), Some(&NodeData::Phi(_, _)))
     }
 
     fn is_selector(&self, exi: Self::ValueRef) -> bool {
@@ -769,17 +744,14 @@ impl SSA for SSAStorage {
     }
 
     fn is_comment(&self, exi: Self::ValueRef) -> bool {
-        match self.g.node_weight(exi) {
-            Some(&NodeData::Comment(_, _)) => true,
-            _ => false,
-        }
+        matches!(self.g.node_weight(exi), Some(&NodeData::Comment(_, _)))
     }
 
     fn is_constant(&self, exi: Self::ValueRef) -> bool {
-        match self.g.node_weight(exi) {
-            Some(&NodeData::Op(MOpcode::OpConst(_), _)) => true,
-            _ => false,
-        }
+        matches!(
+            self.g.node_weight(exi),
+            Some(&NodeData::Op(MOpcode::OpConst(_), _))
+        )
     }
 
     fn constant_value(&self, exi: Self::ValueRef) -> Option<u64> {
@@ -928,19 +900,19 @@ impl SSA for SSAStorage {
     fn node_data(&self, i: Self::ValueRef) -> Result<TNodeData, Box<dyn Debug>> {
         match self.g.node_weight(i) {
             Some(&NodeData::Op(ref opc, vt)) => Ok(TNodeData {
-                vt: vt,
+                vt,
                 nt: TNodeType::Op(opc.clone()),
             }),
             Some(&NodeData::Phi(vt, _)) => Ok(TNodeData {
-                vt: vt,
+                vt,
                 nt: TNodeType::Phi,
             }),
             Some(&NodeData::Comment(vt, ref s)) => Ok(TNodeData {
-                vt: vt,
+                vt,
                 nt: TNodeType::Comment(s.clone()),
             }),
             Some(&NodeData::Undefined(vt)) => Ok(TNodeData {
-                vt: vt,
+                vt,
                 nt: TNodeType::Undefined,
             }),
             Some(&NodeData::Removed)
@@ -986,13 +958,10 @@ impl SSA for SSAStorage {
             .neighbors_directed(i, EdgeDirection::Outgoing)
             .detach();
         while let Some((edge, othernode)) = walk.next(&self.g) {
-            match self.g.edge_weight(edge) {
-                Some(&EdgeData::RegisterInfo) => {
-                    if let Some(regname) = self.comment(othernode) {
-                        regs.push(regname);
-                    }
+            if let Some(&EdgeData::RegisterInfo) = self.g.edge_weight(edge) {
+                if let Some(regname) = self.comment(othernode) {
+                    regs.push(regname);
                 }
-                _ => {}
             }
         }
         regs
@@ -1155,10 +1124,7 @@ impl SSAMod for SSAStorage {
 impl SSAExtra for SSAStorage {
     fn mark(&mut self, i: &Self::ValueRef) {
         radeco_trace!(logger::Event::SSAMarkNode(i));
-        let data = self
-            .assoc_data
-            .entry(*i)
-            .or_insert_with(AdditionalData::new);
+        let data = self.assoc_data.entry(*i).or_default();
         data.mark = true;
     }
 
@@ -1170,26 +1136,17 @@ impl SSAExtra for SSAStorage {
     }
 
     fn set_color(&mut self, i: &Self::ValueRef, color: u8) {
-        let data = self
-            .assoc_data
-            .entry(*i)
-            .or_insert_with(AdditionalData::new);
+        let data = self.assoc_data.entry(*i).or_default();
         data.color = Some(color);
     }
 
     fn set_comment(&mut self, i: &Self::ValueRef, comment: String) {
-        let data = self
-            .assoc_data
-            .entry(*i)
-            .or_insert_with(AdditionalData::new);
+        let data = self.assoc_data.entry(*i).or_default();
         data.comments = Some(comment);
     }
 
     fn add_flag(&mut self, i: &Self::ValueRef, f: String) {
-        let data = self
-            .assoc_data
-            .entry(*i)
-            .or_insert_with(AdditionalData::new);
+        let data = self.assoc_data.entry(*i).or_default();
         data.flag = Some(f);
     }
 
@@ -1241,11 +1198,7 @@ impl InorderKey {
 
 impl PartialOrd for InorderKey {
     fn partial_cmp(&self, other: &InorderKey) -> Option<Ordering> {
-        let c = other.address.address.cmp(&self.address.address);
-        match c {
-            Ordering::Equal => Some(other.address.offset.cmp(&self.address.offset)),
-            _ => Some(c),
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -1263,13 +1216,13 @@ impl Ord for InorderKey {
 
 impl PartialEq for InorderKey {
     fn eq(&self, other: &InorderKey) -> bool {
-        match self.address.address.cmp(&other.address.address) {
-            Ordering::Equal => match self.address.offset.cmp(&other.address.offset) {
-                Ordering::Equal => true,
-                _ => false,
-            },
-            _ => false,
-        }
+        matches!(
+            self.address.address.cmp(&other.address.address),
+            Ordering::Equal
+        ) && matches!(
+            self.address.offset.cmp(&other.address.offset),
+            Ordering::Equal
+        )
     }
 }
 

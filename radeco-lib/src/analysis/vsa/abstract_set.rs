@@ -25,6 +25,10 @@ use std::hash::Hash;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
+pub mod bdd;
+pub mod polynomial;
+pub mod strided_interval;
+
 // XXX: Try to support 128-bit registers in the future
 // type Inum = i128; <-- this one do influence performance
 // const full_bits: u8 = 128;

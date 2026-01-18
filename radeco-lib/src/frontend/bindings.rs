@@ -33,7 +33,7 @@ pub trait RBind {
 
     fn is_fn_local(&self) -> bool;
     fn mark_fn_local(&mut self, _: usize, _: i64);
-    fn local_info(&self) -> LocalInfo;
+    fn local_info(&self) -> Option<LocalInfo>;
 
     fn is_stack(&self) -> bool;
     fn mark_stack(&mut self);
@@ -263,7 +263,7 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
     }
 
     fn name(&self) -> String {
-        self.named.clone().unwrap_or_else(String::new)
+        self.named.clone().unwrap_or_default()
     }
 
     fn set_name(&mut self, name: String) {
@@ -271,14 +271,11 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
     }
 
     fn is_register(&self) -> bool {
-        match self.vloc {
-            VarLocation::Register { .. } => true,
-            _ => false,
-        }
+        matches!(self.vloc, VarLocation::Register { .. })
     }
 
     fn mark_register(&mut self, name: String) {
-        self.vloc = VarLocation::Register { name: name };
+        self.vloc = VarLocation::Register { name };
     }
 
     fn mark_memory(&mut self) {
@@ -286,36 +283,26 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
     }
 
     fn is_fn_local(&self) -> bool {
-        match self.vloc {
-            VarLocation::Memory(MemoryRegion::FunctionLocal { .. }) => true,
-            _ => false,
-        }
+        matches!(
+            self.vloc,
+            VarLocation::Memory(MemoryRegion::FunctionLocal { .. })
+        )
     }
 
     fn mark_fn_local(&mut self, base: usize, offset: i64) {
-        self.vloc = VarLocation::Memory(MemoryRegion::FunctionLocal {
-            base: base,
-            offset: offset,
-        });
+        self.vloc = VarLocation::Memory(MemoryRegion::FunctionLocal { base, offset });
     }
 
-    fn local_info(&self) -> LocalInfo {
+    fn local_info(&self) -> Option<LocalInfo> {
         if let VarLocation::Memory(MemoryRegion::FunctionLocal { base, offset }) = self.vloc {
-            LocalInfo {
-                base: base,
-                offset: offset,
-            }
+            Some(LocalInfo { base, offset })
         } else {
-            panic!()
+            None
         }
     }
 
     fn is_stack(&self) -> bool {
-        if let VarLocation::Memory(MemoryRegion::Stack) = self.vloc {
-            true
-        } else {
-            false
-        }
+        matches!(self.vloc, VarLocation::Memory(MemoryRegion::Stack))
     }
 
     fn mark_stack(&mut self) {
@@ -323,14 +310,11 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
     }
 
     fn is_global(&self) -> bool {
-        match self.vloc {
-            VarLocation::Memory(MemoryRegion::Global { .. }) => true,
-            _ => false,
-        }
+        matches!(self.vloc, VarLocation::Memory(MemoryRegion::Global { .. }))
     }
 
     fn mark_global(&mut self, offset: u64) {
-        self.vloc = VarLocation::Memory(MemoryRegion::Global { offset: offset });
+        self.vloc = VarLocation::Memory(MemoryRegion::Global { offset });
     }
 
     fn global_offset(&self) -> u64 {
@@ -342,10 +326,7 @@ impl<T: Clone + fmt::Debug> RBind for Binding<T> {
     }
 
     fn is_unknown(&self) -> bool {
-        match self.vloc {
-            VarLocation::Unknown => true,
-            _ => false,
-        }
+        matches!(self.vloc, VarLocation::Unknown)
     }
 
     fn add_refs(&mut self, refs: Vec<T>) {

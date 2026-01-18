@@ -151,7 +151,7 @@ fn decompile_priv(
         Ok(code) => code,
         Err(_) => {
             println!("Control flow structuring failed");
-            Ok(c_cfg.to_c_ast().print())
+            Ok(c_cfg.as_c_ast().print())
         }
     }
 }

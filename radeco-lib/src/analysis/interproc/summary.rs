@@ -92,9 +92,9 @@ impl InterProcAnalysis for CallSummary {
                 }
             }
 
-            rfn.set_returns(&returns.into_iter().map(From::from).collect::<Vec<_>>());
-            rfn.set_modifides(&modifides.into_iter().map(From::from).collect::<Vec<_>>());
-            rfn.set_args(&args.into_iter().map(From::from).collect::<Vec<_>>());
+            rfn.set_returns(&returns.into_iter().collect::<Vec<_>>());
+            rfn.set_modifides(&modifides.into_iter().collect::<Vec<_>>());
+            rfn.set_args(&args.into_iter().collect::<Vec<_>>());
         }
     }
 
