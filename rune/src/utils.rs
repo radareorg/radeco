@@ -4,15 +4,15 @@ use r2pipe::r2::R2;
 
 use r2api::api_trait::R2PApi;
 
-use crate::context::context::ContextAPI;
 use crate::context::rune_ctx::RuneContext;
+use crate::context::ContextAPI;
 
-use crate::memory::memory::Memory;
+use crate::memory::Memory;
 
 use crate::memory::seg_mem::SegMem;
 
 use crate::regstore::regfile::RuneRegFile;
-use crate::regstore::regstore::RegStore;
+use crate::regstore::RegStore;
 
 use petgraph::graph::NodeIndex;
 
@@ -22,6 +22,8 @@ use libsmt::logics::qf_abv::QF_ABV_Fn::BVOps;
 use libsmt::theories::bitvec::OpCodes::*;
 
 use std::collections::HashMap;
+
+pub mod state;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ValType {
@@ -48,10 +50,10 @@ pub struct SAssignment {
 /// Useful when input strings is to be interpretted either as a Memory Address or a register name.
 pub fn to_key<T: AsRef<str>>(s: T) -> Key {
     let v = s.as_ref();
-    if v.len() > 2 && &v[0..2] == "0x" {
-        Key::Mem(usize::from_str_radix(&v[2..], 16).expect("Invalid number!"))
-    } else if v.chars().nth(0).unwrap().is_digit(10) {
-        Key::Mem(usize::from_str_radix(v, 10).expect("Invalid number!"))
+    if let Some(h) = v.strip_prefix("0x") {
+        Key::Mem(usize::from_str_radix(h, 16).expect("Invalid number!"))
+    } else if matches!(v.chars().next().map(|c| c.is_ascii_digit()), Some(true)) {
+        Key::Mem(v.parse::<usize>().expect("Invalid number!"))
     } else {
         Key::Reg(v.to_owned())
     }
@@ -62,10 +64,8 @@ pub fn to_valtype<T: AsRef<str>>(s: T) -> Option<ValType> {
 
     if v == "SYM" {
         Some(ValType::Symbolic)
-    } else if let Some(val) = convert_to_u64(v) {
-        Some(ValType::Concrete(val as usize))
     } else {
-        None
+        convert_to_u64(v).map(|val| ValType::Concrete(val as usize))
     }
 }
 
@@ -74,30 +74,15 @@ pub fn to_assignment<T: AsRef<str>>(s: T) -> Option<SAssignment> {
     let ops: Vec<&str> = v.split('=').collect();
 
     let lvalue: Key = to_key(ops[0].trim());
-    if let Some(rvalue) = to_valtype(ops[1].trim()) {
-        Some(SAssignment {
-            lvalue: lvalue,
-            rvalue: rvalue,
-        })
-    } else {
-        None
-    }
+    to_valtype(ops[1].trim()).map(|rvalue| SAssignment { lvalue, rvalue })
 }
 
 pub fn convert_to_u64<T: AsRef<str>>(s: T) -> Option<u64> {
     let v = s.as_ref();
-    if v.len() > 2 && &v[0..2] == "0x" {
-        if let Ok(val) = usize::from_str_radix(&v[2..], 16) {
-            Some(val as u64)
-        } else {
-            None
-        }
-    } else if v.chars().nth(0).unwrap().is_digit(10) {
-        if let Ok(val) = usize::from_str_radix(v, 10) {
-            Some(val as u64)
-        } else {
-            None
-        }
+    if let Some(h) = v.strip_prefix("0x") {
+        usize::from_str_radix(h, 16).map(|val| val as u64).ok()
+    } else if matches!(v.chars().next().map(|c| c.is_ascii_digit()), Some(true)) {
+        v.parse::<usize>().map(|val| val as u64).ok()
     } else {
         None
     }
@@ -151,9 +136,9 @@ pub fn new_rune_ctx(
 // Ideally, this should be implemented for all logics.
 // But since we are using only bitvecs, we can use this function for now I guess.
 pub fn simplify_constant(ni: NodeIndex, solver: &mut SMTLib2<qf_abv::QF_ABV>) -> u64 {
-    let c = match solver.get_node_info(ni) {
-        &BVOps(Const(x, _)) => x,
-        &BVOps(BvSub) => {
+    match *solver.get_node_info(ni) {
+        BVOps(Const(x, _)) => x,
+        BVOps(BvSub) => {
             let oper = solver.get_operands(ni);
             let mut iter = oper.iter();
 
@@ -162,7 +147,7 @@ pub fn simplify_constant(ni: NodeIndex, solver: &mut SMTLib2<qf_abv::QF_ABV>) ->
 
             simplify_constant(*second, solver) - simplify_constant(*first, solver)
         }
-        &BVOps(BvAdd) => {
+        BVOps(BvAdd) => {
             let oper = solver.get_operands(ni);
             let mut iter = oper.iter();
 
@@ -172,7 +157,5 @@ pub fn simplify_constant(ni: NodeIndex, solver: &mut SMTLib2<qf_abv::QF_ABV>) ->
             simplify_constant(*second, solver) + simplify_constant(*first, solver)
         }
         _ => panic!("Unimplemented!"),
-    };
-
-    c
+    }
 }

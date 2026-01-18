@@ -12,8 +12,8 @@ use libsmt::theories::core::OpCodes::*;
 
 use r2api::structs::Endian;
 
-use crate::memory::memory::Memory;
-use crate::utils::utils::simplify_constant;
+use super::Memory;
+use crate::utils::simplify_constant;
 
 #[derive(Copy, Clone, Debug)]
 pub struct MemRange {
@@ -23,10 +23,7 @@ pub struct MemRange {
 
 impl MemRange {
     fn new(start: u64, end: u64) -> MemRange {
-        MemRange {
-            start: start,
-            end: end,
-        }
+        MemRange { start, end }
     }
 
     fn get_width(&self) -> usize {
@@ -34,21 +31,13 @@ impl MemRange {
     }
 
     fn contains(&self, num: u64) -> bool {
-        if num >= self.start && num < self.end {
-            true
-        } else {
-            false
-        }
+        num >= self.start && num < self.end
     }
 }
 
 impl PartialEq for MemRange {
     fn eq(&self, other: &MemRange) -> bool {
-        if self.start == other.start && self.end == other.end {
-            true
-        } else {
-            false
-        }
+        self.start == other.start && self.end == other.end
     }
 }
 
@@ -82,8 +71,13 @@ impl MemBlock {
     pub fn new(m_range: MemRange, solver_idx: Option<NodeIndex>) -> MemBlock {
         MemBlock {
             range: m_range,
-            solver_idx: solver_idx,
+            solver_idx,
         }
+    }
+
+    /// Gets the memory range.
+    pub const fn range(&self) -> MemRange {
+        self.range
     }
 }
 
@@ -94,18 +88,42 @@ pub struct SegMem {
     segments: BTreeMap<MemRange, MemBlock>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SegmentInfo {
+    pub cov: u64,
+    pub start: u64,
+    pub end: u64,
+    pub low: u64,
+    pub high: u64,
+    pub width: u64,
+    pub e_mem: Option<NodeIndex>,
+}
+
 impl SegMem {
+    /// Gets the address width.
+    pub const fn addr_width(&self) -> usize {
+        self.addr_width
+    }
+
+    /// Gets the endianness.
+    pub const fn endian(&self) -> Endian {
+        self.endian
+    }
+
     fn read_segment(
         &mut self,
-        cov: u64,
-        start: u64,
-        end: u64,
-        low: u64,
-        high: u64,
-        width: u64,
-        e_mem: Option<NodeIndex>,
+        info: SegmentInfo,
         solver: &mut SMTLib2<qf_abv::QF_ABV>,
     ) -> NodeIndex {
+        let SegmentInfo {
+            cov,
+            start,
+            end,
+            low,
+            high,
+            width,
+            e_mem,
+        } = info;
         let shift = cov;
         let ext = width - (high - low);
 
@@ -113,9 +131,8 @@ impl SegMem {
             let int1 = solver.assert(Extract(high - 1, low), &[mem]);
             let int2 = solver.assert(ZeroExtend(ext), &[int1]);
             let int3 = solver.new_const(Const(shift, width as usize));
-            let int4 = solver.assert(BvShl, &[int2, int3]);
 
-            int4
+            solver.assert(BvShl, &[int2, int3])
         } else {
             let size = high - low;
             let key = format!("mem_{}_{}", start, size / 8);
@@ -141,7 +158,7 @@ impl Memory for SegMem {
     fn new(address_width: usize, endian: Endian) -> SegMem {
         SegMem {
             addr_width: address_width,
-            endian: endian,
+            endian,
             segments: BTreeMap::new(),
         }
     }
@@ -164,7 +181,7 @@ impl Memory for SegMem {
         let mem = self.segments.clone();
         let ranges: Vec<MemRange> = mem.keys().cloned().collect();
 
-        let pos = match ranges.binary_search(&&read_range) {
+        let pos = match ranges.binary_search(&read_range) {
             Ok(0) | Err(0) => 0,
             Ok(pos) | Err(pos) => pos - 1,
         };
@@ -188,7 +205,7 @@ impl Memory for SegMem {
             if let Some(&current) = iterator.peek() {
                 if current.start == start && current.end == end {
                     // current is the mem requested
-                    let node = mem.get(&current).unwrap();
+                    let node = mem.get(current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
 
                     result = node_idx;
@@ -196,7 +213,7 @@ impl Memory for SegMem {
                     ptr = end;
                 } else if current.start == ptr && current.end <= end {
                     // Use current
-                    let node = mem.get(&current).unwrap();
+                    let node = mem.get(current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
 
                     result = solver.assert(BvOr, &[result, node_idx]);
@@ -205,34 +222,46 @@ impl Memory for SegMem {
                     iterator.next();
                 } else if current.contains(ptr) && current.contains(end) {
                     // extract entire
-                    let node = mem.get(&current).unwrap();
+                    let node = mem.get(current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
 
                     low = (ptr - current.start) * 8;
                     high = (end - current.start) * 8;
 
-                    let int =
-                        self.read_segment(cov, ptr, end, low, high, width, Some(node_idx), solver);
+                    let int = self.read_segment(
+                        SegmentInfo {
+                            cov,
+                            start: ptr,
+                            end,
+                            low,
+                            high,
+                            width,
+                            e_mem: Some(node_idx),
+                        },
+                        solver,
+                    );
                     result = solver.assert(BvOr, &[result, int]);
 
                     ptr = end;
                     iterator.next();
                 } else if current.contains(ptr) && !current.contains(end) {
                     // extract till end of current
-                    let node = mem.get(&current).unwrap();
+                    let node = mem.get(current).unwrap();
                     let node_idx = node.solver_idx.unwrap();
 
                     low = (ptr - current.start) * 8;
                     high = (current.end - current.start) * 8;
 
                     let int = self.read_segment(
-                        cov,
-                        ptr,
-                        current.end,
-                        low,
-                        high,
-                        width,
-                        Some(node_idx),
+                        SegmentInfo {
+                            cov,
+                            start: ptr,
+                            end: current.end,
+                            low,
+                            high,
+                            width,
+                            e_mem: Some(node_idx),
+                        },
                         solver,
                     );
                     result = solver.assert(BvOr, &[result, int]);
@@ -244,8 +273,18 @@ impl Memory for SegMem {
                     low = 0;
                     high = (current.start - ptr) * 8;
 
-                    let int =
-                        self.read_segment(cov, ptr, current.start, low, high, width, None, solver);
+                    let int = self.read_segment(
+                        SegmentInfo {
+                            cov,
+                            start: ptr,
+                            end: current.start,
+                            low,
+                            high,
+                            width,
+                            e_mem: None,
+                        },
+                        solver,
+                    );
                     result = solver.assert(BvOr, &[result, int]);
 
                     ptr = current.start;
@@ -254,7 +293,18 @@ impl Memory for SegMem {
                     low = 0;
                     high = (end - ptr) * 8;
 
-                    let int = self.read_segment(cov, ptr, end, low, high, width, None, solver);
+                    let int = self.read_segment(
+                        SegmentInfo {
+                            cov,
+                            start: ptr,
+                            end,
+                            low,
+                            high,
+                            width,
+                            e_mem: None,
+                        },
+                        solver,
+                    );
                     result = solver.assert(BvOr, &[result, int]);
 
                     ptr = end;
@@ -264,7 +314,18 @@ impl Memory for SegMem {
                 low = 0;
                 high = (end - ptr) * 8;
 
-                let int = self.read_segment(cov, ptr, end, low, high, width, None, solver);
+                let int = self.read_segment(
+                    SegmentInfo {
+                        cov,
+                        start: ptr,
+                        end,
+                        low,
+                        high,
+                        width,
+                        e_mem: None,
+                    },
+                    solver,
+                );
                 result = solver.assert(BvOr, &[result, int]);
 
                 ptr = end;

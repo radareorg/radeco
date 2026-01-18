@@ -17,12 +17,12 @@ use std::process::exit;
 
 use serde::{Deserialize, Serialize};
 
-use rune::engine::engine::Engine;
 use rune::engine::rune::Rune;
-use rune::explorer::explorer::PathExplorer;
+use rune::engine::Engine;
 use rune::explorer::interactive::Command;
+use rune::explorer::PathExplorer;
 use rune::utils::state::RInitialState;
-use rune::utils::utils::{Key, SAssignment, ValType};
+use rune::utils::{Key, SAssignment, ValType};
 
 use crate::console::Console;
 use crate::interact::InteractiveExplorer;
@@ -30,7 +30,7 @@ use crate::interact::InteractiveExplorer;
 use r2api::api_trait::R2PApi;
 use r2pipe::r2::R2;
 
-static USAGE: &'static str = "
+static USAGE: &str = "
 runec. Interactive console for rune.
 
 Usage:
@@ -43,6 +43,7 @@ Options:
 ";
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(unused)]
 struct Args {
     flag_help: bool,
     flag_project: bool,

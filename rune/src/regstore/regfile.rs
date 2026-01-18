@@ -1,7 +1,7 @@
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
-use crate::regstore::regstore::{RegEntry, RegStore, RegStoreAPI};
+use super::{RegEntry, RegStore, RegStoreAPI};
 
 use libsmt::backends::backend::SMTBackend;
 use libsmt::backends::smtlib2::SMTLib2;
@@ -14,6 +14,13 @@ pub struct RuneRegFile {
     current_regs: Vec<Option<NodeIndex>>,
     regfile: HashMap<String, RegEntry>,
     alias_info: HashMap<String, String>,
+}
+
+impl RuneRegFile {
+    /// Gets a reference to the register file alias info.
+    pub const fn alias_info(&self) -> &HashMap<String, String> {
+        &self.alias_info
+    }
 }
 
 impl RegStore for RuneRegFile {
@@ -61,8 +68,8 @@ impl RegStore for RuneRegFile {
 
         RuneRegFile {
             current_regs: cur_regs,
-            regfile: regfile,
-            alias_info: alias_info,
+            regfile,
+            alias_info,
         }
     }
 

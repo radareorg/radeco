@@ -4,10 +4,10 @@ use std::collections::VecDeque;
 
 use libsmt::theories::core;
 
-use crate::context::context::{Context, Evaluate, RegisterRead};
+use super::PathExplorer;
 use crate::context::rune_ctx::RuneContext;
+use crate::context::{Context, Evaluate, RegisterRead};
 use crate::engine::rune::RuneControl;
-use crate::explorer::explorer::PathExplorer;
 use crate::memory::qword_mem::QWordMemory;
 use crate::regstore::regfile::RuneRegFile;
 
@@ -26,10 +26,7 @@ struct SavedState<C: Context> {
 
 impl<C: Context> SavedState<C> {
     fn new(ctx: C, b: BranchType) -> SavedState<C> {
-        SavedState {
-            ctx: ctx,
-            branch: b,
-        }
+        SavedState { ctx, branch: b }
     }
 }
 
@@ -85,13 +82,13 @@ impl PathExplorer for DFSExplorer<RuneContext<QWordMemory, RuneRegFile>> {
         let mut false_ctx = ctx.clone();
         {
             let zero = ctx.define_const(0, 1);
-            false_ctx.eval(core::OpCodes::Cmp, &[condition, zero]);
+            false_ctx.eval(core::OpCodes::Cmp, [condition, zero]);
         }
         self.queue
             .push_back(SavedState::new(false_ctx, BranchType::False));
         {
             let one = ctx.define_const(1, 1);
-            ctx.eval(core::OpCodes::Cmp, &[condition, one]);
+            ctx.eval(core::OpCodes::Cmp, [condition, one]);
         }
         RuneControl::ExploreTrue
     }

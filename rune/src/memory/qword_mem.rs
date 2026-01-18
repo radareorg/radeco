@@ -6,7 +6,7 @@ use libsmt::logics::qf_abv;
 use libsmt::theories::{array_ex, bitvec, core};
 use r2api::structs::Endian;
 
-use crate::memory::memory::Memory;
+use super::Memory;
 
 // Not using address_width/endianness
 #[derive(Clone, Debug)]
@@ -16,14 +16,26 @@ pub struct QWordMemory {
     endian: Endian,
 }
 
+impl QWordMemory {
+    /// Gets the address width.
+    pub const fn address_width(&self) -> usize {
+        self.address_width
+    }
+
+    /// Gets the endianness.
+    pub const fn endian(&self) -> Endian {
+        self.endian
+    }
+}
+
 impl Memory for QWordMemory {
     type VarRef = NodeIndex;
 
     fn new(address_width: usize, endian: Endian) -> QWordMemory {
         QWordMemory {
             map: None,
-            address_width: address_width,
-            endian: endian,
+            address_width,
+            endian,
         }
     }
 

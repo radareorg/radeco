@@ -4,6 +4,8 @@ use r2api::structs::LRegInfo;
 
 use std::fmt::Debug;
 
+pub mod regfile;
+
 #[derive(Clone, Debug, Default)]
 pub struct RegEntry {
     pub name: String,
@@ -25,12 +27,12 @@ impl RegEntry {
         alias: Option<String>,
     ) -> RegEntry {
         RegEntry {
-            name: name,
-            idx: idx,
+            name,
+            idx,
             start_bit: sbit,
             end_bit: ebit,
-            is_whole: is_whole,
-            alias: alias,
+            is_whole,
+            alias,
         }
     }
 }

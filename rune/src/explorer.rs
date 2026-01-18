@@ -1,9 +1,13 @@
 //! Defines traits that guides the symbolic emulator
 
-use crate::context::context::Context;
 use std::fmt::Debug;
 
-use crate::context::context::RegisterRead;
+use crate::context::{Context, RegisterRead};
+
+pub mod bfs;
+pub mod dfs;
+pub mod directed;
+pub mod interactive;
 
 pub trait PathExplorer {
     type C: Clone + Debug;

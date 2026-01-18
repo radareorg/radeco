@@ -1,5 +1,9 @@
 //! Defines traits and structs that perform the actual symbolic emulation.
 
+pub mod breakpt;
+pub mod hook;
+pub mod rune;
+
 #[derive(Clone, Copy, Debug)]
 pub enum EngineError {
     Undefined,

@@ -2,10 +2,12 @@
 
 use r2api::structs::LOpInfo;
 
-use crate::context::context::{Context, RegisterRead};
-use crate::engine::engine::{Engine, EngineError, EngineResult};
-use crate::explorer::explorer::PathExplorer;
+use crate::context::{Context, RegisterRead};
+use crate::explorer::PathExplorer;
 use crate::stream::InstructionStream;
+
+use super::{Engine, EngineError, EngineResult};
+
 use esil::lexer::{Token, Tokenizer};
 use esil::parser::{Parse, Parser};
 
@@ -48,10 +50,10 @@ where
 {
     pub fn new(ctx: Ctx, exp: Exp, stream: S) -> Rune<Ctx, Exp, S> {
         Rune {
-            ctx: ctx,
+            ctx,
             explorer: exp,
             intermediates: Vec::new(),
-            stream: stream,
+            stream,
             skip: false,
         }
     }
