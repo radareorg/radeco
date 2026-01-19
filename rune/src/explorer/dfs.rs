@@ -4,10 +4,10 @@ use std::collections::VecDeque;
 
 use libsmt::theories::core;
 
-use crate::explorer::explorer::PathExplorer;
-use crate::engine::rune::RuneControl;
 use crate::context::context::{Context, Evaluate, RegisterRead};
 use crate::context::rune_ctx::RuneContext;
+use crate::engine::rune::RuneControl;
+use crate::explorer::explorer::PathExplorer;
 use crate::memory::qword_mem::QWordMemory;
 use crate::regstore::regfile::RuneRegFile;
 
@@ -47,7 +47,9 @@ impl PathExplorer for DFSExplorer<RuneContext<QWordMemory, RuneRegFile>> {
     type Ctx = RuneContext<QWordMemory, RuneRegFile>;
 
     fn new() -> DFSExplorer<Self::Ctx> {
-        DFSExplorer { queue: VecDeque::new() }
+        DFSExplorer {
+            queue: VecDeque::new(),
+        }
     }
 
     // TODO: Terminate the current execution path if the depth is greater than a
@@ -70,10 +72,11 @@ impl PathExplorer for DFSExplorer<RuneContext<QWordMemory, RuneRegFile>> {
         }
     }
 
-    fn register_branch(&mut self,
-                       ctx: &mut Self::Ctx,
-                       condition: <Self::Ctx as RegisterRead>::VarRef)
-                       -> RuneControl {
+    fn register_branch(
+        &mut self,
+        ctx: &mut Self::Ctx,
+        condition: <Self::Ctx as RegisterRead>::VarRef,
+    ) -> RuneControl {
         // When a new branch is encountered, push the false branch into the queue and
         // explore the
         // true branch. Note that this choice is arbitrary and we could have as well
@@ -84,7 +87,8 @@ impl PathExplorer for DFSExplorer<RuneContext<QWordMemory, RuneRegFile>> {
             let zero = ctx.define_const(0, 1);
             false_ctx.eval(core::OpCodes::Cmp, &[condition, zero]);
         }
-        self.queue.push_back(SavedState::new(false_ctx, BranchType::False));
+        self.queue
+            .push_back(SavedState::new(false_ctx, BranchType::False));
         {
             let one = ctx.define_const(1, 1);
             ctx.eval(core::OpCodes::Cmp, &[condition, one]);

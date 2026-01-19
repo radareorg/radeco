@@ -1,12 +1,13 @@
-use crate::utils::*;
 use crate::cc::calling_convention::*;
+use crate::utils::*;
 
 /****************************
  * cdecl calling convention *
  * *************************/
 
-declare_cc!(pub struct Cdecl {
-});
+declare_cc!(
+    pub struct Cdecl {}
+);
 
 register_cc!(Cdecl);
 
@@ -18,7 +19,9 @@ impl Cdecl {
             cdecl.set_return_val(VType::Register(absreg, 32));
             Ok(cdecl)
         } else {
-            Err(String::from("AbstractRegister for return value was not allocated"))
+            Err(String::from(
+                "AbstractRegister for return value was not allocated",
+            ))
         }
     }
 }

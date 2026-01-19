@@ -218,10 +218,10 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
             &Constraint::Assertion(ref c) => match **c {
                 Constraint::Or(ref c1, ref c2) => {
                     // c1, c2 will be of the form And(Eq(ci1), Eq(ci2))
-                    [c1, c2].iter().any(|&ci| {
-                        match **ci {
-                            Constraint::And(ref bc1, ref bc2) => match (&**bc1, &**bc2) {
-                                (Constraint::Equality(op1, bvt1), Constraint::Equality(op2, bvt2)) => match (&**bvt1, &**bvt2) {
+                    [c1, c2].iter().any(|&ci| match **ci {
+                        Constraint::And(ref bc1, ref bc2) => match (&**bc1, &**bc2) {
+                            (Constraint::Equality(op1, bvt1), Constraint::Equality(op2, bvt2)) => {
+                                match (&**bvt1, &**bvt2) {
                                     (Constraint::Value(vt1), Constraint::Value(vt2)) => {
                                         if &self.bvalue(*op1) == vt1 {
                                             self.bindings.insert(*op2, *vt2);
@@ -235,15 +235,14 @@ impl<T: Clone + Debug + Hash + Eq + Copy> ConstraintSet<T> {
                                     }
                                     _ => false,
                                 }
-                                _ => false,
-
                             }
                             _ => false,
-                        }
+                        },
+                        _ => false,
                     })
                 }
                 _ => false,
-            }
+            },
             _ => false,
         }
     }

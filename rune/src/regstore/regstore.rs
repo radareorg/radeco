@@ -1,10 +1,8 @@
-
-use libsmt::backends::smtlib2::{SMTLib2};
+use libsmt::backends::smtlib2::SMTLib2;
 use libsmt::logics::qf_abv;
 use r2api::structs::LRegInfo;
 
 use std::fmt::Debug;
-
 
 #[derive(Clone, Debug, Default)]
 pub struct RegEntry {
@@ -18,13 +16,14 @@ pub struct RegEntry {
 }
 
 impl RegEntry {
-    pub fn new(name: String,
-           idx: usize,
-           sbit: usize,
-           ebit: usize,
-           is_whole: bool,
-           alias: Option<String>)
-           -> RegEntry {
+    pub fn new(
+        name: String,
+        idx: usize,
+        sbit: usize,
+        ebit: usize,
+        is_whole: bool,
+        alias: Option<String>,
+    ) -> RegEntry {
         RegEntry {
             name: name,
             idx: idx,
@@ -55,4 +54,3 @@ pub trait RegStore: Clone + Debug {
 pub trait RegStoreAPI: RegStore {
     fn get_regs(&self) -> Vec<Option<Self::VarRef>>;
 }
-

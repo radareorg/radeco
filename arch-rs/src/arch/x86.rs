@@ -8,8 +8,9 @@ use crate::regfile::regfile::*;
  * x86 architecture *
  * ******************/
 
-declare_architecture!(pub struct X86 {
-});
+declare_architecture!(
+    pub struct X86 {}
+);
 
 register_architecture!(X86);
 
@@ -23,7 +24,7 @@ impl<CC: CallingConvention, RF: RegisterFile> Default for X86<CC, RF> {
             int_size: 32,
             long_size: 32,
             calling_convention: None,
-            regfile: None
+            regfile: None,
         }
     }
 }

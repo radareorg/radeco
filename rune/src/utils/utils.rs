@@ -4,15 +4,15 @@ use r2pipe::r2::R2;
 
 use r2api::api_trait::R2PApi;
 
+use crate::context::context::ContextAPI;
 use crate::context::rune_ctx::RuneContext;
-use crate::context::context::{ContextAPI};
 
 use crate::memory::memory::Memory;
 
 use crate::memory::seg_mem::SegMem;
 
-use crate::regstore::regstore::RegStore;
 use crate::regstore::regfile::RuneRegFile;
+use crate::regstore::regstore::RegStore;
 
 use petgraph::graph::NodeIndex;
 
@@ -20,7 +20,6 @@ use libsmt::backends::smtlib2::SMTLib2;
 use libsmt::logics::qf_abv;
 use libsmt::logics::qf_abv::QF_ABV_Fn::BVOps;
 use libsmt::theories::bitvec::OpCodes::*;
-
 
 use std::collections::HashMap;
 
@@ -77,9 +76,9 @@ pub fn to_assignment<T: AsRef<str>>(s: T) -> Option<SAssignment> {
     let lvalue: Key = to_key(ops[0].trim());
     if let Some(rvalue) = to_valtype(ops[1].trim()) {
         Some(SAssignment {
-                lvalue: lvalue,
-                rvalue: rvalue,
-            })
+            lvalue: lvalue,
+            rvalue: rvalue,
+        })
     } else {
         None
     }
@@ -109,24 +108,24 @@ pub fn new_rune_ctx(
     ip: Option<u64>,
     syms: Option<HashMap<Key, u64>>,
     consts: Option<HashMap<Key, (u64, u64)>>,
-    r2: &mut R2) -> RuneContext<SegMem, RuneRegFile> {
-
+    r2: &mut R2,
+) -> RuneContext<SegMem, RuneRegFile> {
     let mut lreginfo = r2.reg_info().unwrap();
-    let rregfile     = RuneRegFile::new(&mut lreginfo);
+    let rregfile = RuneRegFile::new(&mut lreginfo);
 
-    let bin      = r2.bin_info().unwrap().bin.unwrap();
-    let bits     = bin.bits.unwrap();
-    let endian   = bin.endian.unwrap();
+    let bin = r2.bin_info().unwrap().bin.unwrap();
+    let bits = bin.bits.unwrap();
+    let endian = bin.endian.unwrap();
     let rmem = SegMem::new(bits, endian);
 
     let smt = SMTLib2::new(Some(qf_abv::QF_ABV));
-    
+
     let mut ctx = RuneContext::new(ip, rmem, rregfile, smt);
 
     if let Some(sym_vars) = syms {
         for (sym, size) in sym_vars.iter() {
             match *sym {
-                Key::Mem(addr)    => ctx.set_mem_as_sym(addr as u64, *size as usize),
+                Key::Mem(addr) => ctx.set_mem_as_sym(addr as u64, *size as usize),
                 Key::Reg(ref reg) => ctx.set_reg_as_sym(reg),
             };
         }
@@ -135,7 +134,7 @@ pub fn new_rune_ctx(
     if let Some(const_vars) = consts {
         for (key, val) in const_vars.iter() {
             match *key {
-                Key::Mem(addr)    => ctx.set_mem_as_const(addr as u64, val.0, val.1 as usize),
+                Key::Mem(addr) => ctx.set_mem_as_const(addr as u64, val.0, val.1 as usize),
                 Key::Reg(ref reg) => ctx.set_reg_as_const(reg, val.0),
             };
         }
@@ -149,29 +148,29 @@ pub fn new_rune_ctx(
     ctx
 }
 
-// Ideally, this should be implemented for all logics. 
+// Ideally, this should be implemented for all logics.
 // But since we are using only bitvecs, we can use this function for now I guess.
 pub fn simplify_constant(ni: NodeIndex, solver: &mut SMTLib2<qf_abv::QF_ABV>) -> u64 {
     let c = match solver.get_node_info(ni) {
         &BVOps(Const(x, _)) => x,
         &BVOps(BvSub) => {
-            let oper     = solver.get_operands(ni);
+            let oper = solver.get_operands(ni);
             let mut iter = oper.iter();
 
-            let first    = iter.next().unwrap();
-            let second   = iter.next().unwrap();
+            let first = iter.next().unwrap();
+            let second = iter.next().unwrap();
 
             simplify_constant(*second, solver) - simplify_constant(*first, solver)
-        },
+        }
         &BVOps(BvAdd) => {
-            let oper     = solver.get_operands(ni);
+            let oper = solver.get_operands(ni);
             let mut iter = oper.iter();
 
-            let first    = iter.next().unwrap();
-            let second   = iter.next().unwrap();
+            let first = iter.next().unwrap();
+            let second = iter.next().unwrap();
 
             simplify_constant(*second, solver) + simplify_constant(*first, solver)
-        },
+        }
         _ => panic!("Unimplemented!"),
     };
 

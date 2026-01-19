@@ -7,12 +7,14 @@ use std::collections::HashMap;
 
 use libsmt::backends::smtlib2::SMTProc;
 
-pub trait Context: Clone + Debug
-                   + RegisterRead
-                   + RegisterWrite<VarRef=<Self as RegisterRead>::VarRef>
-                   + Evaluate<VarRef=<Self as RegisterRead>::VarRef>
-                   + MemoryRead<VarRef=<Self as RegisterRead>::VarRef>
-                   + MemoryWrite<VarRef=<Self as RegisterRead>::VarRef>
+pub trait Context:
+    Clone
+    + Debug
+    + RegisterRead
+    + RegisterWrite<VarRef = <Self as RegisterRead>::VarRef>
+    + Evaluate<VarRef = <Self as RegisterRead>::VarRef>
+    + MemoryRead<VarRef = <Self as RegisterRead>::VarRef>
+    + MemoryWrite<VarRef = <Self as RegisterRead>::VarRef>
 {
     fn ip(&self) -> u64;
     fn is_symbolic(&self) -> bool {
@@ -30,7 +32,7 @@ pub trait Context: Clone + Debug
 
     fn solve<S: SMTProc>(&mut self, _: &mut S) -> HashMap<<Self as RegisterRead>::VarRef, u64>;
 
-    fn var_named<T: AsRef<str>>(& self, _: T) -> Option<<Self as RegisterRead>::VarRef>;
+    fn var_named<T: AsRef<str>>(&self, _: T) -> Option<<Self as RegisterRead>::VarRef>;
     fn set_e_old(&mut self, _: <Self as RegisterRead>::VarRef);
     fn set_e_cur(&mut self, _: <Self as RegisterRead>::VarRef);
 }
@@ -60,8 +62,9 @@ pub trait Evaluate {
     type IFn: Clone + Debug;
 
     fn eval<T, Q>(&mut self, _: T, _: Q) -> Self::VarRef
-        where T: Into<Self::IFn>,
-              Q: AsRef<[Self::VarRef]>;
+    where
+        T: Into<Self::IFn>,
+        Q: AsRef<[Self::VarRef]>;
 }
 
 /// Optional trait intended to boost usability of `Context`

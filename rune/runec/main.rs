@@ -3,32 +3,32 @@
 //! Interactive shell that uses rune for user guided symbolic execution and
 //! binary reasoning.
 
-extern crate rune;
-extern crate libsmt;
 extern crate docopt;
-extern crate r2pipe;
+extern crate libsmt;
 extern crate r2api;
+extern crate r2pipe;
+extern crate rune;
 
-mod interact;
 mod console;
+mod interact;
 
-use std::process::exit;
 use docopt::Docopt;
+use std::process::exit;
 
 use serde::{Deserialize, Serialize};
 
-use rune::utils::utils::{Key, ValType, SAssignment};
-use rune::utils::state::RInitialState;
+use rune::engine::engine::Engine;
+use rune::engine::rune::Rune;
 use rune::explorer::explorer::PathExplorer;
 use rune::explorer::interactive::Command;
-use rune::engine::rune::Rune;
-use rune::engine::engine::Engine;
+use rune::utils::state::RInitialState;
+use rune::utils::utils::{Key, SAssignment, ValType};
 
-use crate::interact::InteractiveExplorer;
 use crate::console::Console;
+use crate::interact::InteractiveExplorer;
 
-use r2pipe::r2::R2;
 use r2api::api_trait::R2PApi;
+use r2pipe::r2::R2;
 
 static USAGE: &'static str = "
 runec. Interactive console for rune.
@@ -52,8 +52,8 @@ struct Args {
 
 fn main() {
     let args = Docopt::new(USAGE)
-                      .and_then(|dopt| dopt.parse())
-                      .unwrap_or_else(|e| e.exit());
+        .and_then(|dopt| dopt.parse())
+        .unwrap_or_else(|e| e.exit());
 
     if args.get_bool("-h") {
         println!("{}", USAGE);
@@ -63,7 +63,9 @@ fn main() {
     let mut stream = R2::new(Some(args.get_str("<file>"))).expect("Unable to spawn r2");
     stream.init().expect("Unable to initialize the stream");
 
-    let _lreginfo = stream.reg_info().expect("Unable to retrieve register info.");
+    let _lreginfo = stream
+        .reg_info()
+        .expect("Unable to retrieve register info.");
 
     let c: Console = Default::default();
     let mut is: RInitialState = RInitialState::new();
@@ -85,30 +87,36 @@ fn main() {
                 let mut rune = Rune::new(ctx, explorer, stream);
                 rune.run().expect("Rune Error!");
                 break;
-            },
+            }
             Command::Help => {
                 c.print_help();
                 continue;
-            },
+            }
             Command::Save => {
                 is.write_to_json();
                 continue;
-            },
+            }
             Command::DebugState => {
                 // TODO: It would be better if we pretty print the debug message.
                 c.print_info(&is.get_string());
                 continue;
-            },
-            Command::SetContext(SAssignment { lvalue: Key::Mem(val),
-                                              rvalue: ValType::Break }) => {
+            }
+            Command::SetContext(SAssignment {
+                lvalue: Key::Mem(val),
+                rvalue: ValType::Break,
+            }) => {
                 is.add_breakpoint(val as u64);
-            },
-            Command::SetContext(SAssignment { lvalue: ref val,
-                                              rvalue: ValType::Symbolic }) => {
+            }
+            Command::SetContext(SAssignment {
+                lvalue: ref val,
+                rvalue: ValType::Symbolic,
+            }) => {
                 is.add_sym(val.clone());
-            },
-            Command::SetContext(SAssignment { lvalue: ref key,
-                                              rvalue: ValType::Concrete(val) }) => {
+            }
+            Command::SetContext(SAssignment {
+                lvalue: ref key,
+                rvalue: ValType::Concrete(val),
+            }) => {
                 // If the register to be set is rip, we infer that the user is setting
                 // their start address
                 if *key == Key::Reg("rip".to_owned()) {
@@ -116,14 +124,14 @@ fn main() {
                 } else {
                     is.add_const((key.clone(), val as u64));
                 }
-            },
+            }
             Command::Exit => {
                 c.print_info("Thanks for using rune!");
                 exit(0);
-            },
+            }
             Command::Invalid => {
                 c.print_error("Invalid command. Please try again.");
-            },
+            }
             _ => continue,
         }
     }

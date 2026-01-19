@@ -5,8 +5,8 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::fmt::Debug;
 use std::collections::VecDeque;
+use std::fmt::Debug;
 
 const ESIL_INTERNAL_PREFIX: char = '$';
 const DEFAULT_SIZE: u8 = 64;
@@ -83,23 +83,23 @@ pub enum Token {
 impl Token {
     pub fn is_binary(&self) -> bool {
         match *self {
-            Token::ECmp |
-            Token::ELt |
-            Token::EGt |
-            Token::EEq |
-            Token::ELsl |
-            Token::ELsr |
-            Token::ERor |
-            Token::ERol |
-            Token::EAnd |
-            Token::EOr |
-            Token::EMul |
-            Token::EXor |
-            Token::EAdd |
-            Token::ESub |
-            Token::EDiv |
-            Token::EMod |
-            Token::EPoke(_) => true,
+            Token::ECmp
+            | Token::ELt
+            | Token::EGt
+            | Token::EEq
+            | Token::ELsl
+            | Token::ELsr
+            | Token::ERor
+            | Token::ERol
+            | Token::EAnd
+            | Token::EOr
+            | Token::EMul
+            | Token::EXor
+            | Token::EAdd
+            | Token::ESub
+            | Token::EDiv
+            | Token::EMod
+            | Token::EPoke(_) => true,
             _ => false,
         }
     }
@@ -120,23 +120,19 @@ impl Token {
 
     pub fn is_implemented(&self) -> bool {
         match *self {
-            Token::ETodo |
-            Token::EInterrupt |
-            Token::EGoto |
-            Token::EBreak |
-            Token::EClear |
-            Token::ETrap => false,
+            Token::ETodo
+            | Token::EInterrupt
+            | Token::EGoto
+            | Token::EBreak
+            | Token::EClear
+            | Token::ETrap => false,
             _ => true,
         }
     }
 
     pub fn is_meta(&self) -> bool {
         match *self {
-            Token::EOld |
-            Token::EOld_ |
-            Token::ECur |
-            Token::ELastsz |
-            Token::EAddress => true,
+            Token::EOld | Token::EOld_ | Token::ECur | Token::ELastsz | Token::EAddress => true,
             _ => false,
         }
     }
@@ -173,263 +169,568 @@ impl Tokenize for Tokenizer {
     fn tokenize<T: AsRef<str>>(esil: T) -> VecDeque<Self::Token> {
         let mut tokens = VecDeque::new();
         for t in esil.as_ref().split(",").into_iter() {
-            tokens.extend(
-                match t {
-                    "$" => vec![Token::EInterrupt],
-                    "==" => vec![Token::ECmp],
+            tokens.extend(match t {
+                "$" => vec![Token::EInterrupt],
+                "==" => vec![Token::ECmp],
 
-                    "<" => vec![Token::ELt],
-                    ">" => vec![Token::EGt],
-                    "<=" => vec![Token::PCopy(2), Token::ELt, Token::PPop(2),
-                    Token::ECmp, Token::EOr],
-                    ">=" => vec![Token::PCopy(2), Token::EGt, Token::PPop(2),
-                    Token::ECmp, Token::EOr],
+                "<" => vec![Token::ELt],
+                ">" => vec![Token::EGt],
+                "<=" => vec![
+                    Token::PCopy(2),
+                    Token::ELt,
+                    Token::PPop(2),
+                    Token::ECmp,
+                    Token::EOr,
+                ],
+                ">=" => vec![
+                    Token::PCopy(2),
+                    Token::EGt,
+                    Token::PPop(2),
+                    Token::ECmp,
+                    Token::EOr,
+                ],
 
-                    "?{" => vec![Token::EIf],
+                "?{" => vec![Token::EIf],
 
-                    "<<" => vec![Token::ELsl],
-                    "<<=" => vec![Token::PCopy(1), Token::ELsl, Token::PPop(1),
-                    Token::EEq],
+                "<<" => vec![Token::ELsl],
+                "<<=" => vec![Token::PCopy(1), Token::ELsl, Token::PPop(1), Token::EEq],
 
-                    ">>" => vec![Token::ELsr],
-                    ">>=" => vec![Token::PCopy(1), Token::ELsr, Token::PPop(1),
-                    Token::EEq],
+                ">>" => vec![Token::ELsr],
+                ">>=" => vec![Token::PCopy(1), Token::ELsr, Token::PPop(1), Token::EEq],
 
-                    ">>>" => vec![Token::ERor],
-                    "<<<" => vec![Token::ERol],
+                ">>>" => vec![Token::ERor],
+                "<<<" => vec![Token::ERol],
 
-                    "&" => vec![Token::EAnd],
-                    "&=" => vec![Token::PCopy(1), Token::EAnd, Token::PPop(1),
-                    Token::EEq],
+                "&" => vec![Token::EAnd],
+                "&=" => vec![Token::PCopy(1), Token::EAnd, Token::PPop(1), Token::EEq],
 
-                    "}" => vec![Token::EEndIf],
+                "}" => vec![Token::EEndIf],
 
-                    "|" => vec![Token::EOr],
-                    "|=" => vec![Token::PCopy(1), Token::EOr, Token::PPop(1),
-                    Token::EEq],
+                "|" => vec![Token::EOr],
+                "|=" => vec![Token::PCopy(1), Token::EOr, Token::PPop(1), Token::EEq],
 
-                    "!" => vec![Token::ENeg],
-                    "!=" => vec![Token::PCopy(1), Token::ENeg, Token::PPop(1), Token::EEq],
+                "!" => vec![Token::ENeg],
+                "!=" => vec![Token::PCopy(1), Token::ENeg, Token::PPop(1), Token::EEq],
 
-                    "=" => vec![Token::EEq],
+                "=" => vec![Token::EEq],
 
-                    "*" => vec![Token::EMul],
-                    "*=" => vec![Token::PCopy(1), Token::EMul, Token::PPop(1),
-                    Token::EEq],
+                "*" => vec![Token::EMul],
+                "*=" => vec![Token::PCopy(1), Token::EMul, Token::PPop(1), Token::EEq],
 
-                    "^" => vec![Token::EXor],
-                    "^=" => vec![Token::PCopy(1), Token::EXor, Token::PPop(1),
-                    Token::EEq],
+                "^" => vec![Token::EXor],
+                "^=" => vec![Token::PCopy(1), Token::EXor, Token::PPop(1), Token::EEq],
 
-                    "+" => vec![Token::EAdd],
-                    "+=" => vec![Token::PCopy(1), Token::EAdd, Token::PPop(1),
-                    Token::EEq],
+                "+" => vec![Token::EAdd],
+                "+=" => vec![Token::PCopy(1), Token::EAdd, Token::PPop(1), Token::EEq],
 
-                    "++" => vec![Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1),
-					Token::EAdd],
-                    "++=" => vec![Token::PCopy(1), Token::PCopy(1), Token::EPop,
-					Token::EConstant(1), Token::PPop(1), Token::EAdd, Token::PPop(1), Token::EEq],
+                "++" => vec![
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::EAdd,
+                ],
+                "++=" => vec![
+                    Token::PCopy(1),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EEq,
+                ],
 
-                    "-" => vec![Token::ESub],
-                    "-=" => vec![Token::PCopy(1), Token::ESub, Token::PPop(1),
-                    Token::EEq],
+                "-" => vec![Token::ESub],
+                "-=" => vec![Token::PCopy(1), Token::ESub, Token::PPop(1), Token::EEq],
 
-                    "--" => vec![Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1),
-					Token::ESub],
-                    "--=" => vec![Token::PCopy(1), Token::PCopy(1), Token::EPop,
-					Token::EConstant(1), Token::PPop(1), Token::ESub, Token::PPop(1), Token::EEq],
+                "--" => vec![
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::ESub,
+                ],
+                "--=" => vec![
+                    Token::PCopy(1),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EEq,
+                ],
 
-                    "/" => vec![Token::EDiv],
-                    "/=" => vec![Token::PCopy(1), Token::EDiv, Token::PPop(1),
-                    Token::EEq],
+                "/" => vec![Token::EDiv],
+                "/=" => vec![Token::PCopy(1), Token::EDiv, Token::PPop(1), Token::EEq],
 
-                    "%" => vec![Token::EMod],
-                    "%=" => vec![Token::PCopy(1), Token::EMod, Token::PPop(1),
-                    Token::EEq],
+                "%" => vec![Token::EMod],
+                "%=" => vec![Token::PCopy(1), Token::EMod, Token::PPop(1), Token::EEq],
 
-                    "=[]" => vec![Token::EPoke(64)],
-                    "=[1]" => vec![Token::EPoke(8)],
-                    "=[2]" => vec![Token::EPoke(16)],
-                    "=[4]" => vec![Token::EPoke(32)],
-                    "=[8]" => vec![Token::EPoke(64)],
+                "=[]" => vec![Token::EPoke(64)],
+                "=[1]" => vec![Token::EPoke(8)],
+                "=[2]" => vec![Token::EPoke(16)],
+                "=[4]" => vec![Token::EPoke(32)],
+                "=[8]" => vec![Token::EPoke(64)],
 
-                    "|=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EOr,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "|=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::EOr,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "|=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::EOr,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "|=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::EOr,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "|=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EOr,
-                    Token::PPop(1), Token::EPoke(64)],
+                "|=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EOr,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "|=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::EOr,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "|=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::EOr,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "|=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::EOr,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "|=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EOr,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "^=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EXor,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "^=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::EXor,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "^=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::EXor,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "^=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::EXor,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "^=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EXor,
-                    Token::PPop(1), Token::EPoke(64)],
+                "^=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EXor,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "^=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::EXor,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "^=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::EXor,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "^=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::EXor,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "^=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EXor,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "&=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EAnd,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "&=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::EAnd,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "&=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::EAnd,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "&=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::EAnd,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "&=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EAnd,
-                    Token::PPop(1), Token::EPoke(64)],
+                "&=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EAnd,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "&=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::EAnd,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "&=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::EAnd,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "&=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::EAnd,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "&=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EAnd,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "+=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "+=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "+=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "+=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "+=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(64)],
+                "+=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "+=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "+=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "+=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "+=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "-=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::ESub,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "-=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::ESub,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "-=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::ESub,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "-=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::ESub,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "-=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::ESub,
-                    Token::PPop(1), Token::EPoke(64)],
+                "-=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "-=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "-=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "-=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "-=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "%=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EMod,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "%=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::EMod,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "%=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::EMod,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "%=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::EMod,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "%=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EMod,
-                    Token::PPop(1), Token::EPoke(64)],
+                "%=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EMod,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "%=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::EMod,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "%=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::EMod,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "%=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::EMod,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "%=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EMod,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "/=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EDiv,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "/=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::EDiv,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "/=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::EDiv,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "/=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::EDiv,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "/=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EDiv,
-                    Token::PPop(1), Token::EPoke(64)],
+                "/=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EDiv,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "/=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::EDiv,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "/=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::EDiv,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "/=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::EDiv,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "/=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EDiv,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "*=[]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EMul,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "*=[1]" => vec![Token::PCopy(1), Token::EPeek(8), Token::EMul,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "*=[2]" => vec![Token::PCopy(1), Token::EPeek(16), Token::EMul,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "*=[4]" => vec![Token::PCopy(1), Token::EPeek(32), Token::EMul,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "*=[8]" => vec![Token::PCopy(1), Token::EPeek(64), Token::EMul,
-                    Token::PPop(1), Token::EPoke(64)],
+                "*=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EMul,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "*=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::EMul,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "*=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::EMul,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "*=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::EMul,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "*=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::EMul,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "++=[]" => vec![Token::PCopy(1), Token::EPeek(64),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "++=[1]" => vec![Token::PCopy(1), Token::EPeek(8),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "++=[2]" => vec![Token::PCopy(1), Token::EPeek(16),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "++=[4]" => vec![Token::PCopy(1), Token::EPeek(32),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "++=[8]" => vec![Token::PCopy(1), Token::EPeek(64),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::EAdd,
-                    Token::PPop(1), Token::EPoke(64)],
+                "++=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "++=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "++=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "++=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "++=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::EAdd,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "--=[]" => vec![Token::PCopy(1), Token::EPeek(64),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::ESub,
-                    Token::PPop(1), Token::EPoke(64)],
-                    "--=[1]" => vec![Token::PCopy(1), Token::EPeek(8),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::ESub,
-                    Token::PPop(1), Token::EPoke(8)],
-                    "--=[2]" => vec![Token::PCopy(1), Token::EPeek(16),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::ESub,
-                    Token::PPop(1), Token::EPoke(16)],
-                    "--=[4]" => vec![Token::PCopy(1), Token::EPeek(32),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::ESub,
-                    Token::PPop(1), Token::EPoke(32)],
-                    "--=[8]" => vec![Token::PCopy(1), Token::EPeek(64),
-                    Token::PCopy(1), Token::EPop, Token::EConstant(1), Token::PPop(1), Token::ESub,
-                    Token::PPop(1), Token::EPoke(64)],
+                "--=[]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
+                "--=[1]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(8),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(8),
+                ],
+                "--=[2]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(16),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(16),
+                ],
+                "--=[4]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(32),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(32),
+                ],
+                "--=[8]" => vec![
+                    Token::PCopy(1),
+                    Token::EPeek(64),
+                    Token::PCopy(1),
+                    Token::EPop,
+                    Token::EConstant(1),
+                    Token::PPop(1),
+                    Token::ESub,
+                    Token::PPop(1),
+                    Token::EPoke(64),
+                ],
 
-                    "[]" => vec![Token::EPeek(64)],
-                    "[*]" => vec![Token::EPeek(64)],
-                    "=[*]" => vec![Token::EPoke(64)],
-                    "[1]" => vec![Token::EPeek(8)],
-                    "[2]" => vec![Token::EPeek(16)],
-                    "[4]" => vec![Token::EPeek(32)],
-                    "[8]" => vec![Token::EPeek(64)],
+                "[]" => vec![Token::EPeek(64)],
+                "[*]" => vec![Token::EPeek(64)],
+                "=[*]" => vec![Token::EPoke(64)],
+                "[1]" => vec![Token::EPeek(8)],
+                "[2]" => vec![Token::EPeek(16)],
+                "[4]" => vec![Token::EPeek(32)],
+                "[8]" => vec![Token::EPeek(64)],
 
-                    "STACK" => vec![Token::EDump],
-                    "POP" => vec![Token::EPop],
-                    "TODO" => vec![Token::ETodo],
-                    "GOTO" => vec![Token::EGoto],
-                    "BREAK" => vec![Token::EBreak],
-                    "CLEAR" => vec![Token::EClear],
-                    "DUP" => vec![Token::EDup],
-                    "TRAP" => vec![Token::ETrap],
-                    _   => {
-            // Handle internal vars
-                        if Some(ESIL_INTERNAL_PREFIX) == t.chars().nth(0) {
-                            let bit = if t.len() < 3 || !t.is_char_boundary(2) {
-                                DEFAULT_SIZE
-                            } else {
-                                t[2..].parse::<u8>().unwrap_or(DEFAULT_SIZE)
-                            };
-                            match t.chars().nth(1).unwrap_or('\0') {
-                                '$' => vec![Token::IAddress(bit)],
-                                'z' => vec![Token::IZero(bit)],
-                                'b' => vec![Token::IBorrow(bit)],
-                                'c' => vec![Token::ICarry(bit)],
-                                'p' => vec![Token::IParity(bit)],
-                                'r' => vec![Token::ISize(bit)],
-                                'o' => vec![Token::IOverflow(bit)],
-                                's' => vec![Token::ISign(bit)],
-                                _ => {
-                                    if let Ok(num) = t[1..].parse::<u64>() {
-                                        vec![Token::IConstant(num)]
-                                    } else {
-                                        vec![Token::EInvalid]
-                                    }
+                "STACK" => vec![Token::EDump],
+                "POP" => vec![Token::EPop],
+                "TODO" => vec![Token::ETodo],
+                "GOTO" => vec![Token::EGoto],
+                "BREAK" => vec![Token::EBreak],
+                "CLEAR" => vec![Token::EClear],
+                "DUP" => vec![Token::EDup],
+                "TRAP" => vec![Token::ETrap],
+                _ => {
+                    // Handle internal vars
+                    if Some(ESIL_INTERNAL_PREFIX) == t.chars().nth(0) {
+                        let bit = if t.len() < 3 || !t.is_char_boundary(2) {
+                            DEFAULT_SIZE
+                        } else {
+                            t[2..].parse::<u8>().unwrap_or(DEFAULT_SIZE)
+                        };
+                        match t.chars().nth(1).unwrap_or('\0') {
+                            '$' => vec![Token::IAddress(bit)],
+                            'z' => vec![Token::IZero(bit)],
+                            'b' => vec![Token::IBorrow(bit)],
+                            'c' => vec![Token::ICarry(bit)],
+                            'p' => vec![Token::IParity(bit)],
+                            'r' => vec![Token::ISize(bit)],
+                            'o' => vec![Token::IOverflow(bit)],
+                            's' => vec![Token::ISign(bit)],
+                            _ => {
+                                if let Ok(num) = t[1..].parse::<u64>() {
+                                    vec![Token::IConstant(num)]
+                                } else {
+                                    vec![Token::EInvalid]
                                 }
                             }
-                        } else if t.starts_with("0x") {
-                            match u64::from_str_radix(t.trim_start_matches("0x"), 16) {
-                                Ok(v) => vec![Token::EConstant(v)],
-                                Err(_) => vec![Token::EInvalid],
-                            }
-                        } else if let Ok(v) = t.parse::<i64>() {
-                            vec![Token::EConstant(v as u64)]
-                        } else if let Ok(v) = t.parse::<u64>() {
-                            vec![Token::EConstant(v)]
-                        } else {
-                            // Just returns it as an identifier. It is upto the
-                            // parser to decide if it is a valid token.
-                            vec![Token::EIdentifier(t.to_owned())]
                         }
+                    } else if t.starts_with("0x") {
+                        match u64::from_str_radix(t.trim_start_matches("0x"), 16) {
+                            Ok(v) => vec![Token::EConstant(v)],
+                            Err(_) => vec![Token::EInvalid],
+                        }
+                    } else if let Ok(v) = t.parse::<i64>() {
+                        vec![Token::EConstant(v as u64)]
+                    } else if let Ok(v) = t.parse::<u64>() {
+                        vec![Token::EConstant(v)]
+                    } else {
+                        // Just returns it as an identifier. It is upto the
+                        // parser to decide if it is a valid token.
+                        vec![Token::EIdentifier(t.to_owned())]
                     }
-                });
+                }
+            });
         }
         tokens
     }
@@ -437,8 +738,8 @@ impl Tokenize for Tokenizer {
 
 #[cfg(test)]
 mod test {
-    use std::str;
     use super::*;
+    use std::str;
 
     #[test]
     fn esil_basic() {
@@ -448,36 +749,46 @@ mod test {
 
     #[test]
     fn negative_int() {
-        assert_eq!(Token::EConstant(0xFFFFFFFFFFFFFFFF),
-                   Tokenizer::tokenize("-1")[0]);
+        assert_eq!(
+            Token::EConstant(0xFFFFFFFFFFFFFFFF),
+            Tokenizer::tokenize("-1")[0]
+        );
     }
 
     #[test]
     fn u64_max_int() {
-        assert_eq!(Token::EConstant(u64::max_value()),
-                   Tokenizer::tokenize("18446744073709551615")[0]);
+        assert_eq!(
+            Token::EConstant(u64::max_value()),
+            Tokenizer::tokenize("18446744073709551615")[0]
+        );
     }
 
     #[test]
     fn u64_min_int() {
-        assert_eq!(Token::EConstant(0),
-                   Tokenizer::tokenize(format!("{}", u64::min_value()))[0]);
+        assert_eq!(
+            Token::EConstant(0),
+            Tokenizer::tokenize(format!("{}", u64::min_value()))[0]
+        );
     }
 
     #[test]
     fn i64_min_int() {
-        assert_eq!(Token::EConstant(i64::min_value() as u64),
-                   Tokenizer::tokenize(format!("{}", i64::min_value()))[0]);
+        assert_eq!(
+            Token::EConstant(i64::min_value() as u64),
+            Tokenizer::tokenize(format!("{}", i64::min_value()))[0]
+        );
     }
 
     #[test]
     fn i64_max_int() {
-        assert_eq!(Token::EConstant(i64::max_value() as u64),
-                   Tokenizer::tokenize(format!("{}", i64::max_value()))[0]);
+        assert_eq!(
+            Token::EConstant(i64::max_value() as u64),
+            Tokenizer::tokenize(format!("{}", i64::max_value()))[0]
+        );
     }
 
     #[test]
     fn utf8_internal_prefix() {
-        Tokenizer::tokenize(str::from_utf8(&vec![0x24,0xda,0x91]).unwrap());
+        Tokenizer::tokenize(str::from_utf8(&vec![0x24, 0xda, 0x91]).unwrap());
     }
 }

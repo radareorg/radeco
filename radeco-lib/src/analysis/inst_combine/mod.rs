@@ -36,7 +36,6 @@ pub enum CombinableOpConstInfo {
     Right(u64),
 }
 
-
 #[derive(Debug)]
 pub struct CombineChange {
     /// Index of the node to combine.

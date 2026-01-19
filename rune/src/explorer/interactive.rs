@@ -1,6 +1,6 @@
 //! Defines Commands available to the Explorer.
 
-use crate::utils::utils::{Key, convert_to_u64, to_assignment, SAssignment, ValType};
+use crate::utils::utils::{convert_to_u64, to_assignment, Key, SAssignment, ValType};
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Command {
@@ -51,7 +51,7 @@ impl Command {
  */
 impl From<String> for Command {
     fn from(s: String) -> Command {
-        if let Some(c) = s.chars().nth(0) { 
+        if let Some(c) = s.chars().nth(0) {
             match c {
                 // dc -> debug context
                 // dq debug query
@@ -76,11 +76,11 @@ impl From<String> for Command {
                             'S' => Command::DebugState,
                             'Q' => Command::DebugQuery,
                             _ => Command::Invalid,
-                        } 
+                        }
                     } else {
                         Command::Invalid
                     }
-                },
+                }
                 '?' => Command::Assertion,
                 'Q' => Command::Query,
                 'e' => {

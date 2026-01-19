@@ -1,12 +1,10 @@
 use std::fs::File;
 use std::io::prelude::*;
 
-
 use std::collections::HashMap;
 
-use serde_json::{to_string, from_reader};
-use crate::utils::utils::{Key, new_rune_ctx};
-
+use crate::utils::utils::{new_rune_ctx, Key};
+use serde_json::{from_reader, to_string};
 
 use crate::context::rune_ctx::RuneContext;
 
@@ -86,9 +84,13 @@ impl RInitialState {
         from_reader(file).unwrap()
     }
 
-    pub fn create_context(&self, r2: &mut R2) -> RuneContext<SegMem, RuneRegFile>
-    {
-        new_rune_ctx(self.start_addr, self.sym_vars.clone(), self.constants.clone(), r2)
+    pub fn create_context(&self, r2: &mut R2) -> RuneContext<SegMem, RuneRegFile> {
+        new_rune_ctx(
+            self.start_addr,
+            self.sym_vars.clone(),
+            self.constants.clone(),
+            r2,
+        )
     }
 }
 

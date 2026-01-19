@@ -1,7 +1,7 @@
 //! Defines `Module` and `Function` that act as containers.
 
 #![allow(deprecated)]
-#![deprecated(since="0.2.0", note="Replace with `radeco_containers`")]
+#![deprecated(since = "0.2.0", note = "Replace with `radeco_containers`")]
 
 use crate::frontend::bindings::{Binding, LocalInfo, RBind, RBindings, RadecoBindings};
 

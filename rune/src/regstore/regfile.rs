@@ -1,13 +1,13 @@
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
-use crate::regstore::regstore::{RegStore, RegStoreAPI, RegEntry};
+use crate::regstore::regstore::{RegEntry, RegStore, RegStoreAPI};
 
-use r2api::structs::LRegInfo;
-use libsmt::backends::smtlib2::{SMTLib2};
+use libsmt::backends::backend::SMTBackend;
+use libsmt::backends::smtlib2::SMTLib2;
 use libsmt::logics::qf_abv;
 use libsmt::theories::bitvec;
-use libsmt::backends::backend::SMTBackend;
+use r2api::structs::LRegInfo;
 
 #[derive(Clone, Debug, Default)]
 pub struct RuneRegFile {
@@ -24,10 +24,13 @@ impl RegStore for RuneRegFile {
         let mut regfile = HashMap::new();
         let mut seen_offsets = Vec::new();
         let mut alias_info = HashMap::new();
-        reginfo.reg_info.sort_by(|x, y| (y.offset + y.size).cmp(&(x.offset + x.size)));
+        reginfo
+            .reg_info
+            .sort_by(|x, y| (y.offset + y.size).cmp(&(x.offset + x.size)));
         for register in &reginfo.reg_info {
-            let (idx, s_bit, e_bit, is_whole) = if !seen_offsets.contains(&register.offset) &&
-                                                   (register.type_str == "gpr" || register.type_str == "flg") {
+            let (idx, s_bit, e_bit, is_whole) = if !seen_offsets.contains(&register.offset)
+                && (register.type_str == "gpr" || register.type_str == "flg")
+            {
                 cur_regs.push(None);
                 seen_offsets.push(register.offset);
                 (cur_regs.len() - 1, 0, register.size - 1, true)
@@ -42,8 +45,10 @@ impl RegStore for RuneRegFile {
                 (found, 0, register.size - 1, false)
             };
 
-            regfile.insert(register.name.clone(),
-                           RegEntry::new(register.name.clone(), idx, s_bit, e_bit, is_whole, None));
+            regfile.insert(
+                register.name.clone(),
+                RegEntry::new(register.name.clone(), idx, s_bit, e_bit, is_whole, None),
+            );
         }
 
         for alias in &reginfo.alias_info {
@@ -63,8 +68,9 @@ impl RegStore for RuneRegFile {
 
     fn read(&mut self, reg_name: &str, solver: &mut SMTLib2<qf_abv::QF_ABV>) -> NodeIndex {
         let rentry = &self.regfile.get(reg_name).expect("Unknown Register");
-        let idx = self.current_regs[rentry.idx].expect("Unset register - Undefined Behavior. \
-                                                        Consider setting an initial value before use!");
+        let idx = self.current_regs[rentry.idx].expect(
+            "Unset register - Undefined Behavior. Consider setting an initial value before use!",
+        );
         if rentry.is_whole {
             idx
         } else {
@@ -93,7 +99,6 @@ impl RegStore for RuneRegFile {
         let idx = self.regfile[r_string].idx;
         self.current_regs[idx] = Some(cval);
     }
- 
 }
 
 impl RegStoreAPI for RuneRegFile {

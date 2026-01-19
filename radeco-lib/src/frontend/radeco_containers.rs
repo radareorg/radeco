@@ -176,16 +176,18 @@ pub trait CGInfo {
 impl CGInfo for CallGraph {
     // Return a list of callers to function at offset, along with their callsites
     fn callers<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a> {
-        Box::new(self
-            .edges_directed(idx, Direction::Incoming)
-            .map(|er| (er.weight().csite, er.target())))
+        Box::new(
+            self.edges_directed(idx, Direction::Incoming)
+                .map(|er| (er.weight().csite, er.target())),
+        )
     }
 
     // Return (callsite, call target)
     fn callees<'a>(&'a self, idx: NodeIndex) -> Box<dyn Iterator<Item = (u64, NodeIndex)> + 'a> {
-        Box::new(self
-            .edges_directed(idx, Direction::Outgoing)
-            .map(|er| (er.weight().csite, er.target())))
+        Box::new(
+            self.edges_directed(idx, Direction::Outgoing)
+                .map(|er| (er.weight().csite, er.target())),
+        )
     }
 }
 
