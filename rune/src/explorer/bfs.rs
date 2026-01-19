@@ -1,9 +1,9 @@
 //! `PathExplorer` that works by exploring the CFG in Breadth First Order.
 use std::collections::VecDeque;
 
-use crate::explorer::explorer::{PathExplorer};
-use crate::engine::rune::RuneControl;
 use crate::context::context::{Context, RegisterRead};
+use crate::engine::rune::RuneControl;
+use crate::explorer::explorer::PathExplorer;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum BranchType {
@@ -21,7 +21,7 @@ impl<C: Context> SavedState<C> {
     fn new(ctx: C, b: BranchType) -> SavedState<C> {
         SavedState {
             ctx: ctx,
-            branch: b
+            branch: b,
         }
     }
 }
@@ -34,7 +34,9 @@ pub struct BFSExplorer<Ctx: Context> {
 }
 
 impl<Ctx> PathExplorer for BFSExplorer<Ctx>
-where Ctx: Context {
+where
+    Ctx: Context,
+{
     type C = RuneControl;
     type Ctx = Ctx;
 
@@ -61,26 +63,31 @@ where Ctx: Context {
         // completely explored and rune will halt.
         if let Some(ref state) = self.queue.pop_front() {
             *ctx = state.ctx.clone();
-            Some(
-                match state.branch {
-                    BranchType::True => RuneControl::ExploreTrue,
-                    BranchType::False => RuneControl::ExploreFalse,
-                })
+            Some(match state.branch {
+                BranchType::True => RuneControl::ExploreTrue,
+                BranchType::False => RuneControl::ExploreFalse,
+            })
         } else {
             None
         }
     }
 
     // TODO: register_branch does not add constraints when adding true/false branch to the list
-    fn register_branch(&mut self, ctx: &mut Self::Ctx, _condition: <Self::Ctx as RegisterRead>::VarRef) -> RuneControl {
+    fn register_branch(
+        &mut self,
+        ctx: &mut Self::Ctx,
+        _condition: <Self::Ctx as RegisterRead>::VarRef,
+    ) -> RuneControl {
         // When rune encounters a conditional branch instruction, it needs to decide which state to
         // explore next. To resolve this, it makes a call to the path explorer which decides on the
         // path to be explored next. Path explorer saves the current context information in order
         // to return to the path that is not taken in the future. It returns a `RuneControl` to
         // rune in order to direct its path of execution.
 
-        self.queue.push_back(SavedState::new(ctx.clone(), BranchType::True));
-        self.queue.push_back(SavedState::new(ctx.clone(), BranchType::False));
+        self.queue
+            .push_back(SavedState::new(ctx.clone(), BranchType::True));
+        self.queue
+            .push_back(SavedState::new(ctx.clone(), BranchType::False));
 
         // Switch to a new path in the BFS Queue and pre-empt the current instruction, forcing run
         // to load a new job from the queue.

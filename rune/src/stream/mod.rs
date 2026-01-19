@@ -1,18 +1,18 @@
 //! Defines traits that need to be implemented for a source to be considered as
 //! an `InstructionStream`.
 
-use std::fmt::Debug;
-use std::path;
 use std::collections::HashMap;
+use std::fmt::Debug;
+use std::fs::File;
 use std::hash::Hash;
 use std::io::prelude::*;
-use std::fs::File;
+use std::path;
 
 use serde::{Deserialize, Serialize};
 
-use r2pipe::r2::R2;
-use r2api::structs::LOpInfo;
 use r2api::api_trait::R2PApi;
+use r2api::structs::LOpInfo;
+use r2pipe::r2::R2;
 
 pub trait Decodable: for<'a> Deserialize<'a> + Serialize {}
 
@@ -23,7 +23,6 @@ pub trait InstructionStream {
     fn new() -> Self;
     fn at(&mut self, _: Self::Index) -> Option<Self::Output>;
 }
-
 
 impl InstructionStream for R2 {
     type Output = LOpInfo;
@@ -45,16 +44,17 @@ impl InstructionStream for R2 {
 // when asked for that address.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct FileStream<I, Op>
-    where I: Debug + Clone + Hash + PartialEq + Eq,
-          Op: Debug + Clone
+where
+    I: Debug + Clone + Hash + PartialEq + Eq,
+    Op: Debug + Clone,
 {
     insts: HashMap<I, Op>,
 }
 
-
 impl<I, Op> FileStream<I, Op>
-    where I: Debug + Clone + Decodable + Hash + PartialEq + Eq,
-          Op: Debug + Clone + Decodable
+where
+    I: Debug + Clone + Decodable + Hash + PartialEq + Eq,
+    Op: Debug + Clone + Decodable,
 {
     pub fn load<T: AsRef<path::Path>>(&mut self, fname: T) {
         let mut f = File::open(fname).expect("Failed to open file");
@@ -65,13 +65,17 @@ impl<I, Op> FileStream<I, Op>
 }
 
 impl<I, Op> InstructionStream for FileStream<I, Op>
-where I: Debug + Clone + Decodable + Hash + PartialEq + Eq,
-      Op: Debug + Clone + Decodable {
+where
+    I: Debug + Clone + Decodable + Hash + PartialEq + Eq,
+    Op: Debug + Clone + Decodable,
+{
     type Output = Op;
     type Index = I;
 
     fn new() -> FileStream<I, Op> {
-        FileStream { insts: HashMap::new() }
+        FileStream {
+            insts: HashMap::new(),
+        }
     }
 
     fn at(&mut self, addr: I) -> Option<Op> {

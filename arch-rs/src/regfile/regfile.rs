@@ -1,7 +1,7 @@
 //! Defines traits which describe a RegisterFile
+use crate::utils::*;
 use r2api::structs::LRegInfo;
 use std::collections::HashMap;
-use crate::utils::*;
 
 /// Register Type
 #[derive(Clone, Debug, Copy, Hash)]
@@ -12,7 +12,7 @@ pub enum RegType {
     XMM,
     Flag,
     Segment,
-    Unknown
+    Unknown,
 }
 
 /// Helper method to convert RegisterType returned by radare2 to RegType enum
@@ -23,11 +23,11 @@ impl From<usize> for RegType {
             0 => RegType::GeneralPurpose,
             1 => RegType::Debug,
             2 => RegType::FloatingPoint,
-            3 =>  RegType::XMM,
+            3 => RegType::XMM,
             4 => RegType::Unknown,
             5 => RegType::Flag,
             6 => RegType::Segment,
-            _ => RegType::Unknown
+            _ => RegType::Unknown,
         }
     }
 }
@@ -38,7 +38,7 @@ pub enum RegFileError {
     AbstractRegisterAlreadyAllocated,
     AbstractRegisterUnallocated,
     OutOfAbstractRegisters,
-    RegisterNotFound
+    RegisterNotFound,
 }
 
 /// Trait defining methods to be implemented by a Register
@@ -102,7 +102,11 @@ pub trait RegisterFile {
 
     /// Insert information for a new register to the RegisterFile.
     /// The next available AR is provided.
-    fn add_register(&mut self, _: Option<AbstractRegister>, _: &Self::Reg) -> Result<AbstractRegister, RegFileError>;
+    fn add_register(
+        &mut self,
+        _: Option<AbstractRegister>,
+        _: &Self::Reg,
+    ) -> Result<AbstractRegister, RegFileError>;
 
     /// Remove register allocation for an AbstractRegister
     fn remove_register(&mut self, _: AbstractRegister) -> Result<AbstractRegister, RegFileError>;
@@ -117,11 +121,11 @@ pub fn new_absregmap(reg_info: &LRegInfo) -> Result<AbsRegMap, RegFileError> {
     let mut absregmap = HashMap::new();
 
     for register in &reg_info.reg_info {
-       if let Some(abs) = available_abstract_regs.pop() {
-           absregmap.insert(register.name.clone(), abs);
-       } else {
-           return Err(RegFileError::OutOfAbstractRegisters)
-       }
+        if let Some(abs) = available_abstract_regs.pop() {
+            absregmap.insert(register.name.clone(), abs);
+        } else {
+            return Err(RegFileError::OutOfAbstractRegisters);
+        }
     }
 
     Ok(absregmap)

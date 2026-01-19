@@ -75,7 +75,12 @@ impl Highlighter for Completes {}
 
 impl Completer for Completes {
     type Candidate = String;
-    fn complete(&self, line: &str, _pos: usize, ctx: &Context<'_>) -> rustyline::Result<(usize, Vec<String>)> {
+    fn complete(
+        &self,
+        line: &str,
+        _pos: usize,
+        ctx: &Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<String>)> {
         let cmds = vec![
             command::HELP,
             command::LOAD,

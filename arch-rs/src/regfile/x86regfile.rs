@@ -1,9 +1,9 @@
 use r2api::structs::LRegInfo;
-use std::collections::HashMap;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
-use crate::utils::*;
 use crate::regfile::regfile::*;
+use crate::utils::*;
 
 /// Basic X86Register structure
 #[derive(Clone, Debug, Hash)]
@@ -17,14 +17,21 @@ pub struct X86Register {
 }
 
 impl X86Register {
-    pub fn new(name: String, regtype: RegType, offset: usize, width: usize, is_whole: bool, parent: Option<AbstractRegister>) -> X86Register {
+    pub fn new(
+        name: String,
+        regtype: RegType,
+        offset: usize,
+        width: usize,
+        is_whole: bool,
+        parent: Option<AbstractRegister>,
+    ) -> X86Register {
         X86Register {
             name: name,
             regtype: regtype,
             offset: offset,
             width: width,
             is_whole: is_whole,
-            parent: parent
+            parent: parent,
         }
     }
 }
@@ -111,16 +118,23 @@ impl RegisterFile for X86RegisterFile {
         }
     }
 
-    fn add_register(&mut self, abs_reg: Option<AbstractRegister>, reg: &X86Register) -> Result<AbstractRegister, RegFileError> {
+    fn add_register(
+        &mut self,
+        abs_reg: Option<AbstractRegister>,
+        reg: &X86Register,
+    ) -> Result<AbstractRegister, RegFileError> {
         if let Some(abs) = abs_reg {
-            let idx = self.available_abstract_regs.iter().position( |&t| t == abs);
+            let idx = self.available_abstract_regs.iter().position(|&t| t == abs);
             if idx.is_none() {
                 let _ = self.available_abstract_regs.remove(idx.unwrap());
                 self.absregmap.insert(reg.name.clone(), abs);
                 self.registers.insert(abs, reg.clone());
                 Ok(abs)
             } else {
-                *self.registers.get_mut(&self.available_abstract_regs[idx.unwrap()]).unwrap() = reg.clone();
+                *self
+                    .registers
+                    .get_mut(&self.available_abstract_regs[idx.unwrap()])
+                    .unwrap() = reg.clone();
                 Ok(abs)
             }
         } else {
@@ -129,13 +143,16 @@ impl RegisterFile for X86RegisterFile {
                 self.absregmap.insert(reg.name.clone(), abs_reg);
                 self.registers.insert(abs_reg, reg.clone());
                 Ok(abs_reg)
-             } else {
+            } else {
                 Err(RegFileError::OutOfAbstractRegisters)
             }
         }
     }
 
-    fn remove_register(&mut self, abs_reg: AbstractRegister) -> Result<AbstractRegister, RegFileError> {
+    fn remove_register(
+        &mut self,
+        abs_reg: AbstractRegister,
+    ) -> Result<AbstractRegister, RegFileError> {
         if self.registers.contains_key(&abs_reg) {
             let reg = self.registers.remove(&abs_reg).unwrap();
             let reg_name = reg.name().unwrap();
@@ -169,7 +186,14 @@ impl X86RegisterFile {
             match regtype {
                 RegType::FloatingPoint | RegType::Flag => continue,
                 // name regtype offset width parent
-                _ => registers.push(X86Register::new(reg.name.clone(), regtype, reg.offset, reg.size, false, None)),
+                _ => registers.push(X86Register::new(
+                    reg.name.clone(),
+                    regtype,
+                    reg.offset,
+                    reg.size,
+                    false,
+                    None,
+                )),
             }
         }
 
@@ -183,7 +207,8 @@ impl X86RegisterFile {
         });
 
         let mut c_reg;
-        let mut parent_reg = X86Register::new(String::from("TEMP"), RegType::Unknown, 0, 0, false, None);
+        let mut parent_reg =
+            X86Register::new(String::from("TEMP"), RegType::Unknown, 0, 0, false, None);
 
         let mut abs;
         let mut parent_abs = AbstractRegister::WILDCARD;
@@ -196,7 +221,7 @@ impl X86RegisterFile {
 
             abs = available_abstract_regs.pop();
             if abs.is_none() {
-                return Err(RegFileError::OutOfAbstractRegisters)
+                return Err(RegFileError::OutOfAbstractRegisters);
             }
 
             if reg.offset >= c_until {
@@ -214,7 +239,6 @@ impl X86RegisterFile {
 
             absregmap.insert(reg.name.clone(), abs.unwrap());
             regmap.insert(abs.unwrap(), c_reg);
-
         }
 
         Ok(X86RegisterFile {

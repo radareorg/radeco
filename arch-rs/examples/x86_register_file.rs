@@ -1,9 +1,9 @@
 extern crate arch;
-extern crate r2pipe;
 extern crate r2api;
+extern crate r2pipe;
 
-use r2pipe::r2::R2;
 use r2api::api_trait::R2Api;
+use r2pipe::r2::R2;
 
 use arch::regfile::x86regfile::*;
 

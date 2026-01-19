@@ -3,14 +3,14 @@
 use r2api::structs::LOpInfo;
 
 use crate::context::context::{Context, RegisterRead};
+use crate::engine::engine::{Engine, EngineError, EngineResult};
 use crate::explorer::explorer::PathExplorer;
 use crate::stream::InstructionStream;
-use crate::engine::engine::{Engine, EngineError, EngineResult};
 use esil::lexer::{Token, Tokenizer};
 use esil::parser::{Parse, Parser};
 
-use libsmt::theories::{bitvec, core};
 use libsmt::logics::qf_abv;
+use libsmt::theories::{bitvec, core};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RuneControl {
@@ -24,9 +24,10 @@ pub enum RuneControl {
 }
 
 pub struct Rune<Ctx, Exp, S>
-    where Ctx: Context,
-          Exp: PathExplorer,
-          S: InstructionStream<Output = LOpInfo, Index = u64>
+where
+    Ctx: Context,
+    Exp: PathExplorer,
+    S: InstructionStream<Output = LOpInfo, Index = u64>,
 {
     /// Context on which the instance of rune operates on
     ctx: Ctx,
@@ -39,13 +40,12 @@ pub struct Rune<Ctx, Exp, S>
     skip: bool,
 }
 
-
 impl<S, Exp, Ctx> Rune<Ctx, Exp, S>
-where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
-      Exp: PathExplorer<C = RuneControl, Ctx = Ctx>,
-      S: InstructionStream<Output = LOpInfo, Index = u64>
+where
+    Ctx: Context<IFn = qf_abv::QF_ABV_Fn>,
+    Exp: PathExplorer<C = RuneControl, Ctx = Ctx>,
+    S: InstructionStream<Output = LOpInfo, Index = u64>,
 {
-
     pub fn new(ctx: Ctx, exp: Exp, stream: S) -> Rune<Ctx, Exp, S> {
         Rune {
             ctx: ctx,
@@ -56,9 +56,10 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
         }
     }
 
-    fn process_in(&mut self,
-                  t: Option<&Token>)
-                  -> EngineResult<Option<<Ctx as RegisterRead>::VarRef>> {
+    fn process_in(
+        &mut self,
+        t: Option<&Token>,
+    ) -> EngineResult<Option<<Ctx as RegisterRead>::VarRef>> {
         if t.is_none() {
             return Ok(None);
         }
@@ -85,12 +86,13 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
         Ok(Some(read))
     }
 
-    fn process_op(&mut self,
-                  token: Token,
-                  lhs: Option<Token>,
-                  rhs: Option<Token>,
-                  control: &mut RuneControl)
-                  -> EngineResult<Option<<Ctx as RegisterRead>::VarRef>> {
+    fn process_op(
+        &mut self,
+        token: Token,
+        lhs: Option<Token>,
+        rhs: Option<Token>,
+        control: &mut RuneControl,
+    ) -> EngineResult<Option<<Ctx as RegisterRead>::VarRef>> {
         // Reset previously set `control`
         *control = RuneControl::Continue;
 
@@ -141,30 +143,36 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
                 return Ok(None);
             }
             Token::EPoke(size) => {
-                self.ctx.mem_write(l_op.unwrap(), r_op.unwrap(), size as usize);
-                return Ok(None)
+                self.ctx
+                    .mem_write(l_op.unwrap(), r_op.unwrap(), size as usize);
+                return Ok(None);
             }
             Token::ENop => return Ok(None),
             _ => {}
         }
 
         let result = match token {
-            Token::EPeek(size) => {
-                self.ctx.mem_read(l_op.unwrap(), size as usize)
-            }
+            Token::EPeek(size) => self.ctx.mem_read(l_op.unwrap(), size as usize),
             Token::ECmp | Token::ELt | Token::EGt => {
                 // This case is a bit different as we want the result to be a bitvector rather
                 // than a bool. Hence we adopt the following stratergy:
                 // (ite (= lhs rhs) (_ bv1 64) (_ bv0 64))
-                let e_cur = self.ctx.eval(bitvec::OpCodes::BvSub,
-                                          vec![l_op.as_ref().unwrap().clone(),
-                                               r_op.as_ref().unwrap().clone()]);
+                let e_cur = self.ctx.eval(
+                    bitvec::OpCodes::BvSub,
+                    vec![
+                        l_op.as_ref().unwrap().clone(),
+                        r_op.as_ref().unwrap().clone(),
+                    ],
+                );
                 self.ctx.set_e_cur(e_cur);
                 self.ctx.set_e_old(l_op.as_ref().unwrap().clone());
                 let const_0 = self.ctx.define_const(0, 64);
                 let const_1 = self.ctx.define_const(1, 64);
-                let eq = self.ctx.eval(token.to_smt(), vec![l_op.unwrap(), r_op.unwrap()]);
-                self.ctx.eval(core::OpCodes::ITE, vec![eq, const_1, const_0])
+                let eq = self
+                    .ctx
+                    .eval(token.to_smt(), vec![l_op.unwrap(), r_op.unwrap()]);
+                self.ctx
+                    .eval(core::OpCodes::ITE, vec![eq, const_1, const_0])
             }
             Token::EPop => unimplemented!(),
             Token::EGoto => unimplemented!(),
@@ -192,9 +200,10 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
 }
 
 impl<Ctx, Exp, S> Engine for Rune<Ctx, Exp, S>
-where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
-      Exp: PathExplorer<C = RuneControl, Ctx = Ctx>,
-      S: InstructionStream<Output = LOpInfo, Index = u64>
+where
+    Ctx: Context<IFn = qf_abv::QF_ABV_Fn>,
+    Exp: PathExplorer<C = RuneControl, Ctx = Ctx>,
+    S: InstructionStream<Output = LOpInfo, Index = u64>,
 {
     fn run(&mut self) -> EngineResult<()> {
         let mut p = Parser::init(None, Some(64));
@@ -238,7 +247,9 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
                         }
                     };
 
-                    if let Ok(Some(ref res)) = self.process_op(token.clone(), lhs, rhs, &mut control) {
+                    if let Ok(Some(ref res)) =
+                        self.process_op(token.clone(), lhs, rhs, &mut control)
+                    {
                         let rt = self.process_out(res);
                         p.push(rt);
                     }
@@ -262,7 +273,6 @@ where Ctx: Context<IFn=qf_abv::QF_ABV_Fn>,
                 RuneControl::Continue => {}
                 _ => unimplemented!(),
             }
-
         }
 
         Ok(())

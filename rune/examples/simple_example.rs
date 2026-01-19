@@ -1,7 +1,7 @@
-extern crate rune;
 extern crate libsmt;
-extern crate r2pipe;
 extern crate r2api;
+extern crate r2pipe;
+extern crate rune;
 
 use std::collections::HashMap;
 
@@ -12,21 +12,14 @@ use r2api::api_trait::R2Api;
 use rune::explorer::directed::DirectedExplorer;
 use rune::explorer::explorer::PathExplorer;
 
-
-
-
 use rune::memory::memory::Memory;
 
-
 use rune::regstore::regstore::RegStore;
-
 
 use rune::engine::engine::Engine;
 use rune::engine::rune::Rune;
 
 use rune::utils::utils::{new_rune_ctx, Key};
-
-
 
 fn main() {
     // Stream
@@ -39,7 +32,7 @@ fn main() {
     let branch = 0x00400513;
 
     let mut syms = HashMap::new();
-    syms.insert(Key::Mem(bp-0x8), 8);
+    syms.insert(Key::Mem(bp - 0x8), 8);
 
     let mut consts = HashMap::new();
     consts.insert(Key::Reg(String::from("rbp")), (bp as u64, 64 as u64));

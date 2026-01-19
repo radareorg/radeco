@@ -1,17 +1,17 @@
 //! `PathExplorer` that allows interactive exploration
 
+use rune::context::context::{Context, Evaluate, MemoryRead, RegisterRead};
+use rune::context::rune_ctx::RuneContext;
+use rune::engine::rune::RuneControl;
 use rune::explorer::explorer::PathExplorer;
 use rune::explorer::interactive::Command;
-use rune::context::rune_ctx::RuneContext;
-use rune::context::context::{Context, Evaluate, MemoryRead, RegisterRead};
-use rune::engine::rune::RuneControl;
 use rune::memory::seg_mem::SegMem;
 use rune::regstore::regfile::RuneRegFile;
 
-use libsmt::theories::{bitvec, core};
-use libsmt::logics::qf_abv::QF_ABV_Fn;
-use libsmt::backends::z3;
 use crate::console::Console;
+use libsmt::backends::z3;
+use libsmt::logics::qf_abv::QF_ABV_Fn;
+use libsmt::theories::{bitvec, core};
 
 use std::process;
 
@@ -38,7 +38,8 @@ impl InteractiveExplorer {
 
     pub fn print_debug(&self, ctx: &RuneContext<SegMem, RuneRegFile>) {
         self.console.print_info("DEBUG");
-        self.console.print_info(&format!("Constraints:\n{}", ctx.solver.generate_asserts()));
+        self.console
+            .print_info(&format!("Constraints:\n{}", ctx.solver.generate_asserts()));
     }
 
     pub fn query_constraints(&self, ctx: &mut RuneContext<SegMem, RuneRegFile>) {
@@ -77,7 +78,7 @@ impl InteractiveExplorer {
                 if &tokens[1][0..1] == "[" {
                     let addr = {
                         let addr_ = u64::from_str_radix(&tokens[1][3..tokens[1].len() - 1], 16)
-                                        .expect("Invalid integer base16");
+                            .expect("Invalid integer base16");
                         ctx.define_const(addr_, 64)
                     };
                     ctx.mem_read(addr, 64)
@@ -88,8 +89,8 @@ impl InteractiveExplorer {
 
             let op_2 = {
                 if tokens[2].len() > 2 && &tokens[2][0..2] == "0x" {
-                    let const_v = u64::from_str_radix(&tokens[2][2..], 16)
-                                      .expect("Invalid base16 Integer");
+                    let const_v =
+                        u64::from_str_radix(&tokens[2][2..], 16).expect("Invalid base16 Integer");
                     ctx.define_const(const_v, 64)
                 } else {
                     ctx.reg_read(tokens[2])
@@ -116,7 +117,8 @@ impl PathExplorer for InteractiveExplorer {
 
     fn next(&mut self, ctx: &mut Self::Ctx) -> RuneControl {
         if self.single_step || self.bp.contains(&ctx.ip()) {
-            self.console.print_info(&format!("Halted at {:#x}", ctx.ip()));
+            self.console
+                .print_info(&format!("Halted at {:#x}", ctx.ip()));
             loop {
                 self.single_step = match self.console.read_command()[0] {
                     Command::Step => true,
@@ -124,27 +126,27 @@ impl PathExplorer for InteractiveExplorer {
                     Command::DebugQuery => {
                         self.print_debug(ctx);
                         continue;
-                    },
+                    }
                     Command::Assertion => {
                         self.add_assertion(ctx);
                         continue;
-                    },
+                    }
                     Command::Query => {
                         self.query_constraints(ctx);
                         continue;
-                    },
+                    }
                     Command::Help => {
                         self.console.print_help();
                         continue;
-                    },
+                    }
                     Command::Safety => {
                         self.safety(ctx);
                         continue;
-                    },
+                    }
                     Command::Exit => {
                         self.console.print_info("Thanks for using rune!");
                         process::exit(1);
-                    },
+                    }
                     _ => continue,
                 };
                 break;
@@ -157,12 +159,14 @@ impl PathExplorer for InteractiveExplorer {
         None
     }
 
-    fn register_branch(&mut self,
-                       ctx: &mut Self::Ctx,
-                       condition: <Self::Ctx as RegisterRead>::VarRef)
-                       -> RuneControl {
+    fn register_branch(
+        &mut self,
+        ctx: &mut Self::Ctx,
+        condition: <Self::Ctx as RegisterRead>::VarRef,
+    ) -> RuneControl {
         if self.cmd_q.is_empty() {
-            self.console.print_info(&format!("Encountered Branch At {:#x}", ctx.ip()));
+            self.console
+                .print_info(&format!("Encountered Branch At {:#x}", ctx.ip()));
             self.cmd_q = self.console.read_command();
         }
 

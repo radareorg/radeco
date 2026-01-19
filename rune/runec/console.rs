@@ -90,9 +90,8 @@ impl Console {
                         let mut iter = buffer.split_whitespace();
                         iter.next();
                         repeat = if let Some(num) = iter.next() {
-                            num.chars().fold(0, |acc, c:char| {
-                                acc*10 + c.to_digit(10).unwrap()
-                            })
+                            num.chars()
+                                .fold(0, |acc, c: char| acc * 10 + c.to_digit(10).unwrap())
                         } else {
                             1
                         }
@@ -101,16 +100,16 @@ impl Console {
                     if cmd.is_valid() {
                         break;
                     }
-                },
+                }
                 Err(ReadlineError::Interrupted) => {
                     repeat = 1;
                     continue;
-                },
+                }
                 Err(ReadlineError::Eof) => {
                     cmd = Command::Exit;
                     repeat = 1;
                     break;
-                }, 
+                }
                 Err(err) => {
                     println!("[!] Error: {:?}", err);
                     repeat = 1;
@@ -119,7 +118,9 @@ impl Console {
             }
         }
         r.save_history("history.txt").unwrap();
-        iter::repeat(cmd).take(repeat as usize + 1).collect::<Vec<_>>()
+        iter::repeat(cmd)
+            .take(repeat as usize + 1)
+            .collect::<Vec<_>>()
     }
 
     pub fn readline(&self) -> io::Result<String> {

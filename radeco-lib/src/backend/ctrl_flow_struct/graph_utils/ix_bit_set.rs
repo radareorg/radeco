@@ -10,21 +10,31 @@ pub trait IndexLike {
 }
 
 macro_rules! forward {
-    (pub fn $name:ident(&self) -> $out:ty) => (
-        pub fn $name(&self) -> $out { (self.0).$name() }
-    );
-    (pub fn $name:ident(&mut self) -> $out:ty) => (
-        pub fn $name(&mut self) -> $out { (self.0).$name() }
-    );
-    (pub fn $name:ident(&mut self, value: Ix) -> $out:ty) => (
-        pub fn $name(&mut self, value: Ix) -> $out { (self.0).$name(value.index()) }
-    );
-    (pub fn $name:ident(&self, value: Ix) -> $out:ty) => (
-        pub fn $name(&self, value: Ix) -> $out { (self.0).$name(value.index()) }
-    );
-    (pub fn $name:ident(&mut self, other: &Self) -> $out:ty) => (
-        pub fn $name(&mut self, other: &Self) -> $out { (self.0).$name(&other.0) }
-    );
+    (pub fn $name:ident(&self) -> $out:ty) => {
+        pub fn $name(&self) -> $out {
+            (self.0).$name()
+        }
+    };
+    (pub fn $name:ident(&mut self) -> $out:ty) => {
+        pub fn $name(&mut self) -> $out {
+            (self.0).$name()
+        }
+    };
+    (pub fn $name:ident(&mut self, value: Ix) -> $out:ty) => {
+        pub fn $name(&mut self, value: Ix) -> $out {
+            (self.0).$name(value.index())
+        }
+    };
+    (pub fn $name:ident(&self, value: Ix) -> $out:ty) => {
+        pub fn $name(&self, value: Ix) -> $out {
+            (self.0).$name(value.index())
+        }
+    };
+    (pub fn $name:ident(&mut self, other: &Self) -> $out:ty) => {
+        pub fn $name(&mut self, other: &Self) -> $out {
+            (self.0).$name(&other.0)
+        }
+    };
 }
 
 /// Wrapper for [`BitSet`] for [`IndexLike`] things.

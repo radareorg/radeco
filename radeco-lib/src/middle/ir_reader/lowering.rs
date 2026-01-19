@@ -52,7 +52,9 @@ impl<'a> LowerSsa<'a> {
         let entry_node = if let Some(en) = ssa.entry_node() {
             en
         } else {
-            let entry_node = ssa.insert_block(ir::MAddress::new(0, 0)).ok_or(LoweringError::SsaError)?;
+            let entry_node = ssa
+                .insert_block(ir::MAddress::new(0, 0))
+                .ok_or(LoweringError::SsaError)?;
             ssa.set_entry_node(entry_node);
             entry_node
         };
@@ -115,10 +117,16 @@ impl<'a> LowerSsa<'a> {
         &mut self,
         sregstate: Vec<(sast::NewValue, sast::PhysReg)>,
     ) -> Result<()> {
-        let regstate = self.ssa.registers_in(self.entry_node).ok_or(LoweringError::SsaError)?;
+        let regstate = self
+            .ssa
+            .registers_in(self.entry_node)
+            .ok_or(LoweringError::SsaError)?;
         for (sast::NewValue(vr, ty), sreg) in sregstate {
             let regid = self.index_of_reg(&sreg)?;
-            let val = self.ssa.insert_comment(lower_valueinfo(ty), sreg.0).ok_or(LoweringError::SsaError)?;
+            let val = self
+                .ssa
+                .insert_comment(lower_valueinfo(ty), sreg.0)
+                .ok_or(LoweringError::SsaError)?;
             self.ssa.op_use(regstate, regid.to_u8(), val);
             self.insert_new_value(vr, val)?;
         }
@@ -129,7 +137,10 @@ impl<'a> LowerSsa<'a> {
         &mut self,
         sregstate: Vec<(sast::PhysReg, sast::Operand)>,
     ) -> Result<()> {
-        let regstate = self.ssa.registers_in(self.exit_node).ok_or(LoweringError::SsaError)?;
+        let regstate = self
+            .ssa
+            .registers_in(self.exit_node)
+            .ok_or(LoweringError::SsaError)?;
         for (sreg, sop) in sregstate {
             let regid = self.index_of_reg(&sreg)?;
             let op = self.lower_operand(sop)?;
@@ -180,7 +191,10 @@ impl<'a> LowerSsa<'a> {
     }
 
     fn lower_exit_node(&mut self, sen: sast::ExitNode) -> Result<()> {
-        let node_addr = self.ssa.starting_address(self.exit_node).ok_or(LoweringError::SsaError)?;
+        let node_addr = self
+            .ssa
+            .starting_address(self.exit_node)
+            .ok_or(LoweringError::SsaError)?;
         for sop in sen.ops {
             let (res, opt_op_addr) = self.lower_operation(sop)?;
             let op_addr = opt_op_addr.unwrap_or(node_addr);
@@ -220,7 +234,10 @@ impl<'a> LowerSsa<'a> {
                     }
                     sast::Expr::Resize(rst, ws, sop0) => (lower_resize_op(rst, ws), vec![sop0]),
                 };
-                let res = self.ssa.insert_op(opcode, vi, None).ok_or(LoweringError::SsaError)?;
+                let res = self
+                    .ssa
+                    .insert_op(opcode, vi, None)
+                    .ok_or(LoweringError::SsaError)?;
                 for (i, sop) in sops.into_iter().enumerate() {
                     let op = self.lower_operand(sop)?;
                     self.ssa.op_use(res, i as u8, op);
@@ -230,7 +247,10 @@ impl<'a> LowerSsa<'a> {
             }
 
             sast::Operation::Call(opt_addr, srets, tgt, sargs) => {
-                let res = self.ssa.insert_op(IrOpcode::OpCall, scalar!(0), None).ok_or(LoweringError::SsaError)?;
+                let res = self
+                    .ssa
+                    .insert_op(IrOpcode::OpCall, scalar!(0), None)
+                    .ok_or(LoweringError::SsaError)?;
                 let tgt_op = self.lower_operand(tgt)?;
                 self.ssa.op_use(res, 0, tgt_op);
                 for sarg in sargs {
@@ -265,15 +285,18 @@ impl<'a> LowerSsa<'a> {
                 } else {
                     match self.fw_ref_values.entry(r) {
                         Entry::Occupied(o) => Ok(*o.get()),
-                        Entry::Vacant(v) => {
-                            self.ssa.insert_undefined(ValueInfo::new_unresolved(
-                                ir::WidthSpec::Unknown,
-                            )).ok_or(LoweringError::SsaError).map(|b| *v.insert(b))
-                        }
+                        Entry::Vacant(v) => self
+                            .ssa
+                            .insert_undefined(ValueInfo::new_unresolved(ir::WidthSpec::Unknown))
+                            .ok_or(LoweringError::SsaError)
+                            .map(|b| *v.insert(b)),
                     }
                 }
             }
-            sast::Operand::Const(v) => self.ssa.insert_const(v, None).ok_or(LoweringError::SsaError)
+            sast::Operand::Const(v) => self
+                .ssa
+                .insert_const(v, None)
+                .ok_or(LoweringError::SsaError),
         }
     }
 
@@ -303,7 +326,11 @@ impl<'a> LowerSsa<'a> {
         // can't use `or_insert_with` because `ssa.insert_block` may fail
         match self.blocks.entry(at) {
             Entry::Occupied(o) => Ok(*o.into_mut()),
-            Entry::Vacant(v) => self.ssa.insert_block(at).map(|b| *v.insert(b)).ok_or(LoweringError::SsaError),
+            Entry::Vacant(v) => self
+                .ssa
+                .insert_block(at)
+                .map(|b| *v.insert(b))
+                .ok_or(LoweringError::SsaError),
         }
     }
 

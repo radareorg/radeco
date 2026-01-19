@@ -3,8 +3,8 @@
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
-use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
 use libsmt::backends::backend::SMTBackend;
+use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
 use libsmt::logics::qf_abv;
 use libsmt::theories::bitvec;
 
@@ -13,12 +13,15 @@ use crate::memory::memory::Memory;
 use crate::regstore::regstore::{RegStore, RegStoreAPI};
 //use regstore::regfile::RuneRegFile;
 
-use crate::context::context::{Context, ContextAPI, Evaluate, RegisterRead, RegisterWrite, MemoryRead, MemoryWrite};
+use crate::context::context::{
+    Context, ContextAPI, Evaluate, MemoryRead, MemoryWrite, RegisterRead, RegisterWrite,
+};
 
 #[derive(Clone, Debug)]
 pub struct RuneContext<Mem, Reg>
-    where Mem: Memory,
-          Reg: RegStore
+where
+    Mem: Memory,
+    Reg: RegStore,
 {
     ip: u64,
     pub solver: SMTLib2<qf_abv::QF_ABV>,
@@ -29,8 +32,9 @@ pub struct RuneContext<Mem, Reg>
 }
 
 impl<Mem, Reg> Context for RuneContext<Mem, Reg>
-    where Mem: Memory<VarRef=NodeIndex>,
-          Reg: RegStore<VarRef=NodeIndex>
+where
+    Mem: Memory<VarRef = NodeIndex>,
+    Reg: RegStore<VarRef = NodeIndex>,
 {
     fn set_e_old(&mut self, i: NodeIndex) {
         self.e_old = Some(i);
@@ -84,8 +88,9 @@ impl<Mem, Reg> Context for RuneContext<Mem, Reg>
 }
 
 impl<Mem, Reg> RegisterRead for RuneContext<Mem, Reg>
-where Mem: Memory<VarRef=NodeIndex>,
-      Reg: RegStore<VarRef=NodeIndex>
+where
+    Mem: Memory<VarRef = NodeIndex>,
+    Reg: RegStore<VarRef = NodeIndex>,
 {
     type VarRef = NodeIndex;
 
@@ -95,8 +100,9 @@ where Mem: Memory<VarRef=NodeIndex>,
 }
 
 impl<Mem, Reg> RegisterWrite for RuneContext<Mem, Reg>
-where Mem: Memory<VarRef=NodeIndex>,
-      Reg: RegStore<VarRef=NodeIndex>
+where
+    Mem: Memory<VarRef = NodeIndex>,
+    Reg: RegStore<VarRef = NodeIndex>,
 {
     type VarRef = NodeIndex;
 
@@ -112,41 +118,45 @@ where Mem: Memory<VarRef=NodeIndex>,
 }
 
 impl<Mem, Reg> MemoryRead for RuneContext<Mem, Reg>
-where Mem: Memory<VarRef=NodeIndex>,
-      Reg: RegStore<VarRef=NodeIndex>
+where
+    Mem: Memory<VarRef = NodeIndex>,
+    Reg: RegStore<VarRef = NodeIndex>,
 {
     type VarRef = NodeIndex;
 
     fn mem_read(&mut self, addr: NodeIndex, read_size: usize) -> NodeIndex {
         // Assert read size is multiple of 8
-        assert_eq!(read_size%8, 0, "Read Size is not divisible by 8");
+        assert_eq!(read_size % 8, 0, "Read Size is not divisible by 8");
         self.mem.read(addr, read_size, &mut self.solver)
     }
 }
 
 impl<Mem, Reg> MemoryWrite for RuneContext<Mem, Reg>
-where Mem: Memory<VarRef=NodeIndex>,
-      Reg: RegStore<VarRef=NodeIndex>
+where
+    Mem: Memory<VarRef = NodeIndex>,
+    Reg: RegStore<VarRef = NodeIndex>,
 {
     type VarRef = NodeIndex;
 
     fn mem_write(&mut self, addr: NodeIndex, data: NodeIndex, write_size: usize) {
         // Assert write size is multiple of 8
-        assert_eq!(write_size%8, 0, "Write Size is not divisible by 8");
+        assert_eq!(write_size % 8, 0, "Write Size is not divisible by 8");
         self.mem.write(addr, data, write_size, &mut self.solver);
     }
 }
 
 impl<Mem, Reg> Evaluate for RuneContext<Mem, Reg>
-where Mem: Memory<VarRef=NodeIndex>,
-      Reg: RegStore<VarRef=NodeIndex>
+where
+    Mem: Memory<VarRef = NodeIndex>,
+    Reg: RegStore<VarRef = NodeIndex>,
 {
     type VarRef = NodeIndex;
     type IFn = qf_abv::QF_ABV_Fn;
 
     fn eval<T, Q>(&mut self, smt_fn: T, operands: Q) -> Self::VarRef
-        where T: Into<Self::IFn>,
-              Q: AsRef<[Self::VarRef]>
+    where
+        T: Into<Self::IFn>,
+        Q: AsRef<[Self::VarRef]>,
     {
         // TODO: Add extract / concat to ensure that the registers are of compatible
         // sizes for operations.
@@ -155,8 +165,9 @@ where Mem: Memory<VarRef=NodeIndex>,
 }
 
 impl<Mem, Reg> ContextAPI for RuneContext<Mem, Reg>
-where Mem: Memory<VarRef=NodeIndex>,
-      Reg: RegStore<VarRef=NodeIndex> + RegStoreAPI
+where
+    Mem: Memory<VarRef = NodeIndex>,
+    Reg: RegStore<VarRef = NodeIndex> + RegStoreAPI,
 {
     fn set_reg_as_const<T: AsRef<str>>(&mut self, reg: T, val: u64) -> NodeIndex {
         if let Some(cval) = self.regstore.get_reg_ref(reg.as_ref()) {
@@ -178,7 +189,7 @@ where Mem: Memory<VarRef=NodeIndex>,
 
     fn set_mem_as_const(&mut self, addr: u64, val: u64, write_size: usize) -> NodeIndex {
         // Assert that memory var is in chunks of 8
-        assert_eq!(write_size%8, 0, "Write size is not divisible by 8!");
+        assert_eq!(write_size % 8, 0, "Write size is not divisible by 8!");
 
         let addr = self.define_const(addr, 64);
         let cval = self.define_const(val, write_size);
@@ -189,9 +200,9 @@ where Mem: Memory<VarRef=NodeIndex>,
 
     fn set_mem_as_sym(&mut self, addr: u64, write_size: usize) -> NodeIndex {
         // Assert that memory var is in chunks of 8
-        assert_eq!(write_size%8, 0, "Write size is not divisible by 8!");
+        assert_eq!(write_size % 8, 0, "Write size is not divisible by 8!");
 
-        let key = format!("mem_{}_{}", addr, write_size/8);
+        let key = format!("mem_{}_{}", addr, write_size / 8);
         let sym = self.solver.new_var(Some(&key), qf_abv::bv_sort(write_size));
         let addr = self.define_const(addr, 64);
 
@@ -216,14 +227,16 @@ where Mem: Memory<VarRef=NodeIndex>,
 }
 
 impl<Mem, Reg> RuneContext<Mem, Reg>
-where Mem: Memory,
-      Reg: RegStore
+where
+    Mem: Memory,
+    Reg: RegStore,
 {
-    pub fn new(ip: Option<u64>,
-               mem: Mem,
-               regstore: Reg,
-               solver: SMTLib2<qf_abv::QF_ABV>)
-               -> RuneContext<Mem, Reg> {
+    pub fn new(
+        ip: Option<u64>,
+        mem: Mem,
+        regstore: Reg,
+        solver: SMTLib2<qf_abv::QF_ABV>,
+    ) -> RuneContext<Mem, Reg> {
         RuneContext {
             ip: ip.unwrap_or(0),
             mem: mem,
@@ -238,8 +251,8 @@ where Mem: Memory,
 mod test {
     use super::*;
 
-    use libsmt::logics::qf_abv;
     use libsmt::backends::smtlib2::SMTLib2;
+    use libsmt::logics::qf_abv;
 
     use crate::memory::seg_mem::SegMem;
     use crate::regstore::regfile::RuneRegFile;
@@ -252,8 +265,8 @@ mod test {
         let regstore = RuneRegFile::new(&mut lreginfo);
 
         let mut mem = SegMem::new(64, Endian::Big);
-		let mut smt = SMTLib2::new(Some(qf_abv::QF_ABV));
-		mem.init_memory(&mut smt);
+        let mut smt = SMTLib2::new(Some(qf_abv::QF_ABV));
+        mem.init_memory(&mut smt);
 
         let _ctx = RuneContext::new(Some(0x9000), mem, regstore, smt);
     }
