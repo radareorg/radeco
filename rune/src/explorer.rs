@@ -9,6 +9,10 @@ pub mod dfs;
 pub mod directed;
 pub mod interactive;
 
+mod error;
+pub use error::{ExplorerError, ExplorerResult};
+
+/// Represents a collection of methods for exploring an instruction path.
 pub trait PathExplorer {
     type C: Clone + Debug;
     type Ctx: Context;
@@ -21,5 +25,5 @@ pub trait PathExplorer {
         &mut self,
         _: &mut Self::Ctx,
         _: <Self::Ctx as RegisterRead>::VarRef,
-    ) -> Self::C;
+    ) -> ExplorerResult<Self::C>;
 }

@@ -4,7 +4,7 @@ use rune::context::rune_ctx::RuneContext;
 use rune::context::{Context, Evaluate, MemoryRead, RegisterRead};
 use rune::engine::rune::RuneControl;
 use rune::explorer::interactive::Command;
-use rune::explorer::PathExplorer;
+use rune::explorer::{ExplorerError, ExplorerResult, PathExplorer};
 use rune::memory::seg_mem::SegMem;
 use rune::regstore::regfile::RuneRegFile;
 
@@ -89,8 +89,7 @@ impl InteractiveExplorer {
 
             let op_2 = {
                 if let Some(h) = tokens[2].strip_prefix("0x") {
-                    let const_v =
-                        u64::from_str_radix(h, 16).expect("Invalid base16 Integer");
+                    let const_v = u64::from_str_radix(h, 16).expect("Invalid base16 Integer");
                     ctx.define_const(const_v, 64)
                 } else {
                     ctx.reg_read(tokens[2])
@@ -163,29 +162,27 @@ impl PathExplorer for InteractiveExplorer {
         &mut self,
         ctx: &mut Self::Ctx,
         condition: <Self::Ctx as RegisterRead>::VarRef,
-    ) -> RuneControl {
+    ) -> ExplorerResult<RuneControl> {
         if self.cmd_q.is_empty() {
             self.console
                 .print_info(&format!("Encountered Branch At {:#x}", ctx.ip()));
             self.cmd_q = self.console.read_command();
         }
 
-        if let Some(cmd) = self.cmd_q.pop() {
-            match cmd {
-                Command::FollowTrue => {
-                    let one = ctx.define_const(1, 64);
-                    ctx.eval(core::OpCodes::Cmp, [condition, one]);
-                    RuneControl::ExploreTrue
-                }
-                Command::FollowFalse => {
-                    let zero = ctx.define_const(0, 64);
-                    ctx.eval(core::OpCodes::Cmp, [condition, zero]);
-                    RuneControl::ExploreFalse
-                }
-                _ => panic!("Incompatible command"),
+        let cmd = self.cmd_q.pop().ok_or(ExplorerError::EmptyCommandQueue)?;
+
+        match cmd {
+            Command::FollowTrue => {
+                let one = ctx.define_const(1, 64);
+                ctx.eval(core::OpCodes::Cmp, [condition, one]);
+                Ok(RuneControl::ExploreTrue)
             }
-        } else {
-            unreachable!()
+            Command::FollowFalse => {
+                let zero = ctx.define_const(0, 64);
+                ctx.eval(core::OpCodes::Cmp, [condition, zero]);
+                Ok(RuneControl::ExploreFalse)
+            }
+            _ => Err(ExplorerError::IncompatibleCommand),
         }
     }
 }

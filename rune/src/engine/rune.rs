@@ -136,12 +136,14 @@ where
                     }
                     Ok(None)
                 } else {
-                    Err(EngineError::InCorrectOperand)
+                    Err(EngineError::IncorrectOperand)
                 };
                 return res;
             }
             Token::EIf => {
-                *control = self.explorer.register_branch(&mut self.ctx, l_op.unwrap());
+                *control = self
+                    .explorer
+                    .register_branch(&mut self.ctx, l_op.unwrap())?;
                 return Ok(None);
             }
             Token::EPoke(size) => {
