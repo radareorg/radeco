@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use libsmt::theories::core;
 
-use super::PathExplorer;
+use super::{ExplorerResult, PathExplorer};
 use crate::context::rune_ctx::RuneContext;
 use crate::context::{Context, Evaluate, RegisterRead};
 use crate::engine::rune::RuneControl;
@@ -73,7 +73,7 @@ impl PathExplorer for DFSExplorer<RuneContext<QWordMemory, RuneRegFile>> {
         &mut self,
         ctx: &mut Self::Ctx,
         condition: <Self::Ctx as RegisterRead>::VarRef,
-    ) -> RuneControl {
+    ) -> ExplorerResult<RuneControl> {
         // When a new branch is encountered, push the false branch into the queue and
         // explore the
         // true branch. Note that this choice is arbitrary and we could have as well
@@ -90,6 +90,6 @@ impl PathExplorer for DFSExplorer<RuneContext<QWordMemory, RuneRegFile>> {
             let one = ctx.define_const(1, 1);
             ctx.eval(core::OpCodes::Cmp, [condition, one]);
         }
-        RuneControl::ExploreTrue
+        Ok(RuneControl::ExploreTrue)
     }
 }

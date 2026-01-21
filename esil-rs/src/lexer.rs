@@ -706,7 +706,7 @@ impl Tokenize for Tokenizer {
                                 }
                             }
                         }
-                    } else if let Some(h) =  t.strip_prefix("0x") {
+                    } else if let Some(h) = t.strip_prefix("0x") {
                         match u64::from_str_radix(h, 16) {
                             Ok(v) => vec![Token::EConstant(v)],
                             Err(_) => vec![Token::EInvalid],

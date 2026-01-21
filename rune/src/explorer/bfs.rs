@@ -1,7 +1,7 @@
 //! `PathExplorer` that works by exploring the CFG in Breadth First Order.
 use std::collections::VecDeque;
 
-use super::PathExplorer;
+use super::{ExplorerResult, PathExplorer};
 use crate::context::{Context, RegisterRead};
 use crate::engine::rune::RuneControl;
 
@@ -74,7 +74,7 @@ where
         &mut self,
         ctx: &mut Self::Ctx,
         _condition: <Self::Ctx as RegisterRead>::VarRef,
-    ) -> RuneControl {
+    ) -> ExplorerResult<RuneControl> {
         // When rune encounters a conditional branch instruction, it needs to decide which state to
         // explore next. To resolve this, it makes a call to the path explorer which decides on the
         // path to be explored next. Path explorer saves the current context information in order
@@ -88,6 +88,6 @@ where
 
         // Switch to a new path in the BFS Queue and pre-empt the current instruction, forcing run
         // to load a new job from the queue.
-        RuneControl::TerminatePath
+        Ok(RuneControl::TerminatePath)
     }
 }

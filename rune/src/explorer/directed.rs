@@ -1,7 +1,7 @@
 //! `DirectedExplorer`, an implementation of a `PathExplorer` which allows directed symbolic
 //! execution
 
-use super::PathExplorer;
+use super::{ExplorerError, ExplorerResult, PathExplorer};
 use crate::engine::rune::RuneControl;
 
 use crate::context::rune_ctx::RuneContext;
@@ -75,25 +75,24 @@ impl PathExplorer for DirectedExplorer {
         &mut self,
         ctx: &mut Self::Ctx,
         condition: <Self::Ctx as RegisterRead>::VarRef,
-    ) -> RuneControl {
-        // println!("{:#x}", ctx.ip());
-        if self.d_map.contains_key(&ctx.ip()) {
-            let direction = self.d_map.get(&ctx.ip()).unwrap();
-            match *direction {
-                BranchType::True => {
-                    let one = ctx.define_const(1, 64);
-                    ctx.eval(core::OpCodes::Cmp, [condition, one]);
-                    RuneControl::ExploreTrue
-                }
-                BranchType::False => {
-                    let zero = ctx.define_const(0, 64);
-                    ctx.eval(core::OpCodes::Cmp, [condition, zero]);
-                    RuneControl::ExploreFalse
-                }
-                _ => panic!("Invalid branch type found!"),
+    ) -> ExplorerResult<RuneControl> {
+        let direction = self
+            .d_map
+            .get(&ctx.ip())
+            .ok_or(ExplorerError::UnknownBranch)?;
+
+        match *direction {
+            BranchType::True => {
+                let one = ctx.define_const(1, 64);
+                ctx.eval(core::OpCodes::Cmp, [condition, one]);
+                Ok(RuneControl::ExploreTrue)
             }
-        } else {
-            panic!("Do not know which branch to take. Set a default!");
+            BranchType::False => {
+                let zero = ctx.define_const(0, 64);
+                ctx.eval(core::OpCodes::Cmp, [condition, zero]);
+                Ok(RuneControl::ExploreFalse)
+            }
+            _ => Err(ExplorerError::InvalidBranch),
         }
     }
 }
