@@ -14,13 +14,17 @@ use r2api::api_trait::R2PApi;
 use r2api::structs::LOpInfo;
 use r2pipe::r2::R2;
 
+mod error;
+
+pub use error::{StreamError, StreamResult};
+
 pub trait Decodable: for<'a> Deserialize<'a> + Serialize {}
 
-pub trait InstructionStream {
+pub trait InstructionStream: Sized {
     type Output: Debug + Clone;
     type Index: Debug + Clone;
 
-    fn new() -> Self;
+    fn new() -> StreamResult<Self>;
     fn at(&mut self, _: Self::Index) -> Option<Self::Output>;
 }
 
@@ -28,13 +32,15 @@ impl InstructionStream for R2 {
     type Output = LOpInfo;
     type Index = u64;
 
-    fn new() -> R2 {
-        R2::new::<&str>(None).expect("Unable to open R2")
+    fn new() -> StreamResult<R2> {
+        R2::new::<&str>(None).map_err(|_| StreamError::OpenR2)
     }
 
     fn at(&mut self, addr: u64) -> Option<Self::Output> {
         let addr_ = format!("{addr}");
-        Some(self.insts(Some(1), Some(&addr_)).unwrap()[0].clone())
+        self.insts(Some(1), Some(&addr_))
+            .ok()
+            .and_then(|insts| insts.first().cloned())
     }
 }
 
@@ -56,11 +62,14 @@ where
     I: Debug + Clone + Decodable + Hash + PartialEq + Eq,
     Op: Debug + Clone + Decodable,
 {
-    pub fn load<T: AsRef<path::Path>>(&mut self, fname: T) {
-        let mut f = File::open(fname).expect("Failed to open file");
+    pub fn load<T: AsRef<path::Path>>(&mut self, fname: T) -> StreamResult<()> {
+        let mut f = File::open(fname).map_err(|_| StreamError::FileOpen)?;
         let mut s = String::new();
-        f.read_to_string(&mut s).expect("Failed to read from file");
-        self.insts = serde_json::from_str::<HashMap<I, Op>>(&s).expect("Failed to decode json");
+        f.read_to_string(&mut s)
+            .map_err(|_| StreamError::FileRead)?;
+        self.insts =
+            serde_json::from_str::<HashMap<I, Op>>(&s).map_err(|_| StreamError::JsonDecode)?;
+        Ok(())
     }
 }
 
@@ -72,10 +81,10 @@ where
     type Output = Op;
     type Index = I;
 
-    fn new() -> FileStream<I, Op> {
-        FileStream {
+    fn new() -> StreamResult<FileStream<I, Op>> {
+        Ok(FileStream {
             insts: HashMap::new(),
-        }
+        })
     }
 
     fn at(&mut self, addr: I) -> Option<Op> {

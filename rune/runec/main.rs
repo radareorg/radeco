@@ -73,51 +73,67 @@ fn main() {
 
     if args.get_bool("-p") {
         let path = args.get_str("<path>");
-        is = RInitialState::import_from_json(path);
+        match RInitialState::import_from_json(path) {
+            Ok(i) => is = i,
+            Err(err) => {
+                c.print_error(format!("unable to load initial state: {err}").as_str());
+                exit(1);
+            }
+        };
     }
 
     loop {
-        match c.read_command()[0] {
-            Command::Run => {
+        match c.read_command().map(|c| c.first().cloned()) {
+            Ok(Some(Command::Run)) => {
                 // NOTE: This allows us to use any explorer here.
                 let mut explorer = InteractiveExplorer::new();
                 explorer.bp = is.get_breakpoints();
 
-                let ctx = is.create_context(&mut stream);
+                let ctx = match is.create_context(&mut stream) {
+                    Ok(c) => c,
+                    Err(err) => {
+                        c.print_error(format!("error creating context: {err}").as_str());
+                        exit(1);
+                    }
+                };
 
                 let mut rune = Rune::new(ctx, explorer, stream);
                 rune.run().expect("Rune Error!");
                 break;
             }
-            Command::Help => {
+            Ok(Some(Command::Help)) => {
                 c.print_help();
                 continue;
             }
-            Command::Save => {
-                is.write_to_json();
+            Ok(Some(Command::Save)) => {
+                if let Err(err) = is.write_to_json() {
+                    c.print_error(err.to_string().as_str());
+                }
                 continue;
             }
-            Command::DebugState => {
+            Ok(Some(Command::DebugState)) => {
                 // TODO: It would be better if we pretty print the debug message.
-                c.print_info(&is.get_string());
+                if let Err(err) = is.get_string().as_deref().map(|istr| c.print_info(istr)) {
+                    c.print_error(err.to_string().as_str());
+                }
                 continue;
             }
-            Command::SetContext(SAssignment {
+            Ok(Some(Command::SetContext(SAssignment {
                 lvalue: Key::Mem(val),
                 rvalue: ValType::Break,
-            }) => {
+            }))) => {
                 is.add_breakpoint(val as u64);
             }
-            Command::SetContext(SAssignment {
+            Ok(Some(Command::SetContext(SAssignment {
                 lvalue: ref val,
                 rvalue: ValType::Symbolic,
-            }) => {
+            }))) => {
                 is.add_sym(val.clone());
             }
-            Command::SetContext(SAssignment {
+            Ok(Some(Command::SetContext(SAssignment {
                 lvalue: ref key,
                 rvalue: ValType::Concrete(val),
-            }) => {
+            }))) => {
                 // If the register to be set is rip, we infer that the user is setting
                 // their start address
                 if *key == Key::Reg("rip".to_owned()) {
@@ -126,11 +142,11 @@ fn main() {
                     is.add_const((key.clone(), val as u64));
                 }
             }
-            Command::Exit => {
+            Ok(Some(Command::Exit)) => {
                 c.print_info("Thanks for using rune!");
                 exit(0);
             }
-            Command::Invalid => {
+            Ok(Some(Command::Invalid)) => {
                 c.print_error("Invalid command. Please try again.");
             }
             _ => continue,

@@ -4,7 +4,10 @@ use r2api::structs::LRegInfo;
 
 use std::fmt::Debug;
 
+mod error;
 pub mod regfile;
+
+pub use error::{RegstoreError, RegstoreResult};
 
 #[derive(Clone, Debug, Default)]
 pub struct RegEntry {
@@ -48,9 +51,9 @@ pub trait RegStore: Clone + Debug {
 
     fn set_reg(&mut self, _: &str, _: Self::VarRef);
 
-    fn read(&mut self, _: &str, _: &mut SMTLib2<qf_abv::QF_ABV>) -> Self::VarRef;
+    fn read(&mut self, _: &str, _: &mut SMTLib2<qf_abv::QF_ABV>) -> RegstoreResult<Self::VarRef>;
 
-    fn write(&mut self, _: &str, _: Self::VarRef) -> Option<Self::VarRef>;
+    fn write(&mut self, _: &str, _: Self::VarRef) -> RegstoreResult<Option<Self::VarRef>>;
 }
 
 pub trait RegStoreAPI: RegStore {

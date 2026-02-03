@@ -6,7 +6,7 @@ use libsmt::logics::qf_abv;
 use libsmt::theories::{array_ex, bitvec, core};
 use r2api::structs::Endian;
 
-use super::Memory;
+use super::{Memory, MemoryError, MemoryResult};
 
 // Not using address_width/endianness
 #[derive(Clone, Debug)]
@@ -59,16 +59,16 @@ impl Memory for QWordMemory {
         addr: NodeIndex,
         read_size: usize,
         solver: &mut SMTLib2<qf_abv::QF_ABV>,
-    ) -> NodeIndex {
+    ) -> MemoryResult<NodeIndex> {
         if self.map.is_none() {
             self.init_memory(solver);
         }
-        let mem = self.map.unwrap();
+        let mem = self.map.ok_or(MemoryError::MissingMap)?;
         let idx = solver.assert(array_ex::OpCodes::Select, &[mem, addr]);
         if read_size < 64 {
-            solver.assert(bitvec::OpCodes::Extract((read_size - 1) as u64, 1), &[idx])
+            Ok(solver.assert(bitvec::OpCodes::Extract((read_size - 1) as u64, 1), &[idx]))
         } else {
-            idx
+            Ok(idx)
         }
     }
 
@@ -78,13 +78,15 @@ impl Memory for QWordMemory {
         data: NodeIndex,
         _write_size: usize,
         solver: &mut SMTLib2<qf_abv::QF_ABV>,
-    ) {
+    ) -> MemoryResult<()> {
         if self.map.is_none() {
             self.init_memory(solver);
         }
 
-        let mem = self.map.unwrap();
+        let mem = self.map.ok_or(MemoryError::MissingMap)?;
         let new_mem = solver.assert(array_ex::OpCodes::Store, &[mem, addr, data]);
         self.map = Some(new_mem);
+
+        Ok(())
     }
 }

@@ -34,7 +34,8 @@ fn main() {
     consts.insert(Key::Reg(String::from("rbp")), (bp as u64, 64 as u64));
 
     // Context
-    let ctx = new_rune_ctx(Some(ip), Some(syms), Some(consts), &mut stream);
+    let ctx = new_rune_ctx(Some(ip), Some(syms), Some(consts), &mut stream)
+        .expect("error creating new Rune context");
 
     // Explorer
     let mut explorer = DirectedExplorer::new();

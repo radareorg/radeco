@@ -12,7 +12,7 @@ use libsmt::theories::core::OpCodes::*;
 
 use r2api::structs::Endian;
 
-use super::Memory;
+use super::{Memory, MemoryError, MemoryResult};
 use crate::utils::simplify_constant;
 
 #[derive(Copy, Clone, Debug)]
@@ -172,9 +172,9 @@ impl Memory for SegMem {
         addr: NodeIndex,
         read_size: usize,
         solver: &mut SMTLib2<qf_abv::QF_ABV>,
-    ) -> NodeIndex {
+    ) -> MemoryResult<NodeIndex> {
         // Assert that address is valid
-        let addr = simplify_constant(addr, solver);
+        let addr = simplify_constant(addr, solver)?;
 
         let read_range = MemRange::new(addr, addr + (read_size / 8) as u64);
 
@@ -205,16 +205,16 @@ impl Memory for SegMem {
             if let Some(&current) = iterator.peek() {
                 if current.start == start && current.end == end {
                     // current is the mem requested
-                    let node = mem.get(current).unwrap();
-                    let node_idx = node.solver_idx.unwrap();
+                    let node = mem.get(current).ok_or(MemoryError::MissingCurrentSegment)?;
+                    let node_idx = node.solver_idx.ok_or(MemoryError::MissingSolverIndex)?;
 
                     result = node_idx;
 
                     ptr = end;
                 } else if current.start == ptr && current.end <= end {
                     // Use current
-                    let node = mem.get(current).unwrap();
-                    let node_idx = node.solver_idx.unwrap();
+                    let node = mem.get(current).ok_or(MemoryError::MissingCurrentSegment)?;
+                    let node_idx = node.solver_idx.ok_or(MemoryError::MissingSolverIndex)?;
 
                     result = solver.assert(BvOr, &[result, node_idx]);
 
@@ -222,8 +222,8 @@ impl Memory for SegMem {
                     iterator.next();
                 } else if current.contains(ptr) && current.contains(end) {
                     // extract entire
-                    let node = mem.get(current).unwrap();
-                    let node_idx = node.solver_idx.unwrap();
+                    let node = mem.get(current).ok_or(MemoryError::MissingCurrentSegment)?;
+                    let node_idx = node.solver_idx.ok_or(MemoryError::MissingSolverIndex)?;
 
                     low = (ptr - current.start) * 8;
                     high = (end - current.start) * 8;
@@ -246,8 +246,8 @@ impl Memory for SegMem {
                     iterator.next();
                 } else if current.contains(ptr) && !current.contains(end) {
                     // extract till end of current
-                    let node = mem.get(current).unwrap();
-                    let node_idx = node.solver_idx.unwrap();
+                    let node = mem.get(current).ok_or(MemoryError::MissingCurrentSegment)?;
+                    let node_idx = node.solver_idx.ok_or(MemoryError::MissingSolverIndex)?;
 
                     low = (ptr - current.start) * 8;
                     high = (current.end - current.start) * 8;
@@ -332,7 +332,7 @@ impl Memory for SegMem {
             }
         }
         println!("{}", solver.generate_asserts());
-        result
+        Ok(result)
     }
 
     fn write(
@@ -341,9 +341,10 @@ impl Memory for SegMem {
         data: NodeIndex,
         write_size: usize,
         solver: &mut SMTLib2<qf_abv::QF_ABV>,
-    ) {
-        let idx = self.read(addr, write_size, solver);
-        solver.assert(Cmp, &[idx, data]);
+    ) -> MemoryResult<()> {
+        self.read(addr, write_size, solver).map(|idx| {
+            solver.assert(Cmp, &[idx, data]);
+        })
     }
 }
 
@@ -366,14 +367,14 @@ mod test {
 
         let addr = solver.new_const(Const(0x9000, 64));
         let data = solver.new_const(Const(0x70, 8));
-        mem.write(addr, data, 8, &mut solver);
+        mem.write(addr, data, 8, &mut solver).unwrap();
 
         let addr = solver.new_const(Const(0x9001, 64));
         let data = solver.new_const(Const(0x79, 8));
-        mem.write(addr, data, 8, &mut solver);
+        mem.write(addr, data, 8, &mut solver).unwrap();
 
         let addr = solver.new_const(Const(0x9000, 64));
-        let var = mem.read(addr, 16, &mut solver);
+        let var = mem.read(addr, 16, &mut solver).unwrap();
 
         let c = solver.new_const(Const(0x7970, 16));
         let _cmp = solver.assert(Cmp, &[var, c]);

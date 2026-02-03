@@ -7,7 +7,12 @@ use std::collections::HashMap;
 
 use libsmt::backends::smtlib2::SMTProc;
 
+use crate::memory::MemoryResult;
+
+mod error;
 pub mod rune_ctx;
+
+pub use error::{ContextError, ContextResult};
 
 pub trait Context:
     Clone
@@ -29,10 +34,13 @@ pub trait Context:
     fn set_ip(&mut self, _: u64);
     fn define_const(&mut self, _: u64, _: usize) -> <Self as RegisterRead>::VarRef;
     fn alias_of(&self, _: String) -> Option<String>;
-    fn e_old(&self) -> <Self as RegisterRead>::VarRef;
-    fn e_cur(&self) -> <Self as RegisterRead>::VarRef;
+    fn e_old(&self) -> ContextResult<<Self as RegisterRead>::VarRef>;
+    fn e_cur(&self) -> ContextResult<<Self as RegisterRead>::VarRef>;
 
-    fn solve<S: SMTProc>(&mut self, _: &mut S) -> HashMap<<Self as RegisterRead>::VarRef, u64>;
+    fn solve<S: SMTProc>(
+        &mut self,
+        _: &mut S,
+    ) -> ContextResult<HashMap<<Self as RegisterRead>::VarRef, u64>>;
 
     fn var_named<T: AsRef<str>>(&self, _: T) -> Option<<Self as RegisterRead>::VarRef>;
     fn set_e_old(&mut self, _: <Self as RegisterRead>::VarRef);
@@ -41,22 +49,22 @@ pub trait Context:
 
 pub trait MemoryRead: Sized {
     type VarRef: Clone + Debug + Hash + Eq;
-    fn mem_read(&mut self, _: Self::VarRef, _: usize) -> Self::VarRef;
+    fn mem_read(&mut self, _: Self::VarRef, _: usize) -> MemoryResult<Self::VarRef>;
 }
 
 pub trait MemoryWrite: Sized {
     type VarRef: Clone + Debug + Hash + Eq;
-    fn mem_write(&mut self, _: Self::VarRef, _: Self::VarRef, _: usize);
+    fn mem_write(&mut self, _: Self::VarRef, _: Self::VarRef, _: usize) -> MemoryResult<()>;
 }
 
 pub trait RegisterRead: Sized {
     type VarRef: Clone + Debug + Hash + Eq;
-    fn reg_read<T: AsRef<str>>(&mut self, _: T) -> Self::VarRef;
+    fn reg_read<T: AsRef<str>>(&mut self, _: T) -> ContextResult<Self::VarRef>;
 }
 
 pub trait RegisterWrite: Sized {
     type VarRef: Clone + Debug + Hash + Eq;
-    fn reg_write<T: AsRef<str>>(&mut self, _: T, _: Self::VarRef);
+    fn reg_write<T: AsRef<str>>(&mut self, _: T, _: Self::VarRef) -> ContextResult<()>;
 }
 
 pub trait Evaluate {
@@ -75,16 +83,29 @@ pub trait Evaluate {
 /// `ContextAPI`.
 pub trait ContextAPI: Context {
     /// Set register to hold either symbolic or concrete values.
-    fn set_reg_as_const<T: AsRef<str>>(&mut self, _: T, _: u64) -> <Self as RegisterRead>::VarRef;
-    fn set_reg_as_sym<T: AsRef<str>>(&mut self, _: T) -> <Self as RegisterRead>::VarRef;
+    fn set_reg_as_const<T: AsRef<str>>(
+        &mut self,
+        _: T,
+        _: u64,
+    ) -> ContextResult<<Self as RegisterRead>::VarRef>;
+    fn set_reg_as_sym<T: AsRef<str>>(
+        &mut self,
+        _: T,
+    ) -> ContextResult<<Self as RegisterRead>::VarRef>;
 
     /// Set memory to hold either symbolic or concrete values.
-    fn set_mem_as_const(&mut self, _: u64, _: u64, _: usize) -> <Self as RegisterRead>::VarRef;
-    fn set_mem_as_sym(&mut self, _: u64, _: usize) -> <Self as RegisterRead>::VarRef;
+    fn set_mem_as_const(
+        &mut self,
+        _: u64,
+        _: u64,
+        _: usize,
+    ) -> ContextResult<<Self as RegisterRead>::VarRef>;
+    fn set_mem_as_sym(&mut self, _: u64, _: usize)
+        -> ContextResult<<Self as RegisterRead>::VarRef>;
 
     /// Set registers that are not set to be a constant zero.
     fn zero_registers(&mut self);
 
     /// An iterator over registers.
-    fn registers(&self) -> Vec<String>;
+    fn registers(&self) -> ContextResult<Vec<String>>;
 }

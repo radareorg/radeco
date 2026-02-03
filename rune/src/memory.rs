@@ -4,8 +4,11 @@ use r2api::structs::Endian;
 
 use std::fmt::Debug;
 
+mod error;
 pub mod qword_mem;
 pub mod seg_mem;
+
+pub use error::{MemoryError, MemoryResult};
 
 pub trait Memory: Clone + Debug {
     type VarRef;
@@ -22,7 +25,7 @@ pub trait Memory: Clone + Debug {
         addr: Self::VarRef,
         read_size: usize,
         solver: &mut SMTLib2<qf_abv::QF_ABV>,
-    ) -> Self::VarRef;
+    ) -> MemoryResult<Self::VarRef>;
 
     /// Write x bytes of memory at a certain location
     fn write(
@@ -31,5 +34,5 @@ pub trait Memory: Clone + Debug {
         data: Self::VarRef,
         write_size: usize,
         solver: &mut SMTLib2<qf_abv::QF_ABV>,
-    );
+    ) -> MemoryResult<()>;
 }
