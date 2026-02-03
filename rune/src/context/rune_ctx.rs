@@ -8,8 +8,11 @@ use libsmt::backends::smtlib2::{SMTLib2, SMTProc};
 use libsmt::logics::qf_abv;
 use libsmt::theories::bitvec;
 
-use super::{Context, ContextAPI, Evaluate, MemoryRead, MemoryWrite, RegisterRead, RegisterWrite};
-use crate::memory::Memory;
+use super::{
+    Context, ContextAPI, ContextError, ContextResult, Evaluate, MemoryRead, MemoryWrite,
+    RegisterRead, RegisterWrite,
+};
+use crate::memory::{Memory, MemoryError, MemoryResult};
 use crate::regstore::{RegStore, RegStoreAPI};
 
 #[derive(Clone, Debug)]
@@ -39,14 +42,12 @@ where
         self.e_cur = Some(i);
     }
 
-    fn e_old(&self) -> NodeIndex {
-        assert!(self.e_old.is_some(), "e_old accessed before being set!");
-        self.e_old.unwrap()
+    fn e_old(&self) -> ContextResult<NodeIndex> {
+        self.e_old.ok_or(ContextError::MissingEOld)
     }
 
-    fn e_cur(&self) -> NodeIndex {
-        assert!(self.e_cur.is_some(), "e_cur accessed before being set!");
-        self.e_cur.unwrap()
+    fn e_cur(&self) -> ContextResult<NodeIndex> {
+        self.e_cur.ok_or(ContextError::MissingECur)
     }
 
     fn ip(&self) -> u64 {
@@ -73,8 +74,8 @@ where
         self.regstore.get_reg_entry(&reg).alias.clone()
     }
 
-    fn solve<S: SMTProc>(&mut self, p: &mut S) -> HashMap<NodeIndex, u64> {
-        self.solver.solve(p).expect("No satisfying solution.")
+    fn solve<S: SMTProc>(&mut self, p: &mut S) -> ContextResult<HashMap<NodeIndex, u64>> {
+        self.solver.solve(p).map_err(|_| ContextError::Unsat)
     }
 
     fn var_named<T: AsRef<str>>(&self, _var: T) -> Option<NodeIndex> {
@@ -89,8 +90,10 @@ where
 {
     type VarRef = NodeIndex;
 
-    fn reg_read<T: AsRef<str>>(&mut self, reg: T) -> NodeIndex {
-        self.regstore.read(reg.as_ref(), &mut self.solver)
+    fn reg_read<T: AsRef<str>>(&mut self, reg: T) -> ContextResult<NodeIndex> {
+        self.regstore
+            .read(reg.as_ref(), &mut self.solver)
+            .map_err(ContextError::from)
     }
 }
 
@@ -101,14 +104,16 @@ where
 {
     type VarRef = NodeIndex;
 
-    fn reg_write<T: AsRef<str>>(&mut self, reg: T, source: NodeIndex) {
-        let e_old = self.regstore.write(reg.as_ref(), source);
+    fn reg_write<T: AsRef<str>>(&mut self, reg: T, source: NodeIndex) -> ContextResult<()> {
+        let e_old = self.regstore.write(reg.as_ref(), source)?;
         // XXX: THIS IS A HACK!
         // IF NOT REG
         if !reg.as_ref().to_owned().ends_with('f') {
             self.e_old = e_old;
             self.e_cur = Some(source);
         }
+
+        Ok(())
     }
 }
 
@@ -119,10 +124,13 @@ where
 {
     type VarRef = NodeIndex;
 
-    fn mem_read(&mut self, addr: NodeIndex, read_size: usize) -> NodeIndex {
+    fn mem_read(&mut self, addr: NodeIndex, read_size: usize) -> MemoryResult<NodeIndex> {
         // Assert read size is multiple of 8
-        assert_eq!(read_size % 8, 0, "Read Size is not divisible by 8");
-        self.mem.read(addr, read_size, &mut self.solver)
+        if read_size.is_multiple_of(8) {
+            self.mem.read(addr, read_size, &mut self.solver)
+        } else {
+            Err(MemoryError::ReadSizeDiv8)
+        }
     }
 }
 
@@ -133,10 +141,18 @@ where
 {
     type VarRef = NodeIndex;
 
-    fn mem_write(&mut self, addr: NodeIndex, data: NodeIndex, write_size: usize) {
+    fn mem_write(
+        &mut self,
+        addr: NodeIndex,
+        data: NodeIndex,
+        write_size: usize,
+    ) -> MemoryResult<()> {
         // Assert write size is multiple of 8
-        assert_eq!(write_size % 8, 0, "Write Size is not divisible by 8");
-        self.mem.write(addr, data, write_size, &mut self.solver);
+        if write_size.is_multiple_of(8) {
+            self.mem.write(addr, data, write_size, &mut self.solver)
+        } else {
+            Err(MemoryError::WriteSizeDiv8)
+        }
     }
 }
 
@@ -164,36 +180,43 @@ where
     Mem: Memory<VarRef = NodeIndex>,
     Reg: RegStore<VarRef = NodeIndex> + RegStoreAPI,
 {
-    fn set_reg_as_const<T: AsRef<str>>(&mut self, reg: T, val: u64) -> NodeIndex {
+    fn set_reg_as_const<T: AsRef<str>>(&mut self, reg: T, val: u64) -> ContextResult<NodeIndex> {
         if let Some(cval) = self.regstore.get_reg_ref(reg.as_ref()) {
-            cval
+            Ok(cval)
         } else {
             let cval = self.define_const(val, 64);
             self.regstore.set_reg(reg.as_ref(), cval);
-            cval
+            Ok(cval)
         }
     }
 
-    fn set_reg_as_sym<T: AsRef<str>>(&mut self, reg: T) -> NodeIndex {
+    fn set_reg_as_sym<T: AsRef<str>>(&mut self, reg: T) -> ContextResult<NodeIndex> {
         let sym = self.solver.new_var(Some(reg.as_ref()), qf_abv::bv_sort(64));
         self.regstore.set_reg(reg.as_ref(), sym);
         // self.syms.insert(reg.as_ref().to_owned(), sym);
 
-        sym
+        Ok(sym)
     }
 
-    fn set_mem_as_const(&mut self, addr: u64, val: u64, write_size: usize) -> NodeIndex {
+    fn set_mem_as_const(
+        &mut self,
+        addr: u64,
+        val: u64,
+        write_size: usize,
+    ) -> ContextResult<NodeIndex> {
         // Assert that memory var is in chunks of 8
-        assert_eq!(write_size % 8, 0, "Write size is not divisible by 8!");
+        if write_size.is_multiple_of(8) {
+            Err(ContextError::Memory(MemoryError::WriteSizeDiv8))
+        } else {
+            let addr = self.define_const(addr, 64);
+            let cval = self.define_const(val, write_size);
+            self.mem_write(addr, cval, write_size)?;
 
-        let addr = self.define_const(addr, 64);
-        let cval = self.define_const(val, write_size);
-        self.mem_write(addr, cval, write_size);
-
-        cval
+            Ok(cval)
+        }
     }
 
-    fn set_mem_as_sym(&mut self, addr: u64, write_size: usize) -> NodeIndex {
+    fn set_mem_as_sym(&mut self, addr: u64, write_size: usize) -> ContextResult<NodeIndex> {
         // Assert that memory var is in chunks of 8
         assert_eq!(write_size % 8, 0, "Write size is not divisible by 8!");
 
@@ -201,10 +224,10 @@ where
         let sym = self.solver.new_var(Some(&key), qf_abv::bv_sort(write_size));
         let addr = self.define_const(addr, 64);
 
-        self.mem_write(addr, sym, write_size);
+        self.mem_write(addr, sym, write_size)?;
         // self.syms.insert(key, sym);
 
-        sym
+        Ok(sym)
     }
 
     fn zero_registers(&mut self) {
@@ -216,8 +239,8 @@ where
         }
     }
 
-    fn registers(&self) -> Vec<String> {
-        unimplemented!();
+    fn registers(&self) -> ContextResult<Vec<String>> {
+        Err(ContextError::Unimplemented)
     }
 }
 
@@ -233,7 +256,7 @@ where
         solver: SMTLib2<qf_abv::QF_ABV>,
     ) -> RuneContext<Mem, Reg> {
         RuneContext {
-            ip: ip.unwrap_or(0),
+            ip: ip.unwrap_or_default(),
             mem,
             regstore,
             solver,

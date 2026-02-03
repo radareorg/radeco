@@ -1,7 +1,7 @@
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
-use super::{RegEntry, RegStore, RegStoreAPI};
+use super::{RegEntry, RegStore, RegStoreAPI, RegstoreError, RegstoreResult};
 
 use libsmt::backends::backend::SMTBackend;
 use libsmt::backends::smtlib2::SMTLib2;
@@ -73,24 +73,29 @@ impl RegStore for RuneRegFile {
         }
     }
 
-    fn read(&mut self, reg_name: &str, solver: &mut SMTLib2<qf_abv::QF_ABV>) -> NodeIndex {
-        let rentry = &self.regfile.get(reg_name).expect("Unknown Register");
-        let idx = self.current_regs[rentry.idx].expect(
-            "Unset register - Undefined Behavior. Consider setting an initial value before use!",
-        );
+    fn read(
+        &mut self,
+        reg_name: &str,
+        solver: &mut SMTLib2<qf_abv::QF_ABV>,
+    ) -> RegstoreResult<NodeIndex> {
+        let rentry = &self
+            .regfile
+            .get(reg_name)
+            .ok_or(RegstoreError::UnknownRegister)?;
+        let idx = self.current_regs[rentry.idx].ok_or(RegstoreError::UnsetRegister)?;
         if rentry.is_whole {
-            idx
+            Ok(idx)
         } else {
-            solver.assert(bitvec::OpCodes::Extract((rentry.end_bit) as u64, 0), &[idx])
+            Ok(solver.assert(bitvec::OpCodes::Extract((rentry.end_bit) as u64, 0), &[idx]))
         }
     }
 
     // TODO: This is not totally correct as the sizes of registers may not match.
-    fn write(&mut self, dest: &str, source: NodeIndex) -> Option<NodeIndex> {
+    fn write(&mut self, dest: &str, source: NodeIndex) -> RegstoreResult<Option<NodeIndex>> {
         let rentry = &self.regfile[dest];
         let e_old = self.current_regs[rentry.idx];
         self.current_regs[rentry.idx] = Some(source);
-        e_old
+        Ok(e_old)
     }
 
     fn get_reg_entry(&self, r_string: &str) -> RegEntry {

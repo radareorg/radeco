@@ -23,7 +23,10 @@ use libsmt::theories::bitvec::OpCodes::*;
 
 use std::collections::HashMap;
 
+mod error;
 pub mod state;
+
+pub use error::{UtilError, UtilResult};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ValType {
@@ -48,14 +51,18 @@ pub struct SAssignment {
 /// Hex/Decimal to Memory address, any other string maps to Registers
 ///
 /// Useful when input strings is to be interpretted either as a Memory Address or a register name.
-pub fn to_key<T: AsRef<str>>(s: T) -> Key {
+pub fn to_key<T: AsRef<str>>(s: T) -> UtilResult<Key> {
     let v = s.as_ref();
     if let Some(h) = v.strip_prefix("0x") {
-        Key::Mem(usize::from_str_radix(h, 16).expect("Invalid number!"))
+        usize::from_str_radix(h, 16)
+            .map_err(|_| UtilError::InvalidBase16)
+            .map(Key::Mem)
     } else if matches!(v.chars().next().map(|c| c.is_ascii_digit()), Some(true)) {
-        Key::Mem(v.parse::<usize>().expect("Invalid number!"))
+        v.parse::<usize>()
+            .map_err(|_| UtilError::InvalidInteger)
+            .map(Key::Mem)
     } else {
-        Key::Reg(v.to_owned())
+        Ok(Key::Reg(v.to_owned()))
     }
 }
 
@@ -73,7 +80,7 @@ pub fn to_assignment<T: AsRef<str>>(s: T) -> Option<SAssignment> {
     let v = s.as_ref();
     let ops: Vec<&str> = v.split('=').collect();
 
-    let lvalue: Key = to_key(ops[0].trim());
+    let lvalue: Key = to_key(ops[0].trim()).ok()?;
     to_valtype(ops[1].trim()).map(|rvalue| SAssignment { lvalue, rvalue })
 }
 
@@ -94,13 +101,16 @@ pub fn new_rune_ctx(
     syms: Option<HashMap<Key, u64>>,
     consts: Option<HashMap<Key, (u64, u64)>>,
     r2: &mut R2,
-) -> RuneContext<SegMem, RuneRegFile> {
-    let mut lreginfo = r2.reg_info().unwrap();
+) -> UtilResult<RuneContext<SegMem, RuneRegFile>> {
+    let mut lreginfo = r2.reg_info()?;
     let rregfile = RuneRegFile::new(&mut lreginfo);
 
-    let bin = r2.bin_info().unwrap().bin.unwrap();
-    let bits = bin.bits.unwrap();
-    let endian = bin.endian.unwrap();
+    let bin = r2
+        .bin_info()
+        .map_err(UtilError::from)
+        .and_then(|bi| bi.bin.ok_or(UtilError::MissingBinInfo))?;
+    let bits = bin.bits.ok_or(UtilError::MissingBinBits)?;
+    let endian = bin.endian.ok_or(UtilError::MissingBinEndian)?;
     let rmem = SegMem::new(bits, endian);
 
     let smt = SMTLib2::new(Some(qf_abv::QF_ABV));
@@ -110,8 +120,8 @@ pub fn new_rune_ctx(
     if let Some(sym_vars) = syms {
         for (sym, size) in sym_vars.iter() {
             match *sym {
-                Key::Mem(addr) => ctx.set_mem_as_sym(addr as u64, *size as usize),
-                Key::Reg(ref reg) => ctx.set_reg_as_sym(reg),
+                Key::Mem(addr) => ctx.set_mem_as_sym(addr as u64, *size as usize)?,
+                Key::Reg(ref reg) => ctx.set_reg_as_sym(reg)?,
             };
         }
     }
@@ -119,43 +129,45 @@ pub fn new_rune_ctx(
     if let Some(const_vars) = consts {
         for (key, val) in const_vars.iter() {
             match *key {
-                Key::Mem(addr) => ctx.set_mem_as_const(addr as u64, val.0, val.1 as usize),
-                Key::Reg(ref reg) => ctx.set_reg_as_const(reg, val.0),
+                Key::Mem(addr) => ctx.set_mem_as_const(addr as u64, val.0, val.1 as usize)?,
+                Key::Reg(ref reg) => ctx.set_reg_as_const(reg, val.0)?,
             };
         }
     }
 
     // Setting unset registers to zero!
     for register in &lreginfo.reg_info {
-        ctx.set_reg_as_const(register.name.clone(), 0);
+        ctx.set_reg_as_const(register.name.clone(), 0)?;
     }
 
-    ctx
+    Ok(ctx)
 }
 
 // Ideally, this should be implemented for all logics.
 // But since we are using only bitvecs, we can use this function for now I guess.
-pub fn simplify_constant(ni: NodeIndex, solver: &mut SMTLib2<qf_abv::QF_ABV>) -> u64 {
+pub fn simplify_constant(ni: NodeIndex, solver: &mut SMTLib2<qf_abv::QF_ABV>) -> UtilResult<u64> {
     match *solver.get_node_info(ni) {
-        BVOps(Const(x, _)) => x,
+        BVOps(Const(x, _)) => Ok(x),
         BVOps(BvSub) => {
             let oper = solver.get_operands(ni);
             let mut iter = oper.iter();
 
-            let first = iter.next().unwrap();
-            let second = iter.next().unwrap();
+            let first = iter.next().ok_or(UtilError::MissingOperand)?;
+            let second = iter.next().ok_or(UtilError::MissingOperand)?;
 
-            simplify_constant(*second, solver) - simplify_constant(*first, solver)
+            simplify_constant(*second, solver)
+                .and_then(|lhs| simplify_constant(*first, solver).map(|rhs| lhs - rhs))
         }
         BVOps(BvAdd) => {
             let oper = solver.get_operands(ni);
             let mut iter = oper.iter();
 
-            let first = iter.next().unwrap();
-            let second = iter.next().unwrap();
+            let first = iter.next().ok_or(UtilError::MissingOperand)?;
+            let second = iter.next().ok_or(UtilError::MissingOperand)?;
 
-            simplify_constant(*second, solver) + simplify_constant(*first, solver)
+            simplify_constant(*second, solver)
+                .and_then(|lhs| simplify_constant(*first, solver).map(|rhs| lhs + rhs))
         }
-        _ => panic!("Unimplemented!"),
+        _ => Err(UtilError::Unimplemented),
     }
 }

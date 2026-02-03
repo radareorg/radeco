@@ -1,7 +1,7 @@
 //! `PathExplorer` that allows interactive exploration
 
 use rune::context::rune_ctx::RuneContext;
-use rune::context::{Context, Evaluate, MemoryRead, RegisterRead};
+use rune::context::{Context, ContextResult, Evaluate, MemoryRead, RegisterRead};
 use rune::engine::rune::RuneControl;
 use rune::explorer::interactive::Command;
 use rune::explorer::{ExplorerError, ExplorerResult, PathExplorer};
@@ -26,14 +26,16 @@ pub struct InteractiveExplorer {
 
 impl InteractiveExplorer {
     // Adds Assertions for safety.
-    pub fn safety(&self, ctx: &mut RuneContext<SegMem, RuneRegFile>) {
-        let rbp = ctx.reg_read("rbp");
+    pub fn safety(&self, ctx: &mut RuneContext<SegMem, RuneRegFile>) -> ContextResult<()> {
+        let rbp = ctx.reg_read("rbp")?;
         let const_8 = ctx.define_const(8, 64);
         let ret_addr = ctx.eval(bitvec::OpCodes::BvAdd, vec![rbp, const_8]);
         // Add an assertion to check if that memory address can be junk (0x41414141)
         let const_trash = ctx.define_const(0x41414141, 64);
-        let mem_at_addr = ctx.mem_read(ret_addr, 64);
+        let mem_at_addr = ctx.mem_read(ret_addr, 64)?;
         ctx.eval(core::OpCodes::Cmp, vec![mem_at_addr, const_trash]);
+
+        Ok(())
     }
 
     pub fn print_debug(&self, ctx: &RuneContext<SegMem, RuneRegFile>) {
@@ -58,7 +60,7 @@ impl InteractiveExplorer {
         */
     }
 
-    pub fn add_assertion(&self, ctx: &mut RuneContext<SegMem, RuneRegFile>) {
+    pub fn add_assertion(&self, ctx: &mut RuneContext<SegMem, RuneRegFile>) -> ExplorerResult<()> {
         self.console.print_assertion_help();
         if let Ok(ref line) = self.console.readline() {
             // Format for adding assertions:
@@ -71,33 +73,35 @@ impl InteractiveExplorer {
                 ">" => bitvec::OpCodes::BvUGt.into(),
                 "<" => bitvec::OpCodes::BvULt.into(),
                 "=" => core::OpCodes::Cmp.into(),
-                _ => panic!("Invalid"),
+                _ => return Err(ExplorerError::InvalidOpCode),
             };
 
             let op_1 = {
                 if &tokens[1][0..1] == "[" {
                     let addr = {
                         let addr_ = u64::from_str_radix(&tokens[1][3..tokens[1].len() - 1], 16)
-                            .expect("Invalid integer base16");
+                            .map_err(|_| ExplorerError::InvalidBase16)?;
                         ctx.define_const(addr_, 64)
                     };
-                    ctx.mem_read(addr, 64)
+                    ctx.mem_read(addr, 64)?
                 } else {
-                    ctx.reg_read(tokens[1])
+                    ctx.reg_read(tokens[1])?
                 }
             };
 
             let op_2 = {
                 if let Some(h) = tokens[2].strip_prefix("0x") {
-                    let const_v = u64::from_str_radix(h, 16).expect("Invalid base16 Integer");
+                    let const_v =
+                        u64::from_str_radix(h, 16).map_err(|_| ExplorerError::InvalidBase16)?;
                     ctx.define_const(const_v, 64)
                 } else {
-                    ctx.reg_read(tokens[2])
+                    ctx.reg_read(tokens[2])?
                 }
             };
             ctx.eval(cmd, vec![op_1, op_2]);
             self.console.print_success("Constraint Added!");
         }
+        Ok(())
     }
 }
 
@@ -119,30 +123,36 @@ impl PathExplorer for InteractiveExplorer {
             self.console
                 .print_info(&format!("Halted at {:#x}", ctx.ip()));
             loop {
-                self.single_step = match self.console.read_command()[0] {
-                    Command::Step => true,
-                    Command::Continue => false,
-                    Command::DebugQuery => {
+                self.single_step = match self.console.read_command().map(|c| c.first().cloned()) {
+                    Ok(Some(Command::Step)) => true,
+                    Ok(Some(Command::Continue)) => false,
+                    Ok(Some(Command::DebugQuery)) => {
                         self.print_debug(ctx);
                         continue;
                     }
-                    Command::Assertion => {
-                        self.add_assertion(ctx);
+                    Ok(Some(Command::Assertion)) => {
+                        if let Err(err) = self.add_assertion(ctx) {
+                            self.console
+                                .print_info(format!("error adding assertion: {err}").as_str());
+                        }
                         continue;
                     }
-                    Command::Query => {
+                    Ok(Some(Command::Query)) => {
                         self.query_constraints(ctx);
                         continue;
                     }
-                    Command::Help => {
+                    Ok(Some(Command::Help)) => {
                         self.console.print_help();
                         continue;
                     }
-                    Command::Safety => {
-                        self.safety(ctx);
+                    Ok(Some(Command::Safety)) => {
+                        if let Err(err) = self.safety(ctx) {
+                            self.console
+                                .print_error(format!("safety error: {err}").as_str());
+                        }
                         continue;
                     }
-                    Command::Exit => {
+                    Ok(Some(Command::Exit)) => {
                         self.console.print_info("Thanks for using rune!");
                         process::exit(1);
                     }
@@ -166,7 +176,11 @@ impl PathExplorer for InteractiveExplorer {
         if self.cmd_q.is_empty() {
             self.console
                 .print_info(&format!("Encountered Branch At {:#x}", ctx.ip()));
-            self.cmd_q = self.console.read_command();
+            self.cmd_q = self.console.read_command().map_err(|err| {
+                self.console
+                    .print_error(format!("Error reading command: {err}").as_str());
+                ExplorerError::ReadCommand
+            })?;
         }
 
         let cmd = self.cmd_q.pop().ok_or(ExplorerError::EmptyCommandQueue)?;

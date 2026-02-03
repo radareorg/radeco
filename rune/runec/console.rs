@@ -44,6 +44,37 @@ Initial State Configuration:
    Set breakpoint for the emulator
 ";
 
+/// Represents the error variants for the runec console.
+#[derive(Debug)]
+pub enum ConsoleError {
+    Rustyline,
+    HistoryLoad,
+    HistorySave,
+    FlushStdOut,
+}
+
+impl std::fmt::Display for ConsoleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rustyline => write!(f, "console: unable to create rustyline Editor"),
+            Self::HistoryLoad => write!(f, "console: unable to load console history"),
+            Self::HistorySave => write!(f, "console: unable to save console history"),
+            Self::FlushStdOut => write!(f, "console: unable to flush std out"),
+        }
+    }
+}
+
+impl std::error::Error for ConsoleError {}
+
+impl From<ConsoleError> for io::Error {
+    fn from(err: ConsoleError) -> Self {
+        Self::other(err.to_string())
+    }
+}
+
+/// Convenience alias for the runec console.
+pub type ConsoleResult<T> = std::result::Result<T, ConsoleError>;
+
 #[derive(Clone, Debug)]
 pub struct Console {
     prompt: String,
@@ -64,13 +95,13 @@ impl Default for Console {
 }
 
 impl Console {
-    pub fn read_command(&self) -> Vec<Command> {
+    pub fn read_command(&self) -> ConsoleResult<Vec<Command>> {
         let mut repeat: u32 = 1;
         let mut cmd: Command;
-        let mut r = Editor::<(), FileHistory>::new().expect("unable to create rustyline Editor");
+        let mut r = Editor::<(), FileHistory>::new().map_err(|_| ConsoleError::Rustyline)?;
 
         if r.load_history("history.txt").is_err() {
-            self.print_info("No history found.");
+            self.print_info(format!("{}: No history found.", ConsoleError::HistoryLoad).as_str());
         }
 
         loop {
@@ -89,8 +120,9 @@ impl Console {
                         let mut iter = buffer.split_whitespace();
                         iter.next();
                         repeat = if let Some(num) = iter.next() {
-                            num.chars()
-                                .fold(0, |acc, c: char| acc * 10 + c.to_digit(10).unwrap())
+                            num.chars().fold(0, |acc, c: char| {
+                                acc * 10 + c.to_digit(10).unwrap_or_default()
+                            })
                         } else {
                             1
                         }
@@ -111,7 +143,7 @@ impl Console {
                 }
                 Err(err) => {
                     if !self.out_prompt.is_empty() {
-                        self.print_out_prompt();
+                        self.print_out_prompt()?;
                     }
                     println!("[!] Error: {err:?}");
                     repeat = 1;
@@ -119,25 +151,28 @@ impl Console {
                 }
             }
         }
-        r.save_history("history.txt").unwrap();
-        std::iter::repeat_n(cmd, repeat as usize + 1).collect::<Vec<_>>()
+
+        r.save_history("history.txt")
+            .map_err(|_| ConsoleError::HistorySave)?;
+
+        Ok(std::iter::repeat_n(cmd, repeat as usize + 1).collect::<Vec<_>>())
     }
 
     pub fn readline(&self) -> io::Result<String> {
-        self.print_prompt();
+        self.print_prompt()?;
         let mut buffer = String::new();
         let _ = io::stdin().read_line(&mut buffer);
         Ok(buffer)
     }
 
-    pub fn print_prompt(&self) {
+    pub fn print_prompt(&self) -> ConsoleResult<()> {
         print!("{}", self.prompt);
-        io::stdout().flush().expect("Could not flush stdout");
+        io::stdout().flush().map_err(|_| ConsoleError::FlushStdOut)
     }
 
-    pub fn print_out_prompt(&self) {
+    pub fn print_out_prompt(&self) -> ConsoleResult<()> {
         print!("{}", self.out_prompt);
-        io::stdout().flush().expect("Could not flush stdout");
+        io::stdout().flush().map_err(|_| ConsoleError::FlushStdOut)
     }
 
     pub fn print_help(&self) {
