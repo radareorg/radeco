@@ -20,11 +20,64 @@ use std::marker::PhantomData;
 // If we add this into middle/ssa/ssastorage.rs, it seems there are too much
 // trivial code. Thus, I make this as a single file.
 
-const PUNDEFINED: u16 = 0;
-const PCOMMENT: u16 = 1;
-const PPHI: u16 = 2;
-// Starting priority for opcodes.
-const OP_BASE: u16 = 3;
+/// Represents the priority for SSA elements.
+#[repr(u16)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SortPriority {
+    /// Priority for undefined SSA elements.
+    Undefined = 0,
+    /// Priority for SSA comments.
+    Comment = 1,
+    /// Priority for SSA PHI elements.
+    Phi = 2,
+    /// Represents the priority for SSA opcodes.
+    Opcode(u16) = 3,
+}
+
+impl SortPriority {
+    /// Represents the priority for undefined SSA elements.
+    pub const UNDEFINED: u16 = 0;
+    /// Represents the priority for SSA comments.
+    pub const COMMENT: u16 = 1;
+    /// Represents the priority for SSA PHI elements.
+    pub const PHI: u16 = 2;
+    /// Represents the starting priority for opcodes.
+    pub const OPCODE: u16 = 3;
+
+    /// Converts a [`u16`] into a [SortPriority].
+    #[inline]
+    pub const fn from_u16(val: u16) -> Self {
+        match val {
+            Self::UNDEFINED => Self::Undefined,
+            Self::COMMENT => Self::Comment,
+            Self::PHI => Self::Phi,
+            op => Self::Opcode(op),
+        }
+    }
+
+    /// Converts the [SortPriority] into a [`u16`].
+    #[inline]
+    pub const fn to_u16(self) -> u16 {
+        match self {
+            Self::Undefined => Self::UNDEFINED,
+            Self::Comment => Self::COMMENT,
+            Self::Phi => Self::PHI,
+            Self::Opcode(op) => Self::OPCODE.saturating_add(op),
+        }
+    }
+}
+
+impl From<u16> for SortPriority {
+    fn from(val: u16) -> Self {
+        Self::from_u16(val)
+    }
+}
+
+impl From<SortPriority> for u16 {
+    fn from(val: SortPriority) -> Self {
+        val.to_u16()
+    }
+}
 
 pub struct Sorter<'a, I, T>
 where
@@ -51,13 +104,13 @@ where
         }
     }
 
-    fn get_priority(&self, node_data: NodeData) -> (u16, u64) {
+    fn get_priority(&self, node_data: NodeData) -> (SortPriority, u64) {
         match node_data.nt {
-            NodeType::Undefined => (PUNDEFINED, 0),
-            NodeType::Comment(_) => (PCOMMENT, 0),
-            NodeType::Phi => (PPHI, 0),
+            NodeType::Undefined => (SortPriority::Undefined, 0),
+            NodeType::Comment(_) => (SortPriority::Comment, 0),
+            NodeType::Phi => (SortPriority::Phi, 0),
             NodeType::Op(opc) => (
-                opc.idx() + OP_BASE,
+                SortPriority::Opcode(opc.idx()),
                 match opc {
                     MOpcode::OpConst(num) => num,
                     MOpcode::OpNarrow(num) | MOpcode::OpZeroExt(num) | MOpcode::OpSignExt(num) => {
@@ -97,7 +150,11 @@ where
             return Ordering::Equal;
         }
         if self.record.contains_key(&(op1, op2)) {
-            return *self.record.get(&(op1, op2)).unwrap();
+            return self
+                .record
+                .get(&(op1, op2))
+                .copied()
+                .unwrap_or(Ordering::Equal);
         }
         if !self.sorted.contains_key(&op1) {
             self.sort_operands(op1);
@@ -111,11 +168,11 @@ where
         };
         let node_data1 = self.ssa.node_data(op1).unwrap();
         let node_data2 = self.ssa.node_data(op2).unwrap();
-        let priority1 = self.get_priority(node_data1);
-        let priority2 = self.get_priority(node_data2);
+        let (priority1, priority1_val) = self.get_priority(node_data1);
+        let (priority2, priority2_val) = self.get_priority(node_data2);
 
-        if priority1.0.cmp(&priority2.0) != Ordering::Equal {
-            return self.return_value(priority1.0.cmp(&priority2.0), op1, op2);
+        if !priority1.cmp(&priority2).is_eq() {
+            return self.return_value(priority1.cmp(&priority2), op1, op2);
         }
 
         // Equal and has an opcode.
@@ -130,11 +187,11 @@ where
                     return self.return_value(addr1.cmp(&addr2), op1, op2);
                 }
                 MOpcode::OpConst(_) => {
-                    return self.return_value(priority1.1.cmp(&priority2.1), op1, op2);
+                    return self.return_value(priority1_val.cmp(&priority2_val), op1, op2);
                 }
                 MOpcode::OpSignExt(_) | MOpcode::OpZeroExt(_) | MOpcode::OpNarrow(_) => {
-                    if priority1.1.cmp(&priority2.1) != Ordering::Equal {
-                        return self.return_value(priority1.1.cmp(&priority2.1), op1, op2);
+                    if !priority1_val.cmp(&priority2_val).is_eq() {
+                        return self.return_value(priority1_val.cmp(&priority2_val), op1, op2);
                     } else {
                         let order = self.compare_operands(op1, op2);
                         return self.return_value(order, op1, op2);
@@ -145,9 +202,9 @@ where
         }
 
         // Equal and not opcode node
-        match priority1.0 {
-            PUNDEFINED => self.return_value(Ordering::Equal, op1, op2),
-            PPHI | PCOMMENT => {
+        match priority1 {
+            SortPriority::Undefined => self.return_value(Ordering::Equal, op1, op2),
+            SortPriority::Phi | SortPriority::Comment => {
                 let addr1 = self.ssa.address(op1).unwrap_or_else(|| {
                     radeco_err!("No address information found");
                     MAddress::new(0, 0)
@@ -181,6 +238,7 @@ where
                     // Operands' length must be 2, for only commutative opcode
                     // could get in this function, while commutative opcodes
                     // always have two operands.
+                    // TODO: replace this assert with an Err, and make this function fallible
                     assert_eq!(operands.len(), 2);
                     if self.compare(operands[0], operands[1]) == Ordering::Less {
                         self.ssa.op_unuse(idx, operands[0]);
@@ -200,5 +258,58 @@ where
         for idx in self.ssa.inorder_walk() {
             self.sort_operands(idx);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_priority() {
+        assert_eq!(
+            SortPriority::Undefined.cmp(&SortPriority::Undefined),
+            Ordering::Equal
+        );
+        assert_eq!(
+            SortPriority::Undefined.cmp(&SortPriority::Comment),
+            Ordering::Less
+        );
+        assert_eq!(
+            SortPriority::Undefined.cmp(&SortPriority::Phi),
+            Ordering::Less
+        );
+        assert_eq!(
+            SortPriority::Undefined.cmp(&SortPriority::Opcode(0)),
+            Ordering::Less
+        );
+
+        assert_eq!(
+            SortPriority::Comment.cmp(&SortPriority::Comment),
+            Ordering::Equal
+        );
+        assert_eq!(
+            SortPriority::Comment.cmp(&SortPriority::Phi),
+            Ordering::Less
+        );
+        assert_eq!(
+            SortPriority::Comment.cmp(&SortPriority::Opcode(0)),
+            Ordering::Less
+        );
+
+        assert_eq!(SortPriority::Phi.cmp(&SortPriority::Phi), Ordering::Equal);
+        assert_eq!(
+            SortPriority::Phi.cmp(&SortPriority::Opcode(0)),
+            Ordering::Less
+        );
+
+        assert_eq!(
+            SortPriority::Opcode(0).cmp(&SortPriority::Opcode(0)),
+            Ordering::Equal
+        );
+        assert_eq!(
+            SortPriority::Opcode(0).cmp(&SortPriority::Opcode(1)),
+            Ordering::Less
+        );
     }
 }
