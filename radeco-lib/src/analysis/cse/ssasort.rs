@@ -127,15 +127,13 @@ where
     // use-def chain withoud any phi node. Because the recursion will stop at phi node, it's
     // impossible to become an infinite loop.
     fn compare_operands(&mut self, op1: T::ValueRef, op2: T::ValueRef) -> Ordering {
-        let operands1 = self.ssa.operands_of(op1);
-        let operands2 = self.ssa.operands_of(op2);
-        for i in 0..operands1.len() {
-            let result = self.compare(operands1[i], operands2[i]);
-            if result != Ordering::Equal {
-                return result;
-            }
-        }
-        Ordering::Equal
+        self.ssa
+            .operands_of(op1)
+            .iter()
+            .zip(self.ssa.operands_of(op2))
+            .filter_map(|(&ops1, ops2)| self.compare(ops1, ops2).ok())
+            .find(|result| !result.is_eq())
+            .unwrap_or(Ordering::Equal)
     }
 
     fn return_value(&mut self, order: Ordering, op1: T::ValueRef, op2: T::ValueRef) -> Ordering {
@@ -145,26 +143,27 @@ where
     }
 
     // TODO: make compare function more concise
-    fn compare(&mut self, op1: T::ValueRef, op2: T::ValueRef) -> Ordering {
+    fn compare(&mut self, op1: T::ValueRef, op2: T::ValueRef) -> Result<Ordering, std::io::Error> {
         if op1 == op2 {
-            return Ordering::Equal;
+            return Ok(Ordering::Equal);
         }
         if self.record.contains_key(&(op1, op2)) {
-            return self
+            return Ok(self
                 .record
                 .get(&(op1, op2))
                 .copied()
-                .unwrap_or(Ordering::Equal);
+                .unwrap_or(Ordering::Equal));
         }
         if !self.sorted.contains_key(&op1) {
-            self.sort_operands(op1);
+            self.sort_operands(op1)?;
         }
         if !self.sorted.contains_key(&op2) {
-            self.sort_operands(op2);
+            self.sort_operands(op2)?;
         }
         if self.ssa.node_data(op1).is_err() || self.ssa.node_data(op2).is_err() {
-            radeco_err!("Operand node not found");
-            return Ordering::Equal;
+            let err_msg = "Operand node not found";
+            radeco_err!("{err_msg}");
+            return Err(std::io::Error::other(err_msg));
         };
         let node_data1 = self.ssa.node_data(op1).unwrap();
         let node_data2 = self.ssa.node_data(op2).unwrap();
@@ -172,29 +171,29 @@ where
         let (priority2, priority2_val) = self.get_priority(node_data2);
 
         if !priority1.cmp(&priority2).is_eq() {
-            return self.return_value(priority1.cmp(&priority2), op1, op2);
+            return Ok(self.return_value(priority1.cmp(&priority2), op1, op2));
         }
 
         // Equal and has an opcode.
         if let Some(opcode) = self.ssa.opcode(op1) {
             match opcode {
                 MOpcode::OpNop => {
-                    return self.return_value(Ordering::Equal, op1, op2);
+                    return Ok(self.return_value(Ordering::Equal, op1, op2));
                 }
                 MOpcode::OpCall | MOpcode::OpLoad | MOpcode::OpStore | MOpcode::OpITE => {
                     let addr1 = self.ssa.address(op1).expect("No address information found");
                     let addr2 = self.ssa.address(op2).expect("No address information found");
-                    return self.return_value(addr1.cmp(&addr2), op1, op2);
+                    return Ok(self.return_value(addr1.cmp(&addr2), op1, op2));
                 }
                 MOpcode::OpConst(_) => {
-                    return self.return_value(priority1_val.cmp(&priority2_val), op1, op2);
+                    return Ok(self.return_value(priority1_val.cmp(&priority2_val), op1, op2));
                 }
                 MOpcode::OpSignExt(_) | MOpcode::OpZeroExt(_) | MOpcode::OpNarrow(_) => {
                     if !priority1_val.cmp(&priority2_val).is_eq() {
-                        return self.return_value(priority1_val.cmp(&priority2_val), op1, op2);
+                        return Ok(self.return_value(priority1_val.cmp(&priority2_val), op1, op2));
                     } else {
                         let order = self.compare_operands(op1, op2);
-                        return self.return_value(order, op1, op2);
+                        return Ok(self.return_value(order, op1, op2));
                     }
                 }
                 _ => {}
@@ -203,7 +202,7 @@ where
 
         // Equal and not opcode node
         match priority1 {
-            SortPriority::Undefined => self.return_value(Ordering::Equal, op1, op2),
+            SortPriority::Undefined => Ok(self.return_value(Ordering::Equal, op1, op2)),
             SortPriority::Phi | SortPriority::Comment => {
                 let addr1 = self.ssa.address(op1).unwrap_or_else(|| {
                     radeco_err!("No address information found");
@@ -213,11 +212,11 @@ where
                     radeco_err!("No address information found");
                     MAddress::new(0, 0)
                 });
-                self.return_value(addr1.cmp(&addr2), op1, op2)
+                Ok(self.return_value(addr1.cmp(&addr2), op1, op2))
             }
             _ => {
                 let order = self.compare_operands(op1, op2);
-                self.return_value(order, op1, op2)
+                Ok(self.return_value(order, op1, op2))
             } // Opcode:
               //  For zero, opc could only be OpConst or OpInvalid.
               //  For Unary and Binary, we should consider their operands. Because
@@ -227,24 +226,29 @@ where
         }
     }
 
-    fn sort_operands(&mut self, idx: T::ValueRef) {
+    fn sort_operands(&mut self, idx: T::ValueRef) -> Result<(), std::io::Error> {
         if self.sorted.contains_key(&idx) {
-            return;
+            return Ok(());
         }
         if let Ok(node_data) = self.ssa.node_data(idx) {
             match node_data.nt {
                 NodeType::Op(ref opc) if opc.is_commutative() => {
-                    let operands = self.ssa.operands_of(idx);
                     // Operands' length must be 2, for only commutative opcode
                     // could get in this function, while commutative opcodes
                     // always have two operands.
-                    // TODO: replace this assert with an Err, and make this function fallible
-                    assert_eq!(operands.len(), 2);
-                    if self.compare(operands[0], operands[1]) == Ordering::Less {
-                        self.ssa.op_unuse(idx, operands[0]);
-                        self.ssa.op_unuse(idx, operands[1]);
-                        self.ssa.op_use(idx, 0, operands[1]);
-                        self.ssa.op_use(idx, 1, operands[0]);
+                    let ops = self.ssa.operands_of(idx);
+                    if ops.len() != 2 {
+                        return Err(std::io::Error::other(format!(
+                            "invalid number of SSA operands: {}",
+                            ops.len(),
+                        )));
+                    }
+
+                    if let Ok(Ordering::Less) = self.compare(ops[0], ops[1]) {
+                        self.ssa.op_unuse(idx, ops[0]);
+                        self.ssa.op_unuse(idx, ops[1]);
+                        self.ssa.op_use(idx, 0, ops[1]);
+                        self.ssa.op_use(idx, 1, ops[0]);
                     }
                 }
                 _ => {}
@@ -252,12 +256,15 @@ where
         }
 
         self.sorted.entry(idx).or_insert(true);
+
+        Ok(())
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<(), std::io::Error> {
         for idx in self.ssa.inorder_walk() {
-            self.sort_operands(idx);
+            self.sort_operands(idx)?;
         }
+        Ok(())
     }
 }
 
