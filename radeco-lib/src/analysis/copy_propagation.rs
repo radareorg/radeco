@@ -11,6 +11,11 @@ use crate::middle::ssa::ssastorage::SSAStorage;
 use std::any::Any;
 use std::collections::HashSet;
 
+/// Represents copy-propagation operations for analysis.
+///
+/// Currently, gathers all [OpMov](MOpcode::OpMov) opcodes as [ReplaceValue]s.
+///
+/// Maintains a `skip`-list of opcodes to skip over during analysis.
 #[derive(Debug)]
 pub struct CopyPropagation {
     skip: Vec<ReplaceValue>,
@@ -23,7 +28,19 @@ impl Default for CopyPropagation {
 }
 
 impl CopyPropagation {
-    pub fn new() -> Self {
+    const NAME: &str = "copy_propagation";
+    const REQUIRES: &[AnalyzerKind] = &[];
+
+    /// Represents the [AnalyzerInfo] for [CopyPropagation].
+    pub const INFO: AnalyzerInfo = AnalyzerInfo {
+        name: Self::NAME,
+        kind: AnalyzerKind::CopyPropagation,
+        requires: Self::REQUIRES,
+        uses_policy: true,
+    };
+
+    /// Creates a new [CopyPropagation].
+    pub const fn new() -> Self {
         CopyPropagation { skip: Vec::new() }
     }
 
@@ -31,34 +48,25 @@ impl CopyPropagation {
         ssa.blocks()
             .into_iter()
             .flat_map(|b| ssa.exprs_in(b))
-            .filter_map(|e| match ssa.opcode(e) {
-                Some(MOpcode::OpMov) => {
-                    if let Some(&o) = ssa.operands_of(e).first() {
-                        Some(ReplaceValue(o, e))
-                    } else {
+            .filter_map(|e| {
+                ssa.opcode(e)
+                    .filter(|op| matches!(op, MOpcode::OpMov))
+                    .and_then(|_| ssa.operands_of(e).first().copied())
+                    .map(|o| ReplaceValue(o, e))
+                    .or_else(|| {
                         radeco_err!("No operand of `OpMov` found");
                         None
-                    }
-                }
-                _ => None,
+                    })
             })
             .collect::<Vec<_>>()
     }
 }
 
-const NAME: &str = "copy_propagation";
-const REQUIRES: &[AnalyzerKind] = &[];
-
-pub const INFO: AnalyzerInfo = AnalyzerInfo {
-    name: NAME,
-    kind: AnalyzerKind::CopyPropagation,
-    requires: REQUIRES,
-    uses_policy: true,
-};
+pub const INFO: AnalyzerInfo = CopyPropagation::INFO;
 
 impl Analyzer for CopyPropagation {
     fn info(&self) -> &'static AnalyzerInfo {
-        &INFO
+        &Self::INFO
     }
     fn as_any(&self) -> &dyn Any {
         self

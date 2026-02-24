@@ -136,7 +136,10 @@ impl Engine for RadecoEngine {
         {
             // Sort the IR.
             let mut sorter = Sorter::new(rfn.ssa_mut());
-            sorter.run();
+            sorter
+                .run()
+                .map_err(|_err| radeco_err!("engine analysis sorting: {}", _err))
+                .ok()?;
         }
 
         let mut analyzers = sort_by_requires(&analyzer::all_func_analyzers());

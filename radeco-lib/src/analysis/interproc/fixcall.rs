@@ -90,7 +90,9 @@ impl<'a> CallFixer<'a> {
             radeco_trace!("CallFixer|RadecoFunction: {:?}", rfn.name);
             let ssa = rfn.ssa_mut();
             let mut sorter = Sorter::new(ssa);
-            sorter.run();
+            if let Err(_err) = sorter.run() {
+                radeco_err!("fixcall reanalysis sorting: {}", _err)
+            }
         }
 
         let (entry_store, exit_load) = {
@@ -163,7 +165,10 @@ impl<'a> CallFixer<'a> {
             radeco_trace!("CallFixer|RadecoFunction: {:?}", rfn.name);
             let ssa = rfn.ssa_mut();
             let mut sorter = Sorter::new(ssa);
-            sorter.run();
+            if let Err(_err) = sorter.run() {
+                radeco_err!("fixcall analysis sorting: {}", _err);
+                return;
+            }
         }
 
         // At the first time for analysis, we only assume that SP will balance
@@ -492,6 +497,8 @@ impl<'a> CallFixer<'a> {
 mod test {
     use super::*;
     use crate::frontend::radeco_containers::RadecoModule;
+
+    // TODO: reenable all of these tests
 
     #[test]
     #[ignore]
