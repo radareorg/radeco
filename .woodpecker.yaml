@@ -1,0 +1,26 @@
+matrix:
+  RUST:
+    - stable
+
+steps:
+  build:
+    image: rust
+    when:
+      - event: manual
+      - event: pull_request
+      - event: push
+    commands:
+      - export CARGO_TERM_COLOR=always
+      - cargo build
+      - cargo build --release
+
+  test:
+    image: rust
+    when:
+      - event: manual
+      - event: pull_request
+      - event: push
+    commands:
+      - export CARGO_TERM_COLOR=always
+      - cargo check
+      - cargo test --all
