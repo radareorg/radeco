@@ -6,19 +6,30 @@
 // except according to those terms.
 
 //! Implements Dominance frontier and dominance tree computation.
+//!
+//! From the Wikipedia article on [Dominator (graph theory)](https://en.wikipedia.org/wiki/Dominator_(graph_theory)):
+//!
+//! ```text
+//! A node `d` of a control-flow graph dominates a node `n` if every path from the entry node to `n` must go through `d`.
+//!
+//! The `dominance frontier` of a node `d` is the set of all nodes `n[i]` such that `d` dominates an immediate predecessor of `n[i]`, but `d` does not strictly dominate `n[i]`.
+//! It is the set of nodes where `d`'s dominance stops.
+//!
+//! A `dominator tree` is a tree where each node's children are those nodes it immediately dominates.
+//! The start node is the root of the tree.
+//! ```
 
 use petgraph::graph::Graph;
 use petgraph::{graph, EdgeDirection};
 use std::collections::{HashMap, HashSet};
-use std::default;
 
 use super::index::InternalIndex;
+use crate::analysis::error::AnalysisError;
 use crate::middle::dot::{DotAttrBlock, GraphDot};
 
-#[derive(Clone, Debug)]
 /// Depth first visitor that stores pre- and post- order traversal over a
-/// Graph.
-#[derive(Default)]
+/// [Graph].
+#[derive(Clone, Debug)]
 pub struct DFSVisitor {
     post_order: Vec<graph::NodeIndex>,
     pre_order: Vec<graph::NodeIndex>,
@@ -26,7 +37,8 @@ pub struct DFSVisitor {
 }
 
 impl DFSVisitor {
-    pub fn new() -> DFSVisitor {
+    /// Creates a new [DFSVisitor].
+    pub const fn new() -> DFSVisitor {
         DFSVisitor {
             post_order: Vec::new(),
             pre_order: Vec::new(),
@@ -34,6 +46,7 @@ impl DFSVisitor {
         }
     }
 
+    /// Performs a depth-first-search on the [Graph] starting at the `node` index.
     pub fn dfs<N, E>(&mut self, g: &Graph<N, E>, node: graph::NodeIndex) {
         if self.visited.contains(&node) {
             return;
@@ -53,26 +66,34 @@ impl DFSVisitor {
         self.post_order.push(node);
     }
 
-    pub fn post_order(&self) -> Vec<graph::NodeIndex> {
-        self.post_order.clone()
+    /// Gets a reference to the post-search order of node indices.
+    pub fn post_order(&self) -> &[graph::NodeIndex] {
+        &self.post_order
     }
 
-    pub fn pre_order(&self) -> Vec<graph::NodeIndex> {
-        self.pre_order.clone()
+    /// Gets a reference to the the pre-search order of node indices.
+    pub fn pre_order(&self) -> &[graph::NodeIndex] {
+        &self.pre_order
     }
 }
 
-#[derive(Clone, Debug)]
+impl Default for DFSVisitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Wrapper struct that consolidates the `Dom` and `PostDom` information for a
-/// Graph.
-#[derive(Default)]
+/// [Graph].
+#[derive(Clone, Debug)]
 pub struct DomInfo {
     dom: Option<DomTree>,
     postdom: Option<DomTree>,
 }
 
 impl DomInfo {
-    pub fn new() -> DomInfo {
+    /// Creates a new [DomInfo].
+    pub const fn new() -> DomInfo {
         DomInfo {
             dom: None,
             postdom: None,
@@ -80,42 +101,54 @@ impl DomInfo {
     }
 
     /// Constructs the DomTree and computes the dominance frontier for `g`.
-    pub fn build_dom_tree<N, E>(&mut self, g: &Graph<N, E>, i: graph::NodeIndex)
+    pub fn build_dom_tree<N, E>(
+        &mut self,
+        g: &Graph<N, E>,
+        i: graph::NodeIndex,
+    ) -> Result<(), AnalysisError>
     where
         N: Clone,
         E: Clone,
     {
-        let mut dom = DomTree::build_dom_tree(g, i);
-        dom.compute_dominance_frontier();
-        self.dom = Some(dom);
+        DomTree::build_dom_tree(g, i).and_then(|mut dom| {
+            dom.compute_dominance_frontier().map(|_| {
+                self.dom = Some(dom);
+            })
+        })
     }
 
     /// Constructs the Post-DomTree and computes the postdominance frontier for `g`.
-    pub fn build_postdom_tree<N, E>(&mut self, g: &Graph<N, E>, i: graph::NodeIndex)
+    pub fn build_postdom_tree<N, E>(
+        &mut self,
+        g: &Graph<N, E>,
+        i: graph::NodeIndex,
+    ) -> Result<(), AnalysisError>
     where
         N: Clone,
         E: Clone,
     {
         let mut g_ = (*g).clone();
         g_.reverse();
-        let mut postdom = DomTree::build_dom_tree(&g_, i);
-        postdom.compute_dominance_frontier();
-        self.postdom = Some(postdom);
+        DomTree::build_dom_tree(&g_, i).and_then(|mut postdom| {
+            postdom.compute_dominance_frontier().map(|_| {
+                self.postdom = Some(postdom);
+            })
+        })
     }
 
     /// Returns all the dominators of the node with graph::NodeIndex `i`.
-    pub fn doms(&self, i: graph::NodeIndex) -> Result<Vec<graph::NodeIndex>, &'static str> {
+    pub fn doms(&self, i: graph::NodeIndex) -> Result<Vec<graph::NodeIndex>, AnalysisError> {
         match self.dom {
-            None => Err("dom not computed."),
-            Some(ref d) => Ok(d.doms(i)),
+            None => Err(AnalysisError::domtree("dom not computed.")),
+            Some(ref d) => d.doms(i),
         }
     }
 
     /// Returns the immediate dominator of the node with graph::NodeIndex `i`.
-    pub fn idom(&self, i: graph::NodeIndex) -> Result<graph::NodeIndex, &'static str> {
+    pub fn idom(&self, i: graph::NodeIndex) -> Result<graph::NodeIndex, AnalysisError> {
         match self.dom {
-            None => Err("dom not computed."),
-            Some(ref d) => Ok(d.idom(i)),
+            None => Err(AnalysisError::domtree("dom not computed.")),
+            Some(ref d) => d.idom(i),
         }
     }
 
@@ -123,26 +156,26 @@ impl DomInfo {
     pub fn dom_frontier(
         &self,
         i: graph::NodeIndex,
-    ) -> Result<HashSet<graph::NodeIndex>, &'static str> {
+    ) -> Result<&HashSet<graph::NodeIndex>, AnalysisError> {
         match self.dom {
-            None => Err("dom not computed."),
+            None => Err(AnalysisError::domtree("dom not computed.")),
             Some(ref d) => d.dom_frontier(i),
         }
     }
 
     /// Returns all postdominators of `i`.
-    pub fn postdoms(&self, i: graph::NodeIndex) -> Result<Vec<graph::NodeIndex>, &'static str> {
+    pub fn postdoms(&self, i: graph::NodeIndex) -> Result<Vec<graph::NodeIndex>, AnalysisError> {
         match self.postdom {
-            None => Err("postdom not computed."),
-            Some(ref d) => Ok(d.doms(i)),
+            None => Err(AnalysisError::domtree("postdom not computed.")),
+            Some(ref d) => d.doms(i),
         }
     }
 
     /// Returns the immediate postdominator of `i`.
-    pub fn ipostdom(&self, i: graph::NodeIndex) -> Result<graph::NodeIndex, &'static str> {
+    pub fn ipostdom(&self, i: graph::NodeIndex) -> Result<graph::NodeIndex, AnalysisError> {
         match self.postdom {
-            None => Err("postdom not computed."),
-            Some(ref d) => Ok(d.idom(i)),
+            None => Err(AnalysisError::domtree("postdom not computed.")),
+            Some(ref d) => d.idom(i),
         }
     }
 
@@ -150,11 +183,17 @@ impl DomInfo {
     pub fn postdom_frontier(
         &self,
         i: graph::NodeIndex,
-    ) -> Result<HashSet<graph::NodeIndex>, &'static str> {
+    ) -> Result<&HashSet<graph::NodeIndex>, AnalysisError> {
         match self.postdom {
-            None => Err("postdom not computed."),
+            None => Err(AnalysisError::domtree("postdom not computed.")),
             Some(ref d) => d.dom_frontier(i),
         }
+    }
+}
+
+impl Default for DomInfo {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -173,20 +212,9 @@ pub struct DomTree {
     dom_frontier: Option<HashMap<graph::NodeIndex, HashSet<graph::NodeIndex>>>,
 }
 
-impl default::Default for DomTree {
-    fn default() -> DomTree {
-        DomTree {
-            idom: Vec::new(),
-            rmap: HashMap::new(),
-            g: Graph::new(),
-            preds_map: HashMap::new(),
-            dom_frontier: None,
-        }
-    }
-}
-
 impl DomTree {
-    fn new() -> DomTree {
+    /// Creates a new [DomTree].
+    pub fn new() -> DomTree {
         DomTree {
             idom: Vec::new(),
             rmap: HashMap::new(),
@@ -196,37 +224,42 @@ impl DomTree {
         }
     }
 
+    /// Gets a reference to the [DomTree] control-flow [Graph].
     pub fn graph(&self) -> &Graph<graph::NodeIndex, u8> {
         &self.g
     }
 
-    pub fn doms(&self, i: graph::NodeIndex) -> Vec<graph::NodeIndex> {
-        assert!(
-            !self.idom.is_empty(),
-            "Call to DomTree::doms before DomTree::build_dom_tree."
-        );
+    /// Gets a list of all the dominator node indices.
+    pub fn doms(&self, i: graph::NodeIndex) -> Result<Vec<graph::NodeIndex>, AnalysisError> {
+        if self.idom.is_empty() {
+            return Err(AnalysisError::domtree(
+                "Call to DomTree::doms before DomTree::build_dom_tree.",
+            ));
+        }
 
         let internal_index = self.rmap[&i];
         let mut idom = internal_index;
-        let mut doms = Vec::<InternalIndex>::new();
+        let mut doms = Vec::<graph::NodeIndex>::new();
+
         while idom != self.idom[idom] {
-            doms.push(idom);
+            doms.push(idom.external());
             idom = self.idom[idom];
         }
 
-        doms.push(idom);
-        doms.iter().map(|d| d.external()).collect()
+        doms.push(idom.external());
+        Ok(doms)
     }
 
-    pub fn idom(&self, i: graph::NodeIndex) -> graph::NodeIndex {
-        assert!(
-            !self.idom.is_empty(),
-            "Call to DomTree::idom before DomTree::build_dom_tree."
-        );
+    /// Gets the internal dominator node index.
+    pub fn idom(&self, i: graph::NodeIndex) -> Result<graph::NodeIndex, AnalysisError> {
+        if self.idom.is_empty() {
+            return Err(AnalysisError::domtree(
+                "Call to DomTree::idom before DomTree::build_dom_tree.",
+            ));
+        }
 
         let internal_index = self.rmap[&i];
-        let internal_node = self.idom[internal_index];
-        internal_node.external()
+        Ok(self.idom[internal_index].external())
     }
 
     fn intersect(idom: &[InternalIndex], i: &InternalIndex, j: &InternalIndex) -> InternalIndex {
@@ -243,7 +276,11 @@ impl DomTree {
         f1
     }
 
-    pub fn build_dom_tree<N, E>(g: &Graph<N, E>, start_node: graph::NodeIndex) -> DomTree
+    /// Builds the `dominator tree` from the provided [Graph] starting at the `start_node`.
+    pub fn build_dom_tree<N, E>(
+        g: &Graph<N, E>,
+        start_node: graph::NodeIndex,
+    ) -> Result<DomTree, AnalysisError>
     where
         N: Clone,
         E: Clone,
@@ -323,7 +360,12 @@ impl DomTree {
                         }
                     }
                     // Make sure we found a node.
-                    assert_ne!(new_idom, invalid_index);
+                    if new_idom == invalid_index {
+                        return Err(AnalysisError::domtree(format!(
+                            "invalid domtree index: {}",
+                            new_idom.index()
+                        )));
+                    }
                     for p in preds.iter() {
                         if idom[*p] != invalid_index {
                             new_idom = DomTree::intersect(idom, &new_idom, p);
@@ -345,14 +387,18 @@ impl DomTree {
             }
         }
 
-        tree
+        Ok(tree)
     }
 
-    pub fn compute_dominance_frontier(&mut self) {
-        assert!(
-            !self.idom.is_empty(),
-            "Call to DomTree::compute_dominance_frontier before DomTree::build_dom_tree."
-        );
+    /// Computes the [DomTree] of the `dominance frontier`.
+    ///
+    /// For more information, see the module-level documentation.
+    pub fn compute_dominance_frontier(&mut self) -> Result<(), AnalysisError> {
+        if self.idom.is_empty() {
+            return Err(AnalysisError::domtree(
+                "Call to DomTree::compute_dominance_frontier before DomTree::build_dom_tree.",
+            ));
+        }
 
         let node_count = self.idom.len();
         let mut frontier_map = HashMap::<graph::NodeIndex, HashSet<graph::NodeIndex>>::new();
@@ -379,17 +425,36 @@ impl DomTree {
         }
 
         self.dom_frontier = Some(frontier_map);
+
+        Ok(())
     }
 
+    /// Gets a reference to the `dominance frontier` at the `n` node index.
+    ///
+    /// Returns an `Err` if:
+    ///
+    /// - the `dom_frontier` is unintialized
+    /// - there is no `dom_frontier` at index `n`
     pub fn dom_frontier(
         &self,
         n: graph::NodeIndex,
-    ) -> Result<HashSet<graph::NodeIndex>, &'static str> {
-        assert_ne!(self.dom_frontier, None, "Uninitialized dom_frontier.");
+    ) -> Result<&HashSet<graph::NodeIndex>, AnalysisError> {
         self.dom_frontier
-            .clone()
-            .ok_or("DomTree dom_frontier: failed to clone")
-            .map(|d| d[&n].clone())
+            .as_ref()
+            .ok_or(AnalysisError::domtree("Uninitialized dom_frontier"))
+            .map(|d| d.get(&n))
+            .and_then(|d| {
+                d.ok_or(AnalysisError::domtree(format!(
+                    "no dom_frontier at index: {}",
+                    n.index()
+                )))
+            })
+    }
+}
+
+impl Default for DomTree {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -422,13 +487,13 @@ impl GraphDot for DomTree {
     }
 
     fn nodes(&self) -> Vec<Self::NodeIndex> {
-        // XXX: FIXME
-        (0..self.node_count()).map(graph::NodeIndex::new).collect()
+        (0..self.node_count()).map(Self::NodeIndex::new).collect()
     }
 
     fn edges(&self) -> Vec<Self::EdgeIndex> {
-        // XXX: FIXME
-        (0..self.edge_count()).map(|i| i as u8).collect()
+        (0..self.edge_count())
+            .map(|i| i as Self::EdgeIndex)
+            .collect()
     }
 
     fn edge_source(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
@@ -440,12 +505,12 @@ impl GraphDot for DomTree {
     }
 
     fn edge_attrs(&self, _: &Self::EdgeIndex) -> DotAttrBlock {
-        DotAttrBlock::Raw("".to_string())
+        DotAttrBlock::Raw(String::new())
     }
 
     fn node_attrs(&self, i: &Self::NodeIndex) -> DotAttrBlock {
         let tmp = format!("n{}", i.index());
-        DotAttrBlock::Raw(format!("[label={}]", tmp))
+        DotAttrBlock::Raw(format!("[label={tmp}]"))
     }
 }
 
@@ -526,14 +591,14 @@ mod test {
         g.add_edge(n3, n7, 0);
         g.add_edge(n7, n1, 0);
 
-        let dom = DomTree::build_dom_tree(&g, n0);
+        let dom = DomTree::build_dom_tree(&g, n0).unwrap();
         let doms_n1 = [n1, n7, n2, n0];
         let doms_n9 = [n9, n6, n5, n4, n2, n0];
         let doms_n3 = [n3, n2, n0];
 
-        assert_eq!(dom.doms(n1), doms_n1);
-        assert_eq!(dom.doms(n9), doms_n9);
-        assert_eq!(dom.doms(n3), doms_n3);
+        assert_eq!(dom.doms(n1).as_deref(), Ok(doms_n1.as_ref()));
+        assert_eq!(dom.doms(n9).as_deref(), Ok(doms_n9.as_ref()));
+        assert_eq!(dom.doms(n3).as_deref(), Ok(doms_n3.as_ref()));
     }
 
     #[test]
@@ -556,8 +621,8 @@ mod test {
         g.add_edge(e, f, 0);
         g.add_edge(f, _g, 0);
 
-        let mut dom = DomTree::build_dom_tree(&g, a);
-        dom.compute_dominance_frontier();
+        let mut dom = DomTree::build_dom_tree(&g, a).unwrap();
+        dom.compute_dominance_frontier().unwrap();
 
         let res = dom.dom_frontier(f).unwrap();
         let mut dom_front_f = HashSet::new();

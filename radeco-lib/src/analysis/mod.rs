@@ -9,6 +9,7 @@
 
 pub mod analyzer;
 pub mod engine;
+pub mod error;
 
 pub mod cse;
 #[allow(dead_code)]
