@@ -501,7 +501,6 @@ mod test {
     // TODO: reenable all of these tests
 
     #[test]
-    #[ignore]
     fn analysis_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
@@ -517,7 +516,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn fix_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
@@ -536,7 +534,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn reanalysis_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         let functions = rmod.functions.clone();
@@ -558,7 +555,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn rounded_analysis_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
 
@@ -570,7 +566,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn bin_file_rounded_analysis_test() {
         let mut rmod = RadecoModule::new("./test_files/ct1_sccp_ex/ct1_sccp_ex".to_string());
         {
