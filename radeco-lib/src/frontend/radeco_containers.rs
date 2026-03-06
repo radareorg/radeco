@@ -780,12 +780,12 @@ impl<'a> ModuleLoader<'a> {
         // Fill in module level information from the `Source`
         match source.symbols() {
             Ok(sym_info) => rmod.symbols = sym_info,
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         match source.sections() {
             Ok(section_info) => rmod.sections = Arc::new(section_info),
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         match source.imports() {
@@ -812,32 +812,32 @@ impl<'a> ModuleLoader<'a> {
                     })
                     .collect();
             }
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         match source.exports() {
             Ok(exports) => rmod.exports = exports,
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         match source.relocs() {
             Ok(relocs) => rmod.relocs = relocs,
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         match source.libraries() {
             Ok(libs) => rmod.libs = libs,
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         match source.entrypoint() {
             Ok(ep) => rmod.entrypoint = ep,
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         match source.strings(true) {
             Ok(strings) => rmod.strings = strings,
-            Err(_e) => radeco_warn!(_e),
+            Err(e) => radeco_warn!("{e}"),
         }
 
         let mut flresult = floader.load(&rmod);
@@ -906,8 +906,8 @@ impl<'a> ModuleLoader<'a> {
         if self.build_callgraph || self.load_datarefs || self.load_locals {
             let aux_info = match source.functions() {
                 Ok(info) => info,
-                Err(_e) => {
-                    radeco_warn!(_e);
+                Err(e) => {
+                    radeco_warn!("{e}");
                     Vec::new()
                 }
             };

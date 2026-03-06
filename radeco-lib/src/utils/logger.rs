@@ -8,7 +8,7 @@
 //! Structs, Strings and Enums to support trace logging of radeco
 //!
 //! To enable logging support, compile the library with
-//! the `trace_lgo` features, i.e.
+//! the `trace_log` features, i.e.
 //! `cargo build --features trace_log`
 //!
 //! The consumer should also import `env_logger` and `log` crates
@@ -57,54 +57,32 @@ impl<'a, T: Debug> Display for Event<'a, T> {
     }
 }
 
+/// Helper macro to handle radeco debug/trace logging.
 #[macro_export]
 macro_rules! radeco_trace {
-    ($t: expr) => ({
-        if cfg!(feature = "trace_log") {
-            #[cfg(feature="trace_log")]
-            debug!("{}", $t.to_string());
-        }
-    });
-    ($fmt:expr, $($arg:tt)*) => ({
-        if cfg!(feature = "trace_log") {
-            #[cfg(feature="trace_log")]
-            debug!("{}", format_args!($fmt, $($arg)*));
-        }
+    ($fmt:expr$(, $($arg:tt)*)?) => ({
+        let _msg = format_args!($fmt$(, $($arg)*)?);
+        #[cfg(feature="trace_log")]
+        debug!("{_msg}");
     });
 }
 
+/// Helper macro to handle radeco warning logging.
 #[macro_export]
 macro_rules! radeco_warn {
-    ($t: expr) => ({
-        if cfg!(feature = "trace_log") {
-            #[cfg(feature="trace_log")]
-            warn!("{}", $t.to_string());
-        } else {
-            let _ = &$t;
-        }
-    });
-    ($fmt:expr, $($arg:tt)*) => ({
-        if cfg!(feature = "trace_log") {
-            #[cfg(feature="trace_log")]
-            warn!("{}", format_args!($fmt, $($arg)*));
-        }
+    ($fmt:expr$(, $($arg:tt)*)?) => ({
+        let _msg = format_args!($fmt$(, $($arg)*)?);
+        #[cfg(feature="trace_log")]
+        warn!("{_msg}");
     });
 }
 
+/// Helper macro to handle radeco error logging.
 #[macro_export]
 macro_rules! radeco_err {
-    ($t: expr) => ({
-        if cfg!(feature = "trace_log") {
-            #[cfg(feature="trace_log")]
-            warn!("{}", $t.to_string());
-        } else {
-            let _ = &$t;
-        }
-    });
-    ($fmt:expr, $($arg:tt)*) => ({
-        if cfg!(feature = "trace_log") {
-            #[cfg(feature="trace_log")]
-            error!("{}", format_args!($fmt, $($arg)*));
-        }
+    ($fmt:expr$(, $($arg:tt)*)?) => ({
+        let _msg = format_args!($fmt$(, $($arg)*)?);
+        #[cfg(feature="trace_log")]
+        error!("{_msg}");
     });
 }

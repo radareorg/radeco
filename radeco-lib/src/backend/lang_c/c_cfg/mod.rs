@@ -849,7 +849,7 @@ impl<'a> CASTConverter<'a> {
             Ok(ast_node) => {
                 let _ = self.node_map.insert(current_node, ast_node);
             }
-            Err(err) => radeco_err!(err),
+            Err(err) => radeco_err!("{err}"),
         }
 
         if let Some(comment) = self.cfg.debug_info.get(&current_node) {

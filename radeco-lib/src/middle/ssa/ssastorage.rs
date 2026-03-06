@@ -25,8 +25,7 @@ use super::ssa_traits::NodeData as TNodeData;
 use super::ssa_traits::NodeType as TNodeType;
 use super::ssa_traits::{SSAExtra, SSAMod, SSAWalk, ValueInfo, SSA};
 
-#[cfg(feature = "trace_log")]
-use utils::logger;
+use crate::utils::logger;
 
 /// Structure that represents data that maybe associated with an node in the
 /// SSA
@@ -234,7 +233,7 @@ impl Graph for SSAStorage {
 
     fn insert_node(&mut self, d: Self::NodeData) -> Option<Self::GraphNodeRef> {
         let ret = self.g.add_node(d);
-        radeco_trace!(logger::Event::SSAInsertNode(&ret));
+        radeco_trace!("{}", logger::Event::SSAInsertNode(&ret));
         if ret == NodeIndex::end() {
             None
         } else {
@@ -243,13 +242,13 @@ impl Graph for SSAStorage {
     }
 
     fn remove_node(&mut self, exi: Self::GraphNodeRef) {
-        radeco_trace!(logger::Event::SSARemoveNode(&exi));
+        radeco_trace!("{}", logger::Event::SSARemoveNode(&exi));
         self.g.remove_node(exi);
     }
 
     // TODO: When i is a constant, there may be some bugs.
     fn replace_node(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef) {
-        radeco_trace!(logger::Event::SSAReplaceNode(&i, &j));
+        radeco_trace!("{}", logger::Event::SSAReplaceNode(&i, &j));
         // Before replace, we need to copy over the edges.
         assert!(self.constant(i).is_none());
 
@@ -318,11 +317,7 @@ impl Graph for SSAStorage {
         e: Self::EdgeData,
     ) -> Option<Self::GraphEdgeRef> {
         if !(self.g.contains_node(i) && self.g.contains_node(j)) {
-            radeco_warn!(
-                "Tried to add edge between invalid nodes! {:?} -> {:?}",
-                i,
-                j
-            );
+            radeco_warn!("Tried to add edge between invalid nodes! {i:?} -> {j:?}",);
             return Some(EdgeIndex::end());
         }
         //Don't insert a duplicate edge between i and j with same EdgeData
@@ -366,7 +361,7 @@ impl Graph for SSAStorage {
         if flag {
             Some(exist_edge)
         } else {
-            radeco_trace!(logger::Event::SSAInsertEdge(&i, &j));
+            radeco_trace!("{}", logger::Event::SSAInsertEdge(&i, &j));
             Some(self.g.add_edge(i, j, e))
         }
     }
@@ -377,7 +372,7 @@ impl Graph for SSAStorage {
         j: Self::GraphNodeRef,
         e: Self::EdgeData,
     ) -> Option<Self::GraphEdgeRef> {
-        radeco_trace!(logger::Event::SSAUpdateEdge(&i, &j));
+        radeco_trace!("{}", logger::Event::SSAUpdateEdge(&i, &j));
         Some(self.g.update_edge(i, j, e))
     }
 
@@ -406,7 +401,7 @@ impl Graph for SSAStorage {
 
     // It's possible that there are mutilple edges between two same nodes. like: xor eax, eax
     fn remove_edges_between(&mut self, i: Self::GraphNodeRef, j: Self::GraphNodeRef) {
-        radeco_trace!(logger::Event::SSARemoveEdge(&i, &j));
+        radeco_trace!("{}", logger::Event::SSARemoveEdge(&i, &j));
         while let Some(ei) = self.g.find_edge(i, j) {
             self.g.remove_edge(ei);
         }
@@ -1123,13 +1118,13 @@ impl SSAMod for SSAStorage {
 
 impl SSAExtra for SSAStorage {
     fn mark(&mut self, i: &Self::ValueRef) {
-        radeco_trace!(logger::Event::SSAMarkNode(i));
+        radeco_trace!("{}", logger::Event::SSAMarkNode(i));
         let data = self.assoc_data.entry(*i).or_default();
         data.mark = true;
     }
 
     fn clear_mark(&mut self, i: &Self::ValueRef) {
-        radeco_trace!(logger::Event::SSAClearMark(i));
+        radeco_trace!("{}", logger::Event::SSAClearMark(i));
         if let Some(ref mut data) = self.assoc_data.get_mut(i) {
             data.mark = false;
         }
