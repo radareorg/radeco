@@ -237,13 +237,24 @@ impl DomTree {
             ));
         }
 
-        let internal_index = self.rmap[&i];
+        let internal_index = self
+            .rmap
+            .get(&i)
+            .cloned()
+            .ok_or(AnalysisError::domtree(format!(
+                "missing rmap entry at: {}",
+                i.index()
+            )))?;
         let mut idom = internal_index;
         let mut doms = Vec::<graph::NodeIndex>::new();
 
-        while idom != self.idom[idom] {
-            doms.push(idom.external());
-            idom = self.idom[idom];
+        while let Some(&id) = self.idom.get(idom.index()) {
+            if id != idom {
+                doms.push(idom.external());
+                idom = id;
+            } else {
+                break;
+            }
         }
 
         doms.push(idom.external());
@@ -258,22 +269,42 @@ impl DomTree {
             ));
         }
 
-        let internal_index = self.rmap[&i];
-        Ok(self.idom[internal_index].external())
+        self.rmap
+            .get(&i)
+            .ok_or(AnalysisError::domtree(format!(
+                "missing rmap entry at: {}",
+                i.index()
+            )))
+            .and_then(|idx| {
+                self.idom
+                    .get(idx.index())
+                    .ok_or(AnalysisError::domtree(format!("missing idom at: {idx}")))
+            })
+            .map(|idom| idom.external())
     }
 
-    fn intersect(idom: &[InternalIndex], i: &InternalIndex, j: &InternalIndex) -> InternalIndex {
+    fn intersect(
+        idom: &[InternalIndex],
+        i: &InternalIndex,
+        j: &InternalIndex,
+    ) -> Result<InternalIndex, AnalysisError> {
         let mut f1 = *i;
         let mut f2 = *j;
         while f1 != f2 {
             while f1 < f2 {
-                f1 = idom[f1.index()];
+                f1 = idom
+                    .get(f1.index())
+                    .copied()
+                    .ok_or(AnalysisError::domtree("missing idom at: {f1}"))?;
             }
             while f2 < f1 {
-                f2 = idom[f2.index()];
+                f2 = idom
+                    .get(f2.index())
+                    .copied()
+                    .ok_or(AnalysisError::domtree("missing idom at: {f2}"))?;
             }
         }
-        f1
+        Ok(f1)
     }
 
     /// Builds the `dominator tree` from the provided [Graph] starting at the `start_node`.
@@ -353,38 +384,55 @@ impl DomTree {
                         .entry(node)
                         .or_insert_with(|| preds_iter.cloned().collect::<Vec<_>>());
                     let mut new_idom = invalid_index;
-                    for p in preds.iter() {
-                        if idom[*p] < invalid_index {
-                            new_idom = *p;
+                    for &p in preds.iter() {
+                        let id = idom
+                            .get(p.index())
+                            .ok_or(AnalysisError::domtree(format!("missing idom at: {p}")))?;
+
+                        if id < &invalid_index {
+                            new_idom = p;
                             break;
                         }
                     }
                     // Make sure we found a node.
                     if new_idom == invalid_index {
                         return Err(AnalysisError::domtree(format!(
-                            "invalid domtree index: {}",
-                            new_idom.index()
+                            "invalid domtree index: {new_idom}",
                         )));
                     }
-                    for p in preds.iter() {
-                        if idom[*p] != invalid_index {
-                            new_idom = DomTree::intersect(idom, &new_idom, p);
-                        }
+                    for &p in preds.iter() {
+                        idom.get(p.index())
+                            .ok_or(AnalysisError::domtree(format!("missing idom at: {p}")))
+                            .and_then(|id| {
+                                if id != &invalid_index {
+                                    new_idom = DomTree::intersect(idom, &new_idom, &p)?;
+                                }
+                                Ok(())
+                            })?;
                     }
-                    if idom[n.1] != new_idom {
-                        idom[n.1] = new_idom;
-                        changed = true;
-                    }
+
+                    idom.get_mut(n.1)
+                        .ok_or(AnalysisError::domtree(format!("missing idom at: {}", n.1)))
+                        .map(|id| {
+                            if id != &new_idom {
+                                *id = new_idom;
+                                changed = true;
+                            }
+                        })?;
                 }
             }
 
             // Add edges to the graph based on the idom information.
-            for i in &dom_tree_nodes {
-                if *i == idom[*i] {
-                    continue;
-                }
-                dom_tree.add_edge(idom[*i].external(), i.external(), 0);
-            }
+            dom_tree_nodes
+                .iter()
+                .copied()
+                .filter_map(|i| {
+                    idom.get(i.index())
+                        .and_then(|&id: &InternalIndex| if id == i { None } else { Some((id, i)) })
+                })
+                .for_each(|(id, i)| {
+                    dom_tree.add_edge(id.external(), i.external(), 0);
+                });
         }
 
         Ok(tree)
@@ -403,8 +451,21 @@ impl DomTree {
         let node_count = self.idom.len();
         let mut frontier_map = HashMap::<graph::NodeIndex, HashSet<graph::NodeIndex>>::new();
         for node in (0..node_count).map(graph::NodeIndex::new) {
-            let internal_index = self.rmap[&node];
-            let preds = &self.preds_map[&node];
+            let internal_index =
+                self.rmap
+                    .get(&node)
+                    .copied()
+                    .ok_or(AnalysisError::domtree(format!(
+                        "missing rmap entry at: {}",
+                        node.index()
+                    )))?;
+            let preds = self
+                .preds_map
+                .get(&node)
+                .ok_or(AnalysisError::domtree(format!(
+                    "missing predicate map entry at: {}",
+                    node.index()
+                )))?;
 
             if preds.len() < 2 {
                 continue;
@@ -412,14 +473,22 @@ impl DomTree {
 
             for p in preds {
                 let mut runner = *p;
-                while runner != self.idom[internal_index] {
+                while runner
+                    != self.idom.get(internal_index.index()).copied().ok_or(
+                        AnalysisError::domtree(format!("missing idom at: {internal_index}")),
+                    )?
+                {
                     let runner_index = runner.external();
                     frontier_map
                         .entry(runner_index)
                         .or_insert_with(HashSet::new)
                         .insert(node);
 
-                    runner = self.idom[runner];
+                    runner = self
+                        .idom
+                        .get(runner.index())
+                        .copied()
+                        .ok_or(AnalysisError::domtree(format!("missing idom at: {runner}")))?;
                 }
             }
         }
@@ -497,11 +566,19 @@ impl GraphDot for DomTree {
     }
 
     fn edge_source(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
-        self.g.raw_edges()[*i as usize].source()
+        self.g
+            .raw_edges()
+            .get(*i as usize)
+            .map(|e| e.source())
+            .unwrap_or_default()
     }
 
     fn edge_target(&self, i: &Self::EdgeIndex) -> Self::NodeIndex {
-        self.g.raw_edges()[*i as usize].target()
+        self.g
+            .raw_edges()
+            .get(*i as usize)
+            .map(|e| e.target())
+            .unwrap_or_default()
     }
 
     fn edge_attrs(&self, _: &Self::EdgeIndex) -> DotAttrBlock {

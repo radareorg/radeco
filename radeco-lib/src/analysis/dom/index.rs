@@ -63,3 +63,9 @@ impl PartialOrd for InternalIndex {
         self.index.partial_cmp(&other.index)
     }
 }
+
+impl std::fmt::Display for InternalIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.index())
+    }
+}
