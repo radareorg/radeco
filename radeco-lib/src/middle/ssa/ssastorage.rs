@@ -317,7 +317,7 @@ impl Graph for SSAStorage {
         e: Self::EdgeData,
     ) -> Option<Self::GraphEdgeRef> {
         if !(self.g.contains_node(i) && self.g.contains_node(j)) {
-            radeco_warn!("Tried to add edge between invalid nodes! {i:?} -> {j:?}",);
+            radeco_warn!("Tried to add edge between invalid nodes! {i:?} -> {j:?}");
             return Some(EdgeIndex::end());
         }
         //Don't insert a duplicate edge between i and j with same EdgeData

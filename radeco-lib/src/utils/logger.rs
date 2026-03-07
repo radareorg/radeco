@@ -60,29 +60,32 @@ impl<'a, T: Debug> Display for Event<'a, T> {
 /// Helper macro to handle radeco debug/trace logging.
 #[macro_export]
 macro_rules! radeco_trace {
-    ($fmt:expr$(, $($arg:tt)*)?) => ({
-        let _msg = format_args!($fmt$(, $($arg)*)?);
+    ($fmt:expr$(, $arg:expr)*) => ({
         #[cfg(feature="trace_log")]
-        debug!("{_msg}");
+        debug!("{}", format_args!($fmt$(, $arg)*));
+        #[cfg(not(feature="trace_log"))]
+        let _ = format_args!($fmt$(, $arg)*);
     });
 }
 
 /// Helper macro to handle radeco warning logging.
 #[macro_export]
 macro_rules! radeco_warn {
-    ($fmt:expr$(, $($arg:tt)*)?) => ({
-        let _msg = format_args!($fmt$(, $($arg)*)?);
+    ($fmt:expr$(, $arg:expr)*) => ({
         #[cfg(feature="trace_log")]
-        warn!("{_msg}");
+        warn!("{}", format_args!($fmt$(, $arg)*));
+        #[cfg(not(feature="trace_log"))]
+        let _ = format_args!($fmt$(, $arg)*);
     });
 }
 
 /// Helper macro to handle radeco error logging.
 #[macro_export]
 macro_rules! radeco_err {
-    ($fmt:expr$(, $($arg:tt)*)?) => ({
-        let _msg = format_args!($fmt$(, $($arg)*)?);
+    ($fmt:expr$(, $arg:expr)*) => ({
         #[cfg(feature="trace_log")]
-        error!("{_msg}");
+        error!("{}", format_args!($fmt$(, $arg)*));
+        #[cfg(not(feature="trace_log"))]
+        let _ = format_args!($fmt$(, $arg)*);
     });
 }
