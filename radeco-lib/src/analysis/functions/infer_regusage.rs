@@ -1,7 +1,8 @@
 //! Infers how each function uses every register
+//!
 //! For every function, patch all of its call sites to ignore registers that the
-//! callee doesn't read and to preserve register values that the callee
-//! preserves. Then, record which registers it reads and which registers it
+//! callee doesn't read, and to preserve register values that the callee
+//! preserves. Then, record which registers it reads, and which registers it
 //! preserves.
 //!
 //! After this, all functions should have mutable [`regusage`][RadecoFunction::regusage]s.
@@ -10,7 +11,8 @@
 //! register by pushing it onto the stack and popping it back right before
 //! returning, it is considered to be read and not preserved because we can't
 //! guarantee that that stack location is never subsequently read or modified.
-//! See #147 for further discussion
+//!
+//! See [#147](https://github.com/radareorg/radeco/issues/147) for further discussion.
 
 use crate::analysis::analyzer::{
     all, Action, Analyzer, AnalyzerInfo, AnalyzerKind, AnalyzerResult, Change, FuncAnalyzer,
@@ -31,15 +33,7 @@ use petgraph::visit::{DfsPostOrder, Walker};
 use std::any::Any;
 use std::collections::{BTreeMap, HashSet};
 
-const NAME: &str = "inferer";
-const REQUIRES: &[AnalyzerKind] = &[];
-
-pub const INFO: AnalyzerInfo = AnalyzerInfo {
-    name: NAME,
-    kind: AnalyzerKind::Inferer,
-    requires: REQUIRES,
-    uses_policy: false,
-};
+pub const INFO: AnalyzerInfo = Inferer::INFO;
 
 #[derive(Debug)]
 pub struct Inferer {
@@ -68,27 +62,34 @@ impl ModuleAnalyzer for Inferer {
         _policy: Option<T>,
     ) -> Option<Box<dyn AnalyzerResult>> {
         // for imports, *ASSUME* that the callconv that r2 says is correct
-        let mut new_analyzed = Vec::new();
-        {
-            let imp_ru_iter = rmod.imports.iter().filter_map(|(&imp_addr, imp_info)| {
+        let new_analyzers = rmod
+            .imports
+            .iter()
+            .filter_map(|(&imp_addr, imp_info)| {
                 let imp_rfn = imp_info.rfn.borrow();
-                let regusage = self.reginfo.r2callconv_to_register_usage(
-                    imp_rfn.callconv.as_ref()?, // ignore imports without callconvs
-                    &imp_rfn.callconv_name,
-                )?;
-                Some((imp_addr, regusage))
-            });
-            for (imp_addr, imp_ru) in imp_ru_iter {
-                rmod.functions.get_mut(&imp_addr).unwrap().regusage = imp_ru;
-                new_analyzed.push(imp_addr);
-            }
-        }
 
-        for func in new_analyzed {
-            self.analyzed.insert(func);
+                imp_rfn
+                    .callconv
+                    .as_ref()
+                    .and_then(|callconv| {
+                        self.reginfo.r2callconv_to_register_usage(
+                            callconv, // ignore imports without callconvs
+                            &imp_rfn.callconv_name,
+                        )
+                    })
+                    .map(|regusage| (regusage, imp_addr))
+            })
+            .collect::<Vec<_>>();
+
+        for (regusage, imp_addr) in new_analyzers {
+            rmod.functions.get_mut(&imp_addr).map(|rfn| {
+                rfn.regusage = regusage;
+                self.analyzed.insert(imp_addr);
+            })?;
         }
 
         let mut dfs_wi = DfsPostOrder::empty(&rmod.callgraph).iter(&rmod.callgraph);
+
         // pick a function ...
         for fn_ni in rmod.callgraph.node_indices() {
             // ... and start a dfs on it
@@ -100,7 +101,7 @@ impl ModuleAnalyzer for Inferer {
                 if !self.analyzed.contains(&fn_addr) {
                     self.patch_fn(fn_addr, &mut rmod.functions);
 
-                    let rfn = &mut rmod.functions.get_mut(&fn_addr).unwrap();
+                    let rfn = &mut rmod.functions.get_mut(&fn_addr)?;
                     let mut dce = DCE::new();
                     dce.analyze(rfn, Some(all));
 
@@ -108,7 +109,7 @@ impl ModuleAnalyzer for Inferer {
                     combiner.analyze(rfn, Some(all));
 
                     let ru = self.analyze_fn(rfn, &self.reginfo).unwrap_or_else(|| {
-                        radeco_err!("Failed to analyze fn: {:?} (@ {:#X})", rfn.name, fn_addr);
+                        radeco_err!("Failed to analyze fn: {:?} (@ {fn_addr:#X})", rfn.name);
                         // if analysis failed, default to "reads and clobbers everything"
                         self.reginfo.new_register_usage()
                     });
@@ -124,8 +125,22 @@ impl ModuleAnalyzer for Inferer {
 }
 
 impl Inferer {
-    pub fn new(reginfo: SubRegisterFile) -> Inferer {
-        Inferer {
+    /// Represents the [Inferer] analyzer name.
+    pub const NAME: &str = "inferer";
+    /// Represents the [Inferer] required analyzers.
+    pub const REQUIRES: &[AnalyzerKind] = &[];
+
+    /// Represents the [Inferer] analyzer information.
+    pub const INFO: AnalyzerInfo = AnalyzerInfo {
+        name: Self::NAME,
+        kind: AnalyzerKind::Inferer,
+        requires: Self::REQUIRES,
+        uses_policy: false,
+    };
+
+    /// Creates a new [Inferer].
+    pub fn new(reginfo: SubRegisterFile) -> Self {
+        Self {
             reginfo,
             analyzed: HashSet::new(),
         }
@@ -158,27 +173,24 @@ impl Inferer {
         fn_map: &mut BTreeMap<u64, RadecoFunction>,
     ) -> Option<()> {
         // bail on indirect or weird call
-        let (call_tgt_addr, call_reg_map) = direct_call_info(fn_map[&fn_addr].ssa(), call_node)?;
+        let (call_tgt_addr, call_reg_map) =
+            Self::direct_call_info(fn_map[&fn_addr].ssa(), call_node)?;
 
         // remove unread args
         for (regid, &op_node) in &call_reg_map {
             if fn_map[&call_tgt_addr].regusage.is_ignored(regid) {
-                fn_map
-                    .get_mut(&fn_addr)
-                    .unwrap()
-                    .ssa_mut()
-                    .op_unuse(call_node, op_node);
+                fn_map.get_mut(&fn_addr).map(|op| {
+                    op.ssa_mut().op_unuse(call_node, op_node);
+                })?;
             }
         }
 
         // bridge preserved registers
         for (regid, (use_node, _)) in utils::call_rets(call_node, fn_map[&fn_addr].ssa()) {
             if fn_map[&call_tgt_addr].regusage.is_preserved(regid) {
-                fn_map
-                    .get_mut(&fn_addr)
-                    .unwrap()
-                    .ssa_mut()
-                    .replace_value(use_node, call_reg_map[regid]);
+                fn_map.get_mut(&fn_addr).map(|op| {
+                    op.ssa_mut().replace_value(use_node, call_reg_map[regid]);
+                })?;
             }
         }
 
@@ -188,8 +200,8 @@ impl Inferer {
     fn analyze_fn(&self, rfn: &RadecoFunction, reginfo: &SubRegisterFile) -> Option<RegisterUsage> {
         radeco_trace!("analyzing fn: {}", rfn.name);
         let ssa = rfn.ssa();
-        let entry_regstate_node = ssa.registers_in(ssa.entry_node()?)?;
-        let exit_regstate_node = ssa.registers_in(ssa.exit_node()?)?;
+        let entry_regstate_node = ssa.entry_node().and_then(|n| ssa.registers_in(n))?;
+        let exit_regstate_node = ssa.exit_node().and_then(|n| ssa.registers_in(n))?;
         // some registers may not be present in the entry node;
         // this means that the function neither reads nor preserves that register
         let entry_regstate = utils::register_state_info(entry_regstate_node, ssa);
@@ -200,33 +212,31 @@ impl Inferer {
 
         for regid in ssa.regfile.iter_register_ids() {
             // ignore registers not in entry regstate
-            if let Some(&(reg_val_entry, _)) = entry_regstate.get(regid) {
+            if let Some(reg_val_entry) = entry_regstate.get(regid).map(|&(r, _)| r) {
                 // bail if a register isn't present in exit regstate
-                let &(reg_val_exit, _) = exit_regstate.get(regid)?;
+                let reg_val_exit = exit_regstate.get(regid).map(|&(r, _)| r)?;
 
                 if reg_val_exit == reg_val_entry {
                     ret.set_preserved(regid);
                 }
 
                 // find all uses, ignoring entry/exit register state
-                let mut uses_iter = ssa
-                    .uses_of(reg_val_entry)
+                // On first non-entry/exit node, mark the register usage as "read"
+                ssa.uses_of(reg_val_entry)
                     .into_iter()
-                    .filter(|&n| n != entry_regstate_node && n != exit_regstate_node);
-                if uses_iter.next().is_some() {
-                    ret.set_read(regid);
-                }
+                    .find(|&n| n != entry_regstate_node && n != exit_regstate_node)
+                    .map(|_| ret.set_read(regid));
             }
         }
 
         Some(ret)
     }
-}
 
-fn direct_call_info(
-    ssa: &SSAStorage,
-    call_node: <SSAStorage as SSA>::ValueRef,
-) -> Option<(u64, RegisterMap<<SSAStorage as SSA>::ValueRef>)> {
-    let callinfo = utils::call_info(call_node, ssa)?;
-    Some((ssa.constant(callinfo.target)?, callinfo.register_args))
+    fn direct_call_info(
+        ssa: &SSAStorage,
+        call_node: <SSAStorage as SSA>::ValueRef,
+    ) -> Option<(u64, RegisterMap<<SSAStorage as SSA>::ValueRef>)> {
+        utils::call_info(call_node, ssa)
+            .and_then(|ci| ssa.constant(ci.target).map(|c| (c, ci.register_args)))
+    }
 }
