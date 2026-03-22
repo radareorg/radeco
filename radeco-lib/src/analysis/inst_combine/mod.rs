@@ -36,6 +36,7 @@ pub enum CombinableOpConstInfo {
     Right(u64),
 }
 
+/// Represents a combination analysis change.
 #[derive(Debug)]
 pub struct CombineChange {
     /// Index of the node to combine.
@@ -69,7 +70,8 @@ impl Change for CombineChange {
     }
 }
 
-enum CombErr {
+/// Represents the [Combiner] error variants.
+pub enum CombErr {
     /// The op-info is not combinable.
     NoComb,
 
@@ -80,16 +82,9 @@ enum CombErr {
     Abort,
 }
 
-const NAME: &str = "combiner";
-const REQUIRES: &[AnalyzerKind] = &[];
+pub const INFO: AnalyzerInfo = Combiner::INFO;
 
-pub const INFO: AnalyzerInfo = AnalyzerInfo {
-    name: NAME,
-    kind: AnalyzerKind::Combiner,
-    requires: REQUIRES,
-    uses_policy: true,
-};
-
+/// Represents an analyzer for combining operand info in SSA nodes.
 #[derive(Debug)]
 pub struct Combiner {
     /// Nodes that could potentially be combined into another
@@ -103,6 +98,20 @@ impl Default for Combiner {
 }
 
 impl Combiner {
+    /// Represents the [Combinar] analyzer name.
+    pub const NAME: &str = "combiner";
+    /// Represents the [Combiner]'s required analyzers.
+    pub const REQUIRES: &[AnalyzerKind] = &[];
+
+    /// Represents the [Combiner] analyzer information.
+    pub const INFO: AnalyzerInfo = AnalyzerInfo {
+        name: Self::NAME,
+        kind: AnalyzerKind::Combiner,
+        requires: Self::REQUIRES,
+        uses_policy: true,
+    };
+
+    /// Creates a new [Combiner].
     pub fn new() -> Self {
         Combiner {
             combine_candidates: HashMap::new(),
@@ -126,39 +135,29 @@ impl Combiner {
         let extracted = extract_opinfo(cur_node, ssa).ok_or(CombErr::NoComb)?;
         match extracted {
             Left((sub_node, cur_opinfo, cur_vt)) => {
-                radeco_trace!(
-                    "trying to combine ({:?} = {:?} {:?})",
-                    cur_node,
-                    sub_node,
-                    cur_opinfo
-                );
+                radeco_trace!("trying to combine ({cur_node:?} = {sub_node:?} {cur_opinfo:?})");
                 let opt_new_node =
                     self.make_combined_node(cur_node, &cur_opinfo, cur_vt, sub_node, ssa, policy);
                 match opt_new_node {
                     Ok(Left((new_node, new_sub_node, new_opinfo))) => {
                         radeco_trace!(
-                            "  {:?} ==> ({:?} = {:?} {:?})",
-                            cur_node,
-                            new_node,
-                            new_sub_node,
-                            new_opinfo
+                            "  {cur_node:?} ==> ({new_node:?} = {new_sub_node:?} {new_opinfo:?})"
                         );
                         self.combine_candidates
                             .insert(new_node, (new_sub_node, new_opinfo));
                         Ok(new_node)
                     }
                     Ok(Right(new_node)) => {
-                        radeco_trace!("  {:?} ==> no-op", cur_node);
+                        radeco_trace!("  {cur_node:?} ==> no-op");
                         Ok(new_node)
                     }
-                    Err(comb_err) => {
-                        if let CombErr::NoComb = comb_err {
-                            // no change; still add to `combine_candidates`
-                            self.combine_candidates
-                                .insert(cur_node, (sub_node, cur_opinfo));
-                        }
-                        Err(comb_err)
+                    Err(err @ CombErr::NoComb) => {
+                        // no change; still add to `combine_candidates`
+                        self.combine_candidates
+                            .insert(cur_node, (sub_node, cur_opinfo));
+                        Err(err)
                     }
+                    Err(err) => Err(err),
                 }
             }
             Right(c_val) => {
@@ -170,9 +169,8 @@ impl Combiner {
                 match action {
                     Action::Apply => {
                         // combined to constant
-                        radeco_trace!("{:?} = {:#x}", cur_node, c_val);
-                        let c_node = ssa.insert_const(c_val, None).ok_or(CombErr::NoComb)?;
-                        Ok(c_node)
+                        radeco_trace!("{cur_node:?} = {c_val:#x}");
+                        ssa.insert_const(c_val, None).ok_or(CombErr::NoComb)
                     }
                     Action::Skip => Err(CombErr::Skip),
                     Action::Abort => Err(CombErr::Abort),
@@ -213,9 +211,7 @@ impl Combiner {
                 match action {
                     Action::Apply => {
                         radeco_trace!(
-                            "    simplified ({:?}) into ({:?})",
-                            new_opinfo,
-                            simpl_new_opinfo
+                            "    simplified ({new_opinfo:?}) into ({simpl_new_opinfo:?})"
                         );
                         // make the new node
                         let new_node =
@@ -235,7 +231,7 @@ impl Combiner {
 
                 match action {
                     Action::Apply => {
-                        radeco_trace!("    simplified ({:?}) into no-op", new_opinfo);
+                        radeco_trace!("    simplified ({new_opinfo:?}) into no-op");
                         Ok(Right(new_sub_node))
                     }
                     Action::Skip => Err(CombErr::Skip),
@@ -255,10 +251,9 @@ impl Combiner {
                         match action {
                             Action::Apply => {
                                 // combined, but no further simplification
-                                let new_node =
-                                    make_opinfo_node(cur_vt, new_opinfo.clone(), new_sub_node, ssa)
-                                        .ok_or(CombErr::NoComb)?;
-                                Ok(Left((new_node, new_sub_node, new_opinfo)))
+                                make_opinfo_node(cur_vt, new_opinfo.clone(), new_sub_node, ssa)
+                                    .ok_or(CombErr::NoComb)
+                                    .map(|new_node| Left((new_node, new_sub_node, new_opinfo)))
                             }
                             Action::Skip => Err(CombErr::Skip),
                             Action::Abort => Err(CombErr::Abort),
@@ -278,19 +273,14 @@ impl Combiner {
     ) -> Option<(CombinableOpInfo, SSAValue)> {
         let &(sub_sub_node, ref sub_opinfo) = self.combine_candidates.get(&sub_node)?;
         let new_opinfo = combine_rules::combine_opinfo(cur_opinfo, sub_opinfo)?;
-        radeco_trace!(
-            "    combined ({:?} {:?}) into ({:?})",
-            sub_opinfo,
-            cur_opinfo,
-            new_opinfo
-        );
+        radeco_trace!("    combined ({sub_opinfo:?} {cur_opinfo:?}) into ({new_opinfo:?})");
         Some((new_opinfo, sub_sub_node))
     }
 }
 
 impl Analyzer for Combiner {
     fn info(&self) -> &'static AnalyzerInfo {
-        &INFO
+        &Self::INFO
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -304,22 +294,30 @@ impl FuncAnalyzer for Combiner {
         policy: Option<T>,
     ) -> Option<Box<dyn AnalyzerResult>> {
         let ssa = func.ssa_mut();
-        let mut policy = policy.expect("A policy function must be provided");
+        let mut policy = policy.or_else(|| {
+            radeco_err!("A policy function must be provided");
+            None
+        })?;
+
         for node in ssa.inorder_walk() {
-            let res = self.visit_node(node, ssa, &mut policy);
+            self.visit_node(node, ssa, &mut policy)
+                .and_then(|repl_node| {
+                    let blk = ssa.block_for(node).ok_or(CombErr::Abort)?;
+                    let addr = ssa.address(node).ok_or(CombErr::Abort)?;
 
-            if let Ok(repl_node) = res {
-                let blk = ssa.block_for(node).unwrap();
-                let addr = ssa.address(node).unwrap();
-                ssa.replace_value(node, repl_node);
-                if !ssa.is_constant(repl_node) && ssa.address(repl_node).is_none() {
-                    ssa.insert_into_block(repl_node, blk, addr);
-                }
-            }
+                    ssa.replace_value(node, repl_node);
 
-            if let Err(CombErr::Abort) = res {
-                return None;
-            }
+                    if !ssa.is_constant(repl_node) && ssa.address(repl_node).is_none() {
+                        ssa.insert_into_block(repl_node, blk, addr);
+                    }
+
+                    Ok(())
+                })
+                .or_else(|err| match err {
+                    CombErr::Abort => Err(err),
+                    _ => Ok(()),
+                })
+                .ok()?;
         }
 
         None
@@ -376,11 +374,11 @@ fn simplify_opinfo(info: &CombinableOpInfo) -> Option<Option<CombinableOpInfo>> 
         | COI(OpXor, COCI::Left(0))
         | COI(OpXor, COCI::Right(0)) => Some(None),
         COI(OpAdd, COCI::Left(c)) | COI(OpAdd, COCI::Right(c)) if *c > u64::MAX / 2 => {
-            let c = OpSub.eval_binop(0, *c).unwrap();
+            let c = OpSub.eval_binop(0, *c)?;
             Some(Some(COI(OpSub, COCI::Right(c))))
         }
         COI(OpSub, COCI::Right(c)) if *c > u64::MAX / 2 => {
-            let c = OpSub.eval_binop(0, *c).unwrap();
+            let c = OpSub.eval_binop(0, *c)?;
             Some(Some(COI(OpAdd, COCI::Left(c))))
         }
         _ => None,
@@ -444,10 +442,12 @@ impl fmt::Debug for CombinableOpInfo {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         use self::CombinableOpConstInfo as COCI;
 
-        match self.1 {
-            COCI::Unary => fmt.write_fmt(format_args!("-> ({:?} .)", self.0)),
-            COCI::Left(c) => fmt.write_fmt(format_args!("-> ({:#x} {:?} .)", c, self.0)),
-            COCI::Right(c) => fmt.write_fmt(format_args!("-> (. {:?} {:#x})", self.0, c)),
+        let Self(op, coci) = self;
+
+        match coci {
+            COCI::Unary => fmt.write_fmt(format_args!("-> ({op:?} .)")),
+            COCI::Left(c) => fmt.write_fmt(format_args!("-> ({c:#x} {op:?} .)")),
+            COCI::Right(c) => fmt.write_fmt(format_args!("-> (. {op:?} {c:#x})")),
         }
     }
 }
